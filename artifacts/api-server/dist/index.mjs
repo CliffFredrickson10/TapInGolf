@@ -61847,6 +61847,13 @@ app.use(import_express19.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");
 app.use("/api/logos", import_express19.default.static(logosDir));
 app.use("/api", routes_default);
+if (process.env.NODE_ENV === "production") {
+  const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");
+  app.use(import_express19.default.static(clientDir));
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path2.join(clientDir, "index.html"));
+  });
+}
 app.use((err, _req, res, _next) => {
   const status = err.status ?? err.statusCode ?? 500;
   const message = status === 500 ? "Internal server error" : err.message ?? "Error";

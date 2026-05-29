@@ -39,6 +39,16 @@ app.use("/api/logos", express.static(logosDir));
 
 app.use("/api", router);
 
+// In production, serve the built club-portal SPA from the same origin so
+// its relative /api calls work. Dev is unaffected (workflows run separately).
+if (process.env.NODE_ENV === "production") {
+  const clientDir = path.resolve(__dirname, "../../club-portal/dist/public");
+  app.use(express.static(clientDir));
+  app.get(/^(?!\/api).*/, (_req, res) => {
+    res.sendFile(path.join(clientDir, "index.html"));
+  });
+}
+
 // Global error handler — returns JSON instead of Express default HTML
 app.use((err: any, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
   const status = err.status ?? err.statusCode ?? 500;

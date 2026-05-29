@@ -1,0 +1,467 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: portal-clubs
+    description: Club profile management
+  - name: portal-tee-sheet
+    description: Tee sheet and slot management
+  - name: portal-dashboard
+    description: Portal dashboard statistics
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /portal/dashboard:
+    get:
+      operationId: getPortalDashboard
+      tags: [portal-dashboard]
+      summary: Dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /portal/clubs:
+    get:
+      operationId: listPortalClubs
+      tags: [portal-clubs]
+      summary: List all club profiles
+      responses:
+        "200":
+          description: List of clubs
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ClubProfile"
+    post:
+      operationId: createPortalClub
+      tags: [portal-clubs]
+      summary: Create a club profile
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClubProfileInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClubProfile"
+
+  /portal/clubs/{clubId}:
+    get:
+      operationId: getPortalClub
+      tags: [portal-clubs]
+      summary: Get club profile
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Club profile
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClubProfile"
+        "404":
+          description: Not found
+    put:
+      operationId: updatePortalClub
+      tags: [portal-clubs]
+      summary: Update club profile
+      parameters:
+        - name: clubId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClubProfileInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ClubProfile"
+
+  /portal/tee-sheet:
+    get:
+      operationId: getPortalTeeSheet
+      tags: [portal-tee-sheet]
+      summary: Get tee sheet for a specific club and date
+      parameters:
+        - name: clubId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: date
+          in: query
+          required: true
+          schema:
+            type: string
+            description: "Date in YYYY-MM-DD format"
+      responses:
+        "200":
+          description: Tee sheet for the day
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeeSheetDay"
+
+  /portal/tee-sheet/generate:
+    post:
+      operationId: generatePortalTeeSheet
+      tags: [portal-tee-sheet]
+      summary: Auto-generate tee slots for a date based on club configuration
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/GenerateTeeSheetInput"
+      responses:
+        "200":
+          description: Generated tee sheet
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeeSheetDay"
+
+  /portal/slots/{slotId}:
+    patch:
+      operationId: updateTeeSlot
+      tags: [portal-tee-sheet]
+      summary: Update a tee slot (active status, notes, rate codes)
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TeeSlotUpdate"
+      responses:
+        "200":
+          description: Updated slot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeeSlot"
+        "404":
+          description: Not found
+
+  /portal/slots/{slotId}/bookings:
+    get:
+      operationId: listSlotBookings
+      tags: [portal-tee-sheet]
+      summary: List all bookings for a tee slot
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: List of bookings
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/SlotBooking"
+        "404":
+          description: Not found
+
+  /portal/slots/{slotId}/bookings/{bookingId}:
+    delete:
+      operationId: cancelSlotBooking
+      tags: [portal-tee-sheet]
+      summary: Cancel (delete) a booking from a slot
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: bookingId
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated slot after cancellation
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeeSlot"
+        "404":
+          description: Not found
+
+  /portal/slots/{slotId}/book:
+    post:
+      operationId: bookTeeSlot
+      tags: [portal-tee-sheet]
+      summary: Add a player booking to a slot
+      parameters:
+        - name: slotId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SlotBookingInput"
+      responses:
+        "200":
+          description: Updated slot after booking
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeeSlot"
+        "400":
+          description: Slot full or inactive
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    DashboardStats:
+      type: object
+      required: [total_clubs, total_slots_today, booked_slots_today, active_slots_today, upcoming_slots]
+      properties:
+        total_clubs:
+          type: integer
+        total_slots_today:
+          type: integer
+        booked_slots_today:
+          type: integer
+        active_slots_today:
+          type: integer
+        upcoming_slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/UpcomingSlot"
+
+    UpcomingSlot:
+      type: object
+      required: [slot_id, club_name, tee_time, session_type, player_count, max_players]
+      properties:
+        slot_id:
+          type: integer
+        club_name:
+          type: string
+        tee_time:
+          type: string
+        session_type:
+          type: string
+        player_count:
+          type: integer
+        max_players:
+          type: integer
+
+    ClubConfig:
+      type: object
+      description: Configurable tee time generation settings
+      required: [am_start, am_end, pm_start, pm_end, twilight_start, twilight_end, interval_minutes, allow_18hole_booking]
+      properties:
+        am_start:
+          type: string
+          description: "HH:MM 24h format"
+        am_end:
+          type: string
+        pm_start:
+          type: string
+        pm_end:
+          type: string
+        twilight_start:
+          type: ["string", "null"]
+        twilight_end:
+          type: ["string", "null"]
+        interval_minutes:
+          type: integer
+          description: "Minutes between tee times"
+        allow_18hole_booking:
+          type: boolean
+          description: "9-hole courses only — lock a second slot 2h10m later"
+
+    ClubProfile:
+      type: object
+      required: [id, name, layout_type, total_holes, config]
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        layout_type:
+          type: string
+          enum: ["18-Hole", "9-Hole"]
+        total_holes:
+          type: integer
+        config:
+          $ref: "#/components/schemas/ClubConfig"
+
+    ClubProfileInput:
+      type: object
+      required: [name, layout_type, total_holes, config]
+      properties:
+        name:
+          type: string
+          minLength: 1
+        layout_type:
+          type: string
+          enum: ["18-Hole", "9-Hole"]
+        total_holes:
+          type: integer
+        config:
+          $ref: "#/components/schemas/ClubConfig"
+
+    TeeSlot:
+      type: object
+      required: [id, club_id, date, tee_time, session_type, tee_start_type, max_players, weekday_rate_code, weekend_rate_code, is_active, player_count]
+      properties:
+        id:
+          type: integer
+        club_id:
+          type: integer
+        date:
+          type: string
+        tee_time:
+          type: string
+        session_type:
+          type: string
+          enum: ["AM", "PM", "Twilight"]
+        tee_start_type:
+          type: string
+          enum: ["1st Tee", "10th Tee", "Two-Tee Start"]
+        max_players:
+          type: integer
+        weekday_rate_code:
+          type: ["string", "null"]
+        weekend_rate_code:
+          type: ["string", "null"]
+        is_active:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        player_count:
+          type: integer
+
+    TeeSlotUpdate:
+      type: object
+      properties:
+        is_active:
+          type: boolean
+        notes:
+          type: ["string", "null"]
+        weekday_rate_code:
+          type: ["string", "null"]
+        weekend_rate_code:
+          type: ["string", "null"]
+        tee_start_type:
+          type: string
+          enum: ["1st Tee", "10th Tee", "Two-Tee Start"]
+        max_players:
+          type: integer
+
+    TeeSheetDay:
+      type: object
+      required: [club_id, date, slots]
+      properties:
+        club_id:
+          type: integer
+        date:
+          type: string
+        slots:
+          type: array
+          items:
+            $ref: "#/components/schemas/TeeSlot"
+
+    GenerateTeeSheetInput:
+      type: object
+      required: [date]
+      properties:
+        date:
+          type: string
+          description: "YYYY-MM-DD"
+        overwrite:
+          type: boolean
+          description: "If true, delete existing slots for this date before generating"
+
+    SlotBooking:
+      type: object
+      required: [id, slot_id, player_name, booked_at]
+      properties:
+        id:
+          type: integer
+        slot_id:
+          type: integer
+        player_name:
+          type: string
+        player_email:
+          type: ["string", "null"]
+        player_phone:
+          type: ["string", "null"]
+        booked_at:
+          type: string
+          description: "ISO 8601 timestamp"
+
+    SlotBookingInput:
+      type: object
+      required: [player_name]
+      properties:
+        player_name:
+          type: string
+        player_email:
+          type: ["string", "null"]
+        player_phone:
+          type: ["string", "null"]

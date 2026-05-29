@@ -1,0 +1,55 @@
+Next I would like to build a Golf Club Tee Time management tool for clubs to use in the club management portal. 
+Clubs will use this to manage their daily operational tee sheets and allow members/visitors to book slots. 
+
+1. Core Operational Structure & Fields
+The application must track and relate the following fields for daily management:
+
+A. Club & Course Profiles
+Clubs can host multiple course configurations depending on their layout:
+- Club Name
+- Layout Type (Selectable option: '18-Hole' or '9-Hole')
+- Total Holes (Numeric: 18 or 9)
+
+B. Tee Time Slots
+Every individual daily time slot must track:
+- Slot ID (Unique identifier)
+- Tee Time (24-hour clock format)
+- Session Type (Categorized as: 'Morning (AM)', 'Midday (PM)', or 'Twilight')
+- Tee Start Type (Categorized as: '1st Tee', '10th Tee', or 'Two-Tee Start')
+- Max Players (Defaults to 4 for a standard foursome)
+- Weekday Rate Code (Applied Monday through Thursday)
+- Weekend Rate Code (Applied Friday through Sunday, as well as Public Holidays)
+- Operational Status (Active or Inactive toggle to allow for maintenance or corporate private days)
+- Notes/Restrictions (Text field for special event or member-only notices)
+
+2. Standard Course Configuration Rules
+Configure the system logic to generate slots automatically based on whether the club profile is set to an 18-Hole or a 9-Hole layout:
+
+CONFIGURATION A: Standard 18-Hole Layout (Split-Tee / Two-Tee Model)
+Optimized for high-volume South African clubs balancing large morning and afternoon fields (e.g., peak Wednesday and Saturday competition days). Spaced at strict 8-minute intervals.
+1. Morning Block (AM Fields): Automatically generate slots from 06:36 to 08:44. 
+   - Tee Start Type: 'Two-Tee Start' (Players launch concurrently from both the 1st and 10th tees).
+2. The Field Reset Window: No tee slots are to be generated between 08:45 and 10:59. This creates a buffer allowing the morning players to complete their back-9 holes without colliding with new players.
+3. Midday Block (PM Fields): Automatically generate slots from 11:00 to 13:32.
+   - Tee Start Type: 'Two-Tee Start'.
+4. Twilight Block: Automatically generate slots from 15:00 to 16:12. 
+   - Tee Start Type: '1st Tee' only (Quick 9-holes before sunset).
+5. First and last available Tee times must be editable to cater for any club's individual requirement.
+6. Tee time slot intervals must be editable to cater for any club's individual requirement.
+
+CONFIGURATION B: Standard 9-Hole Layout (Continuous / Cross-Over Model)
+For dedicated 9-hole courses, mashie courses, or smaller estate clubs. Spaced at 10-minute intervals to allow smoother spacing on a physically smaller property footprint.
+1. Continuous Morning Block: Automatically generate slots from 07:00 to 11:00.
+   - Tee Start Type: '1st Tee' (Continuous single-tee cycling).
+2. Midday/Afternoon Block: Automatically generate slots from 11:30 to 14:30.
+   - Tee Start Type: '1st Tee'.
+3. The 9-Hole "Cross-Over" Logic: Provide a feature toggle for 9-hole systems called "Allow 18-Hole Booking". When turned ON, if a golfer books a morning slot to play 18 holes (e.g., at 07:30), the application must automatically reserve and lock out a corresponding slot exactly 2 hours and 10 minutes later (e.g., at 09:40) on the same day. This ensures the golfer can seamlessly loop the course a second time to complete an 18-hole score without running into newly arriving players.
+4. First and last available Tee times must be editable to cater for any club's individual requirement.
+5. Tee time slot intervals must be editable to cater for any club's individual requirement.
+
+3. Club Admin Tee Sheet Dashboard
+- Include an interactive daily calendar picker.
+- Render a clean chronological table or grid of all slots for the selected day.
+- Color-code the slots visually by session type (e.g., soft yellow for AM, bright clear blue for PM, muted purple for twilight).
+- Display the status of each slot showing filled player slots (e.g., 0/4 filled up to 4/4 filled).
+- Provide an "Active/Inactive" toggle directly on each row so managers can instantly block individual slots.

@@ -1,0 +1,1 @@
+{"version":3,"file":"dashboardStats.d.ts","sourceRoot":"","sources":["../../../src/generated/types/dashboardStats.ts"],"names":[],"mappings":"AAAA;;;;;;GAMG;AACH,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,gBAAgB,CAAC;AAEnD,MAAM,WAAW,cAAc;IAC7B,WAAW,EAAE,MAAM,CAAC;IACpB,iBAAiB,EAAE,MAAM,CAAC;IAC1B,kBAAkB,EAAE,MAAM,CAAC;IAC3B,kBAAkB,EAAE,MAAM,CAAC;IAC3B,cAAc,EAAE,YAAY,EAAE,CAAC;CAChC"}

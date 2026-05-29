@@ -1,0 +1,27 @@
+kind = "mobile"
+previewPath = "/"
+title = "TapIn Golf"
+version = "1.0.0"
+id = "artifacts/tapin-golf"
+router = "expo-domain"
+
+[[integratedSkills]]
+name = "expo"
+version = "1.0.0"
+
+[[services]]
+ensurePreviewReachable = "/status"
+name = "expo"
+paths = [ "/" ]
+localPort = 26107
+
+[services.development]
+run = "pnpm --filter @workspace/tapin-golf run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/tapin-golf", "run", "build" ]
+run = [ "pnpm", "--filter", "@workspace/tapin-golf", "run", "serve" ]
+
+[services.env]
+PORT = "26107"
+BASE_PATH = "/"

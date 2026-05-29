@@ -1,0 +1,21 @@
+CONFIGURATION A: Standard 18-Hole Layout (Split-Tee / Two-Tee Model)
+Optimized for high-volume South African clubs balancing large morning and afternoon fields (e.g., peak Wednesday and Saturday competition days). Spaced at strict 8-minute intervals.
+1. Morning Block (AM Fields): Automatically generate slots from 06:36 to 08:44. 
+   - Tee Start Type: 'Two-Tee Start' (Players launch concurrently from both the 1st and 10th tees).
+2. The Field Reset Window: No tee slots are to be generated between 08:45 and 10:59. This creates a buffer allowing the morning players to complete their back-9 holes without colliding with new players.
+3. Midday Block (PM Fields): Automatically generate slots from 11:00 to 13:32.
+   - Tee Start Type: 'Two-Tee Start'.
+4. Twilight Block: Automatically generate slots from 15:00 to 16:12. 
+   - Tee Start Type: '1st Tee' only (Quick 9-holes before sunset).
+5. First and last available Tee times must be editable to cater for any club's individual requirement.
+6. Tee time slot intervals must be editable to cater for any club's individual requirement.
+
+CONFIGURATION B: Standard 9-Hole Layout (Continuous / Cross-Over Model)
+For dedicated 9-hole courses, mashie courses, or smaller estate clubs. Spaced at 10-minute intervals to allow smoother spacing on a physically smaller property footprint.
+1. Continuous Morning Block: Automatically generate slots from 07:00 to 11:00.
+   - Tee Start Type: '1st Tee' (Continuous single-tee cycling).
+2. Midday/Afternoon Block: Automatically generate slots from 11:30 to 14:30.
+   - Tee Start Type: '1st Tee'.
+3. The 9-Hole "Cross-Over" Logic: Provide a feature toggle for 9-hole systems called "Allow 18-Hole Booking". When turned ON, if a golfer books a morning slot to play 18 holes (e.g., at 07:30), the application must automatically reserve and lock out a corresponding slot exactly 2 hours and 10 minutes later (e.g., at 09:40) on the same day. This ensures the golfer can seamlessly loop the course a second time to complete an 18-hole score without running into newly arriving players.
+4. First and last available Tee times must be editable to cater for any club's individual requirement.
+5. Tee time slot intervals must be editable to cater for any club's individual requirement.

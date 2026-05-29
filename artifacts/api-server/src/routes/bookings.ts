@@ -1,0 +1,735 @@
+import { Router, type IRouter } from "express";
+import crypto from "crypto";
+import { query, row, exec, run, withTransaction, clientQuery } from "../lib/pg";
+import { getUser } from "../lib/auth";
+import { sendPushNotifications } from "../lib/notifications";
+import { saveUserNotification } from "../lib/userNotifications";
+import { createStitchPayment } from "../lib/stitch";
+
+const router: IRouter = Router();
+
+function generateRef(): string {
+  return "TG" + crypto.randomBytes(4).toString("hex").toUpperCase();
+}
+
+// ── Open games (portal slots with space still available) ──────────────────────
+router.get("/bookings/open", async (req, res): Promise<void> => {
+  const province = String(req.query.province ?? "").trim();
+  const suburb   = String(req.query.suburb ?? "").trim();
+  const date     = String(req.query.date ?? "").trim();
+  const validDate = /^\d{4}-\d{2}-\d{2}$/.test(date);
+
+  const where: string[] = [
+    "pts.is_active = 1",
+    validDate ? "pts.date = ?" : "pts.date >= CURRENT_DATE",
+    "pts.player_count > 0",
+    "GREATEST(0, pts.max_players - pts.player_count) > 0",
+  ];
+  const params: any[] = [];
+
+  if (validDate) params.push(date);
+
+  if (province && province !== "All") {
+    where.push("c.province = ?");
+    params.push(province);
+  }
+  if (suburb) {
+    where.push("(c.name ILIKE ? OR c.location ILIKE ?)");
+    params.push(`%${suburb}%`, `%${suburb}%`);
+  }
+
+  const rows = await query<any>(
+    `SELECT
+       pts.id          AS tee_time_id,
+       pts.date, pts.tee_time AS time, 0 AS price, NULL AS promotional_price,
+       pts.max_players AS total_slots,
+       GREATEST(0, pts.max_players - pts.player_count) AS available,
+       pts.player_count AS booked_count,
+       c.id            AS club_id,
+       c.name          AS club_name,
+       c.location      AS club_location,
+       c.province,
+       c.latitude,
+       c.longitude,
+       c.cart_available,
+       c.cart_compulsory,
+       c.cart_price,
+       (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
+        FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
+       ) AS existing_players
+     FROM portal_tee_slots pts
+     JOIN clubs c ON c.id = pts.club_id
+     WHERE ${where.join(" AND ")}
+     ORDER BY pts.date ASC, pts.tee_time ASC
+     LIMIT 100`,
+    params
+  );
+
+  const fmtName = (full: string) => {
+    const parts = (full ?? "").trim().split(/\s+/);
+    if (parts.length < 2) return parts[0] ?? "Guest";
+    return `${parts[0]} ${parts[parts.length - 1][0]}.`;
+  };
+
+  const games = rows.map((r: any) => {
+    let existingPlayers: { name: string; players: number }[] = [];
+    try {
+      const raw = typeof r.existing_players === "string"
+        ? JSON.parse(r.existing_players)
+        : (r.existing_players ?? []);
+      existingPlayers = (raw ?? []).map((p: any) => ({ name: fmtName(p.name), players: p.players }));
+    } catch {}
+    return {
+      tee_time_id:       r.tee_time_id,
+      date:              String(r.date).slice(0, 10),
+      time:              String(r.time).slice(0, 5),
+      price:             parseFloat(r.price),
+      promotional_price: r.promotional_price != null ? parseFloat(r.promotional_price) : null,
+      total_slots:       parseInt(r.total_slots),
+      available:         parseInt(r.available),
+      booked_count:      parseInt(r.booked_count),
+      club_id:           r.club_id,
+      club_name:         r.club_name,
+      club_location:     r.club_location,
+      province:          r.province,
+      latitude:          r.latitude != null ? parseFloat(r.latitude) : null,
+      longitude:         r.longitude != null ? parseFloat(r.longitude) : null,
+      cart_available:    !!r.cart_available,
+      cart_compulsory:   !!r.cart_compulsory,
+      cart_price:        r.cart_price != null ? parseFloat(r.cart_price) : 0,
+      existing_players:  existingPlayers,
+    };
+  });
+
+  res.json({ games });
+});
+
+router.get("/bookings", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const status = String(req.query.status ?? "upcoming");
+  const statusFilter = status === "upcoming"
+    ? "b.status IN ('confirmed','pending') AND (pts.date IS NULL OR pts.date >= CURRENT_DATE)"
+    : "(b.status IN ('completed','cancelled') OR (b.status = 'confirmed' AND pts.date IS NOT NULL AND pts.date < CURRENT_DATE))";
+
+  const myBookings = await query<any>(
+    `SELECT b.*,
+            COALESCE(c.name, 'Unknown Club') as club_name,
+            COALESCE(c.location, '') as club_location,
+            COALESCE(pts.tee_time, '') as time,
+            COALESCE(pts.date, b.created_at::date) as date,
+            0 as price,
+            'organizer' as role, 1 as my_paid
+     FROM bookings b
+     LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     LEFT JOIN clubs c ON c.id = pts.club_id
+     WHERE b.user_id = ? AND (${statusFilter})
+     ORDER BY COALESCE(pts.date, b.created_at::date) ASC, pts.tee_time ASC`,
+    [user.id]
+  );
+
+  const invitedBookings = await query<any>(
+    `SELECT b.*,
+            COALESCE(c.name, 'Unknown Club') as club_name,
+            COALESCE(c.location, '') as club_location,
+            COALESCE(pts.tee_time, '') as time,
+            COALESCE(pts.date, b.created_at::date) as date,
+            0 as price,
+            'invited' as role, bp.paid as my_paid,
+            COALESCE(bp.amount, b.total_amount / b.players) as my_amount
+     FROM bookings b
+     LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     LEFT JOIN clubs c ON c.id = pts.club_id
+     JOIN booking_players bp ON bp.booking_id = b.id AND bp.user_id = ?
+     WHERE b.user_id != ? AND (${statusFilter})
+     ORDER BY COALESCE(pts.date, b.created_at::date) ASC, pts.tee_time ASC`,
+    [user.id, user.id]
+  );
+
+  const parse = (b: any) => ({
+    ...b,
+    total_amount: parseFloat(b.total_amount),
+    my_amount:    parseFloat(b.my_amount),
+    players:      parseInt(b.players),
+    my_paid:      !!b.my_paid,
+  });
+
+  res.json({
+    bookings:         myBookings.map(parse),
+    invited_bookings: invitedBookings.map(parse),
+  });
+});
+
+router.get("/bookings/:id", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const booking = await row<any>(
+    `SELECT b.*,
+            c.name as club_name,
+            COALESCE(c.location, '') as club_location,
+            COALESCE(c.phone, '') as club_phone,
+            COALESCE(c.address, '') as club_address,
+            c.latitude as club_latitude,
+            c.longitude as club_longitude,
+            pts.tee_time as time,
+            pts.date as date,
+            0 as price
+     FROM bookings b
+     LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     LEFT JOIN clubs c ON c.id = pts.club_id
+     WHERE b.id = ? AND (
+       b.user_id = ? OR
+       EXISTS (SELECT 1 FROM booking_players bp WHERE bp.booking_id = b.id AND bp.user_id = ?)
+     )`,
+    [id, user.id, user.id]
+  );
+
+  if (!booking) {
+    res.status(404).json({ message: "Booking not found" });
+    return;
+  }
+
+  booking.total_amount = parseFloat(booking.total_amount);
+  booking.my_amount    = parseFloat(booking.my_amount);
+  booking.players      = parseInt(booking.players);
+
+  const isOrganizer = booking.user_id === user.id;
+  booking.role = isOrganizer ? "organizer" : "invited";
+
+  if (!isOrganizer) {
+    const bp = await row<any>(
+      "SELECT paid, amount FROM booking_players WHERE booking_id = ? AND user_id = ?",
+      [id, user.id]
+    );
+    booking.my_amount = bp?.amount ? parseFloat(bp.amount) : booking.total_amount / booking.players;
+    booking.my_paid   = !!bp?.paid;
+  } else {
+    booking.my_paid = true;
+  }
+
+  const players = await query<any>(
+    `SELECT u.name, u.email, bp.paid, COALESCE(bp.amount, b.total_amount / b.players) as amount
+     FROM booking_players bp
+     JOIN users u ON u.id = bp.user_id
+     JOIN bookings b ON b.id = bp.booking_id
+     WHERE bp.booking_id = ?`,
+    [id]
+  );
+  // When split_bill is off, the organizer covers everyone — treat all players as paid
+  // once the booking is confirmed (no individual payments required from invited players)
+  const allCoveredByOrganizer = !booking.split_bill && booking.status === "confirmed";
+  booking.players_list = players.map((p: any) => ({
+    name:   p.name,
+    email:  p.email,
+    paid:   allCoveredByOrganizer ? true : !!p.paid,
+    amount: parseFloat(p.amount),
+  }));
+
+  res.json({ booking });
+});
+
+router.post("/bookings", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const {
+    tee_time_id, players = 1, split_bill = false,
+    friend_ids = [],        // legacy field — kept for backward compat
+    players_data,           // preferred: Array<{user_id?:number, guest_name?:string}>
+    payment_method = "stitch", voucher_code, include_cart = false,
+    holes = 18,             // 9 or 18
+    hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
+  } = req.body ?? {};
+
+  // Normalise to players_data: prefer explicit players_data, fall back to friend_ids
+  const rawPlayers: Array<{ user_id?: number; guest_name?: string }> =
+    Array.isArray(players_data)
+      ? players_data
+      : (friend_ids as number[]).map((id) => ({ user_id: id }));
+
+  const numPlayers = Math.min(Math.max(parseInt(players), 1), 4);
+  const normalised = rawPlayers.slice(0, numPlayers - 1);
+
+  // All tee times come from portal_tee_slots
+  const rawSlot = await row<any>(
+    `SELECT pts.*, c.name AS club_name,
+       c.cart_available, c.cart_compulsory, c.cart_price,
+       GREATEST(0, pts.max_players - pts.player_count) AS available
+     FROM portal_tee_slots pts
+     JOIN clubs c ON c.id = pts.club_id
+     WHERE pts.id = ? AND pts.is_active = 1`,
+    [parseInt(tee_time_id)]
+  );
+
+  if (!rawSlot) { res.status(404).json({ message: "Tee time not found" }); return; }
+
+  const slot = {
+    ...rawSlot,
+    time:             rawSlot.tee_time,
+    total_slots:      rawSlot.max_players,
+    price:            "0",
+    price_9:          null,
+    promotional_price: null,
+  };
+  if (parseInt(slot.available) < numPlayers) {
+    res.status(409).json({ message: "Not enough slots available" });
+    return;
+  }
+
+  // ── Prepaid validation ───────────────────────────────────────────
+  if (payment_method === "prepaid") {
+    // Prepaid covers the organiser's own spot only — other players must pay their own share (split bill)
+    if (numPlayers > 1 && !split_bill) {
+      res.status(400).json({ message: "When using prepaid rounds with other players, split billing must be enabled so each player pays their own share." });
+      return;
+    }
+    const membership = await row<any>(
+      "SELECT id, prepaid_rounds, prepaid_rounds_used FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+      [slot.club_id, user.id]
+    );
+    if (!membership) {
+      res.status(403).json({ message: "Prepaid rounds can only be used at your home club as an active member." });
+      return;
+    }
+    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
+    if (remaining <= 0) {
+      res.status(400).json({ message: "You have no prepaid rounds remaining at this club." });
+      return;
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
+
+  // ── Event restriction check ──────────────────────────────────────
+  // If this date has a restricted event, verify the user is eligible
+  const slotDate = slot.date instanceof Date
+    ? slot.date.toISOString().split("T")[0]
+    : String(slot.date).split("T")[0];
+
+  const restrictedEvent = await row<any>(
+    `SELECT id, name, restriction FROM golf_events
+     WHERE club_id = ? AND event_date = ? AND status = 'active' AND restriction != 'open'
+     ORDER BY id LIMIT 1`,
+    [slot.club_id, slotDate]
+  );
+
+  if (restrictedEvent) {
+    if (restrictedEvent.restriction === "members_only") {
+      const membership = await row<any>(
+        "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+        [slot.club_id, user.id]
+      );
+      if (!membership) {
+        res.status(403).json({
+          message: `"${restrictedEvent.name}" is a members-only event. You must be a registered member of this club to book on this day.`,
+          error_code: "event_members_only",
+          event_id:   restrictedEvent.id,
+        });
+        return;
+      }
+    } else if (restrictedEvent.restriction === "invitation_only") {
+      const reg = await row<any>(
+        "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+        [restrictedEvent.id, user.id]
+      );
+      if (!reg || reg.status !== "approved") {
+        res.status(403).json({
+          message: `"${restrictedEvent.name}" is an invitation-only event. Please contact the club to request access.`,
+          error_code:        "event_invitation_only",
+          event_id:          restrictedEvent.id,
+          registration_status: reg?.status ?? null,
+        });
+        return;
+      }
+    }
+  }
+  // ────────────────────────────────────────────────────────────────
+
+  // Use 9-hole price when requested and available, else 18-hole
+  const numHoles = holes === 9 && slot.price_9 != null ? 9 : 18;
+  const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);
+  const priceCol = numHoles === 9 ? "price_9h" : "price_18h";
+
+  // Resolve organizer's tier price: member tier > HNA affiliated > non-affiliated visitor
+  let basePrice = slot.promotional_price ? parseFloat(slot.promotional_price) : rawPrice;
+  if (!slot.promotional_price) {
+    const memberTierRow = await row<any>(
+      "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+      [slot.club_id, user.id]
+    );
+    // HNA affiliation is universal: a stored HNA number makes the user affiliated
+    // at any club where they are not a registered member — no need to re-submit it per booking
+    const effectiveHna = hna_number || (user as any).hna_number;
+    const tierType = memberTierRow
+      ? memberTierRow.membership_type
+      : (effectiveHna ? "affiliated_visitor" : "non_affiliated_visitor");
+    const tierPrice = await row<any>(
+      `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
+      [slot.club_id, tierType]
+    );
+    if (tierPrice && tierPrice[priceCol] != null) {
+      basePrice = parseFloat(tierPrice[priceCol]);
+    }
+  }
+
+  // Organizer's greens fee: R0 when paying with a prepaid round
+  const organizerGreens = payment_method === "prepaid" ? 0 : basePrice;
+
+  // Resolve each invited player's tier price individually (split-bill or organizer-pays-all)
+  const getInvitedPrice = async (p: { user_id?: number; guest_name?: string }): Promise<number> => {
+    if (!p.user_id) {
+      // Guests have no membership and no HNA → non_affiliated_visitor rate
+      const guestTierRow = await row<any>(
+        `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = 'non_affiliated_visitor'`,
+        [slot.club_id]
+      ).catch(() => null);
+      return guestTierRow?.[priceCol] != null ? parseFloat(guestTierRow[priceCol]) : rawPrice;
+    }
+    const [pMember, pUser] = await Promise.all([
+      row<any>(
+        "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+        [slot.club_id, p.user_id]
+      ).catch(() => null),
+      row<any>("SELECT hna_number FROM users WHERE id = ?", [p.user_id]).catch(() => null),
+    ]);
+    const pMemberType = pMember?.membership_type ?? null;
+    const pHna        = pUser?.hna_number ?? null;
+    const pHasHna     = pHna && pHna !== "null" && String(pHna).trim().length === 10;
+    const pTierType   = pMemberType ?? (pHasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+    const pTierRow    = await row<any>(
+      `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
+      [slot.club_id, pTierType]
+    ).catch(() => null);
+    return pTierRow?.[priceCol] != null ? parseFloat(pTierRow[priceCol]) : basePrice;
+  };
+  const invitedGreens: number[] = await Promise.all(normalised.map(getInvitedPrice));
+
+  const totalGreens = organizerGreens + invitedGreens.reduce((a, b) => a + b, 0);
+
+  // Apply voucher discount if provided
+  let discountAmount  = 0;
+  let appliedVoucher: string | null = null;
+  if (voucher_code) {
+    const voucher = await row<any>(
+      "SELECT * FROM vouchers WHERE code = ? AND active = 1",
+      [String(voucher_code).toUpperCase().trim()]
+    );
+    const voucherValid =
+      voucher &&
+      (!voucher.expires_at || new Date(voucher.expires_at) > new Date()) &&
+      (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) &&
+      (voucher.club_id === null || voucher.club_id === slot.club_id);
+    if (voucherValid) {
+      if (voucher.discount_type === "percentage") {
+        discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
+      } else {
+        discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
+      }
+      appliedVoucher = voucher.code;
+    }
+  }
+
+  // Cart fee calculation: 1-2 players = 1 cart, 3-4 players = 2 carts
+  const cartAvailable  = !!slot.cart_available;
+  const cartCompulsory = !!slot.cart_compulsory;
+  const cartUnitPrice  = slot.cart_price ? parseFloat(slot.cart_price) : 0;
+  const wantCart       = cartAvailable && (cartCompulsory || !!include_cart);
+  const numCarts       = numPlayers <= 2 ? 1 : 2;
+  const cartFee        = wantCart ? Math.round(numCarts * cartUnitPrice * 100) / 100 : 0;
+  const cartShare      = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
+
+  const greensAfterDiscount = Math.max(0, totalGreens - discountAmount);
+  const totalAmount         = greensAfterDiscount + cartFee;
+
+  // Organizer's payment: their greens (R0 if prepaid) + full cart (solo) or cart share (split)
+  const splitAmount = split_bill && numPlayers > 1
+    ? organizerGreens + cartShare
+    : totalAmount;
+
+  // Each invited player's payment: their individual tier price + cart share (split) or R0 (organizer pays all)
+  const friendAmounts = invitedGreens.map(g => split_bill ? g + cartShare : 0);
+
+  const ref = generateRef();
+
+  // Load platform fee percentage (default 5%)
+  const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
+  const feePct     = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
+  const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
+  const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
+
+  let bookingId!: number;
+  await withTransaction(async (client) => {
+    const insertResult = await clientQuery(client,
+      `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
+        booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) RETURNING id`,
+      [user.id, parseInt(tee_time_id),
+       numPlayers, split_bill ? 1 : 0, totalAmount, splitAmount,
+       ref, payment_method, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles]
+    );
+    bookingId = insertResult.rows[0].id;
+
+    await clientQuery(client,
+      "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
+      [bookingId, user.id, splitAmount]
+    );
+
+    for (let i = 0; i < normalised.length; i++) {
+      const p       = normalised[i];
+      const pAmount = friendAmounts[i] ?? 0;
+      if (p.user_id) {
+        await clientQuery(client,
+          "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
+          [bookingId, p.user_id, pAmount]
+        );
+      } else if (p.guest_name) {
+        await clientQuery(client,
+          "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, NULL, ?, 0, ?)",
+          [bookingId, p.guest_name, pAmount]
+        );
+      }
+    }
+
+    await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+    if (appliedVoucher) {
+      await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+    }
+    // For prepaid: deduct one round from the member's balance
+    if (payment_method === "prepaid") {
+      await clientQuery(client,
+        `UPDATE club_members
+           SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE club_id = ? AND user_id = ? AND status = 'active'
+           AND prepaid_rounds > prepaid_rounds_used`,
+        [slot.club_id, user.id]
+      );
+    }
+    // For non-Stitch payments (prepaid, wallet) the organizer is paid immediately
+    if (payment_method !== "stitch") {
+      await clientQuery(client,
+        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
+        [bookingId, user.id]
+      );
+    }
+    // Track booked players in the portal slot
+    await clientQuery(client,
+      "UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?",
+      [numPlayers, parseInt(tee_time_id)]
+    );
+  });
+
+  let paymentUrl: string | null = null;
+  if (payment_method === "stitch") {
+    const host = req.get("host") ?? "";
+    const pr = await createStitchPayment({
+      amount:               splitAmount,
+      payerReference:       `TapIn-${ref}`.slice(0, 20),
+      beneficiaryReference: ref.slice(0, 20),
+      externalReference:    String(bookingId),
+      redirectUrl:          `https://${host}/booking/success`,
+    });
+    paymentUrl = pr.url;
+  }
+
+  // Notify all registered players — guests (no user_id) have no account so skip them
+  const allPlayerIds = [
+    user.id,
+    ...rawPlayers.slice(0, numPlayers - 1).filter((p) => p.user_id).map((p) => p.user_id!),
+  ];
+  const dateStr = slot.date instanceof Date ? slot.date.toISOString().split("T")[0] : String(slot.date).split("T")[0];
+  const timeStr = String(slot.time).slice(0, 5);
+
+  // Fetch ALL player accounts (with or without a push token) for in-app notifications
+  const playerRows = await query<any>(
+    `SELECT id, name, push_token FROM users WHERE id IN (${allPlayerIds.map(() => "?").join(",")})`,
+    allPlayerIds
+  );
+
+  const buildTitle = (isOrganizer: boolean) =>
+    isOrganizer ? "Booking Confirmed! ⛳" : "You've Been Added to a Round! ⛳";
+  const buildBody = (isOrganizer: boolean) =>
+    isOrganizer
+      ? `Your tee time at ${slot.club_name} on ${dateStr} at ${timeStr} is confirmed.`
+      : split_bill
+        ? `${user.name} added you to a round at ${slot.club_name} on ${dateStr} at ${timeStr}. Tap to pay your share.`
+        : `${user.name} added you to a round at ${slot.club_name} on ${dateStr} at ${timeStr}.`;
+
+  // Push notifications — only to players who have a registered device token
+  const pushMessages = playerRows
+    .filter((p: any) => p.push_token?.startsWith("ExponentPushToken["))
+    .map((p: any) => {
+      const isOrganizer = p.id === user.id;
+      return {
+        to:    p.push_token as string,
+        sound: "default" as const,
+        title: buildTitle(isOrganizer),
+        body:  buildBody(isOrganizer),
+        data:  { type: isOrganizer ? "booking_confirmed" : "booking_invited", booking_id: bookingId },
+      };
+    });
+  sendPushNotifications(pushMessages);
+
+  // In-app notifications — save for every registered player regardless of push token
+  for (const p of playerRows) {
+    const isOrganizer = p.id === user.id;
+    saveUserNotification(
+      p.id,
+      isOrganizer ? "booking_confirmed" : "booking_invited",
+      buildTitle(isOrganizer),
+      buildBody(isOrganizer),
+      { booking_id: bookingId }
+    );
+  }
+
+  res.status(201).json({
+    booking_id:  bookingId,
+    booking_ref: ref,
+    payment_url: paymentUrl,
+    status:      "confirmed",
+  });
+});
+
+router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const bp = await row<any>(
+    "SELECT bp.paid, bp.amount FROM booking_players bp WHERE bp.booking_id = ? AND bp.user_id = ?",
+    [id, user.id]
+  );
+  if (!bp) { res.status(404).json({ message: "You are not a player on this booking" }); return; }
+  if (bp.paid) { res.status(409).json({ message: "You have already paid" }); return; }
+
+  const booking = await row<any>(
+    `SELECT b.*, c.name as club_name
+     FROM bookings b
+     LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     LEFT JOIN clubs c ON c.id = pts.club_id
+     WHERE b.id = ?`,
+    [id]
+  );
+  if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
+
+  const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
+  const host = req.get("host") ?? "";
+  const pr = await createStitchPayment({
+    amount,
+    payerReference:       `TapIn-${booking.booking_ref}`.slice(0, 20),
+    beneficiaryReference: booking.booking_ref.slice(0, 20),
+    externalReference:    `${id}-player-${user.id}`,
+    redirectUrl:          `https://${host}/booking/success`,
+  });
+
+  res.json({ payment_url: pr.url, amount, booking_id: id });
+});
+
+router.put("/bookings/:id/player-paid", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const affected = await run(
+    "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
+    [id, user.id]
+  );
+  if (!affected) { res.status(404).json({ message: "Player record not found" }); return; }
+
+  res.json({ success: true });
+});
+
+router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+
+  const booking = await row(
+    "SELECT id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
+    [id, user.id]
+  );
+
+  if (!booking) {
+    res.status(404).json({ message: "Booking not found or cannot be cancelled" });
+    return;
+  }
+
+  await run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+  res.json({ success: true });
+});
+
+// Stitch webhook — server-to-server payment status notification
+router.post("/stitch/webhook", async (req, res): Promise<void> => {
+  // Stitch sends JSON; the externalReference identifies what was paid
+  const body = req.body as Record<string, unknown>;
+
+  // Support both flat and nested payload shapes Stitch may send
+  const status: string =
+    (body["status"] as string) ??
+    ((body["paymentInitiationRequest"] as any)?.status ?? "");
+  const externalRef: string =
+    (body["externalReference"] as string) ??
+    ((body["paymentInitiationRequest"] as any)?.externalReference ?? "");
+
+  // Only act on completed payments
+  if ((status ?? "").toLowerCase() !== "completed") {
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  // Wallet top-up: externalReference is "wallet-<topupId>"
+  if (externalRef.startsWith("wallet-")) {
+    const topupId = parseInt(externalRef.split("-")[1] ?? "", 10);
+    if (!isNaN(topupId)) {
+      const topup = await row<any>(
+        "SELECT id, user_id, amount FROM wallet_topups WHERE id = ? AND status = 'pending'",
+        [topupId]
+      );
+      if (topup) {
+        await run("UPDATE wallet_topups SET status = 'completed' WHERE id = ?", [topupId]);
+        const existing = await row<any>("SELECT id FROM wallets WHERE user_id = ?", [topup.user_id]);
+        if (existing) {
+          await run("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [topup.amount, topup.user_id]);
+        } else {
+          await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
+        }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  // Booking payment: externalReference is "<bookingId>" or "<bookingId>-player-<userId>"
+  const [rawId] = externalRef.split("-player-");
+  const bookingId = parseInt(rawId, 10);
+  if (!isNaN(bookingId)) {
+    if (externalRef.includes("-player-")) {
+      const userId = parseInt(externalRef.split("-player-")[1] ?? "0", 10);
+      if (userId) {
+        await run(
+          "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
+          [bookingId, userId]
+        );
+      }
+    } else {
+      await run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+      await run(
+        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+        [bookingId, bookingId]
+      );
+    }
+  }
+
+  res.status(200).json({ received: true });
+});
+
+export default router;

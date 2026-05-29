@@ -1,0 +1,40 @@
+import { Router, type IRouter } from "express";
+import healthRouter from "./health";
+import authRouter from "./auth";
+import clubsRouter from "./clubs";
+import bookingsRouter from "./bookings";
+import friendsRouter from "./friends";
+import adsRouter from "./ads";
+import messagesRouter from "./messages";
+import vouchersRouter from "./vouchers";
+import adminRouter from "./admin";
+import geofencingRouter from "./geofencing";
+import notificationsRouter from "./notifications";
+import eventsRouter from "./events";
+import portalRouter from "./portal";
+import storageRouter from "./storage";
+import paymentsRouter from "./payments";
+import settingsRouter from "./settings";
+import mapRouter from "./map";
+
+const router: IRouter = Router();
+
+router.use(healthRouter);
+router.use(authRouter);
+router.use(geofencingRouter); // must come before clubsRouter — /clubs/geofences vs /clubs/:id
+router.use(clubsRouter);
+router.use(bookingsRouter);
+router.use(friendsRouter);
+router.use(adsRouter);
+router.use(messagesRouter);
+router.use(vouchersRouter);
+router.use(adminRouter);
+router.use(notificationsRouter);
+router.use(eventsRouter);
+router.use(portalRouter);
+router.use(storageRouter);
+router.use(paymentsRouter);
+router.use(settingsRouter);
+router.use(mapRouter);
+
+export default router;

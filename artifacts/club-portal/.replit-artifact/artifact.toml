@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/club-portal/"
+title = "Club Management Portal"
+version = "1.0.0"
+id = "artifacts/club-portal"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/club-portal/" ]
+localPort = 19606
+
+[services.development]
+run = "pnpm --filter @workspace/club-portal run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/club-portal", "run", "build" ]
+publicDir = "artifacts/club-portal/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "19606"
+BASE_PATH = "/club-portal/"

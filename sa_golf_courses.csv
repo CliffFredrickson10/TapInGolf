@@ -1,0 +1,507 @@
+#,Name,Address,City,Province,Holes,Data Source,Latitude,Longitude,Phone,Website,Green Fee (ZAR),Google Maps
+1,Aberdeen Golf Club,Hope Street,Aberdeen,Eastern Cape,9,Garmin (SA),-32.477548,24.05347,,https://www.aberdeengolf.com/contact/,,https://www.google.com/maps/search/?api=1&query=-32.477548%2C24.05347
+2,Adelaide Golf Course,Winterberg Lane,Adelaide,Eastern Cape,18,Garmin (SA),-32.690839,26.291658,0409554688,,,https://www.google.com/maps/search/?api=1&query=-32.690839%2C26.291658
+3,Akasia Country Club,Volksrus Road,Theresapark,Gauteng,18,Garmin (SA),-25.660415,28.142574,012 542 4257,,,https://www.google.com/maps/search/?api=1&query=-25.660415%2C28.142574
+4,Albertinia Golf Course,Centre Brak and Golf Street,Albertinia,Western Cape,18,Garmin (SA),-34.201877,21.581805,028 735 1646,,,https://www.google.com/maps/search/?api=1&query=-34.201877%2C21.581805
+5,Alexander Bay Golf Club,Alexander Bay,Alexander Bay,Northern Cape,9,Garmin (SA),-28.599746,16.488916,,,,https://www.google.com/maps/search/?api=1&query=-28.599746%2C16.488916
+6,Alexander Golf Club,"38 Clovelly Road, Sunny Ridge",East London,Eastern Cape,18,Garmin (SA),-33.042851,27.856547,+27437362313,,,https://www.google.com/maps/search/?api=1&query=-33.042851%2C27.856547
+7,Alexandria Golf Club,Martha Oosthuizen Street,Alexandria,Eastern Cape,9,Garmin (SA),-33.651244,26.402112,,,,https://www.google.com/maps/search/?api=1&query=-33.651244%2C26.402112
+8,Aliwal North Golf Club,Benson Street,Aliwal North,Eastern Cape,18,Garmin (SA),-30.698311,26.716068,+27516332391,,,https://www.google.com/maps/search/?api=1&query=-30.698311%2C26.716068
+9,Amandelbult Golf Club,Thabazimbi Main Road,Amandelbult,Limpopo,18,Garmin (SA),-24.813427,27.29795,014 784 1065,,,https://www.google.com/maps/search/?api=1&query=-24.813427%2C27.29795
+10,Amanzimtoti Country Club,1 Golf Course Road,Prospecton,KwaZulu-Natal,18,Garmin (SA),-30.011286,30.931737,031 902 1166,https://amanzimtotigolfclub.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-30.011286%2C30.931737
+11,Amatikulu Country Club,Tongaat Village,Amatikulu,KwaZulu-Natal,18,Garmin (SA),-29.047446,31.53033,,,,https://www.google.com/maps/search/?api=1&query=-29.047446%2C31.53033
+12,Amersfoort Golf Club,South Street,Amersfoort,Mpumalanga,9,Garmin (SA),-27.01699,29.864745,,,,https://www.google.com/maps/search/?api=1&query=-27.01699%2C29.864745
+13,Amorello Bush Golf Lodge,R22 Sodwana Rd,Hluluwe,KwaZulu-Natal,9,Garmin (SA),-27.898076,32.360083,035 562 3182,https://amorello.co.za/,,https://www.google.com/maps/search/?api=1&query=-27.898076%2C32.360083
+14,Amphitheatre Golf Course,Pvt Bag X1621,Bergville,KwaZulu-Natal,9,Garmin (SA),-28.658199,29.033831,,,,https://www.google.com/maps/search/?api=1&query=-28.658199%2C29.033831
+15,Arabella Golf Club,R44 Road,Kleinmond,Western Cape,18,Garmin (SA),-34.317351,19.135054,+27 28 284 0000,,,https://www.google.com/maps/search/?api=1&query=-34.317351%2C19.135054
+16,Arnot Golf Club,"N4 to Nelspruit, Arnot Power Station",Rietkuil,Mpumalanga,9,Garmin (SA),-25.940137,29.81226,,,,https://www.google.com/maps/search/?api=1&query=-25.940137%2C29.81226
+17,Arrow Rest Mashie Course,R512,Hartbeespoort,North West,18,Garmin (SA),-25.77723,27.828229,,https://arrowrest.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.77723%2C27.828229
+18,Atlantic Beach Golf Club,"1 Fairway Drive, Atlantic Beach Golf Estate",Melkbosstrand,Western Cape,18,Garmin (SA),-33.73921,18.453249,+27 21 553 2223,https://golf.atlanticbeachestate.co.za/members/contacts/,,https://www.google.com/maps/search/?api=1&query=-33.73921%2C18.453249
+19,Augusta Country Estate,88 ashley drive,Hillcrest,KwaZulu-Natal,18,Garmin (SA),-29.790974,30.785944,031 7671607,https://www.augusta.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.790974%2C30.785944
+20,Avion Park Golf Club,123 Highveld Road,Kempton Park,Gauteng,18,Garmin (SA),-26.100742,28.249031,,,,https://www.google.com/maps/search/?api=1&query=-26.100742%2C28.249031
+21,Badplaas Golf Course,Carolina Main Road,Badplaas,Mpumalanga,18,Garmin (SA),-25.936317,30.520771,,,,https://www.google.com/maps/search/?api=1&query=-25.936317%2C30.520771
+22,Balkfontein Golf Club,Corner 10th Ave and River Rd,Lejweleputswa,Free State,18,Garmin (SA),-27.403412,26.504478,,,,https://www.google.com/maps/search/?api=1&query=-27.403412%2C26.504478
+23,Bank Golf Club,Bank Colliery,Middelburg,Mpumalanga,18,Garmin (SA),-25.970004,29.463658,,,,https://www.google.com/maps/search/?api=1&query=-25.970004%2C29.463658
+24,Bankenveld Golf Club,69 Steenberg,Witbank,Mpumalanga,18,Garmin (SA),-25.90506,29.282653,072 076 5890,https://www.bankenveldgolfclub.co.za/contact,,https://www.google.com/maps/search/?api=1&query=-25.90506%2C29.282653
+25,Barberton Golf Club,De Villiers Street,Barberton,Mpumalanga,18,Garmin (SA),-25.792336,31.040754,,,,https://www.google.com/maps/search/?api=1&query=-25.792336%2C31.040754
+26,Barkly East Golf Course,Elliot Road,Barkly East,Eastern Cape,9,Garmin (SA),-30.970308,27.605021,079 040 6517,,,https://www.google.com/maps/search/?api=1&query=-30.970308%2C27.605021
+27,Beachwood Golf Club,"Beachwood Place, (Off Fairway Drive)",Durban North,KwaZulu-Natal,18,Garmin (SA),-29.778253,31.049773,,,,https://www.google.com/maps/search/?api=1&query=-29.778253%2C31.049773
+28,Beaufort West Golf Club,North End,Beaufort West,Western Cape,9,Garmin (SA),-32.341936,22.577257,023 414 3050,,,https://www.google.com/maps/search/?api=1&query=-32.341936%2C22.577257
+29,Bedford Golf Course,Bourke Street,Bedford,Eastern Cape,9,Garmin (SA),-32.676558,26.096928,0721111430,,,https://www.google.com/maps/search/?api=1&query=-32.676558%2C26.096928
+30,Belfast Golf Club,Vermooten Street,Belfast,Mpumalanga,9,Garmin (SA),-25.698631,30.048273,,,,https://www.google.com/maps/search/?api=1&query=-25.698631%2C30.048273
+31,Bellville Golf Club,Jip de Jager Drive,Welgemoed,Western Cape,18,Garmin (SA),-33.870614,18.617599,,https://bellvillegolfclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.870614%2C18.617599
+32,Benoni Country Club,"Morris Ave, Morehill",Benoni,Gauteng,18,Garmin (SA),-26.17223,28.342534,+27118495255,http://www.benonicc.co.za,,https://www.google.com/maps/search/?api=1&query=-26.17223%2C28.342534
+33,Berg River Golf Club,Vygie Street,Velddrif,Western Cape,9,Garmin (SA),-32.778834,18.162024,,,,https://www.google.com/maps/search/?api=1&query=-32.778834%2C18.162024
+34,Bethal Golf Club,Hendrik Joubert Park,Bethal,Mpumalanga,9,Garmin (SA),-26.464198,29.475417,0236355601,,,https://www.google.com/maps/search/?api=1&query=-26.464198%2C29.475417
+35,Bethlehem Golf Club,Cnr Golf and Commissioner Streets,Bethlehem,Free State,18,Garmin (SA),-28.225789,28.306502,,,,https://www.google.com/maps/search/?api=1&query=-28.225789%2C28.306502
+36,Bethulie Golf Course,15 Boshoff Street,Bethulie,Free State,9,Garmin (SA),-30.496137,25.967388,,,,https://www.google.com/maps/search/?api=1&query=-30.496137%2C25.967388
+37,Black Mountain Golf Course,Penge Road,Aggeneys,Northern Cape,18,Garmin (SA),-29.261412,18.823801,,https://www.blackmountaingolf.org/contact,,https://www.google.com/maps/search/?api=1&query=-29.261412%2C18.823801
+38,Blair Atholl Golf Club,"R512, Lanseria",Fourways,Gauteng,18,Garmin (SA),-25.906934,27.919317,,https://www.blairatholl.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.906934%2C27.919317
+39,Bloemfontein Golf Club,Maselspoort Road,Bloemfontein,Free State,18,Garmin (SA),-29.116216,26.257367,,,,https://www.google.com/maps/search/?api=1&query=-29.116216%2C26.257367
+40,Bloemhof Golf Course,Christiana Road,Bloemhof,North West,18,Garmin (SA),-27.652245,25.595505,,,,https://www.google.com/maps/search/?api=1&query=-27.652245%2C25.595505
+41,Blue Valley Golf & Country Estate,"Samrand Avenue, Midrand",Centurion,Gauteng,18,Garmin (SA),-25.934755,28.123697,082 964 3267,https://www.bluevalley.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.934755%2C28.123697
+42,Bluff National Park Golf Club,"100 Club Avenue, Bluff",Durban,KwaZulu-Natal,18,Garmin (SA),-29.923156,31.013166,076 018 5289,,,https://www.google.com/maps/search/?api=1&query=-29.923156%2C31.013166
+43,Blyvooruitzicht Golf Course,6th Avenue,Blyvooruitzicht,Gauteng,18,Garmin (SA),-26.406204,27.392101,0888233248,,,https://www.google.com/maps/search/?api=1&query=-26.406204%2C27.392101
+44,Boggomsbaai Golf Club,Albacorn Street,Mossel Bay,Western Cape,18,Garmin (SA),-34.259471,21.905403,,,,https://www.google.com/maps/search/?api=1&query=-34.259471%2C21.905403
+45,Bonnievale Golf Course,Voortrekker Road,Bonnievale,Western Cape,18,Garmin (SA),-33.928749,20.100685,023 616 3939,,,https://www.google.com/maps/search/?api=1&query=-33.928749%2C20.100685
+46,Bosch Hoek Golf Club,Bosch Hoek Farm,Balgowan,KwaZulu-Natal,18,Garmin (SA),-29.352171,30.096622,076 164 9009,https://boschhoek.co.za/golf-1/,,https://www.google.com/maps/search/?api=1&query=-29.352171%2C30.096622
+47,Bothaville Golf Course,Kroonstad Road,Bothaville,Free State,18,Garmin (SA),-27.394667,26.624336,,,,https://www.google.com/maps/search/?api=1&query=-27.394667%2C26.624336
+48,Brand Mashie Golf Club,Welkom Mines,Welkom,Free State,9,Garmin (SA),-28.022726,26.770387,,,,https://www.google.com/maps/search/?api=1&query=-28.022726%2C26.770387
+49,Brandfort Golf Club,Eeufees Avenue,Brandfort,Free State,9,Garmin (SA),-28.696718,26.469455,0635773290,,,https://www.google.com/maps/search/?api=1&query=-28.696718%2C26.469455
+50,Bredasdorp Golf Club,Recreation Street,Bredasdorp,Western Cape,9,Garmin (SA),-34.543462,20.04801,,,,https://www.google.com/maps/search/?api=1&query=-34.543462%2C20.04801
+51,Bronkhorstspruit Golf Club,Luiperd Str.,Bronkhorstspruit,Gauteng,18,Garmin (SA),-25.807957,28.724643,,,,https://www.google.com/maps/search/?api=1&query=-25.807957%2C28.724643
+52,Bryanston Country Club,Corner Bryanston Drive and Grosvenor Road,Bryanston,Gauteng,18,Garmin (SA),-26.061974,28.012583,+27 11 021-1992,https://www.bryanstoncc.co.za/golf/,,https://www.google.com/maps/search/?api=1&query=-26.061974%2C28.012583
+53,Bultfontein Golf Course,Bultfontein Farm,Bultfontein,Free State,9,Garmin (SA),-28.280111,26.133506,,,,https://www.google.com/maps/search/?api=1&query=-28.280111%2C26.133506
+54,Burgersdorp Golf Club,Andries Venter Street,Burgersdorp,Eastern Cape,18,Garmin (SA),-30.990071,26.328585,,,,https://www.google.com/maps/search/?api=1&query=-30.990071%2C26.328585
+55,Bushman Sands Golf Course,Main Street,Alicedale,Eastern Cape,18,Garmin (SA),-33.315671,26.082156,042 231 8001,,,https://www.google.com/maps/search/?api=1&query=-33.315671%2C26.082156
+56,Butterworth Country Club,Stanford Street,Butterworth,Eastern Cape,18,Garmin (SA),-32.32388,28.144462,0637029655,,,https://www.google.com/maps/search/?api=1&query=-32.32388%2C28.144462
+57,C.M.R. Golf Course,"300 Spencer Road, Maraisburg",Roodepoort,Gauteng,18,Garmin (SA),-26.18881,27.937267,011 472 8060,,,https://www.google.com/maps/search/?api=1&query=-26.18881%2C27.937267
+58,Caledon Golf Club,Ian Toerien Street,Caledon,Western Cape,9,Garmin (SA),-34.235287,19.433699,,,,https://www.google.com/maps/search/?api=1&query=-34.235287%2C19.433699
+59,Calvinia Golf Course,Nieuwoudtville Road,Calvinia,Northern Cape,18,Garmin (SA),-31.481558,19.75843,,,,https://www.google.com/maps/search/?api=1&query=-31.481558%2C19.75843
+60,Camelot Country Club,"21 Wishart Road, Hillcrest",Durban,KwaZulu-Natal,18,Garmin (SA),-29.761213,30.77113,,,,https://www.google.com/maps/search/?api=1&query=-29.761213%2C30.77113
+61,Carnarvon Golf Club,Loxton Rd,Carnarvon,Northern Cape,18,Garmin (SA),-30.972906,22.124316,053 382 3349,,,https://www.google.com/maps/search/?api=1&query=-30.972906%2C22.124316
+62,Carolina Golf Course,35 Duvenhage Street,Carolina,Mpumalanga,18,Garmin (SA),-26.067665,30.104397,,,,https://www.google.com/maps/search/?api=1&query=-26.067665%2C30.104397
+63,Cathcart Country Club,The Kloof House,Cathcart,Eastern Cape,18,Garmin (SA),-32.291458,27.142646,0345951132,,,https://www.google.com/maps/search/?api=1&query=-32.291458%2C27.142646
+64,Cathedral Peak Hotel Golf Club,Winterton,Drakensberg,KwaZulu-Natal,18,Garmin (SA),-28.94383,29.209479,,https://www.cathedralpeak.co.za/discover-more/golf-club/,,https://www.google.com/maps/search/?api=1&query=-28.94383%2C29.209479
+65,Cato Ridge Country Club,Chamberlain Street,Cato Ridge,KwaZulu-Natal,18,Garmin (SA),-29.738467,30.591195,,,,https://www.google.com/maps/search/?api=1&query=-29.738467%2C30.591195
+66,Centurion Golf Club,John Vorster Avenue,Centurion,Gauteng,18,Garmin (SA),-25.873148,28.204789,+27 12 665-9602,https://centuriongolfestate.online/contact-us/,,https://www.google.com/maps/search/?api=1&query=-25.873148%2C28.204789
+67,Centurion Lake Golf Course,200 Kwikkie Crescent,Centurion,Gauteng,9,Garmin (SA),-25.850023,28.181102,+27126650279,https://centuriongolfestate.online/contact-us/,,https://www.google.com/maps/search/?api=1&query=-25.850023%2C28.181102
+68,Ceres Golf Club,1 Bergsig Street,Ceres,Western Cape,18,Garmin (SA),-33.375748,19.303593,0958928439,https://ceresgolfclub.com/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.375748%2C19.303593
+69,Champagne Sports Resort,"R600 Winterton, Champagne Valley",Winterton,KwaZulu-Natal,18,Garmin (SA),-29.001632,29.467692,,,,https://www.google.com/maps/search/?api=1&query=-29.001632%2C29.467692
+70,Chelsea Mashie Golf Club,"Portion 39 of 25, Chelsea Meadows",Port Elizabeth,Eastern Cape,9,Garmin (SA),-33.976774,25.466945,,,,https://www.google.com/maps/search/?api=1&query=-33.976774%2C25.466945
+71,Christiana Golf Club,Jan Kemp Road,Christiana,North West,18,Garmin (SA),-27.900317,25.150752,,,,https://www.google.com/maps/search/?api=1&query=-27.900317%2C25.150752
+72,Chrome Golf Club,"Stoffberg Steelport Road, Chrome Club",Steelport,Mpumalanga,18,Garmin (SA),-24.795318,30.166037,,,,https://www.google.com/maps/search/?api=1&query=-24.795318%2C30.166037
+73,Citrusdal Golf Club,Oewer Street,Citrusdal,Western Cape,18,Garmin (SA),-32.593538,19.009128,063 119 3631,https://citrusdalgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-32.593538%2C19.009128
+74,Clanwilliam Golf Course,Park Street,Clanwilliam,Western Cape,18,Garmin (SA),-32.192036,18.90131,027 482 2918,,,https://www.google.com/maps/search/?api=1&query=-32.192036%2C18.90131
+75,Clocolan Golf Club,Andries Pretorius Street,Clocolan,Free State,9,Garmin (SA),-28.917239,27.571376,,,,https://www.google.com/maps/search/?api=1&query=-28.917239%2C27.571376
+76,Clovelly Country Club,"177 Clovelly Road, Clovelly",Cape Town,Western Cape,18,Garmin (SA),-34.122665,18.42818,+27 21 784 2111,https://clovellygolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.122665%2C18.42818
+77,Colesberg Golf Club,Off the N1,Colesberg,Northern Cape,9,Garmin (SA),-30.735141,25.08379,,,,https://www.google.com/maps/search/?api=1&query=-30.735141%2C25.08379
+78,Correctional Services Golf Course,"Training College, Kroonstad Correctional Services",Kimberley,Northern Cape,6,Garmin (SA),-28.741522,24.71868,012 307 2998,,,https://www.google.com/maps/search/?api=1&query=-28.741522%2C24.71868
+79,Cotswold Downs Golf Course,Inanda Road,Hillcrest,KwaZulu-Natal,18,Garmin (SA),-29.756432,30.783134,031 762 3660,https://cotswolddowns.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.756432%2C30.783134
+80,Cradock Golf Club,1 Hofmeyer Road,Cradock,Eastern Cape,18,Garmin (SA),-32.149386,25.62207,0647473382,,,https://www.google.com/maps/search/?api=1&query=-32.149386%2C25.62207
+81,Creek 9 Golf Course,3 Anton van Wouw Str,Roosevelt Park,Gauteng,9,Garmin (SA),-26.150244,27.990645,,,,https://www.google.com/maps/search/?api=1&query=-26.150244%2C27.990645
+82,Creighton Golf Club,School Road,Creighton,KwaZulu-Natal,18,Garmin (SA),-30.025248,29.839057,,,,https://www.google.com/maps/search/?api=1&query=-30.025248%2C29.839057
+83,Crown Mines Golf Course,Booysens Reserve Rd,Crown Mines,Gauteng,18,Garmin (SA),-26.234176,27.991507,,,,https://www.google.com/maps/search/?api=1&query=-26.234176%2C27.991507
+84,Cullinan Golf Club,Main Road,Cullinan,Gauteng,18,Garmin (SA),-25.670384,28.524669,012 734 0090,https://www.cullinangolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-25.670384%2C28.524669
+85,Dainfern Golf and Country Estate,"Dainfern Estate, Cedar Road",Bryanston,Gauteng,18,Garmin (SA),-25.988932,27.997434,+27118750401,https://dainfern.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-25.988932%2C27.997434
+86,Darling Golf Course,Jacaranda Street,Darling,Western Cape,18,Garmin (SA),-33.377268,18.388331,022 492 3013,,,https://www.google.com/maps/search/?api=1&query=-33.377268%2C18.388331
+87,Darnall Country Club,7 Park Drive,Darnall,KwaZulu-Natal,9,Garmin (SA),-29.266163,31.369357,078 579 6635,,,https://www.google.com/maps/search/?api=1&query=-29.266163%2C31.369357
+88,Daveyton Golf Course,Cnr Eislan and Sibeko Street,Daveyton,Gauteng,18,Garmin (SA),-26.127849,28.442852,,,,https://www.google.com/maps/search/?api=1&query=-26.127849%2C28.442852
+89,De Aar Golf Club,Witplaas,De Aar,Northern Cape,18,Garmin (SA),-30.668482,23.994852,053 631 3213,,,https://www.google.com/maps/search/?api=1&query=-30.668482%2C23.994852
+90,De Hoek Golf Club,Aster Road,De Hoek,Western Cape,18,Garmin (SA),-32.943463,18.760946,022 913 8271,https://dehoek.com/contact-us/,,https://www.google.com/maps/search/?api=1&query=-32.943463%2C18.760946
+91,De Zalze Golf Course,"De Zalze Winelands Golf Estate, R44",Stellenbosch,Western Cape,18,Garmin (SA),-33.971337,18.835479,,https://dezalzegolf.com/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.971337%2C18.835479
+92,Delareyville Golf Course,"The Farm, Soutpan",Delareyville,North West,18,Garmin (SA),-26.696842,25.477338,,,,https://www.google.com/maps/search/?api=1&query=-26.696842%2C25.477338
+93,Delmas Golf Club,"Van Der Walt Street, Leeuwpoort",Delmas,Mpumalanga,9,Garmin (SA),-26.142257,28.681464,,,,https://www.google.com/maps/search/?api=1&query=-26.142257%2C28.681464
+94,Devonvale Golf & Wine Estate,"Bottelry Road, Koelenhof",Stellenbosch,Western Cape,18,Garmin (SA),-33.882582,18.804482,+27218652080,https://devonvaleestate.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.882582%2C18.804482
+95,Dewetsdorp Golf Club,Hertzog Street,Dewetsdorp,Free State,9,Garmin (SA),-29.576032,26.664312,+27823775822,,,https://www.google.com/maps/search/?api=1&query=-29.576032%2C26.664312
+96,Diepgezet Golf Course,,Ekulindeni,Mpumalanga,9,Garmin (SA),-26.00318,31.07234,,,,https://www.google.com/maps/search/?api=1&query=-26.00318%2C31.07234
+97,Dimension Data Mashie Golf Course,Campus - Cnr Main & Sloane,Bryanston,Gauteng,9,Garmin (SA),-26.042178,28.021382,,,,https://www.google.com/maps/search/?api=1&query=-26.042178%2C28.021382
+98,Dolphin Creek Golf Estate,"Morrison Ave, Eiland, Groot Brakrivier",Mossel Bay,Western Cape,18,Garmin (SA),-34.049399,22.238688,,,,https://www.google.com/maps/search/?api=1&query=-34.049399%2C22.238688
+99,Dordrecht Country Club,Molteno Road,Dordrecht,Eastern Cape,18,Garmin (SA),-31.368048,27.03774,082 596 5822,,,https://www.google.com/maps/search/?api=1&query=-31.368048%2C27.03774
+100,Douglas Golf Club,Niekerkhoop Road,Douglas,Northern Cape,18,Garmin (SA),-29.056271,23.760141,053 298 1692,,,https://www.google.com/maps/search/?api=1&query=-29.056271%2C23.760141
+101,Drakensberg Gardens Golf Club,Drakensberg Gardens Rd,Underberg,KwaZulu-Natal,18,Garmin (SA),-29.757501,29.226576,079 367 1555,,,https://www.google.com/maps/search/?api=1&query=-29.757501%2C29.226576
+102,Drakensig Golf Course,"MEC Sports Club, Drakensig",Hoedspruit,Limpopo,9,Garmin (SA),-24.346517,30.93224,063 847 7691,,,https://www.google.com/maps/search/?api=1&query=-24.346517%2C30.93224
+103,Dundee Country Club,1 Tandy Street,Dundee,KwaZulu-Natal,18,Garmin (SA),-28.170061,30.221951,,https://dundeecountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-28.170061%2C30.221951
+104,Durban Country Club,101 Walter Gilbert Road,Durban,KwaZulu-Natal,18,Garmin (SA),-29.827867,31.034113,+27 31 313 1777,https://durbancountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.827867%2C31.034113
+105,Durban Deep Golf Club,Main Reef Rd,Roodepoort,Gauteng,18,Garmin (SA),-26.173596,27.867594,+27110220824,,,https://www.google.com/maps/search/?api=1&query=-26.173596%2C27.867594
+106,Durbanville Golf Club,"Sport Road, Durbanville",Cape Town,Western Cape,18,Garmin (SA),-33.833878,18.65912,021 976 8120,https://durbanvillegolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.833878%2C18.65912
+107,Eagle Canyon Country Club,3 Blueberry Street,Honeydew,Gauteng,18,Garmin (SA),-26.086636,27.923592,+27117952799,https://www.eaglecanyongolfestate.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.086636%2C27.923592
+108,East London Golf Club,"22 Gleneagles Road, Bunkers Hill",East London,Eastern Cape,18,Garmin (SA),-32.995861,27.931761,,,,https://www.google.com/maps/search/?api=1&query=-32.995861%2C27.931761
+109,Ebotse Golf & Country Estate,"Sarel Cilliers Street, Rynfield",Benoni,Gauteng,18,Garmin (SA),-26.155744,28.351378,+27 87 285 3543,https://ebotselinks.com/contact,,https://www.google.com/maps/search/?api=1&query=-26.155744%2C28.351378
+110,Edenburg Golf Club,Jagersfontein Road,Edenburg,Free State,9,Garmin (SA),-29.736214,25.9287,0609882845,,,https://www.google.com/maps/search/?api=1&query=-29.736214%2C25.9287
+111,Elements Private Golf Reserve,,Bela Bela,Limpopo,18,Garmin (SA),-24.799393,28.130809,,https://elementspgr.co.za/,,https://www.google.com/maps/search/?api=1&query=-24.799393%2C28.130809
+112,Elliot Golf Club,Lloyd Street,Elliot,Eastern Cape,9,Garmin (SA),-31.326241,27.838411,,,,https://www.google.com/maps/search/?api=1&query=-31.326241%2C27.838411
+113,Emfuleni Country Club,Emfuleni Drive,Vanderbijlpark,Gauteng,18,Garmin (SA),-26.744049,27.841437,,,,https://www.google.com/maps/search/?api=1&query=-26.744049%2C27.841437
+114,Empangeni Country Club,46 Pearce Crescent,Empangeni,KwaZulu-Natal,18,Garmin (SA),-28.746457,31.895885,,,,https://www.google.com/maps/search/?api=1&query=-28.746457%2C31.895885
+115,Engineers Golf Club,"Military Base, Reier Laan",Marievale,Gauteng,18,Garmin (SA),-26.345319,28.491327,0341613851,,,https://www.google.com/maps/search/?api=1&query=-26.345319%2C28.491327
+116,Erinvale Golf Club,Lourensford Road,Somerset West,Western Cape,18,Garmin (SA),-34.065248,18.883949,+27218471144,https://www.erinvale.com/golf,,https://www.google.com/maps/search/?api=1&query=-34.065248%2C18.883949
+117,Ermelo Country Club,Hendrina Road,Ermelo,Mpumalanga,18,Garmin (SA),-26.469753,29.961138,082 375 1335,,,https://www.google.com/maps/search/?api=1&query=-26.469753%2C29.961138
+118,ERPM Golf Course,Pretoria Rd,Boksburg West,Gauteng,18,Garmin (SA),-26.197756,28.22796,0699413922,,,https://www.google.com/maps/search/?api=1&query=-26.197756%2C28.22796
+119,Eshowe Country Club,Eshowe Country Club,Eshowe,KwaZulu-Natal,18,Garmin (SA),-28.894398,31.475208,0648057061,https://eshowehills.co.za/,,https://www.google.com/maps/search/?api=1&query=-28.894398%2C31.475208
+120,Estcourt Golf Club,Louise Street,Estcourt,KwaZulu-Natal,18,Garmin (SA),-29.016609,29.880238,,,,https://www.google.com/maps/search/?api=1&query=-29.016609%2C29.880238
+121,Euphoria Golf Estate,R101,Naboomspruit,Limpopo,18,Garmin (SA),-24.547181,28.6441,+2782 076 6275,https://euphoriaestate.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-24.547181%2C28.6441
+122,Excelsior Golf Club,Wesselsstraat,Excelsior,Free State,9,Garmin (SA),-28.932452,27.057889,,,,https://www.google.com/maps/search/?api=1&query=-28.932452%2C27.057889
+123,Eye of Africa Golf Estate,33 Cayman Road,Eikenhof,Gauteng,18,Garmin (SA),-26.3623,28.02146,079 555 1090,https://eyeofafrica.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-26.3623%2C28.02146
+124,Fairview Golf Estate,14 Pebble Beach Close,Gordon's Bay,Western Cape,18,Garmin (SA),-34.138875,18.865271,021 856 4997,,,https://www.google.com/maps/search/?api=1&query=-34.138875%2C18.865271
+125,Fairview Par 3 Golf Course,Old Gravelotte Rd,Tzaneen,Limpopo,18,Garmin (SA),-23.821321,30.171521,015 307 2679,,,https://www.google.com/maps/search/?api=1&query=-23.821321%2C30.171521
+126,Fancourt Hotel & Country Club ~ Links,1 Montagu St,George,Western Cape,18,Garmin (SA),-33.969331,22.409119,+27 44 804 0000,https://fancourt.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-33.969331%2C22.409119
+127,Fancourt Hotel & Country Club ~ Montagu,"Montagu Street, Blanco",George,Western Cape,18,Garmin (SA),-33.952665,22.406123,+27 44 804 0000,https://fancourt.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-33.952665%2C22.406123
+128,Fancourt Hotel & Country Club ~ Outeniqua,"Montagu Street, Blanco",George,Western Cape,18,Garmin (SA),-33.951252,22.406659,+27 44 804 0000,https://fancourt.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.951252%2C22.406659
+129,Fancourt Hotel & Country Club ~ The Links Experience,Montagu St,George,Western Cape,9,Garmin (SA),-33.962961,22.400596,+27 44 804 0000,https://fancourt.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-33.962961%2C22.400596
+130,Fancourt Hotel & Country Club ~ The Links Experience Par 3,Montagu St,George,Western Cape,9,Garmin (SA),-33.962961,22.400596,+27 44 804 0000,,,https://www.google.com/maps/search/?api=1&query=-33.962961%2C22.400596
+131,Ficksburg Golf Course,1 Hill Street,Ficksburg,Free State,18,Garmin (SA),-28.859481,27.888856,0922693460,,,https://www.google.com/maps/search/?api=1&query=-28.859481%2C27.888856
+132,Fig Tree Golf Course,Oceanway Rd,East London,Eastern Cape,9,Garmin (SA),-32.94234,27.971881,076 808 1455,,,https://www.google.com/maps/search/?api=1&query=-32.94234%2C27.971881
+133,Fish River Sun Country Club,R72,Port Alfred,Eastern Cape,18,Garmin (SA),-33.483611,27.133227,+27406761101,,,https://www.google.com/maps/search/?api=1&query=-33.483611%2C27.133227
+134,Fort Beaufort Golf Course,1601 Ralph Street,Fort Beaufort,Eastern Cape,18,Garmin (SA),-32.762837,26.624062,,,,https://www.google.com/maps/search/?api=1&query=-32.762837%2C26.624062
+135,Frankfort Golf Course,Brand Street,Frankfort,Free State,9,Garmin (SA),-27.288086,28.495767,,,,https://www.google.com/maps/search/?api=1&query=-27.288086%2C28.495767
+136,Fynbos Golf and Country Estate,Eersterivierstrand,Oubosrand,Eastern Cape,18,Garmin (SA),-34.070267,24.233131,+27 72 751 6162,https://www.fynbosgolf.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.070267%2C24.233131
+137,Gansbaai Golf Club,"212 Perlemoen Street, Kleinbaai",Gansbaai,Western Cape,18,Garmin (SA),-34.618413,19.349027,028 384 1441,https://gansbaaigolfclub.com/home/,,https://www.google.com/maps/search/?api=1&query=-34.618413%2C19.349027
+138,Gary Player Country Club,North West Province,Sun City,North West,18,Garmin (SA),-25.345759,27.098594,+27 14 557 3700,,,https://www.google.com/maps/search/?api=1&query=-25.345759%2C27.098594
+139,George Golf Club,Langenhoven Str,George,Western Cape,18,Garmin (SA),-33.953534,22.445955,+27 44 873 6116,,,https://www.google.com/maps/search/?api=1&query=-33.953534%2C22.445955
+140,Germiston Country Club,Rand Airport Rd,Germiston,Gauteng,18,Garmin (SA),-26.233125,28.153028,,,,https://www.google.com/maps/search/?api=1&query=-26.233125%2C28.153028
+141,Glencoe Correctional Services Golf Club,Glencoe Correctional Premises,Glencoe,KwaZulu-Natal,18,Garmin (SA),-28.156865,30.134833,034 393 2107,,,https://www.google.com/maps/search/?api=1&query=-28.156865%2C30.134833
+142,Glendower Golf Club,"20 Marias Road, Dowerglen Ext 2",Bedfordview,Gauteng,18,Garmin (SA),-26.159873,28.141771,+27 11 453-1013,https://glendower.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.159873%2C28.141771
+143,Glengarry Kamberg,"Glengarry, 1 Highmoor Rd",Kamberg,KwaZulu-Natal,9,Garmin (SA),-29.324148,29.713852,082 867 7620,,,https://www.google.com/maps/search/?api=1&query=-29.324148%2C29.713852
+144,Glenvista Country Club,Vorster Ave,Glenvista,Gauteng,18,Garmin (SA),-26.281408,28.056084,011 432 3150,https://glenvistacountryclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-26.281408%2C28.056084
+145,Glenwood Golf Club,Knysna Rd,George,Western Cape,18,Garmin (SA),-33.973029,22.491644,,https://glenwoodiegolf.com/contact/,,https://www.google.com/maps/search/?api=1&query=-33.973029%2C22.491644
+146,Goldfields West Golf Club,West Driefontein Mine,Carletonville,Gauteng,18,Garmin (SA),-26.391189,27.473949,,,,https://www.google.com/maps/search/?api=1&query=-26.391189%2C27.473949
+147,Golf at Midfields Estates,Midsteam Estate,Midfields Estate,Gauteng,18,Garmin (SA),-25.921108,28.195961,,,,https://www.google.com/maps/search/?api=1&query=-25.921108%2C28.195961
+148,Gonubie Golf Club,"End Street, Gonubie",East London,Eastern Cape,18,Garmin (SA),-32.950938,28.006167,0319028038,,,https://www.google.com/maps/search/?api=1&query=-32.950938%2C28.006167
+149,Goose Valley Golf Club,"Next to N2, Goose Valley",Plettenberg Bay,Western Cape,18,Garmin (SA),-34.026375,23.381877,+27 11 512 0204,https://www.goosevalleygolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-34.026375%2C23.381877
+150,Gowrie Farm Golf Course,Old Main Road,Nottingham Road,KwaZulu-Natal,18,Garmin (SA),-29.362606,30.003023,+27733460847,https://www.gowrie.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.362606%2C30.003023
+151,Graaff Reinet Golf Club,"The Commonage, Aberdeen Road",Graaff-Reinet,Eastern Cape,18,Garmin (SA),-32.295146,24.54514,049 893 0286,https://graaffreinet.co.za/the-graaff-reinet-golf-club/,,https://www.google.com/maps/search/?api=1&query=-32.295146%2C24.54514
+152,Grabouw Mashie Golf Club,26 oudebrug road,Grabouw,Western Cape,18,Garmin (SA),-34.15158,19.018613,+27836792615,,,https://www.google.com/maps/search/?api=1&query=-34.15158%2C19.018613
+153,Graceland Country Club,Embalenhle Road,Secunda,Mpumalanga,18,Garmin (SA),-26.512971,29.162049,,https://graceland.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-26.512971%2C29.162049
+154,Grahamstown Golf Club,Old Cradock Road,Grahamstown,Eastern Cape,18,Garmin (SA),-33.296374,26.499327,,,,https://www.google.com/maps/search/?api=1&query=-33.296374%2C26.499327
+155,Greenside Colliery Golf Club,"Greenside Colliery, Blackhill",Witbank,Mpumalanga,18,Garmin (SA),-25.961637,29.174967,,,,https://www.google.com/maps/search/?api=1&query=-25.961637%2C29.174967
+156,Greenways Golf Estate,"Greenways 4050, Beach Road",Strand,Western Cape,18,Garmin (SA),-34.129957,18.841907,069 971 6173,,,https://www.google.com/maps/search/?api=1&query=-34.129957%2C18.841907
+157,Greytown Country Club,3 Hallcar Street,Greytown,KwaZulu-Natal,18,Garmin (SA),-29.076047,30.592782,033 417 2441,,,https://www.google.com/maps/search/?api=1&query=-29.076047%2C30.592782
+158,Groblersdal Golf Club,Middelburg Road,Groblersdal,Mpumalanga,18,Garmin (SA),-25.177767,29.404693,,,,https://www.google.com/maps/search/?api=1&query=-25.177767%2C29.404693
+159,Hankey Golf Club,Klein River Road,Hankey,Eastern Cape,18,Garmin (SA),-33.826903,24.882884,,,,https://www.google.com/maps/search/?api=1&query=-33.826903%2C24.882884
+160,Hans Merensky Golf Course,Club Road,Phalaborwa,Limpopo,18,Garmin (SA),-23.963127,31.166525,+27 15 781 3931,,,https://www.google.com/maps/search/?api=1&query=-23.963127%2C31.166525
+161,Harding Municipal Golf Club,Shepstone Street,Harding,KwaZulu-Natal,18,Garmin (SA),-30.58098,29.886983,,,,https://www.google.com/maps/search/?api=1&query=-30.58098%2C29.886983
+162,Harrismith Country Club,Murray Street,Harrismith,Free State,18,Garmin (SA),-28.265955,29.135163,058 623 0468,,,https://www.google.com/maps/search/?api=1&query=-28.265955%2C29.135163
+163,Hartswater Golf Club,Christiana Street,Hartswater,Northern Cape,18,Garmin (SA),-27.754126,24.821227,,,,https://www.google.com/maps/search/?api=1&query=-27.754126%2C24.821227
+164,Hazendal Golf,Bottelary Road,Stellenbosch,Western Cape,18,Garmin (SA),-33.897568,18.719164,021 903 5034,,,https://www.google.com/maps/search/?api=1&query=-33.897568%2C18.719164
+165,Heidelberg Golf Club,Off N2 on Riversdale side of Heidelberg,Heidelberg,Western Cape,9,Garmin (SA),-34.087277,20.965567,,https://heidelberggolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.087277%2C20.965567
+166,Heidelberg Golf Course,2 Station Road,Heidelberg,Gauteng,9,Garmin (SA),-26.505997,28.374295,,,,https://www.google.com/maps/search/?api=1&query=-26.505997%2C28.374295
+167,Heilbron Golf Course,Pienaar Street,Heilbron,Free State,9,Garmin (SA),-27.293091,27.960072,0909447960,,,https://www.google.com/maps/search/?api=1&query=-27.293091%2C27.960072
+168,Helderberg Village Golf Club,"Bakkerskloof Road, The Helderberg Village",Somerset West,Western Cape,18,Garmin (SA),-34.045375,18.819066,021 855 8334,https://www.helderbergvillage.org.za/,,https://www.google.com/maps/search/?api=1&query=-34.045375%2C18.819066
+169,Hermanus Golf Club ~ East,Golf Road,Hermanus,Western Cape,18,Garmin (SA),-34.41054,19.256426,,,,https://www.google.com/maps/search/?api=1&query=-34.41054%2C19.256426
+170,Hermanus Golf Club ~ North,Golf Road,Hermanus,Western Cape,18,Garmin (SA),-34.41054,19.256426,,,,https://www.google.com/maps/search/?api=1&query=-34.41054%2C19.256426
+171,Hermanus Golf Club ~ South,Golf Road,Hermanus,Western Cape,18,Garmin (SA),-34.41054,19.256426,,,,https://www.google.com/maps/search/?api=1&query=-34.41054%2C19.256426
+172,Heron Banks Golf Course,"Minnaar, Vaal Park",Sasolburg,Free State,18,Garmin (SA),-26.751347,27.845297,,,,https://www.google.com/maps/search/?api=1&query=-26.751347%2C27.845297
+173,Hex Vallei Golf Club,Dauphine Crescent,De Doorns,Western Cape,18,Garmin (SA),-33.483872,19.65847,,,,https://www.google.com/maps/search/?api=1&query=-33.483872%2C19.65847
+174,Highland Gate Golf & Trout Estate,Kruisfontein Road,Dullstroom,Mpumalanga,18,Garmin (SA),-25.444,30.204282,087 287 4652,https://highlandgate.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.444%2C30.204282
+175,Hillside Golf Club,"Rachel de Beer Street, Pretoria North",Pretoria,Gauteng,18,Garmin (SA),-25.678504,28.15268,,,,https://www.google.com/maps/search/?api=1&query=-25.678504%2C28.15268
+176,Holly Country Club,Off Sasolburg Highway (R57),Heilbron,Free State,18,Garmin (SA),-26.934554,27.914113,0909447960,,,https://www.google.com/maps/search/?api=1&query=-26.934554%2C27.914113
+177,Hoopstad Golf Club,35 Kameeldoring Street,Hoopstad,Free State,18,Garmin (SA),-27.821429,25.905182,,,,https://www.google.com/maps/search/?api=1&query=-27.821429%2C25.905182
+178,Hopetown Golf Club,2 Queen Street,Hopetown,Northern Cape,18,Garmin (SA),-29.627031,24.12198,,,,https://www.google.com/maps/search/?api=1&query=-29.627031%2C24.12198
+179,Hotazel Golf Club,Dyason Road,Hotazel,Northern Cape,9,Garmin (SA),-27.200553,22.953386,053 830 6247,,,https://www.google.com/maps/search/?api=1&query=-27.200553%2C22.953386
+180,Houghton Golf Club,2nd Avenue,Houghton,Gauteng,18,Garmin (SA),-26.164295,28.069787,+27114833072,https://www.houghton.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.164295%2C28.069787
+181,Howick Golf Club,357 Main Road,Howick,KwaZulu-Natal,18,Garmin (SA),-29.498076,30.232723,033 330 3422,https://www.howickgolfclub.co.za,,https://www.google.com/maps/search/?api=1&query=-29.498076%2C30.232723
+182,Huddle Park Golf Club ~ Championship Blue Course,119 Club Street,Linksfield,Gauteng,18,Garmin (SA),-26.155869,28.119574,061 536 0895,http://huddlepark.com/,,https://www.google.com/maps/search/?api=1&query=-26.155869%2C28.119574
+183,Huddle Park Golf Club ~ Mashie Course,119 Club Street,Linksfield,Gauteng,9,Garmin (SA),-26.155869,28.119574,061 536 0895,,,https://www.google.com/maps/search/?api=1&query=-26.155869%2C28.119574
+184,Humewood Golf Club,Marine Drive,Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.99849,25.682833,+27 41 583-3011,,,https://www.google.com/maps/search/?api=1&query=-33.99849%2C25.682833
+185,Hunters Rest Golf Course,R24 Main,Rustenburg,North West,9,Garmin (SA),-25.778947,27.261178,,,,https://www.google.com/maps/search/?api=1&query=-25.778947%2C27.261178
+186,Inanda Greens Golf Course,54 Wierda Road,Sandton,Gauteng,9,Garmin (SA),-26.114803,28.055224,011 884 1414,,,https://www.google.com/maps/search/?api=1&query=-26.114803%2C28.055224
+187,Indiwe Golf Club,West Street,Indiwe,Eastern Cape,9,Garmin (SA),-31.472461,27.337203,,,,https://www.google.com/maps/search/?api=1&query=-31.472461%2C27.337203
+188,Irene Country Club,1 Main Road,Irene,Gauteng,18,Garmin (SA),-25.884078,28.222805,+27 12 667 1081,,,https://www.google.com/maps/search/?api=1&query=-25.884078%2C28.222805
+189,Ixopo Golf Club,Stewarts Drive,Ixopo,KwaZulu-Natal,18,Garmin (SA),-30.149724,30.060074,,,,https://www.google.com/maps/search/?api=1&query=-30.149724%2C30.060074
+190,Jackal Creek Golf Estate,"Boundary Road, Honeydew",Northriding,Gauteng,18,Garmin (SA),-26.057225,27.926336,010 880 3999,https://jackalcreek.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-26.057225%2C27.926336
+191,Jacobsdal Golf Club,34 Hoop Street,Jacobsdal,Free State,18,Garmin (SA),-29.131773,24.778354,,,,https://www.google.com/maps/search/?api=1&query=-29.131773%2C24.778354
+192,Jagersfontein Golf Club,Amandelhoogte,Jagersfontein,Free State,18,Garmin (SA),-29.752608,25.431531,,,,https://www.google.com/maps/search/?api=1&query=-29.752608%2C25.431531
+193,Jan Kempdorp Golf Club,Van Riebeeck Avenue,Jan Kempdorp,Northern Cape,18,Garmin (SA),-27.912592,24.852395,,,,https://www.google.com/maps/search/?api=1&query=-27.912592%2C24.852395
+194,Jan Kriel Mashie Course,Skool St,Kuils River,Western Cape,18,Garmin (SA),-33.919426,18.683496,021 903 1108,https://jankriel.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.919426%2C18.683496
+195,Jeffreys Bay Golf Club,Disa Avenue,Jeffreys Bay,Eastern Cape,18,Garmin (SA),-34.039437,24.914593,,,,https://www.google.com/maps/search/?api=1&query=-34.039437%2C24.914593
+196,Jeffreys Bay Golf Club ~ Par 3,Disa Avenue,Jeffreys Bay,Eastern Cape,18,Garmin (SA),-34.039437,24.914593,+27422932532,,,https://www.google.com/maps/search/?api=1&query=-34.039437%2C24.914593
+197,Jim and Jerry's Driving Range and Mashie Course,"1724 Hole in One Road, Ruimsig",Roodepoort,Gauteng,18,Garmin (SA),-26.074076,27.857487,+27116621603,,,https://www.google.com/maps/search/?api=1&query=-26.074076%2C27.857487
+198,Johannesburg Country Club ~ Mashie,1 Napier Road,Auckland Park,Gauteng,9,Garmin (SA),-26.050164,28.080691,+27 11 202 1600,,,https://www.google.com/maps/search/?api=1&query=-26.050164%2C28.080691
+199,Johannesburg Country Club ~ Rocklands,1 Napier Road,Auckland Park,Gauteng,18,Garmin (SA),-26.050164,28.080691,+27 11 202 1600,,,https://www.google.com/maps/search/?api=1&query=-26.050164%2C28.080691
+200,Johannesburg Country Club ~ Woodmead,1 Napier Road,Auckland Park,Gauteng,18,Garmin (SA),-26.050164,28.080691,011 202 1600,,,https://www.google.com/maps/search/?api=1&query=-26.050164%2C28.080691
+201,Kakamas Golf Club,Neilersdrift Road,Kakamas,Northern Cape,18,Garmin (SA),-28.795595,20.651786,,,,https://www.google.com/maps/search/?api=1&query=-28.795595%2C20.651786
+202,Kambaku Golf Club,33 Rissik Street,Komatipoort,Mpumalanga,18,Garmin (SA),-25.437522,31.972328,,,,https://www.google.com/maps/search/?api=1&query=-25.437522%2C31.972328
+203,Kameeldoring Country Club,H.F Verwoerd,Mokopane,Limpopo,18,Garmin (SA),-24.211056,28.989379,066 287 2250,,,https://www.google.com/maps/search/?api=1&query=-24.211056%2C28.989379
+204,Katberg Eco Estate,R351,Katberg,Eastern Cape,18,Garmin (SA),-32.497466,26.681714,040 864 1010,,,https://www.google.com/maps/search/?api=1&query=-32.497466%2C26.681714
+205,Kei Mouth Country Club,Golf Course Road,Kei Mouth,Eastern Cape,18,Garmin (SA),-32.696153,28.364207,+27438411083,,,https://www.google.com/maps/search/?api=1&query=-32.696153%2C28.364207
+206,Keimoes Golf Club,P.O.Box 272,Keimoes,Northern Cape,9,Garmin (SA),-28.692527,20.970226,,,,https://www.google.com/maps/search/?api=1&query=-28.692527%2C20.970226
+207,Kempton Park Golf Club,"Green Avenue, Kempton Park",Spartan,Gauteng,18,Garmin (SA),-26.106327,28.210959,071 687 1592,,,https://www.google.com/maps/search/?api=1&query=-26.106327%2C28.210959
+208,Kestell Golf Club,Cilliers Street,Kestell,Free State,18,Garmin (SA),-28.301897,28.701675,0576020131,,,https://www.google.com/maps/search/?api=1&query=-28.301897%2C28.701675
+209,Kilbarchan Golf Course,Kilbarchan,Newcastle,KwaZulu-Natal,18,Garmin (SA),-27.841202,29.9695,034 310 6690,,,https://www.google.com/maps/search/?api=1&query=-27.841202%2C29.9695
+210,Killarney Country Club,60 Fifth Street,Lower Houghton,Gauteng,18,Garmin (SA),-26.151767,28.054165,011 442 3880,https://www.killarneycountryclub.co.za/general-information-enquiry/,,https://www.google.com/maps/search/?api=1&query=-26.151767%2C28.054165
+211,Kimberley Golf Club,"Transvaal Road, Kamfersdam",Kimberley,Northern Cape,18,Garmin (SA),-28.69379,24.775614,053 841 0179,https://www.kimberleygc.co.za/contact-6,,https://www.google.com/maps/search/?api=1&query=-28.69379%2C24.775614
+212,Kimiad Golf,Wekker Road,Moreletapark,Gauteng,18,Garmin (SA),-25.817774,28.296576,012 997 2240,,,https://www.google.com/maps/search/?api=1&query=-25.817774%2C28.296576
+213,King David Mowbray Golf Club,"Raapenberg Road, Mowbray",Cape Town,Western Cape,18,Garmin (SA),-33.945951,18.492222,+27 21 685 3018,,,https://www.google.com/maps/search/?api=1&query=-33.945951%2C18.492222
+214,King William's Town Golf Course,Cnr National Rd and Hargreaves Ave,King Williams Town,Eastern Cape,18,Garmin (SA),-32.892144,27.409215,,,,https://www.google.com/maps/search/?api=1&query=-32.892144%2C27.409215
+215,Kingswood Golf Estate,Plattner Boulevard,George,Western Cape,18,Garmin (SA),-33.970653,22.433563,+27 44 861 7271,https://www.kingswood.co.za/directory/,,https://www.google.com/maps/search/?api=1&query=-33.970653%2C22.433563
+216,Kinross Golf Club,Spitz Street,Kinross,Mpumalanga,18,Garmin (SA),-26.41569,29.108289,,,,https://www.google.com/maps/search/?api=1&query=-26.41569%2C29.108289
+217,Kirkwood Golf Club,Uye Road,Kirkwood,Eastern Cape,18,Garmin (SA),-33.39282,25.450232,,,,https://www.google.com/maps/search/?api=1&query=-33.39282%2C25.450232
+218,Kleinmond Golf Club,Top of Botriver Road,Kleinmond,Western Cape,18,Garmin (SA),-34.330816,19.033964,,https://www.kleinmondgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.330816%2C19.033964
+219,Kleinzee Golf Course,Dyason Road,Kleinzee,Northern Cape,9,Garmin (SA),-29.677953,17.059469,027 877 0530,,,https://www.google.com/maps/search/?api=1&query=-29.677953%2C17.059469
+220,Klerksdorp Golf Club,Cnr Boet Randalls and Trens Erasmus Streets,Klerksdorp,North West,18,Garmin (SA),-26.878223,26.65839,,,,https://www.google.com/maps/search/?api=1&query=-26.878223%2C26.65839
+221,Kloof Country Club,26 Victoria Road,Kloof,KwaZulu-Natal,18,Garmin (SA),-29.795887,30.824375,0463496522,https://kloofcc.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.795887%2C30.824375
+222,Knysna Golf Club,"Howard Str., Hunters Home",Knysna,Western Cape,18,Garmin (SA),-34.058426,23.078983,,https://knysnagolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-34.058426%2C23.078983
+223,Koffiefontein Golf Course,Du Preez Street,Koffiefontein,Free State,18,Garmin (SA),-29.410958,25.001085,+27532050681,,,https://www.google.com/maps/search/?api=1&query=-29.410958%2C25.001085
+224,Kokstad Golf Club,107 Elliot Street,Kokstad,KwaZulu-Natal,18,Garmin (SA),-30.542134,29.407958,,,,https://www.google.com/maps/search/?api=1&query=-30.542134%2C29.407958
+225,Komga Golf Course,Main Street,Komga,Eastern Cape,18,Garmin (SA),-32.576695,27.886282,+27438311069,,,https://www.google.com/maps/search/?api=1&query=-32.576695%2C27.886282
+226,Koro Creek Golf Estate,Church Street,Modimolle,Limpopo,18,Garmin (SA),-24.697502,28.385732,,https://www.koro-creek.co.za/contact.html,,https://www.google.com/maps/search/?api=1&query=-24.697502%2C28.385732
+227,Koster Golf Course,Petisie Street,Koster,North West,9,Garmin (SA),-25.872481,26.895282,082 340 3300,,,https://www.google.com/maps/search/?api=1&query=-25.872481%2C26.895282
+228,Kragga Kamma Golf Course,"Kragga Kamma Road, Chelsea",Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.976859,25.453687,063 474 1766,,,https://www.google.com/maps/search/?api=1&query=-33.976859%2C25.453687
+229,Kranspoort Golf Club,N11,Loskop Valley,Mpumalanga,9,Garmin (SA),-25.438092,29.420807,,,,https://www.google.com/maps/search/?api=1&query=-25.438092%2C29.420807
+230,Kriel Golf Club,Bethal Main Road,Kriel,Mpumalanga,9,Garmin (SA),-26.255157,29.1996,,,,https://www.google.com/maps/search/?api=1&query=-26.255157%2C29.1996
+231,Kroonstad Correctional Services Golf Course,College Terrain,Kroonstad,Free State,18,Garmin (SA),-27.624393,27.233047,,,,https://www.google.com/maps/search/?api=1&query=-27.624393%2C27.233047
+232,Kroonstad Country Club,Kroonpark Avenue,Kroonstad,Free State,18,Garmin (SA),-27.665269,27.244291,056 212 5169,,,https://www.google.com/maps/search/?api=1&query=-27.665269%2C27.244291
+233,Kruger Park Lodge Golf Course,9 Kruger Road,Hazyview,Mpumalanga,9,Garmin (SA),-25.033953,31.141307,,,,https://www.google.com/maps/search/?api=1&query=-25.033953%2C31.141307
+234,Krugersdorp Golf Club,"Nightingale Crescent, Rant & Dal",Krugersdorp,Gauteng,18,Garmin (SA),-26.08135,27.784359,,,,https://www.google.com/maps/search/?api=1&query=-26.08135%2C27.784359
+235,Kuils River Golf Club,Bottelary Road,Kuils River,Western Cape,18,Garmin (SA),-33.902392,18.709738,0219030222,https://www.kuilsriviergolfclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.902392%2C18.709738
+236,Kuruman Country Club,Vryburg/Kuruman Road,Kuruman,Northern Cape,18,Garmin (SA),-27.471356,23.457999,053 712 1242,,,https://www.google.com/maps/search/?api=1&query=-27.471356%2C23.457999
+237,Kwambonambi Golf Club,Bridilla Street,Kwambonambi,KwaZulu-Natal,18,Garmin (SA),-28.600373,32.079134,,,,https://www.google.com/maps/search/?api=1&query=-28.600373%2C32.079134
+238,Kyalami Country Club,433 Maple Rd,Kyalami,Gauteng,18,Garmin (SA),-25.977946,28.058286,+27 10 594 0034,,,https://www.google.com/maps/search/?api=1&query=-25.977946%2C28.058286
+239,Ladismith Golf Club,Van Riebeeck Street,Ladismith,Western Cape,9,Garmin (SA),-33.492511,21.263604,,,,https://www.google.com/maps/search/?api=1&query=-33.492511%2C21.263604
+240,Lady Grey Golf Club,28 Schriener Road,Lady Grey,Eastern Cape,18,Garmin (SA),-30.707881,27.209702,+27516030421,,,https://www.google.com/maps/search/?api=1&query=-30.707881%2C27.209702
+241,Ladybrand Sports Club,1 Loop Street,Ladybrand,Free State,18,Garmin (SA),-29.204493,27.456143,051 924 3146,,,https://www.google.com/maps/search/?api=1&query=-29.204493%2C27.456143
+242,Ladysmith Country Club,28 Reservoir Road,Ladysmith,KwaZulu-Natal,18,Garmin (SA),-28.547115,29.770997,,,,https://www.google.com/maps/search/?api=1&query=-28.547115%2C29.770997
+243,Lamberts Bay Golf Club,Main Road,Lamberts Bay,Western Cape,18,Garmin (SA),-32.099086,18.326025,027 432 1000,,,https://www.google.com/maps/search/?api=1&query=-32.099086%2C18.326025
+244,Landau Colliery Golf Club,Landau Colliery,Witbank,Mpumalanga,9,Garmin (SA),-25.948205,29.209814,,,,https://www.google.com/maps/search/?api=1&query=-25.948205%2C29.209814
+245,Landbou Golf Club,Botha Street,Potchefstroom,North West,18,Garmin (SA),-26.731387,27.070561,,,,https://www.google.com/maps/search/?api=1&query=-26.731387%2C27.070561
+246,Langebaan Country Estate Golf,1 Oostewal Rd,Langebaan,Western Cape,18,Garmin (SA),-33.07444,18.054226,,https://langebaanestate.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.07444%2C18.054226
+247,Langebaan Country Estate Golf ~ Mashie Course,1 Oostewal Rd,Langebaan,Western Cape,18,Garmin (SA),-33.07444,18.054226,021 430 6011,https://langebaanestate.co.za/golf/,,https://www.google.com/maps/search/?api=1&query=-33.07444%2C18.054226
+248,Langkloof Golf Club,"Die Ark, Hoofpad",Joubertina,Eastern Cape,18,Garmin (SA),-33.838294,23.837539,,,,https://www.google.com/maps/search/?api=1&query=-33.838294%2C23.837539
+249,Leeudoringstad Golf Course,East Street,Leeudoringstad,North West,18,Garmin (SA),-27.235923,26.240544,0539554111,,,https://www.google.com/maps/search/?api=1&query=-27.235923%2C26.240544
+250,Leeuwkop Golf Club,"2571 Candican Rd, Sunninghill",Sandton,Gauteng,18,Garmin (SA),-26.008745,28.064772,,,,https://www.google.com/maps/search/?api=1&query=-26.008745%2C28.064772
+251,Legend Golf & Safari Resort,Entabeni Safari Conservancy,Mokopane,Limpopo,18,Garmin (SA),-24.195227,28.720853,,,,https://www.google.com/maps/search/?api=1&query=-24.195227%2C28.720853
+252,Leopard Creek Country Club,Malelane Gate,Malelane,Mpumalanga,18,Garmin (SA),-25.441748,31.534459,+27 13 791 2000,https://leopardcreek.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.441748%2C31.534459
+253,Leopard Creek Country Club ~ Par 3,Malelane Gate,Malelane,Mpumalanga,9,Garmin (SA),-25.441748,31.534459,+27 13 791 2000,https://leopardcreek.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.441748%2C31.534459
+254,Leopard Park Golf Club,Nelson Mandela Drive,Mmabatho,North West,18,Garmin (SA),-25.812442,25.637262,,,,https://www.google.com/maps/search/?api=1&query=-25.812442%2C25.637262
+255,Lichtenburg Golf Club,Colingy Road,Lichtenburg,North West,18,Garmin (SA),-26.184535,26.177392,0849432920,,,https://www.google.com/maps/search/?api=1&query=-26.184535%2C26.177392
+256,Lime Acres Golf Course,Central Road,Lime Acres,Northern Cape,18,Garmin (SA),-28.37375,23.458128,0545039785,,,https://www.google.com/maps/search/?api=1&query=-28.37375%2C23.458128
+257,Lions Rock Golf Course,Hazyview Sabie Road,Hazyview,Mpumalanga,9,Garmin (SA),-25.035825,31.063757,,,,https://www.google.com/maps/search/?api=1&query=-25.035825%2C31.063757
+258,Loeriesfontein Golf Club,Golf Club,Loeriesfontein,Northern Cape,9,Garmin (SA),-30.973882,19.450082,,,,https://www.google.com/maps/search/?api=1&query=-30.973882%2C19.450082
+259,Lost City Golf Course,Sun City,Pilansberg,North West,18,Garmin (SA),-25.339322,27.090375,,,,https://www.google.com/maps/search/?api=1&query=-25.339322%2C27.090375
+260,Lutzville Golf Club,Parkway Street,Lutzville,Western Cape,9,Garmin (SA),-31.561535,18.345848,,,,https://www.google.com/maps/search/?api=1&query=-31.561535%2C18.345848
+261,Lydenburg Golf Club,Buhrman Street,Lydenburg,Mpumalanga,18,Garmin (SA),-25.092452,30.461783,086 647 1572,,,https://www.google.com/maps/search/?api=1&query=-25.092452%2C30.461783
+262,Maccauvlei Golf Club,"Old Sasolburg Road, Viljoensdrift",Vereeniging,Free State,18,Garmin (SA),-26.684292,27.939698,+27164213196,https://maccauvleigolfclub.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-26.684292%2C27.939698
+263,Maclear Golf Course,Maclear Country Club,Maclear,Eastern Cape,9,Garmin (SA),-31.066666,28.335634,082 752 8242,,,https://www.google.com/maps/search/?api=1&query=-31.066666%2C28.335634
+264,Magalies Park Golf Club,Main Skeerpoort Road,Skeerpoort,North West,18,Garmin (SA),-25.750986,27.781156,,,,https://www.google.com/maps/search/?api=1&query=-25.750986%2C27.781156
+265,Magersfontein Memorial Golf Course,3 Oak Farms,Modder River,Northern Cape,18,Garmin (SA),-29.023564,24.651136,,,,https://www.google.com/maps/search/?api=1&query=-29.023564%2C24.651136
+266,Maidstone Golf Club,"Main Road, Maidstone Village",Tongaat,KwaZulu-Natal,18,Garmin (SA),-29.548373,31.130941,,,,https://www.google.com/maps/search/?api=1&query=-29.548373%2C31.130941
+267,Malelane Golf Club,R570 to Kruger National Park,Malelane,Mpumalanga,9,Garmin (SA),-25.465794,31.54192,+27137900283,,,https://www.google.com/maps/search/?api=1&query=-25.465794%2C31.54192
+268,Malmesbury Golf Club,Voortrekker Road,Malmesbury,Western Cape,18,Garmin (SA),-33.446072,18.718812,,,,https://www.google.com/maps/search/?api=1&query=-33.446072%2C18.718812
+269,Mandini Golf Club,Talbot Road,Mandini,KwaZulu-Natal,9,Garmin (SA),-29.161727,31.411114,,,,https://www.google.com/maps/search/?api=1&query=-29.161727%2C31.411114
+270,Marble Hall Golf Club,Toitskraal and Main Road,Marble Hall,Limpopo,18,Garmin (SA),-25.000277,29.274385,013 591 3987,,,https://www.google.com/maps/search/?api=1&query=-25.000277%2C29.274385
+271,Margate Country Club,"Wingate Street, Gaybridge",Margate,KwaZulu-Natal,18,Garmin (SA),-30.838387,30.364366,039 312 0571,https://www.margatecountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-30.838387%2C30.364366
+272,Maritzburg Golf Club,"New England Road, Hayfields",Pietermaritzburg,KwaZulu-Natal,18,Garmin (SA),-29.613048,30.414006,+27 33 396 2356,https://www.maritzburggolf.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.613048%2C30.414006
+273,Marquard Golf Club,Andries Pretorius Street,Marquard,Free State,18,Garmin (SA),-28.658631,27.434192,,,,https://www.google.com/maps/search/?api=1&query=-28.658631%2C27.434192
+274,Matatiele Golf Club,Mount Fletcher Road,Matatiele,Eastern Cape,18,Garmin (SA),-30.33999,28.798363,0638130328,,,https://www.google.com/maps/search/?api=1&query=-30.33999%2C28.798363
+275,Melmoth Golf Club,Golf Street,Melmoth,KwaZulu-Natal,9,Garmin (SA),-28.588357,31.390429,,,,https://www.google.com/maps/search/?api=1&query=-28.588357%2C31.390429
+276,Messina Golf Club,Limpopo Avenue,Musina,Limpopo,18,Garmin (SA),-22.3422,30.045462,,,,https://www.google.com/maps/search/?api=1&query=-22.3422%2C30.045462
+277,Metropolitan Golf Club,Fritz Sonnenberg Road,Mouille Point,Western Cape,18,Garmin (SA),-33.900461,18.408344,021 430 6011,https://metropolitangolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.900461%2C18.408344
+278,Meyerton Golf Club,Ramsey Patmore Avenue,Meyerton,Gauteng,18,Garmin (SA),-26.555607,28.025715,,,,https://www.google.com/maps/search/?api=1&query=-26.555607%2C28.025715
+279,Middelburg Country Club,"10 Eeufees Street, Clubville",Middelburg,Mpumalanga,18,Garmin (SA),-25.775578,29.444132,,,,https://www.google.com/maps/search/?api=1&query=-25.775578%2C29.444132
+280,Middelburg Golf and Country Club,,Middelburg,Eastern Cape,18,Garmin (SA),-31.526599,25.031339,013 282 6176,,,https://www.google.com/maps/search/?api=1&query=-31.526599%2C25.031339
+281,Millvale Golf Course,Millvale Road,Kosterdam,North West,18,Garmin (SA),-25.693291,26.910949,,https://golfcentral.co.za/directory/golf-courses/north-west/millvale-golf-estate/,,https://www.google.com/maps/search/?api=1&query=-25.693291%2C26.910949
+282,Milnerton Golf Club,Beidge Rd,Milnerton,Western Cape,18,Garmin (SA),-33.881532,18.488074,081 032 1710,,,https://www.google.com/maps/search/?api=1&query=-33.881532%2C18.488074
+283,Milnerton Golf Club ~ Competition,Beidge Rd,Milnerton,Western Cape,18,Garmin (SA),-33.881532,18.488074,081 032 1710,,,https://www.google.com/maps/search/?api=1&query=-33.881532%2C18.488074
+284,Modderfontein Golf Club,Golf Club Drive,Modderfontein,Gauteng,18,Garmin (SA),-26.10152,28.162615,,,,https://www.google.com/maps/search/?api=1&query=-26.10152%2C28.162615
+285,Mogol Golf Club,George Wells Street,Lephalale,Limpopo,18,Garmin (SA),-23.686223,27.69531,014 763 2427,https://mogolclub.co.za/about-us/,,https://www.google.com/maps/search/?api=1&query=-23.686223%2C27.69531
+286,Molteno Golf Course,Aichison Street,Molteno,Eastern Cape,18,Garmin (SA),-31.399119,26.349463,,,,https://www.google.com/maps/search/?api=1&query=-31.399119%2C26.349463
+287,Monks Cowl Country Club,"R600, Champagne Valley",Winterton,KwaZulu-Natal,9,Garmin (SA),-29.010824,29.470451,036 468 1300,https://monkscowlgolfclub.co.za/pages/36/contact-us,,https://www.google.com/maps/search/?api=1&query=-29.010824%2C29.470451
+288,Montagu Golf Club,Bath Street,Montagu,Western Cape,9,Garmin (SA),-33.770063,20.13133,023 614 1860,https://www.montagugolfclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.770063%2C20.13133
+289,Monzi Golf Club,"Main Road, Monzi",Mtubatuba,KwaZulu-Natal,18,Garmin (SA),-28.432767,32.298431,,https://monzigolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-28.432767%2C32.298431
+290,Mooi Nooi Golf Club,Wilkinson Ave (old Hartebeespoort Road),Mooi Nooi,North West,18,Garmin (SA),-25.752296,27.563925,014 574 4111,,,https://www.google.com/maps/search/?api=1&query=-25.752296%2C27.563925
+291,Mooi River Country Club,Cnr Park and East End Roads,Mooi River,KwaZulu-Natal,18,Garmin (SA),-29.202681,30.009964,,,,https://www.google.com/maps/search/?api=1&query=-29.202681%2C30.009964
+292,Mooipoort Golf Club,"Loerie Rd 304, Kameeldrift",Pretoria,Gauteng,18,Garmin (SA),-25.647975,28.318636,,https://mooipoortgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.647975%2C28.318636
+293,Moorreesburg Golf Club,River Rd,Moorreesburg,Western Cape,18,Garmin (SA),-33.16015,18.665709,,,,https://www.google.com/maps/search/?api=1&query=-33.16015%2C18.665709
+294,Morgenzon Golf Club,Beyer Street,Morgenzon,Mpumalanga,9,Garmin (SA),-26.73229,29.613175,,,,https://www.google.com/maps/search/?api=1&query=-26.73229%2C29.613175
+295,Mossel Bay Golf Club,17th Avenue,Mossel Bay,Western Cape,18,Garmin (SA),-34.189513,22.131298,,,,https://www.google.com/maps/search/?api=1&query=-34.189513%2C22.131298
+296,Mount Edgecombe Country Club ~ The Lakes (Course Two),Gate 2 Eastcourse Dr.,Mount Edgecombe,KwaZulu-Natal,18,Garmin (SA),-29.715482,31.04557,,,,https://www.google.com/maps/search/?api=1&query=-29.715482%2C31.04557
+297,Mount Edgecombe Country Club ~ The Woods (Course One),Gate 2 Eastcourse Dr.,Mount Edgecombe,KwaZulu-Natal,18,Garmin (SA),-29.715482,31.04557,,,,https://www.google.com/maps/search/?api=1&query=-29.715482%2C31.04557
+298,Mthatha Country Club,36 Delville Road,Mthatha,Eastern Cape,18,Garmin (SA),-31.587689,28.775876,047 532 2770,,,https://www.google.com/maps/search/?api=1&query=-31.587689%2C28.775876
+299,Mtunzini Country Club,Hely Hutchinson Street,Mtunzini,KwaZulu-Natal,18,Garmin (SA),-28.944764,31.760393,,,,https://www.google.com/maps/search/?api=1&query=-28.944764%2C31.760393
+300,Mupine Golf Club,"Forest Drive Extension, Pinelands",Cape Town,Western Cape,18,Garmin (SA),-33.922358,18.518332,,,,https://www.google.com/maps/search/?api=1&query=-33.922358%2C18.518332
+301,Naboomspruit Golf Club,Louis Trichardt Street,Naboomspruit,Limpopo,9,Garmin (SA),-24.509811,28.70513,0212776523,,,https://www.google.com/maps/search/?api=1&query=-24.509811%2C28.70513
+302,Nelspruit Golf Club,"Mantumi Golf Estate, Wilhelm Street",Nelspruit,Mpumalanga,18,Garmin (SA),-25.483861,30.995715,082 333 2866,,,https://www.google.com/maps/search/?api=1&query=-25.483861%2C30.995715
+303,Newcastle Golf Course,22 FW Beyers Avenue,Newcastle,KwaZulu-Natal,18,Garmin (SA),-27.741401,29.950383,,,,https://www.google.com/maps/search/?api=1&query=-27.741401%2C29.950383
+304,Nigel Golf Club,off Old Springs Road,Nigel,Gauteng,18,Garmin (SA),-26.39567,28.455286,,,,https://www.google.com/maps/search/?api=1&query=-26.39567%2C28.455286
+305,Noodsberg Country Club,"Pleasant Avenue, Noodsberg Village",Dalton,KwaZulu-Natal,18,Garmin (SA),-29.349501,30.689762,033 502 9573,https://www.noodsbergcountryclub.co.za/pages/contact,,https://www.google.com/maps/search/?api=1&query=-29.349501%2C30.689762
+306,Observatory Golf Club,5 Steyn Street,Observatory,Gauteng,18,Garmin (SA),-26.178546,28.078706,010 476 0964,https://observatorygolfclub.co.za/contacts/,,https://www.google.com/maps/search/?api=1&query=-26.178546%2C28.078706
+307,Ohenimuri Country Club,"Walker Avenue, Fairway Village, Ohenimuri",Walkerville,Gauteng,18,Garmin (SA),-26.444972,27.948661,,,,https://www.google.com/maps/search/?api=1&query=-26.444972%2C27.948661
+308,Olivewood Golf Estate,Cintsa Mouth West,East London,Eastern Cape,18,Garmin (SA),-32.839306,28.087281,087 350 4310,https://olivewoodestate.com/contact/,,https://www.google.com/maps/search/?api=1&query=-32.839306%2C28.087281
+309,Oppenheimer Park Golf Club,3 Oppenheimer Park Drive,Welkom,Free State,18,Garmin (SA),-28.019292,26.780386,,,,https://www.google.com/maps/search/?api=1&query=-28.019292%2C26.780386
+310,Orangedene Golf Course,"Letaba Citrus Estate, Orangedene",Letaba,Limpopo,9,Garmin (SA),-23.874138,30.299121,,,,https://www.google.com/maps/search/?api=1&query=-23.874138%2C30.299121
+311,Orkney Golf Course,1 Scott Avenue,Orkney,North West,18,Garmin (SA),-26.99476,26.676307,,,,https://www.google.com/maps/search/?api=1&query=-26.99476%2C26.676307
+312,Ottosdal Country Club,Main Road,Ottosdal,North West,9,Garmin (SA),-26.815775,26.014962,,,,https://www.google.com/maps/search/?api=1&query=-26.815775%2C26.014962
+313,Oubaai Golf Club,"Oubaai Golf Resort, Herolds Bay",George,Western Cape,18,Garmin (SA),-34.046101,22.408612,+27 44 851 1263,https://www.oubaaigolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-34.046101%2C22.408612
+314,Oudtshoorn Golf Club,331 St Saviour Street,Oudtshoorn,Western Cape,18,Garmin (SA),-33.588173,22.219831,0665188944,,,https://www.google.com/maps/search/?api=1&query=-33.588173%2C22.219831
+315,Paarl Golf Club ~ Boschenmeer,844 Wemmershoek Road,Paarl,Western Cape,18,Garmin (SA),-33.761585,18.981043,+27218631140,https://paarlgolfclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-33.761585%2C18.981043
+316,Paarl Golf Club ~ Old Course,844 Wemmershoek Road,Paarl,Western Cape,18,Garmin (SA),-33.761585,18.981043,+27218631140,https://paarlgolfclub.co.za/the-course/,,https://www.google.com/maps/search/?api=1&query=-33.761585%2C18.981043
+317,Paarl Golf Club ~ Winelands,844 Wemmershoek Road,Paarl,Western Cape,18,Garmin (SA),-33.761585,18.981043,+27218631140,https://paarlgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.761585%2C18.981043
+318,Papwa Sewgolum Golf Club,"256 New Germany Road, Reservoir Hills",Durban,KwaZulu-Natal,18,Garmin (SA),-29.800864,30.966609,,,,https://www.google.com/maps/search/?api=1&query=-29.800864%2C30.966609
+319,Parkview Golf Club,Emmarentia Ave,Parkview,Gauteng,18,Garmin (SA),-26.156424,28.022955,,,,https://www.google.com/maps/search/?api=1&query=-26.156424%2C28.022955
+320,Parow Golf Club,Frans Conradie Drive,Parow,Western Cape,18,Garmin (SA),-33.896747,18.573672,021 939 7756,https://www.parowgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.896747%2C18.573672
+321,Parys Golf & Country Estate,Cnr Venus and Briel Streets,Parys,Free State,18,Garmin (SA),-26.889995,27.466548,056 818 1567,,,https://www.google.com/maps/search/?api=1&query=-26.889995%2C27.466548
+322,Paulpietersburg Country Club,High Street,Paulpietersburg,KwaZulu-Natal,9,Garmin (SA),-27.428731,30.822223,,,,https://www.google.com/maps/search/?api=1&query=-27.428731%2C30.822223
+323,Pearl Valley Golf Estates,R301,Franschhoek,Western Cape,18,Garmin (SA),-33.819896,18.981954,+27218678045,https://www.pearlvalley.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-33.819896%2C18.981954
+324,Pebble Rock Country Club,"307 Aquamarine Drive, Pebble Rock Golf Estate",Pretoria,Gauteng,18,Garmin (SA),-25.613607,28.389254,012 808 5000,https://pebblerock.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-25.613607%2C28.389254
+325,Pecanwood Golf & Country Club,"R512, Provincial Road",Hartebeespoort,North West,18,Garmin (SA),-25.77163,27.853475,012 244 8080,https://pecanwood.co.za/golf-club/,,https://www.google.com/maps/search/?api=1&query=-25.77163%2C27.853475
+326,Petrus Steyn Golf Course,Steyn Street,Petrus Steyn,Free State,9,Garmin (SA),-27.651858,28.137403,+27 10 597 1030,,,https://www.google.com/maps/search/?api=1&query=-27.651858%2C28.137403
+327,Pezula Championship Golf Course,"Lagoonview Drive, East Head",Knysna,Western Cape,18,Garmin (SA),-34.070168,23.089694,044 302 5310,,,https://www.google.com/maps/search/?api=1&query=-34.070168%2C23.089694
+328,Pezula Championship Golf Course ~ Par 3,"Lagoonview Drive, East Head",Knysna,Western Cape,18,Garmin (SA),-34.070168,23.089694,+27 44 302 5310,,,https://www.google.com/maps/search/?api=1&query=-34.070168%2C23.089694
+329,Piet Retief Country Club,Cnr Westend and Brand Streets,Piet Retief,Mpumalanga,9,Garmin (SA),-27.010961,30.799677,,,,https://www.google.com/maps/search/?api=1&query=-27.010961%2C30.799677
+330,Piketberg Golf Club,Church Street,Piketberg,Western Cape,9,Garmin (SA),-32.90298,18.767309,,,,https://www.google.com/maps/search/?api=1&query=-32.90298%2C18.767309
+331,Pilgrims Rest Golf Club,Lydenburg Road,Pilgrimsrest,Mpumalanga,18,Garmin (SA),-24.885287,30.740991,,,,https://www.google.com/maps/search/?api=1&query=-24.885287%2C30.740991
+332,Pinnacle Point Golf Club,1 Pinnacle Point Road,Mossel Bay,Western Cape,18,Garmin (SA),-34.19553,22.090797,044 606 5300,https://pinnaclepointestate.co.za/golf-club/,,https://www.google.com/maps/search/?api=1&query=-34.19553%2C22.090797
+333,Plettenberg Bay Country Club,Piesang Valley Road,Plettenberg Bay,Western Cape,18,Garmin (SA),-34.062028,23.348496,,,,https://www.google.com/maps/search/?api=1&query=-34.062028%2C23.348496
+334,Pollak Park Golf Course,"279 Tonk Meter Drive, Pollak Park",Springs,Gauteng,18,Garmin (SA),-26.268847,28.42766,011 815 3123,,,https://www.google.com/maps/search/?api=1&query=-26.268847%2C28.42766
+335,Polokwane Golf Club,Voortrekker Street,Polokwane,Limpopo,18,Garmin (SA),-23.922858,29.460225,+27152954118,,,https://www.google.com/maps/search/?api=1&query=-23.922858%2C29.460225
+336,Pongola Golf Club,Cnr Klasie Havenga/ Hans Strydom Steets,Pongola,KwaZulu-Natal,9,Garmin (SA),-27.375956,31.617451,,,,https://www.google.com/maps/search/?api=1&query=-27.375956%2C31.617451
+337,Port Edward Country Club,Golf Course Road,Port Edward,KwaZulu-Natal,18,Garmin (SA),-31.053583,30.219911,039 492 0508,https://portedwardcountryclub.co.za/contact.html,,https://www.google.com/maps/search/?api=1&query=-31.053583%2C30.219911
+338,Port Elizabeth Golf Club,"Westview Drive, Mill Park",Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.957725,25.588452,,,,https://www.google.com/maps/search/?api=1&query=-33.957725%2C25.588452
+339,Port Saint Johns Golf Club,Golf Course Drive,Port St Johns,Eastern Cape,9,Garmin (SA),-31.630518,29.544897,,,,https://www.google.com/maps/search/?api=1&query=-31.630518%2C29.544897
+340,Port Shepstone Country Club,"Marine Drive, Umtentweni",Port Shepstone,KwaZulu-Natal,18,Garmin (SA),-30.730614,30.456311,,,,https://www.google.com/maps/search/?api=1&query=-30.730614%2C30.456311
+341,Porterville Golf Club,Buitengracht Street,Porterville,Western Cape,18,Garmin (SA),-33.00569,19.007294,,,,https://www.google.com/maps/search/?api=1&query=-33.00569%2C19.007294
+342,Potchefstroom Country Club,Mooi River Drive,Potchefstroom,North West,18,Garmin (SA),-26.720056,27.105984,018 293 0677,https://www.potchcc.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.720056%2C27.105984
+343,Pretoria Country Club,"241 Sydney Ave, Waterkloof",Pretoria,Gauteng,18,Garmin (SA),-25.782883,28.251222,012 460 6241,,,https://www.google.com/maps/search/?api=1&query=-25.782883%2C28.251222
+344,Pretoria Golf Club,"Morkel Street East, Phillip Nel Park",Pretoria,Gauteng,18,Garmin (SA),-25.738907,28.141737,012 386 6836,https://pretoriagolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.738907%2C28.141737
+345,Prieska Golf Club,8 Stewart Street,Prieska,Northern Cape,9,Garmin (SA),-29.664802,22.754403,053 353 3448,,,https://www.google.com/maps/search/?api=1&query=-29.664802%2C22.754403
+346,Prince Albert Golf Club,Adderley Street,Prince Albert,Western Cape,9,Garmin (SA),-33.208513,22.028202,,,,https://www.google.com/maps/search/?api=1&query=-33.208513%2C22.028202
+347,Prince's Grant Coastal Golf Estate,1 Babu Bodasing Avenue,Stanger,KwaZulu-Natal,18,Garmin (SA),-29.336894,31.366984,,https://www.princesgrant.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.336894%2C31.366984
+348,Queenstown Golf Club,Golf Road,Queenstown,Eastern Cape,18,Garmin (SA),-31.900495,26.889345,,,,https://www.google.com/maps/search/?api=1&query=-31.900495%2C26.889345
+349,Randfontein Golf and Country Club,"Homestead Avenue, Robinson",Randfontein,Gauteng,18,Garmin (SA),-26.155036,27.714257,,,,https://www.google.com/maps/search/?api=1&query=-26.155036%2C27.714257
+350,Randpark Golf Club ~ Bushwillow Course,Setperk St,Randburg,Gauteng,18,Garmin (SA),-26.114738,27.965825,011 215 8600,https://randpark.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.114738%2C27.965825
+351,Randpark Golf Club ~ Firethorn Course,Setperk St,Randburg,Gauteng,18,Garmin (SA),-26.114738,27.965825,011 215 8600,https://randpark.co.za/visitor-information/,,https://www.google.com/maps/search/?api=1&query=-26.114738%2C27.965825
+352,Reading Country Club,"40 Fore St, New Redruth",Alberton,Gauteng,18,Garmin (SA),-26.265024,28.107363,011 907 8906,https://www.readingcc.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.265024%2C28.107363
+353,Reitz Golf Club,Vrede Road,Reitz,Free State,18,Garmin (SA),-27.788501,28.441072,,,,https://www.google.com/maps/search/?api=1&query=-27.788501%2C28.441072
+354,Reivilo Golf Club,Voortrekker Street,Reivilo,North West,18,Garmin (SA),-27.554204,24.183011,,,,https://www.google.com/maps/search/?api=1&query=-27.554204%2C24.183011
+355,Richards Bay Country Club,"Kurperkurwe Street, Meerensee",Richards Bay,KwaZulu-Natal,18,Garmin (SA),-28.767207,32.110119,,,,https://www.google.com/maps/search/?api=1&query=-28.767207%2C32.110119
+356,Richmond Country Club,Pietermaritzburg/Ixopo Road (R56),Richmond,KwaZulu-Natal,18,Garmin (SA),-29.890816,30.279801,,,,https://www.google.com/maps/search/?api=1&query=-29.890816%2C30.279801
+357,Richmond Golf Club,Pietermaritzburg/ixopo Road (r56),Richmond,Northern Cape,9,Garmin (SA),-31.419506,23.939418,,,,https://www.google.com/maps/search/?api=1&query=-31.419506%2C23.939418
+358,Riversdale Golf Club,Tom Stander Drive,Riversdale,Western Cape,18,Garmin (SA),-34.111862,21.28114,,,,https://www.google.com/maps/search/?api=1&query=-34.111862%2C21.28114
+359,Riverside Golf Course,"Aan De Doorns Street, Riverside, Parkers Dam",Worcester,Western Cape,18,Garmin (SA),-33.665521,19.457538,,https://golftheriverside.com/,,https://www.google.com/maps/search/?api=1&query=-33.665521%2C19.457538
+360,Riviera on Vaal Country Club,Mario Milani Drive,Vereeniging,Gauteng,18,Garmin (SA),-26.672738,27.93913,016 100 5027,,,https://www.google.com/maps/search/?api=1&query=-26.672738%2C27.93913
+361,Riviersonderend Golf Club,Voortrekker Road,Riviersonderend,Western Cape,18,Garmin (SA),-34.137309,19.921643,,,,https://www.google.com/maps/search/?api=1&query=-34.137309%2C19.921643
+362,Robertson Golf Club,26 Silwerstrand Boulevard,Robertson,Western Cape,18,Garmin (SA),-33.810262,19.851174,,,,https://www.google.com/maps/search/?api=1&query=-33.810262%2C19.851174
+363,Rondebosch Golf Club,Golf Course Road,Mowbray,Western Cape,18,Garmin (SA),-33.956126,18.493787,021 689 4176,https://rondeboschgolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-33.956126%2C18.493787
+364,Rooiberg Golf Club,Off Warmbaths Road,Rooiberg,Limpopo,18,Garmin (SA),-24.776874,27.745929,,,,https://www.google.com/maps/search/?api=1&query=-24.776874%2C27.745929
+365,Royal Burgundy Mashie Golf Course,22 Viridian Street,Cape Town,Western Cape,9,Garmin (SA),-33.842444,18.553161,064 552 1059,,,https://www.google.com/maps/search/?api=1&query=-33.842444%2C18.553161
+366,Royal Cape Golf Club,174 Ottery Road,Wynberg,Western Cape,18,Garmin (SA),-34.013498,18.485051,+27 21 761 6551,,,https://www.google.com/maps/search/?api=1&query=-34.013498%2C18.485051
+367,Royal Durban Golf Club,16 Mitchell Crescent,Greyville,KwaZulu-Natal,18,Garmin (SA),-29.840363,31.016588,0446854983,https://www.royaldurban.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.840363%2C31.016588
+368,Royal Johannesburg & Kensington Golf Club ~ East Course,1 Fairway Avenue,Johannesburg,Gauteng,18,Garmin (SA),-26.155669,28.108031,011 640 3021,https://royaljk.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.155669%2C28.108031
+369,Royal Johannesburg & Kensington Golf Club ~ West Course,1 Fairway Avenue,Johannesburg,Gauteng,18,Garmin (SA),-26.155669,28.108031,011 640 3021,https://royaljk.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.155669%2C28.108031
+370,Royal Oak Country Club,"1 Prince George Avenue, Anzac",Brakpan,Gauteng,18,Garmin (SA),-26.226474,28.359101,+27117400016,https://www.royaloakcountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.226474%2C28.359101
+371,Royal Port Alfred Golf Club,7 St Andrews Road,Port Alfred,Eastern Cape,18,Garmin (SA),-33.603499,26.884577,046 624 4796,,,https://www.google.com/maps/search/?api=1&query=-33.603499%2C26.884577
+372,Ruimsig Country Club,"Hole In One Avenue, Ruimsig",Roodepoort,Gauteng,18,Garmin (SA),-26.082766,27.865491,083 413 3441,https://ruimsigcc.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-26.082766%2C27.865491
+373,Rustenburg Golf Club,Bethlehem Drive,Rustenburg,North West,18,Garmin (SA),-25.668998,27.228692,014 592 5575,https://www.rtbgolfclub.com/,,https://www.google.com/maps/search/?api=1&query=-25.668998%2C27.228692
+374,Sabie Country Club,Lydenburg Road,Sabie,Mpumalanga,9,Garmin (SA),-25.103953,30.777962,,,,https://www.google.com/maps/search/?api=1&query=-25.103953%2C30.777962
+375,Sabie River Sun Golf Course,Sabie Road,Hazyview,Mpumalanga,18,Garmin (SA),-25.034834,31.11316,,,,https://www.google.com/maps/search/?api=1&query=-25.034834%2C31.11316
+376,Saint Francis Bay Golf Club,556 Lyme Road,St Francis Bay,Eastern Cape,18,Garmin (SA),-34.161229,24.819967,042 294 0467,https://stfrancislinks.com/contact-us/,,https://www.google.com/maps/search/?api=1&query=-34.161229%2C24.819967
+377,Sakabula Golf Club,"Sakabula Country Estate, Merrivale",Howick,KwaZulu-Natal,18,Garmin (SA),-29.530263,30.228882,033 330 6751,,,https://www.google.com/maps/search/?api=1&query=-29.530263%2C30.228882
+378,San Lameer Country Club,"Main Road, Lower South Coast",Southbroom,KwaZulu-Natal,18,Garmin (SA),-30.940268,30.292096,,https://sanlameer.co.za/contact,,https://www.google.com/maps/search/?api=1&query=-30.940268%2C30.292096
+379,Sand River Golf Course,Valley Drive North,Virginia,Free State,18,Garmin (SA),-28.094788,26.874597,,,,https://www.google.com/maps/search/?api=1&query=-28.094788%2C26.874597
+380,Sandonia Golf Club,"Plot 23, Kameeldrift East",Pretoria,Gauteng,18,Garmin (SA),-25.662221,28.332159,012 808 2560,,,https://www.google.com/maps/search/?api=1&query=-25.662221%2C28.332159
+381,Sandy Lane Golf Club,"Caribbean Beach Club, Kosmos",Hartebeespoort,North West,18,Garmin (SA),-25.749035,27.828519,,https://sandylane.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.749035%2C27.828519
+382,Sani Pass Golf Club,"Good Hope Farm, Sani Pass Road",Himeville,KwaZulu-Natal,9,Garmin (SA),-29.654803,29.440656,,,,https://www.google.com/maps/search/?api=1&query=-29.654803%2C29.440656
+383,Sannieshof Golf Course,35 Spoor Street,Sannieshof,North West,18,Garmin (SA),-26.529647,25.804743,018 683 0048,,,https://www.google.com/maps/search/?api=1&query=-26.529647%2C25.804743
+384,Saps Mechanics Golf Course,"Hospital Road, Northmead",Benoni,Gauteng,9,Garmin (SA),-26.160655,28.309101,,,,https://www.google.com/maps/search/?api=1&query=-26.160655%2C28.309101
+385,Sardinia Bay Golf Club,1 Heron Rd,Port Elizabeth,Eastern Cape,18,Garmin (SA),-34.016649,25.496893,+27833042476,,,https://www.google.com/maps/search/?api=1&query=-34.016649%2C25.496893
+386,Schoeman Park Golf Course,Maselspoort Rd,Bloemfontein,Free State,18,Garmin (SA),-29.116538,26.249793,051 101 0619,,,https://www.google.com/maps/search/?api=1&query=-29.116538%2C26.249793
+387,Schweizer-Reneke Golf Club,4 Olivier Street,Schweizer Reineke,North West,18,Garmin (SA),-27.18472,25.319699,,,,https://www.google.com/maps/search/?api=1&query=-27.18472%2C25.319699
+388,Scottburgh Golf Course,cnr Taylor St / Williamson St,Scottburgh,KwaZulu-Natal,18,Garmin (SA),-30.290597,30.751062,087 150 1312,,,https://www.google.com/maps/search/?api=1&query=-30.290597%2C30.751062
+389,Seasons Eco Golf Estate,"Farm Hertebusfontein, Old Rustenburg Road",Brits,North West,18,Garmin (SA),-25.701592,27.849827,012 012 6068,https://www.seasonsestate.co.za/golf.html,,https://www.google.com/maps/search/?api=1&query=-25.701592%2C27.849827
+390,Sedge Links Golf Club,Swartvlei Beach Rd,Sedgefield,Western Cape,18,Garmin (SA),-34.010174,22.755719,,,,https://www.google.com/maps/search/?api=1&query=-34.010174%2C22.755719
+391,Selborne Country Club,Old Main Road,Pennington,KwaZulu-Natal,18,Garmin (SA),-30.376185,30.678216,087 135 0559,,,https://www.google.com/maps/search/?api=1&query=-30.376185%2C30.678216
+392,Senekal Golf Club,Town Grounds,Senekal,Free State,9,Garmin (SA),-28.319342,27.618663,,,,https://www.google.com/maps/search/?api=1&query=-28.319342%2C27.618663
+393,Serengeti Golf & Wildlife Estate ~ Signature Course,"R25 (Just off the R21), Kempton Park",Ekurhuleni,Gauteng,18,Garmin (SA),-26.041557,28.289885,+27 11 552 7200,,,https://www.google.com/maps/search/?api=1&query=-26.041557%2C28.289885
+394,Serengeti Golf & Wildlife Estate ~ Whistling Thorn,"R25 (Just off the R21), Kempton Park",Ekurhuleni,Gauteng,18,Garmin (SA),-26.041557,28.289885,0115527200,https://serengeti-estates.co.za/whistling-thorns/,,https://www.google.com/maps/search/?api=1&query=-26.041557%2C28.289885
+395,Services Golf Club,"Jacobus Opperman Road, Thabatshwane",Pretoria,Gauteng,18,Garmin (SA),-25.78444,28.159783,012 651 4411,https://servicesgc.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.78444%2C28.159783
+396,Sesambos Golf Course,Redbaan Game Farm,Swartwater,Limpopo,18,Garmin (SA),-22.791292,28.120097,,,,https://www.google.com/maps/search/?api=1&query=-22.791292%2C28.120097
+397,Shark River Golf Club,"Tasker Street Military Base, Forest Hill",Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.984917,25.625497,041 581 6188,,,https://www.google.com/maps/search/?api=1&query=-33.984917%2C25.625497
+398,Shelley Point Golf Club,Shelley Point Main Gate,St Helena Bay,Western Cape,18,Garmin (SA),-32.7091,17.972593,,https://shelleypointcountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-32.7091%2C17.972593
+399,Silver Lakes Golf Estate,Lynwood Road,Pretoria,Gauteng,18,Garmin (SA),-25.772703,28.370562,,https://silverlakes.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-25.772703%2C28.370562
+400,Simbithi Country Club,"Shaka's Rock Road, Shaka's Rock",Ballito,KwaZulu-Natal,18,Garmin (SA),-29.511184,31.225519,073 156 1378,https://www.simbithi.com/,,https://www.google.com/maps/search/?api=1&query=-29.511184%2C31.225519
+401,Simola Golf & Country Estate,"1 Old Cape Road, Easford",Knysna,Western Cape,18,Garmin (SA),-34.002906,23.030987,+27443029600,https://www.simola.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.002906%2C23.030987
+402,Simon's Town Country Club,"Main Road, Simons Town",Cape Town,Western Cape,18,Garmin (SA),-34.201148,18.453426,,,,https://www.google.com/maps/search/?api=1&query=-34.201148%2C18.453426
+403,Sishen Golf Club,Hans Coetzee Drive,Kathu,Northern Cape,18,Garmin (SA),-27.688959,23.059723,053 050 5727,,,https://www.google.com/maps/search/?api=1&query=-27.688959%2C23.059723
+404,Skills Golf Club,Dan King Rd,Cape Town,Western Cape,9,Garmin (SA),-33.823732,18.70527,,,,https://www.google.com/maps/search/?api=1&query=-33.823732%2C18.70527
+405,Skukuza Golf Club,Kruger National Park,Skukuza,Mpumalanga,18,Garmin (SA),-24.98379,31.576681,+27 13 735 5543,,,https://www.google.com/maps/search/?api=1&query=-24.98379%2C31.576681
+406,Smithfield Golf Club,N6 motorway,Smithfield,Free State,9,Garmin (SA),-30.196728,26.537101,,,,https://www.google.com/maps/search/?api=1&query=-30.196728%2C26.537101
+407,Somerset East Golf Club,Bestershoek,Somerset East,Eastern Cape,18,Garmin (SA),-32.710308,25.562691,072 785 7079,,,https://www.google.com/maps/search/?api=1&query=-32.710308%2C25.562691
+408,Somerset West Golf Club,Rue De Jacqueline Avenue,Somerset West,Western Cape,18,Garmin (SA),-34.079371,18.840444,021 852 2925,https://www.somersetwestgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.079371%2C18.840444
+409,South Downs Country Club,Albaster Avenue,Mayfield Park,Gauteng,18,Garmin (SA),-26.317715,28.018657,0119434448,https://www.southdownscc.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.317715%2C28.018657
+410,Southbroom Golf Club,301 Captain Smith Road,Southbroom,KwaZulu-Natal,18,Garmin (SA),-30.917909,30.32218,0393166051,https://www.southbroomgolfclub.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-30.917909%2C30.32218
+411,Soutpansberg Golf Club,Cnr. Hospital and Ruh Streets,Makhado,Limpopo,18,Garmin (SA),-23.031614,29.905086,,,,https://www.google.com/maps/search/?api=1&query=-23.031614%2C29.905086
+412,Soweto Country Club,"5353 Mokoka Street, Pimville",Soweto,Gauteng,18,Garmin (SA),-26.276462,27.903711,060 743 6682,,,https://www.google.com/maps/search/?api=1&query=-26.276462%2C27.903711
+413,Springbok Golf Club,Airport Road,Springbok,Northern Cape,18,Garmin (SA),-29.687127,17.907251,,,,https://www.google.com/maps/search/?api=1&query=-29.687127%2C17.907251
+414,Springs Country Club,"Cnr Parkes and Nigel Rd, Selection Park",Springs,Gauteng,18,Garmin (SA),-26.26457,28.442506,011 362 5031,,,https://www.google.com/maps/search/?api=1&query=-26.26457%2C28.442506
+415,St. Cathryn's Golf Estate,R74,Kranskop,KwaZulu-Natal,18,Garmin (SA),-28.980737,30.816325,,,,https://www.google.com/maps/search/?api=1&query=-28.980737%2C30.816325
+416,St. Francis Links,St Francis Bay Road,St. Francis Bay,Eastern Cape,18,Garmin (SA),-34.162411,24.81515,042 294 0467,https://stfrancislinks.com/contact-us/,,https://www.google.com/maps/search/?api=1&query=-34.162411%2C24.81515
+417,Standerton Country Club,Peter Bailey Boulevard,Standerton,Mpumalanga,18,Garmin (SA),-26.947053,29.254351,017 712 1049,,,https://www.google.com/maps/search/?api=1&query=-26.947053%2C29.254351
+418,State Mines Country Club,30 Hewitt Avenue,Brakpan,Gauteng,18,Garmin (SA),-26.208774,28.374259,,,,https://www.google.com/maps/search/?api=1&query=-26.208774%2C28.374259
+419,Steenberg Golf Club,"11111 Steenberg Estate, Tokai Road",Tokai,Western Cape,18,Garmin (SA),-34.069462,18.426862,+27217132233,https://www.steenberggolfclub.co.za/contact,,https://www.google.com/maps/search/?api=1&query=-34.069462%2C18.426862
+420,Stella Golf Club,Stella Street,Stella,North West,9,Garmin (SA),-26.545398,24.859795,,,,https://www.google.com/maps/search/?api=1&query=-26.545398%2C24.859795
+421,Stellenbosch Golf Club,Strand Road (R44),Stellenbosch,Western Cape,18,Garmin (SA),-33.958247,18.850266,,https://stellenboschgolfclub.com/management-and-staff/,,https://www.google.com/maps/search/?api=1&query=-33.958247%2C18.850266
+422,Steyn City Golf Course,Zevenfontein,Midrand,Gauteng,18,Garmin (SA),-25.971081,27.996292,010 597 1030,https://www.steyncity.co.za/experience/jack-nicklaus-golf-course,,https://www.google.com/maps/search/?api=1&query=-25.971081%2C27.996292
+423,Stilbaai Golf Club,"Off Main Road, West Still Bay",Still Bay,Western Cape,18,Garmin (SA),-34.387098,21.411451,,,,https://www.google.com/maps/search/?api=1&query=-34.387098%2C21.411451
+424,Stilfontein Golf Course,Potchefstroom Highway,Stilfontein,North West,18,Garmin (SA),-26.825051,26.823227,0882203641,,,https://www.google.com/maps/search/?api=1&query=-26.825051%2C26.823227
+425,Strand Golf Club,Beach Road,Strand,Western Cape,18,Garmin (SA),-34.098074,18.817407,+27218543309,https://www.strandgolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-34.098074%2C18.817407
+426,Stutterheim Golf Club,Ken Muzzell Avenue,Stutterheim,Eastern Cape,18,Garmin (SA),-32.566475,27.412297,043 683 1508,,,https://www.google.com/maps/search/?api=1&query=-32.566475%2C27.412297
+427,Sun Valley Golf Course,Perdekop Road,Eikenhof,Gauteng,18,Garmin (SA),-26.420301,28.023142,071 874 7973,,,https://www.google.com/maps/search/?api=1&query=-26.420301%2C28.023142
+428,Sutherland Golf Club,Piet Retief Street,Sutherland,Northern Cape,9,Garmin (SA),-32.404325,20.658846,023 571 1033,,,https://www.google.com/maps/search/?api=1&query=-32.404325%2C20.658846
+429,Swartklip Golf Club,Located in Bierspruit near the dam,Swartklip,Limpopo,9,Garmin (SA),-24.907512,27.139976,0631902121,,,https://www.google.com/maps/search/?api=1&query=-24.907512%2C27.139976
+430,Swellendam Golf Course,Andrew White Street,Swellendam,Western Cape,18,Garmin (SA),-34.016078,20.43298,,,,https://www.google.com/maps/search/?api=1&query=-34.016078%2C20.43298
+431,Tempe Golf Club,"Furstenburg Road, Tempe Military Base",Bloemfontein,Free State,9,Garmin (SA),-29.094501,26.195934,,,,https://www.google.com/maps/search/?api=1&query=-29.094501%2C26.195934
+432,Thabazimbi Golf Course,"Rustenburg/Thabazimbi Road (R510), Ben Alberts Reserve",Thabazimbi,Limpopo,18,Garmin (SA),-24.633286,27.371945,,,,https://www.google.com/maps/search/?api=1&query=-24.633286%2C27.371945
+433,Thatchfield Golf Academy,Brakfontein Road,Thatchfield,Gauteng,9,Garmin (SA),-25.89448,28.121395,072 273 6052,,,https://www.google.com/maps/search/?api=1&query=-25.89448%2C28.121395
+434,The Belmont Golf Club,Belmont Valley Rd,Grahamstown,Eastern Cape,18,Garmin (SA),-33.325136,26.611023,,,,https://www.google.com/maps/search/?api=1&query=-33.325136%2C26.611023
+435,The Clarens Golf Estate,Golden Gate Road,Clarens,Free State,18,Garmin (SA),-28.516122,28.429103,+27582561270,https://www.theclarens.co.za/,,https://www.google.com/maps/search/?api=1&query=-28.516122%2C28.429103
+436,The Els Club Copperleaf,Ernie Els Boulevard,Centurion,Gauteng,18,Garmin (SA),-25.880163,28.047817,,,,https://www.google.com/maps/search/?api=1&query=-25.880163%2C28.047817
+437,The Islands Estate Mashie Course,"R512, The Islands Estate",Hartbeespoort,North West,9,Garmin (SA),-25.76499,27.847628,012 244 0777,,,https://www.google.com/maps/search/?api=1&query=-25.76499%2C27.847628
+438,The Lake Golf Club - Benoni,Lakefield Ave,Benoni,Gauteng,18,Garmin (SA),-26.18281,28.296914,0703508936,https://www.lakeclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-26.18281%2C28.296914
+439,The River Club,"Liesbeek Pkwy, Observatory",Cape Town,Western Cape,9,Garmin (SA),-33.936231,18.475699,021 448 6117,https://riverclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.936231%2C18.475699
+440,The River Club Golf Course,"Links Rd, River Club",Sandton,Gauteng,18,Garmin (SA),-26.077808,28.038624,,,,https://www.google.com/maps/search/?api=1&query=-26.077808%2C28.038624
+441,The Wanderers Golf Club,"Cnr Corlett Dr and Rudd Rd, Illovo",Sandton,Gauteng,18,Garmin (SA),-26.133406,28.051872,,,,https://www.google.com/maps/search/?api=1&query=-26.133406%2C28.051872
+442,Theewaterskloof Country Estate Golf Course,Off N2 onto R43 at Caledon,Villiersdorp,Western Cape,18,Garmin (SA),-34.056403,19.288714,+27 31 764 1492,,,https://www.google.com/maps/search/?api=1&query=-34.056403%2C19.288714
+443,Theunissen Golf Club,"Show Grounds, (Off the R708)",Theunissen,Free State,9,Garmin (SA),-28.389251,26.717913,,,,https://www.google.com/maps/search/?api=1&query=-28.389251%2C26.717913
+444,Three Chameleons Short Golf Course,"209 Modder Rivier, R404",Blanco,Western Cape,9,Garmin (SA),-33.97644,22.387371,,,,https://www.google.com/maps/search/?api=1&query=-33.97644%2C22.387371
+445,Tsitsikamma Coastal Golf Estate,Tsitsikamma,Storms River,Eastern Cape,18,Garmin (SA),-34.006163,23.896199,0543384180,,,https://www.google.com/maps/search/?api=1&query=-34.006163%2C23.896199
+446,Tweefontein Golf Club,"Witbank/Ogies Roads, Tweefontein Collieries",Coalville,Mpumalanga,18,Garmin (SA),-26.026032,29.173036,,,,https://www.google.com/maps/search/?api=1&query=-26.026032%2C29.173036
+447,Tzaneen Country Club,Duiwelskloof,Tzaneen,Limpopo,18,Garmin (SA),-23.74727,30.110114,083 414 4002,https://www.tzaneencountryclub.co.za/tcccontacts.html,,https://www.google.com/maps/search/?api=1&query=-23.74727%2C30.110114
+448,Uitenhage Golf Club,Winterhoek Drive,Uitenhage,Eastern Cape,18,Garmin (SA),-33.742628,25.412917,+27419661868,,,https://www.google.com/maps/search/?api=1&query=-33.742628%2C25.412917
+449,Ulco Golf Course,Main Road,Ulco,Northern Cape,9,Garmin (SA),-28.331345,24.225112,,,,https://www.google.com/maps/search/?api=1&query=-28.331345%2C24.225112
+450,Umdoni Park Golf Course,Minerva Road,Pennington,KwaZulu-Natal,18,Garmin (SA),-30.392325,30.689471,,https://umdonipark.com/,,https://www.google.com/maps/search/?api=1&query=-30.392325%2C30.689471
+451,Umfolozi Golf Club,Riverview Road,Mtubatuba,KwaZulu-Natal,18,Garmin (SA),-28.440602,32.176126,082 965 6906,,,https://www.google.com/maps/search/?api=1&query=-28.440602%2C32.176126
+452,Umhlali Golf Estate & Country Club,Compensation Road,Umhlali,KwaZulu-Natal,18,Garmin (SA),-29.511209,31.197116,0189369987,https://umhlaliclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-29.511209%2C31.197116
+453,Umkomaas Golf Club,Moodie Street,Umkomaas,KwaZulu-Natal,18,Garmin (SA),-30.208788,30.795622,079 299 8099,,,https://www.google.com/maps/search/?api=1&query=-30.208788%2C30.795622
+454,Underberg Country Club,Main Road,Underberg,KwaZulu-Natal,18,Garmin (SA),-29.788441,29.493032,,,,https://www.google.com/maps/search/?api=1&query=-29.788441%2C29.493032
+455,Uniondale Golf Club,Stoneleigh Country Estate,Uniondale,Western Cape,18,Garmin (SA),-33.655069,23.140703,,,,https://www.google.com/maps/search/?api=1&query=-33.655069%2C23.140703
+456,University of the North Golf Club,Mankweng,Sovenga,Limpopo,9,Garmin (SA),-23.894989,29.738854,,,,https://www.google.com/maps/search/?api=1&query=-23.894989%2C29.738854
+457,Upington Golf Club,N14 (Olifantshoek Road),Upington,Northern Cape,18,Garmin (SA),-28.426974,21.299658,,,,https://www.google.com/maps/search/?api=1&query=-28.426974%2C21.299658
+458,Utrecht Golf Course,Balgray Road,Utrecht,KwaZulu-Natal,18,Garmin (SA),-27.641185,30.337613,,,,https://www.google.com/maps/search/?api=1&query=-27.641185%2C30.337613
+459,Vaal de Grace Golf Estate,"R59 Road, 2km from Parys",Parys,Free State,18,Garmin (SA),-26.925531,27.418068,+27568163080,https://vaaldegrace.com/golf/,,https://www.google.com/maps/search/?api=1&query=-26.925531%2C27.418068
+460,Ventersdorp Golf Club,Voortrekker Street,Ventersdorp,North West,18,Garmin (SA),-26.324361,26.827777,,,,https://www.google.com/maps/search/?api=1&query=-26.324361%2C26.827777
+461,Victoria Country Club,"Duncan Mackenzie Drive, Montrose",Pietermaritzburg,KwaZulu-Natal,18,Garmin (SA),-29.57629,30.334196,033 347 1942,https://www.victoria.co.za/contact-us,,https://www.google.com/maps/search/?api=1&query=-29.57629%2C30.334196
+462,Victoria West Golf Club,3 Market St,Victoria West,Northern Cape,18,Garmin (SA),-31.40224,23.129918,,,,https://www.google.com/maps/search/?api=1&query=-31.40224%2C23.129918
+463,Viljoenskroon Golf Club,Voortrekker Street,Viljoenskroon,Free State,18,Garmin (SA),-27.215243,26.960571,,,,https://www.google.com/maps/search/?api=1&query=-27.215243%2C26.960571
+464,Village Mashie Club,Vaalriver Village,Vaal Reef,North West,18,Garmin (SA),-26.930272,26.742478,073 334 5393,,,https://www.google.com/maps/search/?api=1&query=-26.930272%2C26.742478
+465,Volksrust Golf Club,1 South Street,Volksrust,Mpumalanga,18,Garmin (SA),-27.373574,29.873972,0762144629,,,https://www.google.com/maps/search/?api=1&query=-27.373574%2C29.873972
+466,Vrede Golf Club,Volksrus Road,Vrede,Free State,18,Garmin (SA),-27.43838,29.16943,,,,https://www.google.com/maps/search/?api=1&query=-27.43838%2C29.16943
+467,Vredenburg Golf Club,Eenzaamheid Street,Vredenburg,Western Cape,18,Garmin (SA),-32.9215,18.055524,022 715 3003,,,https://www.google.com/maps/search/?api=1&query=-32.9215%2C18.055524
+468,Vredendal Golf Club,R363,Vredendal,Western Cape,9,Garmin (SA),-31.661727,18.550183,+27272133740,,,https://www.google.com/maps/search/?api=1&query=-31.661727%2C18.550183
+469,Vryburg Golf Club,De Kock Street,Vryburg,North West,18,Garmin (SA),-26.96399,24.726233,018 264 3181,,,https://www.google.com/maps/search/?api=1&query=-26.96399%2C24.726233
+470,Vryheid Golf Club,1 President Street,Vryheid,KwaZulu-Natal,18,Garmin (SA),-27.780025,30.795021,,,,https://www.google.com/maps/search/?api=1&query=-27.780025%2C30.795021
+471,Vulintaba Country Estate,,Newcastle,KwaZulu-Natal,18,Garmin (SA),-27.775765,29.782236,072 620 0520,https://www.vulintaba.co.za/contact/,,https://www.google.com/maps/search/?api=1&query=-27.775765%2C29.782236
+472,Wagner's Golf Academy,De Bron Rd,Cape Town,Western Cape,9,Garmin (SA),-33.857184,18.669205,021 981 6042,,,https://www.google.com/maps/search/?api=1&query=-33.857184%2C18.669205
+473,Walker Park Golf Club,Standerton Road,Evander,Mpumalanga,18,Garmin (SA),-26.487436,29.10126,,,,https://www.google.com/maps/search/?api=1&query=-26.487436%2C29.10126
+474,Walmer Country Club,1 Victoria Drive,Walmer,Eastern Cape,18,Garmin (SA),-33.991607,25.577105,+27 41 581 1613,https://walmergolfestate.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.991607%2C25.577105
+475,Walmer Golf Club,"Cnr 10th Avenue and River Road, Walmer",Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.974972,25.576793,+27 41 581 1613,https://walmergolfestate.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.974972%2C25.576793
+476,Waterford Golf Course,Vaal River,Loch Vaal,Free State,18,Garmin (SA),-26.769982,27.696183,,,,https://www.google.com/maps/search/?api=1&query=-26.769982%2C27.696183
+477,Waterkloof Golf Club,"Johan Rissik Drive, Waterkloof",Pretoria,Gauteng,18,Garmin (SA),-25.789289,28.222096,012 007 1147,,,https://www.google.com/maps/search/?api=1&query=-25.789289%2C28.222096
+478,Waterpan Golf Course,Westonaria Gold Mine,Westonaria,Gauteng,18,Garmin (SA),-26.355685,27.702265,074 367 2929,,,https://www.google.com/maps/search/?api=1&query=-26.355685%2C27.702265
+479,Wedgewood Golf Course,"226 Old Cape Road, Mill Park",Port Elizabeth,Eastern Cape,18,Garmin (SA),-33.914416,25.393943,,,,https://www.google.com/maps/search/?api=1&query=-33.914416%2C25.393943
+480,Wellington Golf Club,Lower Pents Street,Wellington,Western Cape,18,Garmin (SA),-33.641926,18.98916,,,,https://www.google.com/maps/search/?api=1&query=-33.641926%2C18.98916
+481,Wesselsbron Golf Club,Voortrekker St,Wesselsbron,Free State,18,Garmin (SA),-27.859912,26.367123,+27578992612,,,https://www.google.com/maps/search/?api=1&query=-27.859912%2C26.367123
+482,West Bank Golf Club,Hood Street,East London,Eastern Cape,18,Garmin (SA),-33.037895,27.902562,0380079412,,,https://www.google.com/maps/search/?api=1&query=-33.037895%2C27.902562
+483,Western Deep Levels Mashie Golf Club,Merafong City Rural,Carletonville,North West,9,Garmin (SA),-26.423771,27.429857,,,,https://www.google.com/maps/search/?api=1&query=-26.423771%2C27.429857
+484,Westlake Golf Club,"Westlake Avenue off Boyes Drive, Lakeside",Cape Town,Western Cape,18,Garmin (SA),-34.085009,18.444875,021 788 2020,,,https://www.google.com/maps/search/?api=1&query=-34.085009%2C18.444875
+485,Westminster Golf Club,Westminster Estate,Westminster,Free State,18,Garmin (SA),-29.15928,27.157915,,,,https://www.google.com/maps/search/?api=1&query=-29.15928%2C27.157915
+486,White River Country Club,"Vintage Drive, Off the R40",White River,Mpumalanga,18,Garmin (SA),-25.284927,31.010177,,,,https://www.google.com/maps/search/?api=1&query=-25.284927%2C31.010177
+487,Whites Golf Club,5km South of Hennenman,Hennenman,Free State,18,Garmin (SA),-28.008978,26.992011,0543364984,,,https://www.google.com/maps/search/?api=1&query=-28.008978%2C26.992011
+488,Wild Coast Sun Country Club,"Main Bizana Road (R61), Mzamba Beach",Port Edward,Eastern Cape,18,Garmin (SA),-31.088308,30.184044,039 316 6051,,,https://www.google.com/maps/search/?api=1&query=-31.088308%2C30.184044
+489,Williston Golf Club,De Wet Street,Williston,Northern Cape,9,Garmin (SA),-31.336629,20.906531,,,,https://www.google.com/maps/search/?api=1&query=-31.336629%2C20.906531
+490,Willowmore Golf Club,Wehmeyer Street,Willowmore,Eastern Cape,18,Garmin (SA),-33.296584,23.502366,044 923 1007,,,https://www.google.com/maps/search/?api=1&query=-33.296584%2C23.502366
+491,Windsor Park Municipal Golf Course,NMR Avenue,Durban,KwaZulu-Natal,18,Garmin (SA),-29.816076,31.029633,031 312 2245,,,https://www.google.com/maps/search/?api=1&query=-29.816076%2C31.029633
+492,Wingate Park Country Club,"Norval Street, Moreleta Park",Pretoria,Gauteng,18,Garmin (SA),-25.826179,28.277492,065 532 1590,https://wingateparkcountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.826179%2C28.277492
+493,Witbank Golf Club,Lukin Street,Witbank,Mpumalanga,18,Garmin (SA),-25.882115,29.216788,,,,https://www.google.com/maps/search/?api=1&query=-25.882115%2C29.216788
+494,Wolmeransstad Country Club,Union Street,Wolmaransstad,North West,18,Garmin (SA),-27.210882,25.983782,,,,https://www.google.com/maps/search/?api=1&query=-27.210882%2C25.983782
+495,Woodhill Country Club,"Garsfontein Drive, Woodhill Estate, Pretoria East",Pretoria,Gauteng,18,Garmin (SA),-25.821013,28.312292,+27 12 998 0021,,,https://www.google.com/maps/search/?api=1&query=-25.821013%2C28.312292
+496,Worcester Golf Club,22 Kolie Nelson Road,Worcester,Western Cape,18,Garmin (SA),-33.618505,19.447065,0685772991,https://worcestergolfclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-33.618505%2C19.447065
+497,World of Golf Wedge & Putt Course,Cnr Woodmead and Maxwell Drive,Johannesburg,Gauteng,9,Garmin (SA),-26.042943,28.093239,011 545 8600,,,https://www.google.com/maps/search/?api=1&query=-26.042943%2C28.093239
+498,Xamarin Golf and Country Club,R364,Lamberts Bay,Western Cape,18,Garmin (SA),-32.086573,18.367016,,https://www.xamarin.co.za/,,https://www.google.com/maps/search/?api=1&query=-32.086573%2C18.367016
+499,Zastron Golf Club,Sterkspruit Road,Zastron,Free State,18,Garmin (SA),-30.307803,27.103035,082 564 3405,,,https://www.google.com/maps/search/?api=1&query=-30.307803%2C27.103035
+500,Zebediela Country Club,Zebediela Citrus Estates,Zebediela,Limpopo,9,Garmin (SA),-24.288754,29.30161,,,,https://www.google.com/maps/search/?api=1&query=-24.288754%2C29.30161
+501,Zebula Golf Estate & Spa,35 km west of Warmbaths – across from Mabula Lodge Gate,Mabula,Limpopo,18,Garmin (SA),-24.749123,27.960155,014 734 7708,https://zebulagolfestate.co.za/,,https://www.google.com/maps/search/?api=1&query=-24.749123%2C27.960155
+502,Zeerust Country Club,"2nd Street, Shalimar Park",Zeerust,North West,9,Garmin (SA),-25.549929,26.069891,,,,https://www.google.com/maps/search/?api=1&query=-25.549929%2C26.069891
+503,Zimbali Country Club,M4 Coastal Hwy,Ballito,KwaZulu-Natal,18,Garmin (SA),-29.547644,31.197643,032 538 1041,https://zimbali.com/contact/,,https://www.google.com/maps/search/?api=1&query=-29.547644%2C31.197643
+504,Zimbali Lakes Resort,500 Zimbali Lakes Resort,Ballito,KwaZulu-Natal,18,Garmin (SA),-29.55021,31.184526,087 095 2742,https://zimbalilakes.co.za/contact-us/,,https://www.google.com/maps/search/?api=1&query=-29.55021%2C31.184526
+505,Zwartenbosch Golf & Lifestyle Estate,Zwartenbosch Street,Humansdorp,Eastern Cape,9,Garmin (SA),-33.990201,24.751416,042 291 0569,,,https://www.google.com/maps/search/?api=1&query=-33.990201%2C24.751416
+506,Zwartkop Country Club,"Old Johannesburg Road, Lyttelton",Pretoria,Gauteng,18,Garmin (SA),-25.83019,28.160588,012 654 1144,https://www.zwartkopcountryclub.co.za/,,https://www.google.com/maps/search/?api=1&query=-25.83019%2C28.160588

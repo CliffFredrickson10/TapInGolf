@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Platform,
@@ -25,6 +26,7 @@ export default function NewChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const chatDisabled = !!user?.chat_disabled;
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -39,11 +41,20 @@ export default function NewChatScreen() {
 
   useEffect(() => {
     if (!user) return;
+    if (chatDisabled) {
+      setLoading(false);
+      Alert.alert(
+        "Chat access suspended",
+        "Your chat access has been suspended for violating our Community Guidelines. You can't start new conversations.",
+        [{ text: "OK", onPress: () => router.back() }],
+      );
+      return;
+    }
     apiFetch("/friends", user.token)
       .then(d => setFriends(d.friends ?? []))
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [user]);
+  }, [user, chatDisabled]);
 
   const filtered = friends.filter(f =>
     f.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -52,7 +63,7 @@ export default function NewChatScreen() {
 
   // Direct message — tap once to open
   const startDM = async (friend: Friend) => {
-    if (!user || creating) return;
+    if (!user || creating || chatDisabled) return;
     setCreating(true);
     Haptics.selectionAsync();
     try {
@@ -76,7 +87,7 @@ export default function NewChatScreen() {
   };
 
   const createGroup = async () => {
-    if (selected.length < 1 || !user || creating) return;
+    if (selected.length < 1 || !user || creating || chatDisabled) return;
     setCreating(true);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     try {

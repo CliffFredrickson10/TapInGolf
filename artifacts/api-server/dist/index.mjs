@@ -56697,6 +56697,7 @@ router2.post("/auth/login", async (req, res) => {
       student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
       is_super_user: user.is_super_user === 1 || user.is_super_user === true,
       terms_accepted: user.terms_accepted_at != null,
+      chat_disabled: user.chat_disabled === 1 || user.chat_disabled === true,
       token
     }
   });
@@ -56819,6 +56820,7 @@ router2.post("/auth/register", async (req, res) => {
       student_number_locked: false,
       is_super_user: isSuperUser,
       terms_accepted: true,
+      chat_disabled: false,
       token
     }
   });
@@ -56863,7 +56865,8 @@ router2.get("/profile", async (req, res) => {
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
       ad_free_until: adSub ? String(adSub.expires_at) : null,
       is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true,
-      terms_accepted: fresh.terms_accepted_at != null
+      terms_accepted: fresh.terms_accepted_at != null,
+      chat_disabled: fresh.chat_disabled === 1 || fresh.chat_disabled === true
     }
   });
 });

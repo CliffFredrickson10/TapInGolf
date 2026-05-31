@@ -28,6 +28,7 @@ export interface User {
   ad_free_until?: string | null;
   is_super_user?: boolean;
   terms_accepted?: boolean;
+  chat_disabled?: boolean;
 }
 
 interface AuthContextType {

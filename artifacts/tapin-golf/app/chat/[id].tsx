@@ -52,6 +52,7 @@ export default function ChatScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const chatDisabled = !!user?.chat_disabled;
   const { id, name } = useLocalSearchParams<{ id: string; name?: string }>();
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -398,43 +399,59 @@ export default function ChatScreen() {
         }
       />
 
-      {/* Input bar */}
-      <View style={[
-        styles.inputBar,
-        {
-          backgroundColor: colors.background,
-          borderTopColor: colors.border,
-          paddingBottom: Platform.OS === "web" ? 16 : insets.bottom + 8,
-        },
-      ]}>
-        {/* GIF button */}
-        <TouchableOpacity
-          onPress={() => setGifOpen(true)}
-          style={[styles.gifBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.gifBtnLabel, { color: colors.primary }]}>GIF</Text>
-        </TouchableOpacity>
+      {/* Input bar — replaced with a suspension notice when chat is disabled */}
+      {chatDisabled ? (
+        <View style={[
+          styles.disabledBar,
+          {
+            backgroundColor: colors.card,
+            borderTopColor: colors.border,
+            paddingBottom: Platform.OS === "web" ? 16 : insets.bottom + 8,
+          },
+        ]}>
+          <Ionicons name="lock-closed-outline" size={16} color={colors.mutedForeground} />
+          <Text style={[styles.disabledText, { color: colors.mutedForeground }]}>
+            Your chat access has been suspended for violating our Community Guidelines.
+          </Text>
+        </View>
+      ) : (
+        <View style={[
+          styles.inputBar,
+          {
+            backgroundColor: colors.background,
+            borderTopColor: colors.border,
+            paddingBottom: Platform.OS === "web" ? 16 : insets.bottom + 8,
+          },
+        ]}>
+          {/* GIF button */}
+          <TouchableOpacity
+            onPress={() => setGifOpen(true)}
+            style={[styles.gifBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            activeOpacity={0.7}
+          >
+            <Text style={[styles.gifBtnLabel, { color: colors.primary }]}>GIF</Text>
+          </TouchableOpacity>
 
-        <TextInput
-          style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
-          value={text}
-          onChangeText={setText}
-          placeholder="Message…"
-          placeholderTextColor={colors.mutedForeground}
-          multiline
-          maxLength={500}
-          returnKeyType="default"
-        />
-        <TouchableOpacity
-          style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.primary : colors.muted }]}
-          onPress={sendMessage}
-          disabled={!text.trim() || sending}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="send" size={18} color="#fff" />
-        </TouchableOpacity>
-      </View>
+          <TextInput
+            style={[styles.input, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+            value={text}
+            onChangeText={setText}
+            placeholder="Message…"
+            placeholderTextColor={colors.mutedForeground}
+            multiline
+            maxLength={500}
+            returnKeyType="default"
+          />
+          <TouchableOpacity
+            style={[styles.sendBtn, { backgroundColor: text.trim() ? colors.primary : colors.muted }]}
+            onPress={sendMessage}
+            disabled={!text.trim() || sending}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="send" size={18} color="#fff" />
+          </TouchableOpacity>
+        </View>
+      )}
 
       <GifPicker
         visible={gifOpen}
@@ -583,6 +600,20 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     borderTopWidth: 1,
     gap: 8,
+  },
+  disabledBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    gap: 8,
+  },
+  disabledText: {
+    flex: 1,
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
   },
   gifBtn: {
     width: 40,

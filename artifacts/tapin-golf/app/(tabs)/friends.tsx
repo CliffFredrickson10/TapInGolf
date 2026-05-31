@@ -4,6 +4,7 @@ import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Platform,
@@ -39,6 +40,13 @@ export default function FriendsScreen() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("friends");
+  const chatDisabled = !!user?.chat_disabled;
+
+  const notifyChatDisabled = () =>
+    Alert.alert(
+      "Chat access suspended",
+      "Your messaging access has been suspended for violating our Community Guidelines. You can still use the rest of TapIn Golf. If you believe this is a mistake, contact support@tapingolf.co.za.",
+    );
 
   // Friends state
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -81,7 +89,7 @@ export default function FriendsScreen() {
   };
 
   const loadConversations = async () => {
-    if (!user) { setConvoLoading(false); return; }
+    if (!user || chatDisabled) { setConversations([]); setConvoLoading(false); return; }
     try {
       const data = await apiFetch("/conversations", user.token);
       setConversations(data.conversations ?? []);
@@ -234,7 +242,7 @@ export default function FriendsScreen() {
               <Ionicons name={showAdd ? "close" : "person-add-outline"} size={18} color="#fff" />
             </TouchableOpacity>
           )}
-          {tab === "messages" && (
+          {tab === "messages" && !chatDisabled && (
             <TouchableOpacity
               style={[styles.iconBtn, { backgroundColor: colors.primary }]}
               onPress={() => { Haptics.selectionAsync(); router.push("/chat/new"); }}
@@ -251,7 +259,7 @@ export default function FriendsScreen() {
           <TouchableOpacity
             key={t}
             style={[styles.tabItem, tab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]}
-            onPress={() => { setTab(t); if (t === "messages") loadConversations(); }}
+            onPress={() => { setTab(t); if (t === "messages" && !chatDisabled) loadConversations(); }}
           >
             <Ionicons
               name={t === "friends" ? "people" : "chatbubbles"}
@@ -386,6 +394,7 @@ export default function FriendsScreen() {
                         }
                         actionLabel={item._type === "incoming" ? "Accept" : item._type === "outgoing" ? "Pending" : "Remove"}
                         onChat={item._type === "friend" ? () => {
+                          if (chatDisabled) { notifyChatDisabled(); return; }
                           Haptics.selectionAsync();
                           apiFetch("/conversations", user!.token, {
                             method: "POST",
@@ -415,7 +424,15 @@ export default function FriendsScreen() {
       {/* Messages tab */}
       {tab === "messages" && (
         <>
-          {convoLoading ? (
+          {chatDisabled ? (
+            <View style={styles.emptyState}>
+              <Ionicons name="chatbubble-ellipses-outline" size={48} color={colors.mutedForeground} />
+              <Text style={[styles.emptyTitle, { color: colors.foreground }]}>Chat access suspended</Text>
+              <Text style={[styles.emptySubText, { color: colors.mutedForeground }]}>
+                Your messaging access has been suspended for violating our Community Guidelines. You can still use the rest of TapIn Golf.{"\n\n"}If you believe this is a mistake, contact support@tapingolf.co.za.
+              </Text>
+            </View>
+          ) : convoLoading ? (
             <View style={styles.center}><GolfBallLoader /></View>
           ) : (
             <FlatList

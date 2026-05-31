@@ -218,6 +218,41 @@ router.get("/admin/notifications", async (req, res): Promise<void> => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// GET /admin/notifications/recent
+// Recent broadcasts for the staff landing summary. A club_admin sees their
+// own club's broadcasts; platform/super staff see them across all clubs.
+// ─────────────────────────────────────────────────────────────────────
+router.get("/admin/notifications/recent", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const limit = Math.min(parseInt(String(req.query.limit ?? "5"), 10), 20);
+  const scopedClubId = user?.club_id != null ? Number(user.club_id) : null;
+
+  const notifications = scopedClubId != null
+    ? await query<any>(
+        `SELECT n.id, n.type, n.title, n.body, n.affected_date,
+                n.recipient_count, n.sent_at, c.name as club_name
+         FROM club_notifications n
+         JOIN clubs c ON c.id = n.club_id
+         WHERE n.club_id = ?
+         ORDER BY n.sent_at DESC
+         LIMIT ${limit}`,
+        [scopedClubId]
+      )
+    : await query<any>(
+        `SELECT n.id, n.type, n.title, n.body, n.affected_date,
+                n.recipient_count, n.sent_at, c.name as club_name
+         FROM club_notifications n
+         JOIN clubs c ON c.id = n.club_id
+         ORDER BY n.sent_at DESC
+         LIMIT ${limit}`
+      );
+
+  res.json({ notifications });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // GET /notifications — user's in-app notification inbox
 // ─────────────────────────────────────────────────────────────────────
 router.get("/notifications", async (req, res): Promise<void> => {

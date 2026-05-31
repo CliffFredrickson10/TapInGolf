@@ -59499,6 +59499,33 @@ router11.get("/admin/notifications", async (req, res) => {
   );
   res.json({ notifications });
 });
+router11.get("/admin/notifications/recent", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const limit = Math.min(parseInt(String(req.query.limit ?? "5"), 10), 20);
+  const scopedClubId = user?.club_id != null ? Number(user.club_id) : null;
+  const notifications = scopedClubId != null ? await query(
+    `SELECT n.id, n.type, n.title, n.body, n.affected_date,
+                n.recipient_count, n.sent_at, c.name as club_name
+         FROM club_notifications n
+         JOIN clubs c ON c.id = n.club_id
+         WHERE n.club_id = ?
+         ORDER BY n.sent_at DESC
+         LIMIT ${limit}`,
+    [scopedClubId]
+  ) : await query(
+    `SELECT n.id, n.type, n.title, n.body, n.affected_date,
+                n.recipient_count, n.sent_at, c.name as club_name
+         FROM club_notifications n
+         JOIN clubs c ON c.id = n.club_id
+         ORDER BY n.sent_at DESC
+         LIMIT ${limit}`
+  );
+  res.json({ notifications });
+});
 router11.get("/notifications", async (req, res) => {
   const user = await getUser(req);
   if (!user) {

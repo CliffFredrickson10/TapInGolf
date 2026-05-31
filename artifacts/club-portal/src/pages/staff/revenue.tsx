@@ -1,11 +1,13 @@
 import { useEffect, useState } from "react";
+import { Link } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useHnaPending } from "@/context/HnaPendingContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart3, Percent } from "lucide-react";
+import { BarChart3, Percent, IdCard, Megaphone, ChevronRight } from "lucide-react";
 import { format } from "date-fns";
 
 interface Summary {
@@ -24,30 +26,39 @@ interface BookingRow {
   payment_method: string; status: string; created_at: string;
   club_name: string; golfer_name: string; golfer_email: string; date: string; time: string;
 }
+interface BroadcastRow {
+  id: number; type: string; title: string; body: string;
+  affected_date: string | null; recipient_count: number; sent_at: string; club_name: string;
+}
 
 const rand = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function StaffRevenue() {
   const { toast } = useToast();
+  const { pending, refresh: refreshHna } = useHnaPending();
   const [summary, setSummary] = useState<Summary | null>(null);
   const [clubs, setClubs] = useState<ClubRow[]>([]);
   const [bookings, setBookings] = useState<BookingRow[]>([]);
+  const [broadcasts, setBroadcasts] = useState<BroadcastRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [feeInput, setFeeInput] = useState("");
   const [savingFee, setSavingFee] = useState(false);
 
   const load = async () => {
     setLoading(true);
+    refreshHna();
     try {
-      const [s, c, b] = await Promise.all([
+      const [s, c, b, n] = await Promise.all([
         api<Summary>("/api/admin/revenue/summary"),
         api<{ clubs: ClubRow[] }>("/api/admin/revenue/clubs"),
         api<{ bookings: BookingRow[] }>("/api/admin/revenue/bookings?limit=50"),
+        api<{ notifications: BroadcastRow[] }>("/api/admin/notifications/recent?limit=5"),
       ]);
       setSummary(s);
       setFeeInput(String(s.platform_fee_pct));
       setClubs(c.clubs);
       setBookings(b.bookings);
+      setBroadcasts(n.notifications);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -81,6 +92,54 @@ export default function StaffRevenue() {
           <BarChart3 className="h-7 w-7 text-[#1a5c38]" />Revenue
         </h1>
         <p className="text-muted-foreground mt-1">Platform-wide bookings, fees and club payouts.</p>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Link href="/hna-review">
+          <Card className="cursor-pointer transition-colors hover:border-[#1a5c38]/40" data-testid="card-pending-hna">
+            <CardContent className="p-5 flex items-center gap-4">
+              <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#1a5c38]/10 flex-shrink-0">
+                <IdCard className="h-5 w-5 text-[#1a5c38]" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-sm text-muted-foreground">Pending HNA Verifications</div>
+                <div className="text-2xl font-bold mt-0.5" data-testid="text-pending-hna-count">{pending}</div>
+              </div>
+              <div className="ml-auto flex items-center text-sm font-medium text-[#1a5c38]">
+                Review<ChevronRight className="h-4 w-4" />
+              </div>
+            </CardContent>
+          </Card>
+        </Link>
+
+        <Card className="lg:col-span-2">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <Megaphone className="h-5 w-5 text-[#1a5c38]" />Recent Broadcasts
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            {loading ? <Skeleton className="h-24 w-full" /> : broadcasts.length === 0 ? (
+              <p className="text-muted-foreground text-sm py-4 text-center">No broadcasts sent yet.</p>
+            ) : (
+              <ul className="divide-y" data-testid="list-recent-broadcasts">
+                {broadcasts.map(n => (
+                  <li key={n.id} className="py-2.5 first:pt-0 last:pb-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium text-sm">{n.title}</span>
+                      <span className="text-xs px-2 py-0.5 rounded-full bg-muted text-muted-foreground font-medium">{n.type}</span>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground mt-0.5">
+                      <span>{n.club_name}</span>
+                      <span>{n.recipient_count} recipient{n.recipient_count !== 1 ? "s" : ""}</span>
+                      <span>{format(new Date(n.sent_at), "dd MMM yyyy HH:mm")}</span>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       {loading ? <Skeleton className="h-28 w-full" /> : summary && (

@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { useHnaPending } from "@/context/HnaPendingContext";
 import {
   BarChart3,
   Megaphone,
@@ -16,7 +17,7 @@ const navItems = [
   { href: "/broadcast", label: "Broadcast", icon: Megaphone },
   { href: "/geofence", label: "Geofence", icon: Radio },
   { href: "/events-members", label: "Events & Members", icon: CalendarRange },
-  { href: "/hna-review", label: "HNA Verifications", icon: IdCard },
+  { href: "/hna-review", label: "HNA Verifications", icon: IdCard, badge: "hnaPending" as const },
 ];
 
 // Pages that operate on a single selected club need the club selector shown.
@@ -25,6 +26,7 @@ const CLUB_SCOPED = ["/broadcast", "/events-members"];
 export function StaffLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { staff, logout, clubs, selectedClubId, setSelectedClubId } = useAuth();
+  const { pending } = useHnaPending();
 
   const showClubSelector = CLUB_SCOPED.includes(location);
 
@@ -40,6 +42,7 @@ export function StaffLayout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
+            const showBadge = item.badge === "hnaPending" && pending > 0;
             return (
               <Link key={item.href} href={item.href}>
                 <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer text-sm font-medium ${
@@ -48,7 +51,16 @@ export function StaffLayout({ children }: { children: React.ReactNode }) {
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                 }`}>
                   <Icon className="h-4 w-4 flex-shrink-0" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {showBadge && (
+                    <span
+                      className="ml-auto inline-flex items-center justify-center min-w-[1.25rem] h-5 px-1.5 rounded-full bg-[#c8a84b] text-[#1a5c38] text-xs font-bold"
+                      data-testid="badge-hna-pending"
+                      aria-label={`${pending} pending verifications`}
+                    >
+                      {pending > 99 ? "99+" : pending}
+                    </span>
+                  )}
                 </div>
               </Link>
             );

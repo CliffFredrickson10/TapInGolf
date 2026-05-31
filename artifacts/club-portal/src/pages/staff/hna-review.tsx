@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useHnaPending } from "@/context/HnaPendingContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -38,6 +39,7 @@ const statusBadge = (s: string) => {
 
 export default function StaffHnaReview() {
   const { toast } = useToast();
+  const { refresh: refreshPending } = useHnaPending();
   const [status, setStatus] = useState("pending");
   const [rows, setRows] = useState<VerificationRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -80,6 +82,7 @@ export default function StaffHnaReview() {
       toast({ title: "Approved", description: detail.user_name });
       setDetail(null);
       load();
+      refreshPending();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setActing(false); }
@@ -97,6 +100,7 @@ export default function StaffHnaReview() {
       toast({ title: "Rejected", description: detail.user_name });
       setDetail(null);
       load();
+      refreshPending();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setActing(false); }

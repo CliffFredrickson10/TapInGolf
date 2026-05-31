@@ -124,6 +124,21 @@ router.get("/admin/hna-verifications", async (req, res): Promise<void> => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/hna-verifications/count  → { pending }
+// Lightweight badge count for the staff nav. Declared before /:id so "count"
+// isn't captured as an id.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/hna-verifications/count", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const result = await row<any>(
+    "SELECT COUNT(*) AS pending FROM hna_verifications WHERE status = 'pending'"
+  );
+  res.json({ pending: Number(result?.pending ?? 0) });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // STAFF (super-user): GET /admin/hna-verifications/:id  (includes the card image)
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/admin/hna-verifications/:id", async (req, res): Promise<void> => {

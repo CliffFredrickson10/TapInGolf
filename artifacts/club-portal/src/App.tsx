@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { HnaPendingProvider } from "@/context/HnaPendingContext";
 import { Layout } from "@/components/layout";
 import { StaffLayout } from "@/components/staff-layout";
 import Login from "@/pages/login";
@@ -37,18 +38,20 @@ function Router() {
   if (location === "/forgot-password") return <ForgotPassword />;
   if (staff) {
     return (
-      <StaffLayout>
-        <Switch>
-          <Route path="/" component={StaffRevenue} />
-          <Route path="/broadcast" component={StaffBroadcast} />
-          <Route path="/geofence" component={StaffGeofence} />
-          <Route path="/events-members" component={StaffEventsMembers} />
-          <Route path="/hna-review" component={StaffHnaReview} />
-          <Route>
-            <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
-          </Route>
-        </Switch>
-      </StaffLayout>
+      <HnaPendingProvider>
+        <StaffLayout>
+          <Switch>
+            <Route path="/" component={StaffRevenue} />
+            <Route path="/broadcast" component={StaffBroadcast} />
+            <Route path="/geofence" component={StaffGeofence} />
+            <Route path="/events-members" component={StaffEventsMembers} />
+            <Route path="/hna-review" component={StaffHnaReview} />
+            <Route>
+              <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+            </Route>
+          </Switch>
+        </StaffLayout>
+      </HnaPendingProvider>
     );
   }
   if (!club) return <Login />;

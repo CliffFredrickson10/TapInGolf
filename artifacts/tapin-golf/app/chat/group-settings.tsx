@@ -48,6 +48,8 @@ export default function GroupSettingsScreen() {
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [deleting, setDeleting]           = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [leaving, setLeaving]             = useState(false);
+  const [confirmLeave, setConfirmLeave]   = useState(false);
 
   const isAdmin = !!user && createdBy === user.id;
 
@@ -153,6 +155,20 @@ export default function GroupSettingsScreen() {
     await loadFriends();
     setFriendSearch("");
     setShowAddModal(true);
+  };
+
+  const leaveGroup = async () => {
+    if (!user || isAdmin) return;
+    setLeaving(true);
+    try {
+      await apiFetch(`/conversations/${id}/members/${user.id}`, user.token, { method: "DELETE" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)/chat" as any);
+    } catch (e: any) {
+      showToast(e.message ?? "Could not leave group", true);
+      setLeaving(false);
+      setConfirmLeave(false);
+    }
   };
 
   const deleteGroup = async () => {
@@ -324,6 +340,44 @@ export default function GroupSettingsScreen() {
             >
               <Ionicons name="trash-outline" size={18} color={colors.destructive} />
               <Text style={[styles.deleteGroupText, { color: colors.destructive }]}>Delete Group</Text>
+            </TouchableOpacity>
+          )
+        )}
+
+        {!isAdmin && user && (
+          confirmLeave ? (
+            <View style={[styles.deleteGroupBtn, { borderColor: colors.warning + "88", backgroundColor: colors.warning + "08", flexDirection: "column", gap: 10, paddingVertical: 14 }]}>
+              <Text style={[styles.deleteGroupText, { color: colors.foreground, fontSize: 14 }]}>
+                Leave "{groupName}"? You won't receive new messages.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { backgroundColor: colors.muted, flex: 1 }]}
+                  onPress={() => setConfirmLeave(false)}
+                  disabled={leaving}
+                >
+                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { backgroundColor: colors.warning, flex: 1 }]}
+                  onPress={leaveGroup}
+                  disabled={leaving}
+                >
+                  {leaving
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={[styles.confirmBtnText, { color: "#fff" }]}>Leave</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.deleteGroupBtn, { borderColor: colors.warning + "55", backgroundColor: colors.warning + "08" }]}
+              onPress={() => { Haptics.selectionAsync(); setConfirmLeave(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="exit-outline" size={18} color={colors.warning} />
+              <Text style={[styles.deleteGroupText, { color: colors.warning }]}>Leave Group</Text>
             </TouchableOpacity>
           )
         )}

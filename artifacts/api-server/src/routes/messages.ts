@@ -262,7 +262,7 @@ router.post("/conversations/:id/members", async (req, res): Promise<void> => {
   res.status(201).json({ success: true, message: `${targetUser.name} added to group` });
 });
 
-// DELETE /conversations/:id/members/:userId — remove a member (admin only)
+// DELETE /conversations/:id/members/:userId — remove a member (admin) OR leave (self)
 router.delete("/conversations/:id/members/:userId", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
@@ -273,10 +273,23 @@ router.delete("/conversations/:id/members/:userId", async (req, res): Promise<vo
   const convo = await row<any>("SELECT * FROM conversations WHERE id = ?", [id]);
   if (!convo) { res.status(404).json({ message: "Not found" }); return; }
   if (!convo.is_group) { res.status(400).json({ message: "Not a group conversation" }); return; }
-  if (convo.created_by !== user.id) { res.status(403).json({ message: "Only the group admin can remove members" }); return; }
 
   const targetId = parseInt(req.params.userId, 10);
-  if (targetId === convo.created_by) { res.status(400).json({ message: "Cannot remove the group admin" }); return; }
+  const isSelf  = targetId === user.id;
+  const isAdmin = convo.created_by === user.id;
+
+  // A member may only remove themselves or (if admin) someone else.
+  if (!isSelf && !isAdmin) {
+    res.status(403).json({ message: "Only the group admin can remove other members" }); return;
+  }
+  // The admin cannot leave — they must delete the group instead.
+  if (isSelf && isAdmin) {
+    res.status(400).json({ message: "As the group admin you cannot leave. Delete the group instead." }); return;
+  }
+  // Nobody can remove the admin.
+  if (!isSelf && targetId === convo.created_by) {
+    res.status(400).json({ message: "Cannot remove the group admin" }); return;
+  }
 
   await exec(
     "DELETE FROM conversation_members WHERE conversation_id = ? AND user_id = ?",

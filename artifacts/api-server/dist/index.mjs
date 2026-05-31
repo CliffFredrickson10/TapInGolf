@@ -58994,12 +58994,18 @@ router7.delete("/conversations/:id/members/:userId", async (req, res) => {
     res.status(400).json({ message: "Not a group conversation" });
     return;
   }
-  if (convo.created_by !== user.id) {
-    res.status(403).json({ message: "Only the group admin can remove members" });
+  const targetId = parseInt(req.params.userId, 10);
+  const isSelf = targetId === user.id;
+  const isAdmin = convo.created_by === user.id;
+  if (!isSelf && !isAdmin) {
+    res.status(403).json({ message: "Only the group admin can remove other members" });
     return;
   }
-  const targetId = parseInt(req.params.userId, 10);
-  if (targetId === convo.created_by) {
+  if (isSelf && isAdmin) {
+    res.status(400).json({ message: "As the group admin you cannot leave. Delete the group instead." });
+    return;
+  }
+  if (!isSelf && targetId === convo.created_by) {
     res.status(400).json({ message: "Cannot remove the group admin" });
     return;
   }

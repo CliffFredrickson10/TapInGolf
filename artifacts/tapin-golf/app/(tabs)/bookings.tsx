@@ -2,7 +2,6 @@ import { Ionicons } from "@expo/vector-icons";
 import { router } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   FlatList,
   Platform,
   RefreshControl,
@@ -12,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import BookingCard, { Booking } from "@/components/BookingCard";
 import { AppHeader } from "@/components/AppHeader";
@@ -97,7 +97,7 @@ export default function BookingsScreen() {
 
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
+          <GolfBallLoader />
         </View>
       ) : allEmpty ? (
         <View style={styles.center}>

@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -208,7 +209,7 @@ export default function RevenueScreen() {
           showsVerticalScrollIndicator={false}
         >
           {sumLoading && !summary ? (
-            <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : summary ? (
             <>
               {/* KPI grid */}
@@ -326,7 +327,7 @@ export default function RevenueScreen() {
           scrollEventThrottle={200}
         >
           {bkLoading && bookings.length === 0 ? (
-            <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : bookings.length === 0 ? (
             <View style={styles.center}>
               <Ionicons name="receipt-outline" size={48} color={colors.mutedForeground} />
@@ -393,7 +394,7 @@ export default function RevenueScreen() {
           showsVerticalScrollIndicator={false}
         >
           {clLoading ? (
-            <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : clubs.length === 0 ? (
             <View style={styles.center}>
               <Ionicons name="business-outline" size={48} color={colors.mutedForeground} />

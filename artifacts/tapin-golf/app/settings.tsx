@@ -18,6 +18,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -318,7 +319,7 @@ export default function SettingsScreen() {
       >
         {loading ? (
           <View style={styles.center}>
-            <ActivityIndicator color={colors.primary} size="large" />
+            <GolfBallLoader />
           </View>
         ) : (
           <View style={{ padding: 20, gap: 20 }}>

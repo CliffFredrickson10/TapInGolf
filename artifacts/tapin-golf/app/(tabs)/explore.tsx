@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ClubCard, { Club } from "@/components/ClubCard";
 import { AppHeader } from "@/components/AppHeader";
@@ -346,7 +347,7 @@ export default function ExploreScreen() {
       {/* List */}
       {loading ? (
         <View style={styles.center}>
-          <ActivityIndicator color={colors.primary} size="large" />
+          <GolfBallLoader />
         </View>
       ) : clubs.length === 0 ? (
         <View style={styles.center}>

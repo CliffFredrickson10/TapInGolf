@@ -15,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -689,7 +690,7 @@ export default function JoinGameScreen() {
             {/* Loading */}
             {(loading || !locReady) && (
               <View style={styles.centered}>
-                <ActivityIndicator size="large" color={colors.primary} />
+                <GolfBallLoader />
                 <Text style={[styles.centeredText, { color: colors.mutedForeground }]}>
                   Finding open games near you…
                 </Text>

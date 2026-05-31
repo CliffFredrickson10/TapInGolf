@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -364,7 +365,7 @@ export default function EventsScreen() {
 
           {eventsLoading ? (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <GolfBallLoader />
             </View>
           ) : events.length === 0 ? (
             <View style={styles.center}>
@@ -689,7 +690,7 @@ export default function EventsScreen() {
           </View>
 
           {regsLoading ? (
-            <View style={styles.center}><ActivityIndicator size="large" color={colors.primary} /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : regs.length === 0 ? (
             <View style={styles.center}>
               <Ionicons name="person-add-outline" size={44} color={colors.mutedForeground} />

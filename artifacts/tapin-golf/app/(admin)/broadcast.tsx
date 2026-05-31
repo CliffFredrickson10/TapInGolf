@@ -12,6 +12,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -443,7 +444,7 @@ export default function BroadcastScreen() {
         <ScrollView contentContainerStyle={{ padding: 16, gap: 10, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
           {histLoading ? (
             <View style={styles.center}>
-              <ActivityIndicator size="large" color={colors.primary} />
+              <GolfBallLoader />
             </View>
           ) : history.length === 0 ? (
             <View style={styles.center}>

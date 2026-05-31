@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import FriendCard, { Friend } from "@/components/FriendCard";
 import { AppHeader } from "@/components/AppHeader";
@@ -326,7 +327,7 @@ export default function FriendsScreen() {
             </View>
           )}
           {friendsLoading ? (
-            <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : (
             <FlatList
               data={friendItems}
@@ -415,7 +416,7 @@ export default function FriendsScreen() {
       {tab === "messages" && (
         <>
           {convoLoading ? (
-            <View style={styles.center}><ActivityIndicator color={colors.primary} size="large" /></View>
+            <View style={styles.center}><GolfBallLoader /></View>
           ) : (
             <FlatList
               data={conversations}

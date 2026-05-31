@@ -14,6 +14,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CachedImage from "@/components/CachedImage";
 import TeeTimeSlot, { TeeTime } from "@/components/TeeTimeSlot";
@@ -174,7 +175,7 @@ export default function ClubDetailScreen() {
   if (loading) {
     return (
       <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <GolfBallLoader />
       </View>
     );
   }

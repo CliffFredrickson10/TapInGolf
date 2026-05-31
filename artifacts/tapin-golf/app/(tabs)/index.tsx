@@ -144,32 +144,6 @@ export default function HomeScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppHeader />
 
-      {/* Province chips — pinned at top so they stay visible regardless of scroll */}
-      <View style={styles.chipsBar}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 10, alignItems: "center" }}>
-          {PROVINCES.map((tag) => {
-            const isAll = tag === "All Clubs";
-            // counts uses "All" key for total; province chips use the province name
-            const count = counts[isAll ? "All" : tag];
-            return (
-              <TouchableOpacity
-                key={tag}
-                style={[styles.chip, { backgroundColor: isAll ? colors.primary : colors.card, borderColor: isAll ? colors.primary : colors.border }]}
-                onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/(tabs)/explore", params: { province: isAll ? "" : tag } }); }}
-                activeOpacity={0.8}
-              >
-                <Text style={[styles.chipText, { color: isAll ? "#fff" : colors.foreground }]}>{tag}</Text>
-                {count != null && (
-                  <View style={[styles.countBadge, { backgroundColor: isAll ? "rgba(255,255,255,0.25)" : colors.primary + "18" }]}>
-                    <Text style={[styles.countText, { color: isAll ? "#fff" : colors.primary }]}>{count}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
       <ScrollView
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
@@ -231,6 +205,30 @@ export default function HomeScreen() {
           <Text style={[styles.mapBtnText, { color: colors.primary }]}>Map</Text>
         </TouchableOpacity>
       </View>
+
+      {/* Province chips */}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={{ paddingHorizontal: 20, gap: 10, alignItems: "center" }}>
+        {PROVINCES.map((tag) => {
+          const isAll = tag === "All Clubs";
+          // counts uses "All" key for total; province chips use the province name
+          const count = counts[isAll ? "All" : tag];
+          return (
+            <TouchableOpacity
+              key={tag}
+              style={[styles.chip, { backgroundColor: isAll ? colors.primary : colors.card, borderColor: isAll ? colors.primary : colors.border }]}
+              onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/(tabs)/explore", params: { province: isAll ? "" : tag } }); }}
+              activeOpacity={0.8}
+            >
+              <Text style={[styles.chipText, { color: isAll ? "#fff" : colors.foreground }]}>{tag}</Text>
+              {count != null && (
+                <View style={[styles.countBadge, { backgroundColor: isAll ? "rgba(255,255,255,0.25)" : colors.primary + "18" }]}>
+                  <Text style={[styles.countText, { color: isAll ? "#fff" : colors.primary }]}>{count}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          );
+        })}
+      </ScrollView>
 
       {/* Join a Game */}
       <TouchableOpacity
@@ -354,7 +352,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   mapBtnText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  chipsBar: { paddingTop: 10, paddingBottom: 12 },
+  chips: { marginBottom: 20 },
   chip: { borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 6 },
   chipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
   countBadge: { borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: "center" },

@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { CalendarRange, Plus, Trash2, UserPlus } from "lucide-react";
+import { CalendarRange, Plus, Trash2, UserPlus, Pencil, ClipboardList, Check, X } from "lucide-react";
 import { format } from "date-fns";
 
 interface EventRow {
@@ -23,6 +23,15 @@ interface MemberRow {
   user_id: number; user_name: string; user_email: string; handicap: number | null;
 }
 interface SearchUser { id: number; name: string; email: string; handicap: number | null; already_member: boolean; }
+interface RegistrationRow {
+  id: number; status: string; registered_at: string;
+  user_id: number; user_name: string; user_email: string;
+}
+
+const emptyForm = {
+  name: "", description: "", event_date: "", start_time: "", end_time: "",
+  event_type: "other", restriction: "open", entry_fee: "", max_participants: "",
+};
 
 const EVENT_TYPES = ["open_day", "competition", "corporate", "social", "other"];
 const RESTRICTIONS = ["open", "members_only", "invitation_only"];
@@ -67,11 +76,10 @@ function EventsTab({ clubId }: { clubId: number }) {
   const [events, setEvents] = useState<EventRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [form, setForm] = useState({
-    name: "", description: "", event_date: "", start_time: "", end_time: "",
-    event_type: "other", restriction: "open", entry_fee: "", max_participants: "",
-  });
+  const [form, setForm] = useState({ ...emptyForm });
+  const [regEvent, setRegEvent] = useState<EventRow | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -84,24 +92,50 @@ function EventsTab({ clubId }: { clubId: number }) {
   }, [clubId, toast]);
   useEffect(() => { load(); }, [load]);
 
-  const create = async () => {
+  const openCreate = () => {
+    setEditingId(null);
+    setForm({ ...emptyForm });
+    setOpen(true);
+  };
+
+  const openEdit = (e: EventRow) => {
+    setEditingId(e.id);
+    setForm({
+      name: e.name,
+      description: e.description ?? "",
+      event_date: e.event_date ? e.event_date.slice(0, 10) : "",
+      start_time: e.start_time ?? "",
+      end_time: e.end_time ?? "",
+      event_type: e.event_type,
+      restriction: e.restriction,
+      entry_fee: e.entry_fee != null ? String(e.entry_fee) : "",
+      max_participants: e.max_participants != null ? String(e.max_participants) : "",
+    });
+    setOpen(true);
+  };
+
+  const save = async () => {
     if (!form.name || !form.event_date) { toast({ title: "Name and date required", variant: "destructive" }); return; }
     setSaving(true);
+    const payload = {
+      club_id: clubId,
+      name: form.name, description: form.description || null,
+      event_date: form.event_date, start_time: form.start_time || null, end_time: form.end_time || null,
+      event_type: form.event_type, restriction: form.restriction,
+      entry_fee: form.entry_fee === "" ? null : parseFloat(form.entry_fee),
+      max_participants: form.max_participants === "" ? null : parseInt(form.max_participants, 10),
+    };
     try {
-      await api("/api/admin/events", {
-        method: "POST",
-        body: JSON.stringify({
-          club_id: clubId,
-          name: form.name, description: form.description || null,
-          event_date: form.event_date, start_time: form.start_time || null, end_time: form.end_time || null,
-          event_type: form.event_type, restriction: form.restriction,
-          entry_fee: form.entry_fee === "" ? null : parseFloat(form.entry_fee),
-          max_participants: form.max_participants === "" ? null : parseInt(form.max_participants, 10),
-        }),
-      });
-      toast({ title: "Event created" });
+      if (editingId != null) {
+        await api(`/api/admin/events/${editingId}`, { method: "PUT", body: JSON.stringify(payload) });
+        toast({ title: "Event updated" });
+      } else {
+        await api("/api/admin/events", { method: "POST", body: JSON.stringify(payload) });
+        toast({ title: "Event created" });
+      }
       setOpen(false);
-      setForm({ name: "", description: "", event_date: "", start_time: "", end_time: "", event_type: "other", restriction: "open", entry_fee: "", max_participants: "" });
+      setEditingId(null);
+      setForm({ ...emptyForm });
       load();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
@@ -121,7 +155,7 @@ function EventsTab({ clubId }: { clubId: number }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setOpen(true)}><Plus className="h-4 w-4" />New Event</Button>
+        <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openCreate}><Plus className="h-4 w-4" />New Event</Button>
       </div>
       {loading ? <Skeleton className="h-40 w-full" /> : events.length === 0 ? (
         <Card><CardContent className="py-12 text-center text-muted-foreground">No upcoming events.</CardContent></Card>
@@ -136,7 +170,10 @@ function EventsTab({ clubId }: { clubId: number }) {
                     <div className="text-xs text-muted-foreground capitalize">{e.event_type.replace("_", " ")} · {e.restriction.replace("_", " ")}</div>
                   </div>
                   {e.status !== "cancelled" && (
-                    <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => cancelEvent(e.id)}><Trash2 className="h-4 w-4" /></Button>
+                    <div className="flex items-center gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEdit(e)} title="Edit"><Pencil className="h-4 w-4" /></Button>
+                      <Button variant="ghost" size="icon" className="text-destructive h-8 w-8" onClick={() => cancelEvent(e.id)} title="Cancel event"><Trash2 className="h-4 w-4" /></Button>
+                    </div>
                   )}
                 </div>
                 {e.description && <p className="text-sm text-muted-foreground mt-2">{e.description}</p>}
@@ -147,15 +184,19 @@ function EventsTab({ clubId }: { clubId: number }) {
                   <span>{e.approved_count} approved{e.pending_count > 0 ? ` · ${e.pending_count} pending` : ""}</span>
                   {e.status === "cancelled" && <span className="text-destructive font-medium">Cancelled</span>}
                 </div>
+                <Button variant="outline" size="sm" className="mt-3 gap-1.5" onClick={() => setRegEvent(e)}>
+                  <ClipboardList className="h-4 w-4" />
+                  Registrations{e.pending_count > 0 ? ` (${e.pending_count} pending)` : ""}
+                </Button>
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
+      <Dialog open={open} onOpenChange={(o) => { setOpen(o); if (!o) setEditingId(null); }}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>New Event</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingId != null ? "Edit Event" : "New Event"}</DialogTitle></DialogHeader>
           <div className="space-y-3">
             <div className="space-y-1.5"><Label>Name *</Label><Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
             <div className="space-y-1.5"><Label>Description</Label>
@@ -186,12 +227,94 @@ function EventsTab({ clubId }: { clubId: number }) {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={saving}>Cancel</Button>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={create} disabled={saving}>{saving ? "Creating…" : "Create"}</Button>
+            <Button variant="outline" onClick={() => { setOpen(false); setEditingId(null); }} disabled={saving}>Cancel</Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={save} disabled={saving}>
+              {saving ? "Saving…" : editingId != null ? "Save changes" : "Create"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <RegistrationsDialog clubId={clubId} event={regEvent} onClose={() => setRegEvent(null)} onChanged={load} />
     </div>
+  );
+}
+
+function RegistrationsDialog({ clubId, event, onClose, onChanged }: {
+  clubId: number; event: EventRow | null; onClose: () => void; onChanged: () => void;
+}) {
+  const { toast } = useToast();
+  const [regs, setRegs] = useState<RegistrationRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [actingId, setActingId] = useState<number | null>(null);
+
+  const load = useCallback(async () => {
+    if (!event) return;
+    setLoading(true);
+    try {
+      const data = await api<{ registrations: RegistrationRow[] }>(`/api/admin/events/${event.id}/registrations?club_id=${clubId}`);
+      setRegs(data.registrations);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [event, clubId, toast]);
+  useEffect(() => { if (event) load(); }, [event, load]);
+
+  const decide = async (userId: number, status: "approved" | "rejected") => {
+    if (!event) return;
+    setActingId(userId);
+    try {
+      await api(`/api/admin/events/${event.id}/registrations/${userId}`, {
+        method: "PUT",
+        body: JSON.stringify({ club_id: clubId, status }),
+      });
+      toast({ title: status === "approved" ? "Registration approved" : "Registration rejected" });
+      await load();
+      onChanged();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setActingId(null); }
+  };
+
+  const badge = (s: string) => {
+    const map: Record<string, string> = {
+      pending: "bg-amber-100 text-amber-700",
+      approved: "bg-green-100 text-green-700",
+      rejected: "bg-red-100 text-red-700",
+    };
+    return map[s] ?? "bg-gray-100 text-gray-600";
+  };
+
+  return (
+    <Dialog open={event != null} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader><DialogTitle>Registrations · {event?.name}</DialogTitle></DialogHeader>
+        {loading ? <Skeleton className="h-40 w-full" /> : regs.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-8 text-center">No registrations yet.</p>
+        ) : (
+          <div className="max-h-96 overflow-y-auto space-y-1">
+            {regs.map(r => (
+              <div key={r.id} className="flex items-center justify-between gap-2 p-2.5 rounded-md hover:bg-muted">
+                <div className="min-w-0">
+                  <div className="font-medium text-sm truncate">{r.user_name}</div>
+                  <div className="text-xs text-muted-foreground truncate">{r.user_email}</div>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0">
+                  {r.status === "pending" ? (
+                    <>
+                      <Button size="sm" variant="outline" className="text-destructive gap-1 h-8" disabled={actingId === r.user_id} onClick={() => decide(r.user_id, "rejected")}><X className="h-3.5 w-3.5" />Reject</Button>
+                      <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1 h-8" disabled={actingId === r.user_id} onClick={() => decide(r.user_id, "approved")}><Check className="h-3.5 w-3.5" />Approve</Button>
+                    </>
+                  ) : (
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${badge(r.status)}`}>{r.status}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

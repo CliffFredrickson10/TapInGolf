@@ -294,8 +294,8 @@ export default function ExploreScreen() {
       <ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 12, paddingBottom: 14, alignItems: "center", flexDirection: "row", gap: 8 }}
-        style={{ flexShrink: 0, minHeight: 62 }}
+        contentContainerStyle={{ paddingHorizontal: 16, alignItems: "center", flexDirection: "row", gap: 8 }}
+        style={{ flexGrow: 0, flexShrink: 0, height: 52 }}
         keyboardShouldPersistTaps="handled"
       >
         {PROVINCES.map((item) => {

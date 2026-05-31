@@ -293,7 +293,7 @@ export default function JoinGameScreen() {
   const [locDenied,  setLocDenied]  = useState(false);
   const [locReady,   setLocReady]   = useState(false);
 
-  const topPad = Platform.OS === "web" ? 0 : insets.top;
+  const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   // Silently grab location on mount if already permitted
   useEffect(() => {

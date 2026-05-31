@@ -22,6 +22,7 @@ interface BookingDetail extends Booking {
   role?: "organizer" | "invited";
   my_paid?: boolean;
   players_list?: Array<{ name: string; email: string; paid: boolean; amount: number }>;
+  club_id?: number;
   club_phone?: string;
   club_address?: string;
   club_latitude?: number;
@@ -45,8 +46,9 @@ export default function BookingDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [payLoading, setPayLoading]       = useState(false);
-  const [payMethod, setPayMethod]         = useState<"stitch" | "wallet">("stitch");
+  const [payMethod, setPayMethod]         = useState<"stitch" | "wallet" | "prepaid">("stitch");
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [prepaidBalance, setPrepaidBalance] = useState<{ remaining: number } | null>(null);
   const [payError, setPayError]           = useState<string | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
@@ -61,6 +63,16 @@ export default function BookingDetailScreen() {
       .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
       .catch(() => {});
   }, [id, user]);
+
+  // Fetch prepaid balance once we know the club (only relevant for invited players)
+  useEffect(() => {
+    if (!user || !booking?.club_id || booking.role !== "invited" || booking.my_paid) return;
+    apiFetch(`/clubs/${booking.club_id}/prepaid-balance`, user.token)
+      .then((d) => {
+        if (d.is_member && d.remaining > 0) setPrepaidBalance({ remaining: d.remaining });
+      })
+      .catch(() => {});
+  }, [booking?.club_id, booking?.role, booking?.my_paid, user]);
 
   const handleCancel = async () => {
     if (!user || !booking) return;
@@ -86,12 +98,17 @@ export default function BookingDetailScreen() {
         method: "POST",
         body: JSON.stringify({ payment_method: payMethod }),
       });
-      if (payMethod === "wallet") {
-        // Wallet deducted immediately — refresh booking state
+      if (payMethod === "wallet" || payMethod === "prepaid") {
+        // Settled immediately — refresh booking and update local balance
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const fresh = await apiFetch(`/bookings/${booking.id}`, user.token);
         setBooking(fresh.booking);
-        setWalletBalance(prev => prev !== null ? prev - (data.amount ?? 0) : null);
+        if (payMethod === "wallet") {
+          setWalletBalance(prev => prev !== null ? prev - (data.amount ?? 0) : null);
+        }
+        if (payMethod === "prepaid") {
+          setPrepaidBalance(prev => prev && prev.remaining > 1 ? { remaining: prev.remaining - 1 } : null);
+        }
       } else if (data.payment_url) {
         // Stitch — open payment WebView
         router.push({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: booking.id, is_player_pay: "1" } });
@@ -219,6 +236,26 @@ export default function BookingDetailScreen() {
               </TouchableOpacity>
             )}
 
+            {/* Prepaid rounds option — shown only when member has rounds at this club */}
+            {prepaidBalance !== null && (
+              <TouchableOpacity
+                style={[styles.payOption, {
+                  backgroundColor: payMethod === "prepaid" ? colors.primaryLight : colors.background,
+                  borderColor:     payMethod === "prepaid" ? colors.primary : colors.border,
+                }]}
+                onPress={() => { Haptics.selectionAsync(); setPayMethod("prepaid"); }}
+              >
+                <Ionicons name="ticket-outline" size={20} color={payMethod === "prepaid" ? colors.primary : colors.mutedForeground} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Prepaid Round</Text>
+                  <Text style={[styles.payOptionSub, { color: colors.primary }]}>
+                    {prepaidBalance.remaining} round{prepaidBalance.remaining !== 1 ? "s" : ""} remaining
+                  </Text>
+                </View>
+                {payMethod === "prepaid" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+              </TouchableOpacity>
+            )}
+
             {/* Insufficient wallet notice */}
             {payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0) && (
               <View style={[styles.payOption, { backgroundColor: "#fff3e0", borderColor: colors.warning }]}>
@@ -245,7 +282,9 @@ export default function BookingDetailScreen() {
               <Text style={styles.payConfirmText}>
                 {payLoading
                   ? "Processing…"
-                  : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`}
+                  : payMethod === "prepaid"
+                    ? "Use Prepaid Round"
+                    : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`}
               </Text>
             </TouchableOpacity>
           </View>

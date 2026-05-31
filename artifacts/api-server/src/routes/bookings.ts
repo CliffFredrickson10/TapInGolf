@@ -195,6 +195,7 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
 
   const booking = await row<any>(
     `SELECT b.*,
+            c.id   as club_id,
             c.name as club_name,
             COALESCE(c.location, '') as club_location,
             COALESCE(c.phone, '') as club_phone,
@@ -710,6 +711,32 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
 
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
   const { payment_method = "stitch" } = req.body as { payment_method?: string };
+
+  // ── Prepaid rounds payment ─────────────────────────────────────────────────
+  if (payment_method === "prepaid") {
+    const membership = await row<any>(
+      `SELECT id, prepaid_rounds, prepaid_rounds_used
+       FROM club_members
+       WHERE club_id = (SELECT club_id FROM portal_tee_slots WHERE id = ?)
+         AND user_id = ? AND status = 'active'`,
+      [booking.portal_slot_id, user.id]
+    );
+    if (!membership) {
+      res.status(403).json({ message: "You are not an active member at this club." }); return;
+    }
+    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
+    if (remaining <= 0) {
+      res.status(402).json({ message: "You have no prepaid rounds remaining at this club." }); return;
+    }
+    await exec(
+      `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+       WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+      [membership.id]
+    );
+    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
+    return;
+  }
 
   // ── Wallet payment ─────────────────────────────────────────────────────────
   if (payment_method === "wallet") {

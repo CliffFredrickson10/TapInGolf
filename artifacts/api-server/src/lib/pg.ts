@@ -24,19 +24,64 @@ export function getPool(): Pool {
     _pool = new Pool({
       connectionString: process.env["DATABASE_URL"],
       max: 20,
-      idleTimeoutMillis: 30_000,
+      // Keep connections alive so idle periods don't kill them
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 10_000,
+      // Allow connections to sit idle for 10 minutes before being dropped
+      idleTimeoutMillis: 600_000,
       connectionTimeoutMillis: 15_000,
     });
     _pool.on("error", (err) => {
-      logger.error({ err }, "PostgreSQL pool error");
+      logger.error({ err }, "PostgreSQL pool error — resetting pool");
+      // Force pool recreation on next request
+      _pool = null;
     });
     logger.info("PostgreSQL pool created");
   }
   return _pool;
 }
 
+// Connection-error codes that warrant a pool reset + retry
+const CONNECTION_ERROR_CODES = new Set([
+  "ECONNRESET", "ECONNREFUSED", "EPIPE", "ETIMEDOUT",
+  "57P01",  // admin_shutdown
+  "08006",  // connection_failure
+  "08001",  // sqlclient_unable_to_establish_sqlconnection
+  "08004",  // sqlserver_rejected_establishment_of_sqlconnection
+]);
+
+function isConnectionError(err: any): boolean {
+  if (!err) return false;
+  if (CONNECTION_ERROR_CODES.has(err.code)) return true;
+  const msg: string = (err.message ?? "").toLowerCase();
+  return (
+    msg.includes("connection terminated") ||
+    msg.includes("connection reset") ||
+    msg.includes("server closed the connection") ||
+    msg.includes("connection refused")
+  );
+}
+
+// Wrap a pool query with one automatic retry on dead-connection errors
+async function poolQuery(sql: string, params: any[]): Promise<import("pg").QueryResult> {
+  const positional = toPositional(cleanSql(sql));
+  for (let attempt = 0; attempt <= 1; attempt++) {
+    try {
+      return await getPool().query(positional, params);
+    } catch (err: any) {
+      if (attempt === 0 && isConnectionError(err)) {
+        logger.warn({ code: err.code, message: err.message }, "Pool connection error — resetting pool and retrying");
+        _pool = null;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
+
 export async function query<T = any>(sql: string, params: any[] = []): Promise<T[]> {
-  const result = await getPool().query(toPositional(cleanSql(sql)), params);
+  const result = await poolQuery(sql, params);
   return result.rows as T[];
 }
 
@@ -52,14 +97,14 @@ export async function exec(sql: string, params: any[] = []): Promise<number> {
   if (isInsert && !/RETURNING/i.test(s)) {
     s = s.trimEnd().replace(/;$/, "") + " RETURNING *";
   }
-  const result = await getPool().query(toPositional(s), params);
+  const result = await poolQuery(s, params);
   if (isInsert) return (result.rows[0]?.id as number) ?? 0;
   return result.rowCount ?? 0;
 }
 
 // run() — for UPDATE/DELETE, returns affected row count
 export async function run(sql: string, params: any[] = []): Promise<number> {
-  const result = await getPool().query(toPositional(cleanSql(sql)), params);
+  const result = await poolQuery(sql, params);
   return result.rowCount ?? 0;
 }
 
@@ -75,7 +120,7 @@ export async function execute(sql: string, params: any[] = []): Promise<[any, an
     s = s.trimEnd().replace(/;$/, "") + " RETURNING *";
   }
 
-  const result = await getPool().query(toPositional(s), params);
+  const result = await poolQuery(s, params);
 
   if (isInsert) {
     return [{ insertId: (result.rows[0]?.id as number) ?? 0, affectedRows: result.rowCount ?? 0 }, []];
@@ -111,4 +156,18 @@ export async function clientQuery(
   params: any[] = []
 ): Promise<import("pg").QueryResult> {
   return client.query(toPositional(cleanSql(sql)), params);
+}
+
+// keepAlive — ping the DB every 4 minutes so idle connections don't get culled
+export function startDbKeepAlive(): void {
+  const INTERVAL_MS = 4 * 60 * 1000;
+  setInterval(async () => {
+    try {
+      await getPool().query("SELECT 1");
+    } catch (err: any) {
+      logger.warn({ code: err.code }, "DB keep-alive ping failed — pool will reset on next request");
+      _pool = null;
+    }
+  }, INTERVAL_MS);
+  logger.info({ intervalMs: INTERVAL_MS }, "DB keep-alive started");
 }

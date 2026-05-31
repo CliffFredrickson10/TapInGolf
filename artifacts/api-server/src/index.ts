@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { migrate } from "./lib/migrate";
+import { startDbKeepAlive } from "./lib/pg";
 import { startReminderWorker } from "./worker/reminder";
 
 const rawPort = process.env["PORT"];
@@ -24,6 +25,8 @@ app.listen(port, (err) => {
   }
   logger.info({ port }, "Server listening");
 });
+
+startDbKeepAlive();
 
 migrate()
   .then(() => {

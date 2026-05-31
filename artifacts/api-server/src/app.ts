@@ -37,6 +37,11 @@ app.use(express.urlencoded({ extended: true }));
 const logosDir = path.resolve(__dirname, "../logos");
 app.use("/api/logos", express.static(logosDir));
 
+// Health check — used by mobile keep-alive ping and uptime monitors
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, ts: Date.now() });
+});
+
 app.use("/api", router);
 
 // In production, serve the built club-portal SPA from the same origin so

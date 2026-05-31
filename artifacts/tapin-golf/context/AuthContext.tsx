@@ -1,5 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import React, { createContext, useContext, useEffect, useState } from "react";
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { AppState, type AppStateStatus } from "react-native";
 import { API_BASE } from "@/lib/api";
 import { registerForPushNotifications } from "@/hooks/usePushNotifications";
 import { startGeofencing, stopGeofencing } from "@/lib/geofencing";
@@ -39,36 +40,79 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+// How often the mobile pings /api/health to keep the server warm (ms)
+const KEEP_ALIVE_INTERVAL_MS = 4 * 60 * 1000;
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  // Use a ref so AppState listener always sees the latest user without re-subscribing
+  const userRef = useRef<User | null>(null);
+  userRef.current = user;
 
+  // Silently refresh the profile from the server and merge into stored state
+  const refreshProfile = useCallback(async (token: string) => {
+    try {
+      const res = await fetch(`${API_BASE}/profile`, {
+        headers: { Authorization: `Bearer ${token}` },
+        cache: "no-store",
+      } as RequestInit);
+      if (res.ok) {
+        const data = await res.json();
+        setUser((prev) => {
+          if (!prev) return prev;
+          const refreshed = { ...prev, ...data.user };
+          AsyncStorage.setItem("tapin_user", JSON.stringify(refreshed));
+          return refreshed;
+        });
+      }
+    } catch {
+      // Network offline — keep using cached user
+    }
+  }, []);
+
+  // Boot: restore session from storage then refresh from server
   useEffect(() => {
     (async () => {
       try {
         const stored = await AsyncStorage.getItem("tapin_user");
         if (stored) {
-          const storedUser = JSON.parse(stored);
-          // Set cached user immediately so UI renders fast
+          const storedUser: User = JSON.parse(stored);
           setUser(storedUser);
-          // Then refresh from server to pick up any role/profile changes
-          try {
-            const res = await fetch(`${API_BASE}/profile`, {
-              headers: { Authorization: `Bearer ${storedUser.token}` },
-            });
-            if (res.ok) {
-              const data = await res.json();
-              const refreshed = { ...storedUser, ...data.user };
-              setUser(refreshed);
-              await AsyncStorage.setItem("tapin_user", JSON.stringify(refreshed));
-            }
-          } catch {}
+          // Refresh from server in the background
+          refreshProfile(storedUser.token);
           registerForPushNotifications(storedUser.token);
           startGeofencing(storedUser.token);
         }
       } catch {}
       setLoading(false);
     })();
+  }, [refreshProfile]);
+
+  // Foreground refresh: when the app comes back from background, silently
+  // re-fetch the profile so stale data (wallet, HNA status, etc.) is updated
+  useEffect(() => {
+    const handleAppStateChange = (nextState: AppStateStatus) => {
+      if (nextState === "active" && userRef.current) {
+        refreshProfile(userRef.current.token);
+      }
+    };
+    const sub = AppState.addEventListener("change", handleAppStateChange);
+    return () => sub.remove();
+  }, [refreshProfile]);
+
+  // Keep-alive ping: hit /api/health every 4 minutes so the server stays
+  // warm and the DB connection pool doesn't go idle
+  useEffect(() => {
+    const interval = setInterval(async () => {
+      if (!userRef.current) return; // only ping when a user is logged in
+      try {
+        await fetch(`${API_BASE}/health`, { cache: "no-store" } as RequestInit);
+      } catch {
+        // Offline — no-op; next ping or user action will reconnect
+      }
+    }, KEEP_ALIVE_INTERVAL_MS);
+    return () => clearInterval(interval);
   }, []);
 
   const login = async (email: string, password: string) => {

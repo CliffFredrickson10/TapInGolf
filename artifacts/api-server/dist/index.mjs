@@ -35469,6 +35469,7 @@ __export(pg_exports, {
   query: () => query,
   row: () => row,
   run: () => run,
+  startDbKeepAlive: () => startDbKeepAlive,
   withTransaction: () => withTransaction
 });
 function toPositional(sql) {
@@ -35483,18 +35484,45 @@ function getPool() {
     _pool = new Pool({
       connectionString: process.env["DATABASE_URL"],
       max: 20,
-      idleTimeoutMillis: 3e4,
+      // Keep connections alive so idle periods don't kill them
+      keepAlive: true,
+      keepAliveInitialDelayMillis: 1e4,
+      // Allow connections to sit idle for 10 minutes before being dropped
+      idleTimeoutMillis: 6e5,
       connectionTimeoutMillis: 15e3
     });
     _pool.on("error", (err) => {
-      logger.error({ err }, "PostgreSQL pool error");
+      logger.error({ err }, "PostgreSQL pool error \u2014 resetting pool");
+      _pool = null;
     });
     logger.info("PostgreSQL pool created");
   }
   return _pool;
 }
+function isConnectionError(err) {
+  if (!err) return false;
+  if (CONNECTION_ERROR_CODES.has(err.code)) return true;
+  const msg = (err.message ?? "").toLowerCase();
+  return msg.includes("connection terminated") || msg.includes("connection reset") || msg.includes("server closed the connection") || msg.includes("connection refused");
+}
+async function poolQuery(sql, params) {
+  const positional = toPositional(cleanSql(sql));
+  for (let attempt = 0; attempt <= 1; attempt++) {
+    try {
+      return await getPool().query(positional, params);
+    } catch (err) {
+      if (attempt === 0 && isConnectionError(err)) {
+        logger.warn({ code: err.code, message: err.message }, "Pool connection error \u2014 resetting pool and retrying");
+        _pool = null;
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw new Error("Unreachable");
+}
 async function query(sql, params = []) {
-  const result = await getPool().query(toPositional(cleanSql(sql)), params);
+  const result = await poolQuery(sql, params);
   return result.rows;
 }
 async function row(sql, params = []) {
@@ -35507,12 +35535,12 @@ async function exec(sql, params = []) {
   if (isInsert && !/RETURNING/i.test(s)) {
     s = s.trimEnd().replace(/;$/, "") + " RETURNING *";
   }
-  const result = await getPool().query(toPositional(s), params);
+  const result = await poolQuery(s, params);
   if (isInsert) return result.rows[0]?.id ?? 0;
   return result.rowCount ?? 0;
 }
 async function run(sql, params = []) {
-  const result = await getPool().query(toPositional(cleanSql(sql)), params);
+  const result = await poolQuery(sql, params);
   return result.rowCount ?? 0;
 }
 async function execute(sql, params = []) {
@@ -35523,7 +35551,7 @@ async function execute(sql, params = []) {
   if (isInsert && !/RETURNING/i.test(s)) {
     s = s.trimEnd().replace(/;$/, "") + " RETURNING *";
   }
-  const result = await getPool().query(toPositional(s), params);
+  const result = await poolQuery(s, params);
   if (isInsert) {
     return [{ insertId: result.rows[0]?.id ?? 0, affectedRows: result.rowCount ?? 0 }, []];
   }
@@ -35549,13 +35577,39 @@ async function withTransaction(fn) {
 async function clientQuery(client, sql, params = []) {
   return client.query(toPositional(cleanSql(sql)), params);
 }
-var _pool;
+function startDbKeepAlive() {
+  const INTERVAL_MS = 4 * 60 * 1e3;
+  setInterval(async () => {
+    try {
+      await getPool().query("SELECT 1");
+    } catch (err) {
+      logger.warn({ code: err.code }, "DB keep-alive ping failed \u2014 pool will reset on next request");
+      _pool = null;
+    }
+  }, INTERVAL_MS);
+  logger.info({ intervalMs: INTERVAL_MS }, "DB keep-alive started");
+}
+var _pool, CONNECTION_ERROR_CODES;
 var init_pg = __esm({
   "src/lib/pg.ts"() {
     "use strict";
     init_esm();
     init_logger();
     _pool = null;
+    CONNECTION_ERROR_CODES = /* @__PURE__ */ new Set([
+      "ECONNRESET",
+      "ECONNREFUSED",
+      "EPIPE",
+      "ETIMEDOUT",
+      "57P01",
+      // admin_shutdown
+      "08006",
+      // connection_failure
+      "08001",
+      // sqlclient_unable_to_establish_sqlconnection
+      "08004"
+      // sqlserver_rejected_establishment_of_sqlconnection
+    ]);
   }
 });
 
@@ -62493,6 +62547,9 @@ app.use(import_express20.default.json());
 app.use(import_express20.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");
 app.use("/api/logos", import_express20.default.static(logosDir));
+app.get("/api/health", (_req, res) => {
+  res.json({ ok: true, ts: Date.now() });
+});
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");
@@ -63386,6 +63443,9 @@ async function migrate() {
   logger.info("Migrations complete");
 }
 
+// src/index.ts
+init_pg();
+
 // src/worker/reminder.ts
 init_pg();
 init_logger();
@@ -63490,6 +63550,7 @@ app_default.listen(port, (err) => {
   }
   logger.info({ port }, "Server listening");
 });
+startDbKeepAlive();
 migrate().then(() => {
   startReminderWorker();
 }).catch((err) => {

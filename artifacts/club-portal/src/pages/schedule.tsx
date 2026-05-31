@@ -45,6 +45,7 @@ interface Booking {
   time: string;
   tee_price: number;
   voucher_code: string | null;
+  player_names: string[];
 }
 
 type SlotKind =
@@ -1293,14 +1294,16 @@ export default function Schedule() {
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
                       {slot.kind === "booked" && slot.playerIndex === 0 && (
                         <span className="font-medium truncate leading-tight">
-                          {slot.booking.guest_name}
+                          {slot.booking.player_names?.[0] ?? slot.booking.guest_name}
                           <span className={`ml-1 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.booking.status] ?? ""}`}>
                             {slot.booking.status}
                           </span>
                         </span>
                       )}
                       {slot.kind === "booked" && slot.playerIndex > 0 && (
-                        <span className="truncate opacity-70 italic text-[11px]">{slot.booking.guest_name}</span>
+                        <span className="truncate opacity-70 italic text-[11px]">
+                          {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
+                        </span>
                       )}
                     </div>
                   ))}

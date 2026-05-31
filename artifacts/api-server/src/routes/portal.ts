@@ -353,10 +353,18 @@ router.delete("/portal/tee-times/:id", requireClubAuth, async (req: Request, res
 router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const { status, date, from, to, limit = 50, offset = 0 } = req.query as any;
-  let sql = `SELECT b.id, b.portal_slot_id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
+  let sql = `SELECT b.id, b.portal_slot_id, b.portal_slot_id AS tee_time_id,
+                    b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
                     b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
                     b.discount_amount, b.voucher_code, b.created_at,
                     u.name AS guest_name, u.email AS guest_email, u.phone AS guest_phone,
+                    COALESCE(
+                      (SELECT json_agg(COALESCE(pu.name, bp.guest_name) ORDER BY bp.id)
+                         FROM booking_players bp
+                         LEFT JOIN users pu ON bp.user_id = pu.id
+                        WHERE bp.booking_id = b.id),
+                      '[]'::json
+                    ) AS player_names,
                     pts.date, pts.tee_time AS time, 0 AS tee_price
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id

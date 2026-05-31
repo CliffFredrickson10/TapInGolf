@@ -43,7 +43,7 @@ export default function ExploreScreen() {
   const params = useLocalSearchParams<{ q?: string; province?: string }>();
 
   const [search, setSearch] = useState(params.q ?? "");
-  const [province, setProvince] = useState(params.province ?? "All");
+  const [province, setProvince] = useState(params.province || "All");
   const [clubs, setClubs] = useState<Club[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -360,6 +360,7 @@ export default function ExploreScreen() {
         <FlatList
           data={clubs}
           keyExtractor={(item) => item.id.toString()}
+          style={{ flex: 1 }}
           contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: Platform.OS === "web" ? 140 : 74 }}
           renderItem={({ item }) => (
             <ClubCard

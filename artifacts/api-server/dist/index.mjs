@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router20;
+    module.exports = Router21;
     module.exports.Route = Route;
-    function Router20(options) {
-      if (!(this instanceof Router20)) {
-        return new Router20(options);
+    function Router21(options) {
+      if (!(this instanceof Router21)) {
+        return new Router21(options);
       }
       const opts = options || {};
-      function router20(req, res, next) {
-        router20.handle(req, res, next);
+      function router21(req, res, next) {
+        router21.handle(req, res, next);
       }
-      Object.setPrototypeOf(router20, this);
-      router20.caseSensitive = opts.caseSensitive;
-      router20.mergeParams = opts.mergeParams;
-      router20.params = {};
-      router20.strict = opts.strict;
-      router20.stack = [];
-      return router20;
+      Object.setPrototypeOf(router21, this);
+      router21.caseSensitive = opts.caseSensitive;
+      router21.mergeParams = opts.mergeParams;
+      router21.params = {};
+      router21.strict = opts.strict;
+      router21.stack = [];
+      return router21;
     }
-    Router20.prototype = function() {
+    Router21.prototype = function() {
     };
-    Router20.prototype.param = function param(name, fn) {
+    Router21.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router20.prototype.handle = function handle(req, res, callback) {
+    Router21.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router20.prototype.use = function use(handler) {
+    Router21.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router20.prototype.route = function route(path3) {
+    Router21.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router20.prototype[method] = function(path3) {
+      Router21.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router20 = require_router();
+    var Router21 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router20 = null;
+      var router21 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router20 === null) {
-            router20 = new Router20({
+          if (router21 === null) {
+            router21 = new Router21({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router20;
+          return router21;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router20 = this.router;
+      var router21 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router20.use(path3, fn2);
+          return router21.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router20.use(path3, function mounted_app(req, res, next) {
+        router21.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router20 = require_router();
+    var Router21 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router20.Route;
-    exports.Router = Router20;
+    exports.Route = Router21.Route;
+    exports.Router = Router21;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -52259,14 +52259,14 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express20 = __toESM(require_express2(), 1);
+var import_express21 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path2 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 
 // src/routes/index.ts
-var import_express19 = __toESM(require_express2(), 1);
+var import_express20 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -58751,6 +58751,25 @@ async function isMember(conversationId, userId) {
   );
   return !!r;
 }
+async function blockedBetween(a, b) {
+  const r = await row(
+    `SELECT 1 FROM user_blocks
+      WHERE (user_id = ? AND blocked_user_id = ?)
+         OR (user_id = ? AND blocked_user_id = ?)
+      LIMIT 1`,
+    [a, b, b, a]
+  );
+  return !!r;
+}
+async function dmPartnerId(conversationId, userId) {
+  const convo = await row("SELECT is_group FROM conversations WHERE id = ?", [conversationId]);
+  if (!convo || convo.is_group) return null;
+  const other = await row(
+    "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ? LIMIT 1",
+    [conversationId, userId]
+  );
+  return other ? Number(other.user_id) : null;
+}
 router7.get("/conversations", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
@@ -58836,6 +58855,17 @@ router7.post("/conversations", async (req, res) => {
     return;
   }
   const allMemberIds = [.../* @__PURE__ */ new Set([user.id, ...member_ids.map(Number)])];
+  if (!is_group && allMemberIds.length !== 2) {
+    res.status(400).json({ message: "A direct message must have exactly one other member." });
+    return;
+  }
+  if (!is_group) {
+    const otherId = allMemberIds.find((id) => id !== user.id);
+    if (await blockedBetween(user.id, otherId)) {
+      res.status(403).json({ message: "You can't message this user." });
+      return;
+    }
+  }
   if (!is_group && allMemberIds.length === 2) {
     const otherId = allMemberIds.find((id) => id !== user.id);
     const existing = await row(
@@ -59104,6 +59134,11 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const content = String(req.body?.content ?? "").trim();
   if (!content) {
     res.status(400).json({ message: "content is required" });
+    return;
+  }
+  const partnerId = await dmPartnerId(id, user.id);
+  if (partnerId != null && await blockedBetween(user.id, partnerId)) {
+    res.status(403).json({ message: "You can't message this user." });
     return;
   }
   const messageId = await exec(
@@ -62574,32 +62609,239 @@ router18.post("/admin/hna-verifications/:id/reject", async (req, res) => {
 });
 var hnaVerification_default = router18;
 
-// src/routes/index.ts
+// src/routes/moderation.ts
+var import_express19 = __toESM(require_express2(), 1);
+init_pg();
 var router19 = (0, import_express19.Router)();
-router19.use(health_default);
-router19.use(auth_default);
-router19.use(geofencing_default);
-router19.use(clubs_default);
-router19.use(bookings_default);
-router19.use(friends_default);
-router19.use(ads_default);
-router19.use(messages_default);
-router19.use(vouchers_default);
-router19.use(admin_default);
-router19.use(notifications_default);
-router19.use(events_default);
-router19.use(portal_default);
-router19.use(storage_default);
-router19.use(payments_default);
-router19.use(settings_default);
-router19.use(map_default);
-router19.use(hnaVerification_default);
-var routes_default = router19;
+var REASONS = [
+  "spam",
+  "harassment",
+  "hate_speech",
+  "inappropriate",
+  "threat",
+  "impersonation",
+  "other"
+];
+router19.post("/reports", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const { reported_user_id, conversation_id, message_id, reason, note } = req.body ?? {};
+  const reportedId = Number(reported_user_id);
+  if (!reportedId || reportedId === user.id) {
+    res.status(400).json({ message: "Invalid user to report" });
+    return;
+  }
+  if (!REASONS.includes(String(reason))) {
+    res.status(400).json({ message: `reason must be one of: ${REASONS.join(", ")}` });
+    return;
+  }
+  const target = await row("SELECT id FROM users WHERE id = ?", [reportedId]);
+  if (!target) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+  let convId = null;
+  if (conversation_id != null) {
+    const cid = Number(conversation_id);
+    if (!cid) {
+      res.status(400).json({ message: "Invalid conversation" });
+      return;
+    }
+    const member = await row(
+      "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+      [cid, user.id]
+    );
+    if (!member) {
+      res.status(400).json({ message: "Invalid conversation" });
+      return;
+    }
+    convId = cid;
+  }
+  let excerpt = null;
+  let msgId = null;
+  if (message_id != null) {
+    const mid = Number(message_id);
+    if (!mid) {
+      res.status(400).json({ message: "Invalid message" });
+      return;
+    }
+    const m = await row("SELECT content, conversation_id FROM messages WHERE id = ?", [mid]);
+    if (!m) {
+      res.status(400).json({ message: "Invalid message" });
+      return;
+    }
+    const member = await row(
+      "SELECT 1 FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+      [m.conversation_id, user.id]
+    );
+    if (!member) {
+      res.status(403).json({ message: "You don't have access to that message" });
+      return;
+    }
+    excerpt = String(m.content).slice(0, 500);
+    msgId = mid;
+    if (convId == null) convId = Number(m.conversation_id);
+  }
+  const dup = await row(
+    "SELECT id FROM message_reports WHERE reporter_id = ? AND reported_user_id = ? AND status = 'pending'",
+    [user.id, reportedId]
+  );
+  if (dup) {
+    res.status(200).json({ success: true, id: dup.id, duplicate: true });
+    return;
+  }
+  const cleanNote = note ? String(note).trim().slice(0, 1e3) : null;
+  const id = await exec(
+    `INSERT INTO message_reports
+       (reporter_id, reported_user_id, conversation_id, message_id, reported_excerpt, reason, note)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [user.id, reportedId, convId, msgId, excerpt, String(reason), cleanNote]
+  );
+  res.status(201).json({ success: true, id, status: "pending" });
+});
+router19.get("/admin/reports", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const status = String(req.query.status ?? "pending");
+  const valid = ["pending", "reviewed", "dismissed", "actioned", "all"];
+  if (!valid.includes(status)) {
+    res.status(400).json({ message: `status must be one of: ${valid.join(", ")}` });
+    return;
+  }
+  const where = status === "all" ? "" : "WHERE r.status = ?";
+  const params = status === "all" ? [] : [status];
+  const rows = await query(
+    `SELECT r.id, r.reporter_id, r.reported_user_id, r.conversation_id, r.message_id,
+            r.reported_excerpt, r.reason, r.note, r.status, r.review_note,
+            r.created_at, r.reviewed_at,
+            reporter.name AS reporter_name, reporter.email AS reporter_email,
+            reported.name AS reported_name, reported.email AS reported_email,
+            reviewer.name AS reviewer_name
+       FROM message_reports r
+       JOIN users reporter ON reporter.id = r.reporter_id
+       JOIN users reported ON reported.id = r.reported_user_id
+       LEFT JOIN users reviewer ON reviewer.id = r.reviewed_by
+       ${where}
+      ORDER BY
+        CASE WHEN r.status = 'pending' THEN 0 ELSE 1 END,
+        r.created_at DESC, r.id DESC`,
+    params
+  );
+  res.json({ reports: rows });
+});
+router19.get("/admin/reports/count", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const result = await row(
+    "SELECT COUNT(*) AS pending FROM message_reports WHERE status = 'pending'"
+  );
+  res.json({ pending: Number(result?.pending ?? 0) });
+});
+router19.get("/admin/reports/:id", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row(
+    `SELECT r.id, r.reporter_id, r.reported_user_id, r.conversation_id, r.message_id,
+            r.reported_excerpt, r.reason, r.note, r.status, r.review_note,
+            r.created_at, r.reviewed_at,
+            reporter.name AS reporter_name, reporter.email AS reporter_email,
+            reported.name AS reported_name, reported.email AS reported_email,
+            reviewer.name AS reviewer_name
+       FROM message_reports r
+       JOIN users reporter ON reporter.id = r.reporter_id
+       JOIN users reported ON reported.id = r.reported_user_id
+       LEFT JOIN users reviewer ON reviewer.id = r.reviewed_by
+      WHERE r.id = ?`,
+    [id]
+  );
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  let context = [];
+  if (report.conversation_id) {
+    context = await query(
+      `SELECT m.id, m.sender_id, m.content, m.created_at, u.name AS sender_name
+         FROM messages m
+         JOIN users u ON u.id = m.sender_id
+        WHERE m.conversation_id = ?
+        ORDER BY m.id DESC
+        LIMIT 30`,
+      [report.conversation_id]
+    );
+    context.reverse();
+  }
+  res.json({ report, context });
+});
+router19.post("/admin/reports/:id/resolve", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row("SELECT id, status FROM message_reports WHERE id = ?", [id]);
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  const action = String(req.body?.action ?? "");
+  if (action !== "dismiss" && action !== "uphold") {
+    res.status(400).json({ message: "action must be 'dismiss' or 'uphold'" });
+    return;
+  }
+  const newStatus = action === "uphold" ? "actioned" : "dismissed";
+  const reviewNote = req.body?.review_note ? String(req.body.review_note).trim().slice(0, 1e3) : null;
+  await exec(
+    `UPDATE message_reports
+        SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?`,
+    [newStatus, reviewNote, user.id, id]
+  );
+  res.json({ success: true, status: newStatus });
+});
+var moderation_default = router19;
+
+// src/routes/index.ts
+var router20 = (0, import_express20.Router)();
+router20.use(health_default);
+router20.use(auth_default);
+router20.use(geofencing_default);
+router20.use(clubs_default);
+router20.use(bookings_default);
+router20.use(friends_default);
+router20.use(ads_default);
+router20.use(messages_default);
+router20.use(vouchers_default);
+router20.use(admin_default);
+router20.use(notifications_default);
+router20.use(events_default);
+router20.use(portal_default);
+router20.use(storage_default);
+router20.use(payments_default);
+router20.use(settings_default);
+router20.use(map_default);
+router20.use(hnaVerification_default);
+router20.use(moderation_default);
+var routes_default = router20;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
-var app = (0, import_express20.default)();
+var app = (0, import_express21.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -62620,17 +62862,17 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use(import_express20.default.json());
-app.use(import_express20.default.urlencoded({ extended: true }));
+app.use(import_express21.default.json());
+app.use(import_express21.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express20.default.static(logosDir));
+app.use("/api/logos", import_express21.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express20.default.static(clientDir));
+  app.use(import_express21.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path2.join(clientDir, "index.html"));
   });
@@ -63028,6 +63270,24 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS message_reports (
+      id               SERIAL PRIMARY KEY,
+      reporter_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reported_user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id  INT REFERENCES conversations(id) ON DELETE SET NULL,
+      message_id       INT REFERENCES messages(id) ON DELETE SET NULL,
+      reported_excerpt TEXT,
+      reason           VARCHAR(40) NOT NULL,
+      note             TEXT,
+      status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending','reviewed','dismissed','actioned')),
+      review_note      TEXT,
+      reviewed_by      INT REFERENCES users(id),
+      reviewed_at      TIMESTAMP,
+      created_at       TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
     CREATE TABLE IF NOT EXISTS club_memberships (
       id           SERIAL PRIMARY KEY,
       user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -63205,6 +63465,8 @@ async function createSchema() {
     "CREATE INDEX IF NOT EXISTS idx_ads_placement ON ads (placement, active, priority)",
     "CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON messages (conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_conv_members_user  ON conversation_members (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_msg_reports_status   ON message_reports (status, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_msg_reports_reported ON message_reports (reported_user_id)",
     "CREATE INDEX IF NOT EXISTS idx_vouchers_active ON vouchers (active, expires_at)",
     "CREATE INDEX IF NOT EXISTS idx_psb_slot      ON portal_slot_bookings (slot_id)",
     "CREATE INDEX IF NOT EXISTS idx_pts_club_date ON portal_tee_slots (club_id, date)",

@@ -15,6 +15,29 @@ async function isMember(conversationId: number, userId: number): Promise<boolean
   return !!r;
 }
 
+// Helper: true if either user has blocked the other (block is bidirectional for chat).
+async function blockedBetween(a: number, b: number): Promise<boolean> {
+  const r = await row(
+    `SELECT 1 FROM user_blocks
+      WHERE (user_id = ? AND blocked_user_id = ?)
+         OR (user_id = ? AND blocked_user_id = ?)
+      LIMIT 1`,
+    [a, b, b, a]
+  );
+  return !!r;
+}
+
+// Helper: the other member of a 1:1 (DM) conversation, or null for groups/empty.
+async function dmPartnerId(conversationId: number, userId: number): Promise<number | null> {
+  const convo = await row<any>("SELECT is_group FROM conversations WHERE id = ?", [conversationId]);
+  if (!convo || convo.is_group) return null;
+  const other = await row<any>(
+    "SELECT user_id FROM conversation_members WHERE conversation_id = ? AND user_id != ? LIMIT 1",
+    [conversationId, userId]
+  );
+  return other ? Number(other.user_id) : null;
+}
+
 // GET /conversations — list all conversations the user belongs to
 router.get("/conversations", async (req, res): Promise<void> => {
   const user = await getUser(req);
@@ -107,6 +130,23 @@ router.post("/conversations", async (req, res): Promise<void> => {
   }
 
   const allMemberIds: number[] = [...new Set([user.id, ...member_ids.map(Number)])];
+
+  // Shape invariant: a non-group conversation is a 1:1 DM — exactly two members.
+  // Enforcing this stops a blocked user being smuggled into a "DM" with 3+ members
+  // to dodge the block check below.
+  if (!is_group && allMemberIds.length !== 2) {
+    res.status(400).json({ message: "A direct message must have exactly one other member." });
+    return;
+  }
+
+  // Block enforcement: you cannot start a DM with someone you've blocked or who blocked you.
+  if (!is_group) {
+    const otherId = allMemberIds.find(id => id !== user.id)!;
+    if (await blockedBetween(user.id, otherId)) {
+      res.status(403).json({ message: "You can't message this user." });
+      return;
+    }
+  }
 
   // For DMs, always reuse the most recently active existing conversation
   if (!is_group && allMemberIds.length === 2) {
@@ -346,6 +386,13 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
 
   const content = String(req.body?.content ?? "").trim();
   if (!content) { res.status(400).json({ message: "content is required" }); return; }
+
+  // Block enforcement: in a DM, neither party may send if a block exists either way.
+  const partnerId = await dmPartnerId(id, user.id);
+  if (partnerId != null && await blockedBetween(user.id, partnerId)) {
+    res.status(403).json({ message: "You can't message this user." });
+    return;
+  }
 
   const messageId = await exec(
     "INSERT INTO messages (conversation_id, sender_id, content) VALUES (?, ?, ?)",

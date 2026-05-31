@@ -4,9 +4,12 @@ import { Image } from "expo-image";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
+  Alert,
   FlatList,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -61,6 +64,11 @@ export default function ChatScreen() {
   const [text, setText]               = useState("");
   const [sending, setSending]         = useState(false);
   const [gifOpen, setGifOpen]         = useState(false);
+  const [menuOpen, setMenuOpen]       = useState(false);
+  const [reportOpen, setReportOpen]   = useState(false);
+  const [reportReason, setReportReason] = useState<string | null>(null);
+  const [reportNote, setReportNote]   = useState("");
+  const [submitting, setSubmitting]   = useState(false);
   const flatRef     = useRef<FlatList>(null);
   const pollRef     = useRef<ReturnType<typeof setInterval> | null>(null);
   const latestIdRef = useRef(0);
@@ -136,6 +144,67 @@ export default function ChatScreen() {
 
   const sendGif = async (url: string) => {
     await sendContent(`${GIF_PREFIX}${url}`);
+  };
+
+  const REPORT_REASONS: { value: string; label: string }[] = [
+    { value: "harassment", label: "Harassment or bullying" },
+    { value: "spam", label: "Spam" },
+    { value: "hate_speech", label: "Hate speech" },
+    { value: "inappropriate", label: "Inappropriate content" },
+    { value: "threat", label: "Threats or violence" },
+    { value: "impersonation", label: "Impersonation" },
+    { value: "other", label: "Something else" },
+  ];
+
+  const confirmBlock = () => {
+    setMenuOpen(false);
+    const targetName = otherMember?.name ?? "this user";
+    const doBlock = async () => {
+      if (!user || !otherMember) return;
+      try {
+        await apiFetch(`/settings/block`, user.token, {
+          method: "POST",
+          body: JSON.stringify({ target_id: otherMember.id }),
+        });
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.back();
+      } catch {
+        Alert.alert("Couldn't block", "Please try again.");
+      }
+    };
+    Alert.alert(
+      `Block ${targetName}?`,
+      "You won't be able to message each other. You can unblock them later in Settings.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Block", style: "destructive", onPress: doBlock },
+      ]
+    );
+  };
+
+  const submitReport = async () => {
+    if (!user || !otherMember || !reportReason || submitting) return;
+    setSubmitting(true);
+    try {
+      await apiFetch(`/reports`, user.token, {
+        method: "POST",
+        body: JSON.stringify({
+          reported_user_id: otherMember.id,
+          conversation_id: id ? Number(id) : undefined,
+          reason: reportReason,
+          note: reportNote.trim() || undefined,
+        }),
+      });
+      setReportOpen(false);
+      setReportReason(null);
+      setReportNote("");
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      Alert.alert("Report submitted", "Thanks — our team will review this shortly.");
+    } catch {
+      Alert.alert("Couldn't submit report", "Please try again.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const formatTime = (iso: string) => {
@@ -296,6 +365,18 @@ export default function ChatScreen() {
             <Ionicons name="people-circle-outline" size={28} color={colors.primary} />
           </TouchableOpacity>
         )}
+
+        {/* Moderation menu — only for DMs, once we know the other member */}
+        {!isGroup && otherMember && (
+          <TouchableOpacity
+            style={styles.settingsBtn}
+            onPress={() => setMenuOpen(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Conversation options"
+          >
+            <Ionicons name="ellipsis-vertical" size={22} color={colors.foreground} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Messages */}
@@ -360,6 +441,87 @@ export default function ChatScreen() {
         onClose={() => setGifOpen(false)}
         onSelect={sendGif}
       />
+
+      {/* Moderation action sheet */}
+      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
+        <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setMenuOpen(false)}>
+          <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={styles.sheetItem}
+              onPress={() => { setMenuOpen(false); setReportReason(null); setReportNote(""); setReportOpen(true); }}
+            >
+              <Ionicons name="flag-outline" size={20} color={colors.foreground} />
+              <Text style={[styles.sheetItemText, { color: colors.foreground }]}>Report {otherMember?.name ?? "user"}</Text>
+            </TouchableOpacity>
+            <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={styles.sheetItem} onPress={confirmBlock}>
+              <Ionicons name="ban-outline" size={20} color="#d14343" />
+              <Text style={[styles.sheetItemText, { color: "#d14343" }]}>Block {otherMember?.name ?? "user"}</Text>
+            </TouchableOpacity>
+            <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+            <TouchableOpacity style={styles.sheetItem} onPress={() => setMenuOpen(false)}>
+              <Ionicons name="close-outline" size={20} color={colors.mutedForeground} />
+              <Text style={[styles.sheetItemText, { color: colors.mutedForeground }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Report modal */}
+      <Modal visible={reportOpen} transparent animationType="slide" onRequestClose={() => setReportOpen(false)}>
+        <View style={styles.sheetBackdrop}>
+          <View style={[styles.reportCard, { backgroundColor: colors.background, borderColor: colors.border }]}>
+            <View style={styles.reportHeader}>
+              <Text style={[styles.reportTitle, { color: colors.foreground }]}>Report {otherMember?.name ?? "user"}</Text>
+              <TouchableOpacity onPress={() => setReportOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                <Ionicons name="close" size={24} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+            <Text style={[styles.reportSub, { color: colors.mutedForeground }]}>
+              Tell us what's wrong. Our team reviews every report.
+            </Text>
+            <ScrollView style={{ maxHeight: 320 }} keyboardShouldPersistTaps="handled">
+              {REPORT_REASONS.map(r => {
+                const active = reportReason === r.value;
+                return (
+                  <TouchableOpacity
+                    key={r.value}
+                    style={[
+                      styles.reasonRow,
+                      { borderColor: active ? colors.primary : colors.border, backgroundColor: active ? colors.primary + "12" : "transparent" },
+                    ]}
+                    onPress={() => setReportReason(r.value)}
+                  >
+                    <Text style={[styles.reasonText, { color: colors.foreground }]}>{r.label}</Text>
+                    <Ionicons
+                      name={active ? "radio-button-on" : "radio-button-off"}
+                      size={20}
+                      color={active ? colors.primary : colors.mutedForeground}
+                    />
+                  </TouchableOpacity>
+                );
+              })}
+              <TextInput
+                style={[styles.reportNote, { backgroundColor: colors.card, borderColor: colors.border, color: colors.foreground }]}
+                value={reportNote}
+                onChangeText={setReportNote}
+                placeholder="Add details (optional)"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+                maxLength={1000}
+              />
+            </ScrollView>
+            <TouchableOpacity
+              style={[styles.reportSubmit, { backgroundColor: reportReason ? colors.primary : colors.muted }]}
+              onPress={submitReport}
+              disabled={!reportReason || submitting}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.reportSubmitText}>{submitting ? "Submitting…" : "Submit report"}</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </KeyboardAvoidingView>
   );
 }
@@ -454,4 +616,64 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     flexShrink: 0,
   },
+  sheetBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.4)",
+    justifyContent: "flex-end",
+    padding: 16,
+  },
+  sheet: {
+    borderRadius: 16,
+    borderWidth: 1,
+    overflow: "hidden",
+    marginBottom: 8,
+  },
+  sheetItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  sheetItemText: { fontSize: 16, fontFamily: "Inter_500Medium" },
+  sheetDivider: { height: 1 },
+  reportCard: {
+    borderRadius: 16,
+    borderWidth: 1,
+    padding: 18,
+    marginBottom: 8,
+  },
+  reportHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  reportTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  reportSub: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 4, marginBottom: 12 },
+  reasonRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    marginBottom: 8,
+  },
+  reasonText: { fontSize: 15, fontFamily: "Inter_500Medium" },
+  reportNote: {
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    fontSize: 15,
+    fontFamily: "Inter_400Regular",
+    minHeight: 72,
+    textAlignVertical: "top",
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  reportSubmit: {
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center",
+    marginTop: 12,
+  },
+  reportSubmitText: { color: "#fff", fontSize: 16, fontFamily: "Inter_600SemiBold" },
 });

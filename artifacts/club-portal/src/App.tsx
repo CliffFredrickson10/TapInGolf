@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { HnaPendingProvider } from "@/context/HnaPendingContext";
+import { ReportsPendingProvider } from "@/context/ReportsPendingContext";
 import { Layout } from "@/components/layout";
 import { StaffLayout } from "@/components/staff-layout";
 import Login from "@/pages/login";
@@ -22,6 +23,7 @@ import StaffBroadcast from "@/pages/staff/broadcast";
 import StaffGeofence from "@/pages/staff/geofence";
 import StaffEventsMembers from "@/pages/staff/events-members";
 import StaffHnaReview from "@/pages/staff/hna-review";
+import StaffModeration from "@/pages/staff/moderation";
 
 function Router() {
   const { club, staff, loading } = useAuth();
@@ -39,18 +41,21 @@ function Router() {
   if (staff) {
     return (
       <HnaPendingProvider>
-        <StaffLayout>
-          <Switch>
-            <Route path="/" component={StaffRevenue} />
-            <Route path="/broadcast" component={StaffBroadcast} />
-            <Route path="/geofence" component={StaffGeofence} />
-            <Route path="/events-members" component={StaffEventsMembers} />
-            <Route path="/hna-review" component={StaffHnaReview} />
-            <Route>
-              <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
-            </Route>
-          </Switch>
-        </StaffLayout>
+        <ReportsPendingProvider>
+          <StaffLayout>
+            <Switch>
+              <Route path="/" component={StaffRevenue} />
+              <Route path="/broadcast" component={StaffBroadcast} />
+              <Route path="/geofence" component={StaffGeofence} />
+              <Route path="/events-members" component={StaffEventsMembers} />
+              <Route path="/hna-review" component={StaffHnaReview} />
+              <Route path="/moderation" component={StaffModeration} />
+              <Route>
+                <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+              </Route>
+            </Switch>
+          </StaffLayout>
+        </ReportsPendingProvider>
       </HnaPendingProvider>
     );
   }

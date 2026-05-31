@@ -17,6 +17,7 @@ import paymentsRouter from "./payments";
 import settingsRouter from "./settings";
 import mapRouter from "./map";
 import hnaVerificationRouter from "./hnaVerification";
+import moderationRouter from "./moderation";
 
 const router: IRouter = Router();
 
@@ -38,5 +39,6 @@ router.use(paymentsRouter);
 router.use(settingsRouter);
 router.use(mapRouter);
 router.use(hnaVerificationRouter);
+router.use(moderationRouter);
 
 export default router;

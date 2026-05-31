@@ -418,6 +418,25 @@ async function createSchema(): Promise<void> {
   `);
 
   await ddl(`
+    CREATE TABLE IF NOT EXISTS message_reports (
+      id               SERIAL PRIMARY KEY,
+      reporter_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reported_user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      conversation_id  INT REFERENCES conversations(id) ON DELETE SET NULL,
+      message_id       INT REFERENCES messages(id) ON DELETE SET NULL,
+      reported_excerpt TEXT,
+      reason           VARCHAR(40) NOT NULL,
+      note             TEXT,
+      status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending','reviewed','dismissed','actioned')),
+      review_note      TEXT,
+      reviewed_by      INT REFERENCES users(id),
+      reviewed_at      TIMESTAMP,
+      created_at       TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
     CREATE TABLE IF NOT EXISTS club_memberships (
       id           SERIAL PRIMARY KEY,
       user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -617,6 +636,8 @@ async function createSchema(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS idx_ads_placement ON ads (placement, active, priority)",
     "CREATE INDEX IF NOT EXISTS idx_messages_conv_time ON messages (conversation_id, created_at)",
     "CREATE INDEX IF NOT EXISTS idx_conv_members_user  ON conversation_members (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_msg_reports_status   ON message_reports (status, created_at)",
+    "CREATE INDEX IF NOT EXISTS idx_msg_reports_reported ON message_reports (reported_user_id)",
     "CREATE INDEX IF NOT EXISTS idx_vouchers_active ON vouchers (active, expires_at)",
     "CREATE INDEX IF NOT EXISTS idx_psb_slot      ON portal_slot_bookings (slot_id)",
     "CREATE INDEX IF NOT EXISTS idx_pts_club_date ON portal_tee_slots (club_id, date)",

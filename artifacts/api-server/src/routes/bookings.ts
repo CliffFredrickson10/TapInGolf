@@ -504,6 +504,21 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
   const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
 
+  // Pre-flight wallet balance check (outside transaction for a clear error response)
+  if (payment_method === "wallet") {
+    const walletRow = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+    const available = walletRow ? parseFloat(walletRow.balance) : 0;
+    if (available < splitAmount) {
+      res.status(400).json({
+        message: `Insufficient wallet balance. You have R${available.toFixed(2)} available but this booking requires R${splitAmount.toFixed(2)}.`,
+        error_code: "wallet_insufficient_funds",
+        available,
+        required: splitAmount,
+      });
+      return;
+    }
+  }
+
   let bookingId!: number;
   await withTransaction(async (client) => {
     const insertResult = await clientQuery(client,
@@ -554,6 +569,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
          WHERE club_id = ? AND user_id = ? AND status = 'active'
            AND prepaid_rounds > prepaid_rounds_used`,
         [slot.club_id, user.id]
+      );
+    }
+    // For wallet: deduct the organizer's share from their wallet balance
+    if (payment_method === "wallet") {
+      await clientQuery(client,
+        "UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
+        [splitAmount, user.id, splitAmount]
       );
     }
     // For non-Stitch payments (prepaid, wallet) the organizer is paid immediately

@@ -58103,6 +58103,19 @@ router4.post("/bookings", async (req, res) => {
   const feePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
   const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
   const clubAmount = Math.round((totalAmount - platformFee) * 100) / 100;
+  if (payment_method === "wallet") {
+    const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+    const available = walletRow ? parseFloat(walletRow.balance) : 0;
+    if (available < splitAmount) {
+      res.status(400).json({
+        message: `Insufficient wallet balance. You have R${available.toFixed(2)} available but this booking requires R${splitAmount.toFixed(2)}.`,
+        error_code: "wallet_insufficient_funds",
+        available,
+        required: splitAmount
+      });
+      return;
+    }
+  }
   let bookingId;
   await withTransaction(async (client) => {
     const insertResult = await clientQuery(
@@ -58164,6 +58177,13 @@ router4.post("/bookings", async (req, res) => {
          WHERE club_id = ? AND user_id = ? AND status = 'active'
            AND prepaid_rounds > prepaid_rounds_used`,
         [slot.club_id, user.id]
+      );
+    }
+    if (payment_method === "wallet") {
+      await clientQuery(
+        client,
+        "UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
+        [splitAmount, user.id, splitAmount]
       );
     }
     if (payment_method !== "stitch") {

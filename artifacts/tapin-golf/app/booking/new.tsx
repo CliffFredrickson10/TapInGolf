@@ -142,6 +142,9 @@ export default function NewBookingScreen() {
   const [hnaLoading, setHnaLoading]     = useState(false);
   const hnaDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // For tier-priced clubs (price=0 from server), fetch the organizer's own tier price
+  const [organizerTierPrice, setOrganizerTierPrice] = useState<number | null>(null);
+
   const cartAvailable  = params.cart_available === "1";
   const cartCompulsory = params.cart_compulsory === "1";
   const cartUnitPrice  = params.cart_price ? parseFloat(params.cart_price) : 0;
@@ -216,6 +219,20 @@ export default function NewBookingScreen() {
     return () => { if (hnaDebounce.current) clearTimeout(hnaDebounce.current); };
   }, [hnaNumber, hnaVerified, params.club_id, has9]);
 
+  // When the club is tier-priced (price18=0), fetch the organizer's actual tier price
+  useEffect(() => {
+    if (!isTierPriced || !user) return;
+    setOrganizerTierPrice(null);
+    const noCache: RequestInit = { cache: "no-store" };
+    apiFetch(
+      `/clubs/${params.club_id}/user-tier-price?user_id=${user.id}&holes=${holes}`,
+      user.token,
+      noCache
+    )
+      .then((d) => { if (d.price != null) setOrganizerTierPrice(parseFloat(d.price)); })
+      .catch(() => {});
+  }, [isTierPriced, user, params.club_id, holes]);
+
   // Effective prices: take the lowest of the server-computed tier price and the
   // HNA affiliated rate — whichever is cheaper for the user wins.
   // Members are never charged the HNA/affiliated rate — their membership tier applies.
@@ -224,7 +241,10 @@ export default function NewBookingScreen() {
     ? Math.min(price9Raw, hnaPrice9)
     : price9Raw;
   const regularPrice     = holes === 9 && has9 ? (effectivePrice9 ?? effectivePrice18) : effectivePrice18;
-  const basePrice        = hasPromo ? promoPrice! : regularPrice;
+  // For tier-priced clubs, override basePrice once the organizer's tier price is fetched
+  const basePrice        = hasPromo ? promoPrice! : (isTierPriced && organizerTierPrice !== null ? organizerTierPrice : regularPrice);
+  // True only while we still don't have the real price — controls "Membership pricing" label
+  const effectiveTierPriced = isTierPriced && organizerTierPrice === null;
 
   // ── Totals ──────────────────────────────────────────────────────────────────
   // Organizer pays R0 greens when using a prepaid round
@@ -664,7 +684,7 @@ export default function NewBookingScreen() {
                 <Text style={[styles.splitSub, { color: colors.mutedForeground }]}>
                   {paymentMethod === "prepaid" && isMember
                     ? "Your round is free · others pay their rate"
-                    : isTierPriced
+                    : effectiveTierPriced
                     ? "Membership pricing applies"
                     : "Each player billed at their own rate"}
                 </Text>
@@ -934,7 +954,7 @@ export default function NewBookingScreen() {
               </>
             )}
             {/* Per-player breakdown when split bill is on */}
-            {splitBill && numPlayers > 1 && !isTierPriced && !hasPromo && (
+            {splitBill && numPlayers > 1 && !effectiveTierPriced && !hasPromo && (
               <>
                 {/* Organizer row */}
                 <View style={[styles.totalLine, { alignItems: "flex-start" }]}>
@@ -989,7 +1009,7 @@ export default function NewBookingScreen() {
               </View>
             )}
             {/* Solo player breakdown row */}
-            {numPlayers === 1 && !isTierPriced && !hasPromo && (
+            {numPlayers === 1 && !effectiveTierPriced && !hasPromo && (
               <>
                 <View style={[styles.totalLine, { alignItems: "flex-start" }]}>
                   <View style={{ flex: 1 }}>
@@ -1013,13 +1033,13 @@ export default function NewBookingScreen() {
                 <View style={[styles.totalDivider, { backgroundColor: colors.border, marginTop: 10 }]} />
               </>
             )}
-            {!(splitBill && numPlayers > 1 && !isTierPriced && !hasPromo) && numPlayers > 1 && cartFee > 0 && (
+            {!(splitBill && numPlayers > 1 && !effectiveTierPriced && !hasPromo) && numPlayers > 1 && cartFee > 0 && (
               <View style={styles.totalLine}>
                 <Text style={[styles.totalLineLabel, { color: colors.accent }]}>Golf Cart ({numCarts} × R{cartUnitPrice.toFixed(2)})</Text>
                 <Text style={[styles.totalLineVal, { color: colors.accent }]}>+R{cartFee.toFixed(2)}</Text>
               </View>
             )}
-            {(hasPromo || appliedVoucher || (cartFee > 0 && numPlayers > 1 && !(splitBill && numPlayers > 1 && !isTierPriced && !hasPromo))) && (
+            {(hasPromo || appliedVoucher || (cartFee > 0 && numPlayers > 1 && !(splitBill && numPlayers > 1 && !effectiveTierPriced && !hasPromo))) && (
               <View style={[styles.totalDivider, { backgroundColor: colors.border }]} />
             )}
             <View style={styles.totalLine}>
@@ -1027,7 +1047,7 @@ export default function NewBookingScreen() {
                 <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>
                   {splitBill && numPlayers > 1 ? "Your share" : "Total"}
                 </Text>
-                {splitBill && numPlayers > 1 && !isTierPriced && (
+                {splitBill && numPlayers > 1 && !effectiveTierPriced && (
                   <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Full total: R{totalAmount.toFixed(2)}</Text>
                 )}
               </View>
@@ -1035,7 +1055,7 @@ export default function NewBookingScreen() {
                 <Text style={[styles.totalAmount, { color: colors.primary }]}>
                   {myAmount > 0 ? `R${myAmount.toFixed(2)}` : "Free (prepaid round)"}
                 </Text>
-              ) : isTierPriced ? (
+              ) : effectiveTierPriced ? (
                 <Text style={[styles.totalAmount, { color: colors.primary, fontSize: 16 }]}>Membership pricing</Text>
               ) : (
                 <Text style={[styles.totalAmount, { color: colors.primary }]}>R{myAmount.toFixed(2)}</Text>

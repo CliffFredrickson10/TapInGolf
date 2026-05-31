@@ -58173,14 +58173,33 @@ router4.post("/bookings", async (req, res) => {
   let paymentUrl = null;
   if (payment_method === "stitch") {
     const host = req.get("host") ?? "";
-    const pr = await createStitchPayment({
-      amount: splitAmount,
-      payerReference: `TapIn-${ref}`.slice(0, 20),
-      beneficiaryReference: ref.slice(0, 20),
-      externalReference: String(bookingId),
-      redirectUrl: `https://${host}/booking/success`
-    });
-    paymentUrl = pr.url;
+    try {
+      const pr = await createStitchPayment({
+        amount: splitAmount,
+        payerReference: `TapIn-${ref}`.slice(0, 20),
+        beneficiaryReference: ref.slice(0, 20),
+        externalReference: String(bookingId),
+        redirectUrl: `https://${host}/booking/success`
+      });
+      paymentUrl = pr.url;
+    } catch (stitchErr) {
+      try {
+        await withTransaction(async (client) => {
+          await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [bookingId]);
+          await clientQuery(
+            client,
+            "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - ?) WHERE id = ?",
+            [numPlayers, parseInt(tee_time_id)]
+          );
+        });
+      } catch {
+      }
+      const isConfig = (stitchErr.message ?? "").includes("not configured");
+      res.status(isConfig ? 503 : 502).json({
+        message: isConfig ? "Payment gateway not configured. Set STITCH_CLIENT_ID, STITCH_CLIENT_SECRET and beneficiary secrets." : "Failed to initiate payment. Please try again."
+      });
+      return;
+    }
   }
   const allPlayerIds = [
     user.id,

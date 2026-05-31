@@ -44,8 +44,10 @@ export default function BookingDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
-  const [payLoading, setPayLoading] = useState(false);
-  const [payMethod, setPayMethod] = useState<"payfast" | "google_pay" | "apple_pay">("payfast");
+  const [payLoading, setPayLoading]       = useState(false);
+  const [payMethod, setPayMethod]         = useState<"stitch" | "wallet">("stitch");
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [payError, setPayError]           = useState<string | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -55,6 +57,9 @@ export default function BookingDetailScreen() {
       .then((d) => setBooking(d.booking))
       .catch(() => {})
       .finally(() => setLoading(false));
+    apiFetch("/payments/methods", user.token)
+      .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
+      .catch(() => {});
   }, [id, user]);
 
   const handleCancel = async () => {
@@ -75,21 +80,24 @@ export default function BookingDetailScreen() {
   const handlePayShare = async () => {
     if (!user || !booking) return;
     setPayLoading(true);
+    setPayError(null);
     try {
-      if (payMethod === "google_pay" || payMethod === "apple_pay") {
-        await apiFetch(`/bookings/${booking.id}/player-paid`, user.token, { method: "PUT" });
+      const data = await apiFetch(`/bookings/${booking.id}/pay`, user.token, {
+        method: "POST",
+        body: JSON.stringify({ payment_method: payMethod }),
+      });
+      if (payMethod === "wallet") {
+        // Wallet deducted immediately — refresh booking state
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        // Refetch the full booking so players_list also reflects the updated paid status
         const fresh = await apiFetch(`/bookings/${booking.id}`, user.token);
         setBooking(fresh.booking);
-      } else {
-        const data = await apiFetch(`/bookings/${booking.id}/pay`, user.token, { method: "POST" });
-        if (data.payment_url) {
-          router.push({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: booking.id, is_player_pay: "1" } });
-        }
+        setWalletBalance(prev => prev !== null ? prev - (data.amount ?? 0) : null);
+      } else if (data.payment_url) {
+        // Stitch — open payment WebView
+        router.push({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: booking.id, is_player_pay: "1" } });
       }
-    } catch {
-      // silently fail
+    } catch (e: any) {
+      setPayError(e?.message ?? "Payment failed. Please try again.");
     } finally {
       setPayLoading(false);
     }
@@ -172,44 +180,72 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
 
-            {([
-              { id: "payfast",    label: "PayFast",    icon: "card-outline",  sub: "Debit/Credit card, EFT" },
-              { id: "google_pay", label: "Google Pay", icon: "logo-google",   sub: "Android devices" },
-              { id: "apple_pay",  label: "Apple Pay",  icon: "logo-apple",    sub: "iOS devices" },
-            ] as const).map((pm) => (
+            {/* Stitch option */}
+            <TouchableOpacity
+              style={[styles.payOption, {
+                backgroundColor: payMethod === "stitch" ? colors.primaryLight : colors.background,
+                borderColor:     payMethod === "stitch" ? colors.primary : colors.border,
+              }]}
+              onPress={() => { Haptics.selectionAsync(); setPayMethod("stitch"); }}
+            >
+              <Ionicons name="card-outline" size={20} color={payMethod === "stitch" ? colors.primary : colors.mutedForeground} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Stitch</Text>
+                <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
+              </View>
+              {payMethod === "stitch" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+            </TouchableOpacity>
+
+            {/* Wallet option — shown when balance is loaded */}
+            {walletBalance !== null && (
               <TouchableOpacity
-                key={pm.id}
-                style={[
-                  styles.payOption,
-                  {
-                    backgroundColor: payMethod === pm.id ? colors.primaryLight : colors.background,
-                    borderColor:     payMethod === pm.id ? colors.primary : colors.border,
-                  },
-                ]}
-                onPress={() => { Haptics.selectionAsync(); setPayMethod(pm.id); }}
+                style={[styles.payOption, {
+                  backgroundColor: payMethod === "wallet" ? colors.primaryLight : colors.background,
+                  borderColor:     payMethod === "wallet" ? colors.primary : colors.border,
+                }]}
+                onPress={() => { Haptics.selectionAsync(); setPayMethod("wallet"); }}
               >
-                <Ionicons
-                  name={pm.icon as any}
-                  size={20}
-                  color={payMethod === pm.id ? colors.primary : colors.mutedForeground}
-                />
+                <Ionicons name="wallet-outline" size={20} color={payMethod === "wallet" ? colors.primary : colors.mutedForeground} />
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>{pm.label}</Text>
-                  <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>{pm.sub}</Text>
+                  <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Wallet</Text>
+                  <Text style={[styles.payOptionSub, {
+                    color: walletBalance >= (booking.my_amount ?? 0) ? colors.primary : "#e53935",
+                  }]}>
+                    R{walletBalance.toFixed(2)} available
+                    {walletBalance < (booking.my_amount ?? 0) ? " — insufficient" : ""}
+                  </Text>
                 </View>
-                {payMethod === pm.id && (
-                  <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
-                )}
+                {payMethod === "wallet" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
               </TouchableOpacity>
-            ))}
+            )}
+
+            {/* Insufficient wallet notice */}
+            {payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0) && (
+              <View style={[styles.payOption, { backgroundColor: "#fff3e0", borderColor: colors.warning }]}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.warning} />
+                <Text style={{ color: colors.warning, flex: 1, fontSize: 13 }}>
+                  Top up your wallet in the Profile tab before paying.
+                </Text>
+              </View>
+            )}
+
+            {/* Error */}
+            {payError && (
+              <Text style={{ color: "#e53935", fontSize: 13, marginTop: 4 }}>{payError}</Text>
+            )}
 
             <TouchableOpacity
-              style={[styles.payConfirmBtn, { backgroundColor: payLoading ? colors.muted : colors.accent }]}
+              style={[styles.payConfirmBtn, {
+                backgroundColor: (payLoading || (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0)))
+                  ? colors.muted : colors.accent,
+              }]}
               onPress={handlePayShare}
-              disabled={payLoading}
+              disabled={payLoading || (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0))}
             >
               <Text style={styles.payConfirmText}>
-                {payLoading ? "Processing…" : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "payfast" ? "PayFast" : payMethod === "google_pay" ? "Google Pay" : "Apple Pay"}`}
+                {payLoading
+                  ? "Processing…"
+                  : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`}
               </Text>
             </TouchableOpacity>
           </View>

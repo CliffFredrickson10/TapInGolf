@@ -58357,6 +58357,19 @@ router4.post("/bookings/:id/pay", async (req, res) => {
     return;
   }
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
+  const { payment_method = "stitch" } = req.body;
+  if (payment_method === "wallet") {
+    const wallet = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+    const balance = wallet ? parseFloat(wallet.balance) : 0;
+    if (balance < amount) {
+      res.status(402).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${amount.toFixed(2)} required)` });
+      return;
+    }
+    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [amount, user.id]);
+    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    res.json({ success: true, method: "wallet", amount, booking_id: id });
+    return;
+  }
   const host = req.get("host") ?? "";
   const pr = await createStitchPayment({
     amount,

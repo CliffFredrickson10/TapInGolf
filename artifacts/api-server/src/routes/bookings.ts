@@ -709,6 +709,23 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
   if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
 
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
+  const { payment_method = "stitch" } = req.body as { payment_method?: string };
+
+  // ── Wallet payment ─────────────────────────────────────────────────────────
+  if (payment_method === "wallet") {
+    const wallet = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+    const balance = wallet ? parseFloat(wallet.balance) : 0;
+    if (balance < amount) {
+      res.status(402).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${amount.toFixed(2)} required)` });
+      return;
+    }
+    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [amount, user.id]);
+    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    res.json({ success: true, method: "wallet", amount, booking_id: id });
+    return;
+  }
+
+  // ── Stitch payment (default) ───────────────────────────────────────────────
   const host = req.get("host") ?? "";
   const pr = await createStitchPayment({
     amount,

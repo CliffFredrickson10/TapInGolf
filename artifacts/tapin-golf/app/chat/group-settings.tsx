@@ -5,7 +5,6 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
-  Alert,
   FlatList,
   Image,
   Modal,
@@ -48,6 +47,7 @@ export default function GroupSettingsScreen() {
   const [removingId, setRemovingId]       = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
   const [deleting, setDeleting]           = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const isAdmin = !!user && createdBy === user.id;
 
@@ -155,30 +155,18 @@ export default function GroupSettingsScreen() {
     setShowAddModal(true);
   };
 
-  const deleteGroup = () => {
+  const deleteGroup = async () => {
     if (!user || !isAdmin) return;
-    Alert.alert(
-      "Delete Group",
-      `Delete "${groupName}" and all its messages? This cannot be undone.`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Delete",
-          style: "destructive",
-          onPress: async () => {
-            setDeleting(true);
-            try {
-              await apiFetch(`/conversations/${id}`, user.token, { method: "DELETE" });
-              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-              router.replace("/(tabs)/chat" as any);
-            } catch (e: any) {
-              showToast(e.message ?? "Could not delete group", true);
-              setDeleting(false);
-            }
-          },
-        },
-      ]
-    );
+    setDeleting(true);
+    try {
+      await apiFetch(`/conversations/${id}`, user.token, { method: "DELETE" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)/chat" as any);
+    } catch (e: any) {
+      showToast(e.message ?? "Could not delete group", true);
+      setDeleting(false);
+      setConfirmDelete(false);
+    }
   };
 
   const groupInitials = groupName
@@ -303,20 +291,41 @@ export default function GroupSettingsScreen() {
         </View>
 
         {isAdmin && (
-          <TouchableOpacity
-            style={[styles.deleteGroupBtn, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "08" }]}
-            onPress={deleteGroup}
-            disabled={deleting}
-            activeOpacity={0.8}
-          >
-            {deleting
-              ? <ActivityIndicator size="small" color={colors.destructive} />
-              : <>
-                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                  <Text style={[styles.deleteGroupText, { color: colors.destructive }]}>Delete Group</Text>
-                </>
-            }
-          </TouchableOpacity>
+          confirmDelete ? (
+            <View style={[styles.deleteGroupBtn, { borderColor: colors.destructive + "88", backgroundColor: colors.destructive + "08", flexDirection: "column", gap: 10, paddingVertical: 14 }]}>
+              <Text style={[styles.deleteGroupText, { color: colors.foreground, fontSize: 14 }]}>
+                Delete "{groupName}" and all its messages?
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8, width: "100%" }}>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { backgroundColor: colors.muted, flex: 1 }]}
+                  onPress={() => setConfirmDelete(false)}
+                  disabled={deleting}
+                >
+                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.confirmBtn, { backgroundColor: colors.destructive, flex: 1 }]}
+                  onPress={deleteGroup}
+                  disabled={deleting}
+                >
+                  {deleting
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Text style={[styles.confirmBtnText, { color: "#fff" }]}>Delete</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.deleteGroupBtn, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "08" }]}
+              onPress={() => { Haptics.selectionAsync(); setConfirmDelete(true); }}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+              <Text style={[styles.deleteGroupText, { color: colors.destructive }]}>Delete Group</Text>
+            </TouchableOpacity>
+          )
         )}
 
         {members.map(member => {

@@ -231,7 +231,10 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
       "SELECT paid, amount FROM booking_players WHERE booking_id = ? AND user_id = ?",
       [id, user.id]
     );
-    booking.my_amount = bp?.amount ? parseFloat(bp.amount) : booking.total_amount / booking.players;
+    // Use != null so that a stored amount of 0 (organizer covers all) is respected
+    // rather than falling back to total_amount / players (which would show an
+    // incorrect per-head split when the organizer is paying for everyone).
+    booking.my_amount = bp?.amount != null ? parseFloat(bp.amount) : booking.total_amount / booking.players;
     booking.my_paid   = !!bp?.paid;
   } else {
     booking.my_paid = true;

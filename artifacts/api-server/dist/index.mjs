@@ -57887,7 +57887,7 @@ router4.get("/bookings/:id", async (req, res) => {
       "SELECT paid, amount FROM booking_players WHERE booking_id = ? AND user_id = ?",
       [id, user.id]
     );
-    booking.my_amount = bp?.amount ? parseFloat(bp.amount) : booking.total_amount / booking.players;
+    booking.my_amount = bp?.amount != null ? parseFloat(bp.amount) : booking.total_amount / booking.players;
     booking.my_paid = !!bp?.paid;
   } else {
     booking.my_paid = true;

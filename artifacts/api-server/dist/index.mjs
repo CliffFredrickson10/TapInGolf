@@ -62258,6 +62258,17 @@ router18.get("/admin/hna-verifications", async (req, res) => {
   );
   res.json({ verifications: rows });
 });
+router18.get("/admin/hna-verifications/count", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const result = await row(
+    "SELECT COUNT(*) AS pending FROM hna_verifications WHERE status = 'pending'"
+  );
+  res.json({ pending: Number(result?.pending ?? 0) });
+});
 router18.get("/admin/hna-verifications/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {

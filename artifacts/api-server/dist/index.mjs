@@ -58044,6 +58044,15 @@ router4.post("/bookings", async (req, res) => {
       ).catch(() => null);
       return guestTierRow?.[priceCol] != null ? parseFloat(guestTierRow[priceCol]) : rawPrice;
     }
+    if (p.tier_type) {
+      const hintRow = await row(
+        `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
+        [slot.club_id, p.tier_type]
+      ).catch(() => null);
+      if (hintRow?.[priceCol] != null) {
+        return parseFloat(hintRow[priceCol]);
+      }
+    }
     const [pMember, pVerified] = await Promise.all([
       row(
         "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",

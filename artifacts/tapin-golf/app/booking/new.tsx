@@ -409,10 +409,11 @@ export default function NewBookingScreen() {
     setSubmitting(true);
     const players_data = addedPlayers
       .slice(0, numPlayers - 1)
-      .map((p) => {
+      .map((p, i) => {
         if (!p) return null;
         if (p.type === "guest") return { guest_name: p.name };
-        return { user_id: (p as any).id };
+        const tierType = addedPlayerPrices[i]?.tier_type;
+        return { user_id: (p as any).id, ...(tierType ? { tier_type: tierType } : {}) };
       })
       .filter(Boolean);
     try {

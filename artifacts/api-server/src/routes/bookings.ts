@@ -278,7 +278,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   } = req.body ?? {};
 
   // Normalise to players_data: prefer explicit players_data, fall back to friend_ids
-  const rawPlayers: Array<{ user_id?: number; guest_name?: string }> =
+  const rawPlayers: Array<{ user_id?: number; guest_name?: string; tier_type?: string }> =
     Array.isArray(players_data)
       ? players_data
       : (friend_ids as number[]).map((id) => ({ user_id: id }));
@@ -412,7 +412,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const organizerGreens = payment_method === "prepaid" ? 0 : basePrice;
 
   // Resolve each invited player's tier price individually (split-bill or organizer-pays-all)
-  const getInvitedPrice = async (p: { user_id?: number; guest_name?: string }): Promise<number> => {
+  const getInvitedPrice = async (p: { user_id?: number; guest_name?: string; tier_type?: string }): Promise<number> => {
     if (!p.user_id) {
       // Guests have no membership and no HNA → non_affiliated_visitor rate
       const guestTierRow = await row<any>(
@@ -420,6 +420,19 @@ router.post("/bookings", async (req, res): Promise<void> => {
         [slot.club_id]
       ).catch(() => null);
       return guestTierRow?.[priceCol] != null ? parseFloat(guestTierRow[priceCol]) : rawPrice;
+    }
+    // If the mobile already resolved this player's tier (via /user-tier-price), use it directly.
+    // This avoids re-deriving the wrong fallback (non_affiliated_visitor) for visitors who have
+    // a specific tier such as junior_visitor, pensioner_visitor, student_visitor, etc.
+    if (p.tier_type) {
+      const hintRow = await row<any>(
+        `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
+        [slot.club_id, p.tier_type]
+      ).catch(() => null);
+      if (hintRow?.[priceCol] != null) {
+        return parseFloat(hintRow[priceCol]);
+      }
+      // hint tier not found at this club — fall through to standard derivation
     }
     const [pMember, pVerified] = await Promise.all([
       row<any>(

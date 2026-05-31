@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec, run } from "../lib/pg";
 import { getUser } from "../lib/auth";
+import { isHnaVerified } from "../lib/hna";
 import { Storage } from "@google-cloud/storage";
 
 const router: IRouter = Router();
@@ -285,8 +286,9 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
       row<any>("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null),
     ]);
     const dob    = userRow?.date_of_birth ?? null;
-    const hna    = userRow?.hna_number ?? null;
-    const hasHna = hna && hna !== "null" && String(hna).trim().length === 10;
+    // Affiliated rate requires a CLUB-VERIFIED HNA (active, non-expired membership
+    // somewhere) — a number typed by the golfer alone no longer qualifies.
+    const hasHna = await isHnaVerified(userId);
     const memberType  = memberRow?.membership_type ?? null;
     const isHonorary  = memberType === "honorary";
     const isJunior    = !isHonorary && ageIsJunior(dob);
@@ -419,8 +421,8 @@ router.get("/clubs/:id/user-tier-price", async (req, res): Promise<void> => {
   ]);
 
   const dob        = userRow?.date_of_birth ?? null;
-  const hna        = userRow?.hna_number ?? null;
-  const hasHna     = hna && hna !== "null" && String(hna).trim().length === 10;
+  // Affiliated rate requires a CLUB-VERIFIED HNA (active, non-expired membership)
+  const hasHna     = await isHnaVerified(userId);
   const memberType = memberRow?.membership_type ?? null;
   const isHonorary = memberType === "honorary";
   const isJunior   = !isHonorary && ageIsJunior(dob);

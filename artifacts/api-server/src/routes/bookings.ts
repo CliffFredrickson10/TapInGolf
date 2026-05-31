@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import crypto from "crypto";
 import { query, row, exec, run, withTransaction, clientQuery } from "../lib/pg";
 import { getUser } from "../lib/auth";
+import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment } from "../lib/stitch";
@@ -361,12 +362,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
       "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
       [slot.club_id, user.id]
     );
-    // HNA affiliation is universal: a stored HNA number makes the user affiliated
-    // at any club where they are not a registered member — no need to re-submit it per booking
-    const effectiveHna = hna_number || (user as any).hna_number;
+    // HNA affiliation is universal but must be CLUB-VERIFIED: only a golfer with an
+    // active, non-expired membership somewhere qualifies for the affiliated-visitor
+    // rate. A self-typed number (the legacy hna_number param) no longer grants it.
+    const verified = await isHnaVerified(user.id);
     const tierType = memberTierRow
       ? memberTierRow.membership_type
-      : (effectiveHna ? "affiliated_visitor" : "non_affiliated_visitor");
+      : (verified ? "affiliated_visitor" : "non_affiliated_visitor");
     const tierPrice = await row<any>(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
       [slot.club_id, tierType]
@@ -389,17 +391,15 @@ router.post("/bookings", async (req, res): Promise<void> => {
       ).catch(() => null);
       return guestTierRow?.[priceCol] != null ? parseFloat(guestTierRow[priceCol]) : rawPrice;
     }
-    const [pMember, pUser] = await Promise.all([
+    const [pMember, pVerified] = await Promise.all([
       row<any>(
         "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
         [slot.club_id, p.user_id]
       ).catch(() => null),
-      row<any>("SELECT hna_number FROM users WHERE id = ?", [p.user_id]).catch(() => null),
+      isHnaVerified(p.user_id).catch(() => false),
     ]);
     const pMemberType = pMember?.membership_type ?? null;
-    const pHna        = pUser?.hna_number ?? null;
-    const pHasHna     = pHna && pHna !== "null" && String(pHna).trim().length === 10;
-    const pTierType   = pMemberType ?? (pHasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+    const pTierType   = pMemberType ?? (pVerified ? "affiliated_visitor" : "non_affiliated_visitor");
     const pTierRow    = await row<any>(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
       [slot.club_id, pTierType]

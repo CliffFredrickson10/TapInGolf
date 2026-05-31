@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import bcrypt from "bcryptjs";
 import { query, row, exec, run } from "../lib/pg";
 import { generateToken, getUser } from "../lib/auth";
+import { getHnaStatus } from "../lib/hna";
 import { generateOTP, hashOTP, generateResetToken, normalizePhone, sendOTPEmail, sendOTPPhone } from "../lib/otp";
 import { logger } from "../lib/logger";
 
@@ -39,6 +40,7 @@ router.post("/auth/login", async (req, res): Promise<void> => {
   }
 
   const token = generateToken(user.id);
+  const hna = await getHnaStatus(user.id, user.hna_number);
   res.json({
     user: {
       id:                    user.id,
@@ -52,9 +54,12 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       gender:                user.gender ?? null,
       date_of_birth:         fmtDate(user.date_of_birth),
       home_province:         user.home_province ?? null,
-      hna_number:            user.hna_number ?? null,
+      hna_number:            hna.hna_number,
+      hna_verified:          hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until:       hna.hna_valid_until,
       student_number:        user.student_number ?? null,
-      hna_locked:            user.hna_locked === 1 || user.hna_locked === true,
+      hna_locked:            hna.hna_locked,
       student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
       is_super_user:         user.is_super_user === 1 || user.is_super_user === true,
       token,
@@ -107,7 +112,56 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     await run(`DELETE FROM pending_invitations WHERE invitee_email = ?`, [emailStr]);
   }
 
+  // Promote any pending club memberships a club added for this email before the golfer
+  // signed up. These become real memberships and set the golfer's HNA number (the club
+  // roster is authoritative). Once promoted, the HNA is club-verified.
+  const pendingMemberships = await query<any>(
+    `SELECT * FROM pending_memberships WHERE email = ?`,
+    [emailStr]
+  );
+  const promotedPendingIds: number[] = [];
+  for (const pm of pendingMemberships) {
+    try {
+      await exec(
+        `INSERT INTO club_members
+           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (club_id, user_id) DO UPDATE SET
+           membership_type = EXCLUDED.membership_type,
+           status          = EXCLUDED.status,
+           start_date      = EXCLUDED.start_date,
+           renewal_date    = EXCLUDED.renewal_date,
+           benefits        = EXCLUDED.benefits,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
+        [pm.club_id, id, pm.membership_type || "standard", pm.status || "active", pm.club_id,
+         fmtDate(pm.start_date), fmtDate(pm.renewal_date), pm.benefits ?? null, Number(pm.prepaid_rounds) || 0]
+      );
+      const pmHna = pm.hna_number ? String(pm.hna_number).trim().replace(/\D/g, "") || null : null;
+      const pmStu = pm.student_number ? String(pm.student_number).trim() || null : null;
+      if (pmHna || pmStu) {
+        await exec(
+          `UPDATE users SET
+             hna_number     = COALESCE(?, hna_number),
+             student_number = COALESCE(?, student_number)
+           WHERE id = ?`,
+          [pmHna, pmStu, id]
+        );
+      }
+      promotedPendingIds.push(pm.id);
+    } catch (err: any) {
+      logger.error({ err, email: emailStr, club_id: pm.club_id }, "register: failed to promote pending membership");
+    }
+  }
+  // Only remove the rows we actually promoted — leave any that failed so they can be
+  // retried on a later sign-in/registration rather than silently lost.
+  if (promotedPendingIds.length > 0) {
+    const placeholders = promotedPendingIds.map(() => "?").join(",");
+    await run(`DELETE FROM pending_memberships WHERE id IN (${placeholders})`, promotedPendingIds);
+  }
+
   const token = generateToken(id);
+  const fresh = await row<any>("SELECT hna_number, student_number FROM users WHERE id = ?", [id]);
+  const hna = await getHnaStatus(id, fresh?.hna_number ?? null);
   res.status(201).json({
     user: {
       id,
@@ -121,9 +175,12 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       gender:                null,
       date_of_birth:         null,
       home_province:         null,
-      hna_number:            null,
-      student_number:        null,
-      hna_locked:            false,
+      hna_number:            hna.hna_number,
+      hna_verified:          hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until:       hna.hna_valid_until,
+      student_number:        fresh?.student_number ?? null,
+      hna_locked:            hna.hna_locked,
       student_number_locked: false,
       is_super_user:         isSuperUser,
       token,
@@ -145,6 +202,7 @@ router.get("/profile", async (req, res): Promise<void> => {
     [fresh.id]
   );
 
+  const hna = await getHnaStatus(fresh.id, fresh.hna_number);
   res.json({
     user: {
       id:            fresh.id,
@@ -158,9 +216,12 @@ router.get("/profile", async (req, res): Promise<void> => {
       gender:        fresh.gender ?? null,
       date_of_birth: fmtDate(fresh.date_of_birth),
       home_province: fresh.home_province ?? null,
-      hna_number:            fresh.hna_number ?? null,
+      hna_number:            hna.hna_number,
+      hna_verified:          hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until:       hna.hna_valid_until,
       student_number:        fresh.student_number ?? null,
-      hna_locked:            fresh.hna_locked === 1 || fresh.hna_locked === true,
+      hna_locked:            hna.hna_locked,
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
       ad_free_until: adSub ? String(adSub.expires_at) : null,
       is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true,
@@ -196,9 +257,12 @@ router.put("/profile", async (req, res): Promise<void> => {
     await exec("UPDATE users SET password_hash = ? WHERE id = ?", [hash, user.id]);
   }
 
-  // Fetch lock flags before updating
-  const lockRow = await row<any>("SELECT hna_locked, student_number_locked FROM users WHERE id = ?", [user.id]);
-  const hnaLocked = lockRow?.hna_locked === 1 || lockRow?.hna_locked === true;
+  // HNA lock is DERIVED from club verification, not a stored flag: a golfer can edit
+  // their HNA only while it is not currently club-verified (no active, non-expired
+  // membership anywhere). The student-number lock remains a stored flag.
+  const lockRow = await row<any>("SELECT hna_number, student_number_locked FROM users WHERE id = ?", [user.id]);
+  const currentHna = await getHnaStatus(user.id, lockRow?.hna_number ?? null);
+  const hnaLocked = currentHna.hna_verified;
   const stuLocked = lockRow?.student_number_locked === 1 || lockRow?.student_number_locked === true;
 
   // Validate HNA number (only if not locked)
@@ -239,6 +303,7 @@ router.put("/profile", async (req, res): Promise<void> => {
   );
 
   const fresh = await row<any>("SELECT * FROM users WHERE id = ?", [user.id]);
+  const hnaOut = await getHnaStatus(fresh.id, fresh.hna_number);
   res.json({
     success: true,
     user: {
@@ -253,9 +318,12 @@ router.put("/profile", async (req, res): Promise<void> => {
       gender:        fresh.gender ?? null,
       date_of_birth: fmtDate(fresh.date_of_birth),
       home_province: fresh.home_province ?? null,
-      hna_number:            fresh.hna_number ?? null,
+      hna_number:            hnaOut.hna_number,
+      hna_verified:          hnaOut.hna_verified,
+      hna_verified_club_name: hnaOut.hna_verified_club_name,
+      hna_valid_until:       hnaOut.hna_valid_until,
       student_number:        fresh.student_number ?? null,
-      hna_locked:            fresh.hna_locked === 1 || fresh.hna_locked === true,
+      hna_locked:            hnaOut.hna_locked,
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
     },
   });

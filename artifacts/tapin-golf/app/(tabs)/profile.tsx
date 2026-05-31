@@ -44,6 +44,13 @@ const dobFromApi = (dateStr: string): string => dateStr.slice(0, 10).replace(/-/
 // Convert YYYY/MM/DD (from input) → YYYY-MM-DD (for API)
 const dobToApi = (dateStr: string): string => dateStr.replace(/\//g, "-");
 
+// Format an ISO date (YYYY-MM-DD…) → "12 Jan 2027" for display
+const fmtValidUntil = (dateStr: string): string => {
+  const d = new Date(String(dateStr).slice(0, 10));
+  if (isNaN(d.getTime())) return String(dateStr).slice(0, 10);
+  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+};
+
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -425,16 +432,22 @@ export default function ProfileScreen() {
               )}
 
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>HNA Membership Number</Text>
-              {user?.hna_locked ? (
-                <View style={[styles.lockedField, { borderColor: colors.border, backgroundColor: colors.muted ?? colors.card }]}>
-                  <Text style={[styles.lockedFieldValue, { color: colors.foreground }]}>
-                    {hnaNumber || "—"}
-                  </Text>
-                  <View style={[styles.lockedBadge, { backgroundColor: colors.primary + "15" }]}>
-                    <Ionicons name="lock-closed" size={10} color={colors.primary} />
-                    <Text style={[styles.lockedBadgeText, { color: colors.primary }]}>Set by your club</Text>
+              {user?.hna_verified ? (
+                <>
+                  <View style={[styles.lockedField, { borderColor: colors.primary + "40", backgroundColor: colors.primary + "10" }]}>
+                    <Text style={[styles.lockedFieldValue, { color: colors.foreground }]}>
+                      {hnaNumber || "—"}
+                    </Text>
+                    <View style={[styles.lockedBadge, { backgroundColor: colors.primary + "20" }]}>
+                      <Ionicons name="checkmark-circle" size={11} color={colors.primary} />
+                      <Text style={[styles.lockedBadgeText, { color: colors.primary }]}>Verified</Text>
+                    </View>
                   </View>
-                </View>
+                  <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
+                    {user.hna_verified_club_name ? `Verified by ${user.hna_verified_club_name}` : "Verified by your club"}
+                    {user.hna_valid_until ? ` · valid until ${fmtValidUntil(user.hna_valid_until)}` : ""}
+                  </Text>
+                </>
               ) : (
                 <>
                   <TextInput
@@ -452,6 +465,11 @@ export default function ProfileScreen() {
                   {hnaNumber.length > 0 && hnaNumber.length !== 10 && (
                     <Text style={{ color: colors.destructive, fontSize: 11, marginTop: 2 }}>
                       Must be exactly 10 digits ({hnaNumber.length}/10)
+                    </Text>
+                  )}
+                  {hnaNumber.replace(/\D/g,"").length === 10 && (
+                    <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
+                      Not yet verified. A club confirms your HNA when they add you to their member roster — only then do you get affiliated-visitor rates.
                     </Text>
                   )}
                 </>

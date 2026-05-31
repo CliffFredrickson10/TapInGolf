@@ -175,6 +175,10 @@ export default function NewBookingScreen() {
   const [voucherError, setVoucherError]     = useState<string | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
 
+  // Only a CLUB-VERIFIED HNA earns the affiliated-visitor rate. A number the golfer
+  // typed themselves (unverified) is treated as a standard visitor.
+  const hnaVerified = !!user?.hna_verified;
+
   // ── Organizer's own tier label (from age flags + membership + HNA) ─────────
   const organizerTierLabel = React.useMemo(() => {
     if (isMember) {
@@ -185,14 +189,14 @@ export default function NewBookingScreen() {
     }
     if (isJunior)   return "Junior Visitor";
     if (isStudent)  return "Student Visitor";
-    if (isPensioner) return hnaNumber.length === 10 ? "Affiliated Pensioner Visitor" : "Non-Affiliated Pensioner Visitor";
-    return hnaNumber.length === 10 ? "Affiliated Visitor" : "Non-Affiliated Visitor";
-  }, [isMember, isJunior, isStudent, isPensioner, hnaNumber]);
+    if (isPensioner) return hnaVerified ? "Affiliated Pensioner Visitor" : "Non-Affiliated Pensioner Visitor";
+    return hnaVerified ? "Affiliated Visitor" : "Non-Affiliated Visitor";
+  }, [isMember, isJunior, isStudent, isPensioner, hnaVerified]);
 
   // ── HNA useEffect (after all state declarations) ─────────────────────────────
   useEffect(() => {
     if (hnaDebounce.current) clearTimeout(hnaDebounce.current);
-    if (hnaNumber.length !== 10) {
+    if (!hnaVerified || hnaNumber.length !== 10) {
       setHnaPrice18(null);
       setHnaPrice9(null);
       return;
@@ -209,7 +213,7 @@ export default function NewBookingScreen() {
       } catch {} finally { setHnaLoading(false); }
     }, 500);
     return () => { if (hnaDebounce.current) clearTimeout(hnaDebounce.current); };
-  }, [hnaNumber, params.club_id, has9]);
+  }, [hnaNumber, hnaVerified, params.club_id, has9]);
 
   // Effective prices: take the lowest of the server-computed tier price and the
   // HNA affiliated rate — whichever is cheaper for the user wins.
@@ -772,11 +776,24 @@ export default function NewBookingScreen() {
                 </Text>
               </View>
             </View>
+          ) : hnaNumber.trim() && !hnaVerified ? (
+            <View style={[styles.hnaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.hnaRow}>
+                <Ionicons name="card-outline" size={20} color={colors.mutedForeground} />
+                <Text style={[styles.hnaInput, { color: colors.foreground }]}>HNA {hnaNumber}</Text>
+              </View>
+              <View style={[styles.hnaBadge, { backgroundColor: colors.muted + "55", borderTopColor: colors.border }]}>
+                <Ionicons name="information-circle-outline" size={14} color={colors.mutedForeground} />
+                <Text style={[styles.hnaBadgeText, { color: colors.mutedForeground }]}>
+                  Not club-verified — standard visitor rate applies. A club verifies your HNA when they add you to their roster.
+                </Text>
+              </View>
+            </View>
           ) : hnaNumber.trim() ? (
             <View style={[styles.hnaCard, { backgroundColor: colors.card, borderColor: colors.primary + "40" }]}>
               <View style={styles.hnaRow}>
-                <Ionicons name="card-outline" size={20} color={colors.primary} />
-                <Text style={[styles.hnaInput, { color: colors.foreground }]}>HNA {hnaNumber}</Text>
+                <Ionicons name="shield-checkmark-outline" size={20} color={colors.primary} />
+                <Text style={[styles.hnaInput, { color: colors.foreground }]}>HNA {hnaNumber} · Verified</Text>
                 {hnaLoading && <ActivityIndicator size="small" color={colors.primary} />}
               </View>
               {!hnaLoading && hnaPrice18 !== null && hnaPrice18 < price18 && (

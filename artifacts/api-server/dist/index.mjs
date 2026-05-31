@@ -56375,6 +56375,56 @@ async function getUser(req) {
   return row("SELECT id, name, email, phone, handicap, role, club_id FROM users WHERE id = ?", [userId]);
 }
 
+// src/lib/hna.ts
+init_pg();
+var fmtDate = (d) => {
+  if (!d) return null;
+  if (d instanceof Date) return d.toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+};
+async function getVerifyingMembership(userId) {
+  const m = await row(
+    `SELECT cm.club_id, cm.renewal_date, c.name AS club_name
+       FROM club_members cm
+       JOIN clubs c ON c.id = cm.club_id
+      WHERE cm.user_id = ?
+        AND cm.status = 'active'
+        AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
+      ORDER BY cm.renewal_date DESC NULLS LAST
+      LIMIT 1`,
+    [userId]
+  ).catch(() => null);
+  if (!m) return null;
+  return {
+    club_id: m.club_id,
+    club_name: m.club_name,
+    renewal_date: fmtDate(m.renewal_date)
+  };
+}
+async function getHnaStatus(userId, hnaNumber) {
+  const num = hnaNumber && String(hnaNumber).trim() !== "" && String(hnaNumber) !== "null" ? String(hnaNumber).trim() : null;
+  const m = await getVerifyingMembership(userId);
+  const verified = !!m && !!num;
+  return {
+    hna_number: num,
+    hna_verified: verified,
+    hna_verified_club_id: verified ? m.club_id : null,
+    hna_verified_club_name: verified ? m.club_name : null,
+    hna_valid_until: verified ? m.renewal_date : null,
+    hna_locked: verified
+  };
+}
+async function isHnaVerified(userId) {
+  const u = await row(
+    "SELECT hna_number FROM users WHERE id = ?",
+    [userId]
+  ).catch(() => null);
+  const num = u && u.hna_number && String(u.hna_number).trim() !== "" && String(u.hna_number) !== "null";
+  if (!num) return false;
+  const m = await getVerifyingMembership(userId);
+  return !!m;
+}
+
 // src/lib/otp.ts
 init_logger();
 import crypto3 from "crypto";
@@ -56492,7 +56542,7 @@ The TapIn Golf team`,
 // src/routes/auth.ts
 init_logger();
 var router2 = (0, import_express2.Router)();
-var fmtDate = (d) => {
+var fmtDate2 = (d) => {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().slice(0, 10);
   return String(d).slice(0, 10);
@@ -56517,6 +56567,7 @@ router2.post("/auth/login", async (req, res) => {
     return;
   }
   const token = generateToken(user.id);
+  const hna = await getHnaStatus(user.id, user.hna_number);
   res.json({
     user: {
       id: user.id,
@@ -56528,11 +56579,14 @@ router2.post("/auth/login", async (req, res) => {
       club_id: user.club_id ?? null,
       avatar: user.profile_picture ?? null,
       gender: user.gender ?? null,
-      date_of_birth: fmtDate(user.date_of_birth),
+      date_of_birth: fmtDate2(user.date_of_birth),
       home_province: user.home_province ?? null,
-      hna_number: user.hna_number ?? null,
+      hna_number: hna.hna_number,
+      hna_verified: hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until: hna.hna_valid_until,
       student_number: user.student_number ?? null,
-      hna_locked: user.hna_locked === 1 || user.hna_locked === true,
+      hna_locked: hna.hna_locked,
       student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
       is_super_user: user.is_super_user === 1 || user.is_super_user === true,
       token
@@ -56578,7 +56632,59 @@ router2.post("/auth/register", async (req, res) => {
   if (pendingInvites.length > 0) {
     await run(`DELETE FROM pending_invitations WHERE invitee_email = ?`, [emailStr]);
   }
+  const pendingMemberships = await query(
+    `SELECT * FROM pending_memberships WHERE email = ?`,
+    [emailStr]
+  );
+  const promotedPendingIds = [];
+  for (const pm of pendingMemberships) {
+    try {
+      await exec(
+        `INSERT INTO club_members
+           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+         ON CONFLICT (club_id, user_id) DO UPDATE SET
+           membership_type = EXCLUDED.membership_type,
+           status          = EXCLUDED.status,
+           start_date      = EXCLUDED.start_date,
+           renewal_date    = EXCLUDED.renewal_date,
+           benefits        = EXCLUDED.benefits,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
+        [
+          pm.club_id,
+          id,
+          pm.membership_type || "standard",
+          pm.status || "active",
+          pm.club_id,
+          fmtDate2(pm.start_date),
+          fmtDate2(pm.renewal_date),
+          pm.benefits ?? null,
+          Number(pm.prepaid_rounds) || 0
+        ]
+      );
+      const pmHna = pm.hna_number ? String(pm.hna_number).trim().replace(/\D/g, "") || null : null;
+      const pmStu = pm.student_number ? String(pm.student_number).trim() || null : null;
+      if (pmHna || pmStu) {
+        await exec(
+          `UPDATE users SET
+             hna_number     = COALESCE(?, hna_number),
+             student_number = COALESCE(?, student_number)
+           WHERE id = ?`,
+          [pmHna, pmStu, id]
+        );
+      }
+      promotedPendingIds.push(pm.id);
+    } catch (err) {
+      logger.error({ err, email: emailStr, club_id: pm.club_id }, "register: failed to promote pending membership");
+    }
+  }
+  if (promotedPendingIds.length > 0) {
+    const placeholders = promotedPendingIds.map(() => "?").join(",");
+    await run(`DELETE FROM pending_memberships WHERE id IN (${placeholders})`, promotedPendingIds);
+  }
   const token = generateToken(id);
+  const fresh = await row("SELECT hna_number, student_number FROM users WHERE id = ?", [id]);
+  const hna = await getHnaStatus(id, fresh?.hna_number ?? null);
   res.status(201).json({
     user: {
       id,
@@ -56592,9 +56698,12 @@ router2.post("/auth/register", async (req, res) => {
       gender: null,
       date_of_birth: null,
       home_province: null,
-      hna_number: null,
-      student_number: null,
-      hna_locked: false,
+      hna_number: hna.hna_number,
+      hna_verified: hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until: hna.hna_valid_until,
+      student_number: fresh?.student_number ?? null,
+      hna_locked: hna.hna_locked,
       student_number_locked: false,
       is_super_user: isSuperUser,
       token
@@ -56618,6 +56727,7 @@ router2.get("/profile", async (req, res) => {
      ORDER BY expires_at DESC LIMIT 1`,
     [fresh.id]
   );
+  const hna = await getHnaStatus(fresh.id, fresh.hna_number);
   res.json({
     user: {
       id: fresh.id,
@@ -56629,11 +56739,14 @@ router2.get("/profile", async (req, res) => {
       club_id: fresh.club_id ?? null,
       avatar: fresh.profile_picture ?? null,
       gender: fresh.gender ?? null,
-      date_of_birth: fmtDate(fresh.date_of_birth),
+      date_of_birth: fmtDate2(fresh.date_of_birth),
       home_province: fresh.home_province ?? null,
-      hna_number: fresh.hna_number ?? null,
+      hna_number: hna.hna_number,
+      hna_verified: hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until: hna.hna_valid_until,
       student_number: fresh.student_number ?? null,
-      hna_locked: fresh.hna_locked === 1 || fresh.hna_locked === true,
+      hna_locked: hna.hna_locked,
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
       ad_free_until: adSub ? String(adSub.expires_at) : null,
       is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true
@@ -56668,8 +56781,9 @@ router2.put("/profile", async (req, res) => {
     const hash2 = await bcryptjs_default.hash(String(password), 10);
     await exec("UPDATE users SET password_hash = ? WHERE id = ?", [hash2, user.id]);
   }
-  const lockRow = await row("SELECT hna_locked, student_number_locked FROM users WHERE id = ?", [user.id]);
-  const hnaLocked = lockRow?.hna_locked === 1 || lockRow?.hna_locked === true;
+  const lockRow = await row("SELECT hna_number, student_number_locked FROM users WHERE id = ?", [user.id]);
+  const currentHna = await getHnaStatus(user.id, lockRow?.hna_number ?? null);
+  const hnaLocked = currentHna.hna_verified;
   const stuLocked = lockRow?.student_number_locked === 1 || lockRow?.student_number_locked === true;
   if (!hnaLocked && hna_number !== void 0 && hna_number !== null && String(hna_number).trim() !== "") {
     const cleaned = String(hna_number).trim().replace(/\D/g, "");
@@ -56698,6 +56812,7 @@ router2.put("/profile", async (req, res) => {
     ]
   );
   const fresh = await row("SELECT * FROM users WHERE id = ?", [user.id]);
+  const hnaOut = await getHnaStatus(fresh.id, fresh.hna_number);
   res.json({
     success: true,
     user: {
@@ -56710,11 +56825,14 @@ router2.put("/profile", async (req, res) => {
       club_id: fresh.club_id ?? null,
       avatar: fresh.profile_picture ?? null,
       gender: fresh.gender ?? null,
-      date_of_birth: fmtDate(fresh.date_of_birth),
+      date_of_birth: fmtDate2(fresh.date_of_birth),
       home_province: fresh.home_province ?? null,
-      hna_number: fresh.hna_number ?? null,
+      hna_number: hnaOut.hna_number,
+      hna_verified: hnaOut.hna_verified,
+      hna_verified_club_name: hnaOut.hna_verified_club_name,
+      hna_valid_until: hnaOut.hna_valid_until,
       student_number: fresh.student_number ?? null,
-      hna_locked: fresh.hna_locked === 1 || fresh.hna_locked === true,
+      hna_locked: hnaOut.hna_locked,
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true
     }
   });
@@ -57146,8 +57264,7 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
       row("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null)
     ]);
     const dob = userRow?.date_of_birth ?? null;
-    const hna = userRow?.hna_number ?? null;
-    const hasHna = hna && hna !== "null" && String(hna).trim().length === 10;
+    const hasHna = await isHnaVerified(userId);
     const memberType = memberRow?.membership_type ?? null;
     const isHonorary = memberType === "honorary";
     const isJunior = !isHonorary && ageIsJunior(dob);
@@ -57263,8 +57380,7 @@ router3.get("/clubs/:id/user-tier-price", async (req, res) => {
     row("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null)
   ]);
   const dob = userRow?.date_of_birth ?? null;
-  const hna = userRow?.hna_number ?? null;
-  const hasHna = hna && hna !== "null" && String(hna).trim().length === 10;
+  const hasHna = await isHnaVerified(userId);
   const memberType = memberRow?.membership_type ?? null;
   const isHonorary = memberType === "honorary";
   const isJunior = !isHonorary && ageIsJunior(dob);
@@ -57835,8 +57951,8 @@ router4.post("/bookings", async (req, res) => {
       "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
       [slot.club_id, user.id]
     );
-    const effectiveHna = hna_number || user.hna_number;
-    const tierType = memberTierRow ? memberTierRow.membership_type : effectiveHna ? "affiliated_visitor" : "non_affiliated_visitor";
+    const verified = await isHnaVerified(user.id);
+    const tierType = memberTierRow ? memberTierRow.membership_type : verified ? "affiliated_visitor" : "non_affiliated_visitor";
     const tierPrice = await row(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
       [slot.club_id, tierType]
@@ -57854,17 +57970,15 @@ router4.post("/bookings", async (req, res) => {
       ).catch(() => null);
       return guestTierRow?.[priceCol] != null ? parseFloat(guestTierRow[priceCol]) : rawPrice;
     }
-    const [pMember, pUser] = await Promise.all([
+    const [pMember, pVerified] = await Promise.all([
       row(
         "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
         [slot.club_id, p.user_id]
       ).catch(() => null),
-      row("SELECT hna_number FROM users WHERE id = ?", [p.user_id]).catch(() => null)
+      isHnaVerified(p.user_id).catch(() => false)
     ]);
     const pMemberType = pMember?.membership_type ?? null;
-    const pHna = pUser?.hna_number ?? null;
-    const pHasHna = pHna && pHna !== "null" && String(pHna).trim().length === 10;
-    const pTierType = pMemberType ?? (pHasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+    const pTierType = pMemberType ?? (pVerified ? "affiliated_visitor" : "non_affiliated_visitor");
     const pTierRow = await row(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
       [slot.club_id, pTierType]
@@ -60682,33 +60796,58 @@ router13.post("/portal/members", requireClubAuth, async (req, res) => {
     res.status(400).json({ message: "renewal_date is required" });
     return;
   }
-  const user = await row("SELECT id FROM users WHERE email = ?", [email]);
+  const emailClean = String(email).trim().toLowerCase();
+  const stuClean = student_number ? String(student_number).trim() || null : null;
+  const user = await row("SELECT id FROM users WHERE email = ?", [emailClean]);
   if (!user) {
-    res.status(404).json({ message: "No golfer account with that email" });
-    return;
-  }
-  const existing = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
-  if (existing) {
-    res.status(409).json({ message: "Already a member" });
+    await exec(
+      `INSERT INTO pending_memberships
+         (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
+       VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+       ON CONFLICT (club_id, email) DO UPDATE SET
+         hna_number      = EXCLUDED.hna_number,
+         membership_type = EXCLUDED.membership_type,
+         status          = EXCLUDED.status,
+         start_date      = EXCLUDED.start_date,
+         renewal_date    = EXCLUDED.renewal_date,
+         benefits        = EXCLUDED.benefits,
+         prepaid_rounds  = EXCLUDED.prepaid_rounds,
+         student_number  = EXCLUDED.student_number`,
+      [
+        club.id,
+        emailClean,
+        hnaClean,
+        membership_type,
+        start_date ?? null,
+        renewal_date ?? null,
+        benefits ?? null,
+        Number(prepaid_rounds) || 0,
+        stuClean
+      ]
+    );
+    res.json({ message: "Member staged \u2014 will activate when the golfer signs up", pending: true });
     return;
   }
   await exec(
     `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+     ON CONFLICT (club_id, user_id) DO UPDATE SET
+       membership_type = EXCLUDED.membership_type,
+       status          = 'active',
+       start_date      = EXCLUDED.start_date,
+       renewal_date    = EXCLUDED.renewal_date,
+       benefits        = EXCLUDED.benefits,
+       prepaid_rounds  = EXCLUDED.prepaid_rounds`,
     [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0]
   );
-  const stuClean = student_number ? String(student_number).trim() || null : null;
-  if (hnaClean || stuClean) {
-    await exec(
-      `UPDATE users SET
-        hna_number            = COALESCE(?, hna_number),
-        hna_locked            = IF(? IS NOT NULL AND ? != '', 1, hna_locked),
-        student_number        = COALESCE(?, student_number),
-        student_number_locked = IF(? IS NOT NULL AND ? != '', 1, student_number_locked)
-       WHERE id = ?`,
-      [hnaClean, hnaClean, hnaClean, stuClean, stuClean, stuClean, user.id]
-    );
-  }
+  await exec(
+    `UPDATE users SET
+       hna_number            = ?,
+       student_number        = COALESCE(?, student_number),
+       student_number_locked = CASE WHEN ? IS NOT NULL THEN 1 ELSE student_number_locked END
+     WHERE id = ?`,
+    [hnaClean, stuClean, stuClean, user.id]
+  );
   res.json({ message: "Member added" });
 });
 router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
@@ -60719,8 +60858,8 @@ router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
     return;
   }
   let added = 0;
-  let already_members = 0;
-  const not_found = [];
+  let renewed = 0;
+  let pending = 0;
   const errors = [];
   for (const r of rows) {
     const email = String(r.email ?? "").trim().toLowerCase();
@@ -60729,9 +60868,10 @@ router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
     const renewal_date = r.renewal_date ?? null;
     const benefits = r.benefits ? String(r.benefits) : null;
     const prepaid_rounds = Number(r.prepaid_rounds) || 0;
-    const hnaImport = r.hna_number ? String(r.hna_number).trim().replace(/\D/g, "") : "";
+    const hnaClean = r.hna_number ? String(r.hna_number).trim().replace(/\D/g, "") : "";
+    const stuClean = r.student_number ? String(r.student_number).trim() || null : null;
     if (!email) continue;
-    if (!hnaImport) {
+    if (!hnaClean) {
       errors.push(`${email}: HNA number is required`);
       continue;
     }
@@ -60750,47 +60890,69 @@ router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
     try {
       const user = await row("SELECT id FROM users WHERE email = ?", [email]);
       if (!user) {
-        not_found.push(email);
+        await exec(
+          `INSERT INTO pending_memberships
+             (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
+           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+           ON CONFLICT (club_id, email) DO UPDATE SET
+             hna_number      = EXCLUDED.hna_number,
+             membership_type = EXCLUDED.membership_type,
+             status          = EXCLUDED.status,
+             start_date      = EXCLUDED.start_date,
+             renewal_date    = EXCLUDED.renewal_date,
+             benefits        = EXCLUDED.benefits,
+             prepaid_rounds  = EXCLUDED.prepaid_rounds,
+             student_number  = EXCLUDED.student_number`,
+          [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
+        );
+        pending++;
         continue;
       }
       const existing = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
-      if (existing) {
-        already_members++;
-        continue;
-      }
       await exec(
         `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+         ON CONFLICT (club_id, user_id) DO UPDATE SET
+           membership_type = EXCLUDED.membership_type,
+           status          = 'active',
+           start_date      = EXCLUDED.start_date,
+           renewal_date    = EXCLUDED.renewal_date,
+           benefits        = EXCLUDED.benefits,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
         [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds]
       );
-      const hnaClean = hnaImport || null;
-      const stuClean = r.student_number ? String(r.student_number).trim() || null : null;
-      if (hnaClean || stuClean) {
-        await exec(
-          `UPDATE users SET
-            hna_number            = COALESCE(?, hna_number),
-            hna_locked            = IF(? IS NOT NULL AND ? != '', 1, hna_locked),
-            student_number        = COALESCE(?, student_number),
-            student_number_locked = IF(? IS NOT NULL AND ? != '', 1, student_number_locked)
-           WHERE id = ?`,
-          [hnaClean, hnaClean, hnaClean, stuClean, stuClean, stuClean, user.id]
-        );
-      }
-      added++;
+      await exec(
+        `UPDATE users SET
+           hna_number            = ?,
+           student_number        = COALESCE(?, student_number),
+           student_number_locked = CASE WHEN ? IS NOT NULL THEN 1 ELSE student_number_locked END
+         WHERE id = ?`,
+        [hnaClean, stuClean, stuClean, user.id]
+      );
+      if (existing) renewed++;
+      else added++;
     } catch (err) {
       errors.push(`${email}: ${err.message}`);
     }
   }
-  res.json({ added, already_members, not_found, errors });
+  res.json({ added, renewed, pending, errors });
 });
 router13.put("/portal/members/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const mId = Number(req.params.id);
-  const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds } = req.body ?? {};
-  const existing = await row("SELECT id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
+  const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, hna_number } = req.body ?? {};
+  const existing = await row("SELECT id, user_id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
   if (!existing) {
     res.status(404).json({ message: "Member not found" });
     return;
+  }
+  let hnaClean = null;
+  if (hna_number !== void 0 && hna_number !== null && String(hna_number).trim() !== "") {
+    hnaClean = String(hna_number).trim().replace(/\D/g, "");
+    if (hnaClean.length !== 10) {
+      res.status(400).json({ message: "HNA number must be exactly 10 digits" });
+      return;
+    }
   }
   await exec(
     `UPDATE club_members SET
@@ -60812,7 +60974,55 @@ router13.put("/portal/members/:id", requireClubAuth, async (req, res) => {
       club.id
     ]
   );
+  if (hnaClean) {
+    await exec("UPDATE users SET hna_number = ? WHERE id = ?", [hnaClean, existing.user_id]);
+  }
   res.json({ message: "Updated" });
+});
+router13.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const { ids, renewal_date } = req.body ?? {};
+  if (!Array.isArray(ids) || ids.length === 0) {
+    res.status(400).json({ message: "ids array required" });
+    return;
+  }
+  if (!renewal_date) {
+    res.status(400).json({ message: "renewal_date required" });
+    return;
+  }
+  const memberIds = ids.map((n) => Number(n)).filter((n) => Number.isFinite(n));
+  if (memberIds.length === 0) {
+    res.status(400).json({ message: "no valid ids" });
+    return;
+  }
+  const placeholders = memberIds.map(() => "?").join(",");
+  await exec(
+    `UPDATE club_members SET renewal_date = ?, status = 'active'
+     WHERE club_id = ? AND id IN (${placeholders})`,
+    [renewal_date, club.id, ...memberIds]
+  );
+  res.json({ message: "Renewed", renewed: memberIds.length });
+});
+router13.get("/portal/pending-members", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const rows = await query(
+    `SELECT id, email, hna_number, membership_type, status, start_date, renewal_date,
+            benefits, prepaid_rounds, student_number, created_at
+     FROM pending_memberships WHERE club_id = ? ORDER BY created_at DESC`,
+    [club.id]
+  );
+  res.json(rows);
+});
+router13.delete("/portal/pending-members/:id", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const pId = Number(req.params.id);
+  const existing = await row("SELECT id FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
+  if (!existing) {
+    res.status(404).json({ message: "Pending member not found" });
+    return;
+  }
+  await exec("DELETE FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
+  res.json({ message: "Removed" });
 });
 router13.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -62109,6 +62319,23 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS pending_memberships (
+      id              SERIAL PRIMARY KEY,
+      club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      email           VARCHAR(255) NOT NULL,
+      hna_number      VARCHAR(50),
+      membership_type VARCHAR(50) NOT NULL DEFAULT 'standard',
+      status          VARCHAR(20) NOT NULL DEFAULT 'active',
+      start_date      DATE,
+      renewal_date    DATE,
+      benefits        TEXT,
+      prepaid_rounds  INT NOT NULL DEFAULT 0,
+      student_number  VARCHAR(100),
+      created_at      TIMESTAMP DEFAULT NOW(),
+      UNIQUE (club_id, email)
+    )
+  `);
+  await ddl(`
     CREATE TABLE IF NOT EXISTS event_registrations (
       id            SERIAL PRIMARY KEY,
       event_id      INT NOT NULL,
@@ -62413,6 +62640,8 @@ async function createSchema() {
     "CREATE INDEX IF NOT EXISTS idx_golf_events_date ON golf_events (event_date)",
     "CREATE INDEX IF NOT EXISTS idx_club_members_club ON club_members (club_id)",
     "CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_pending_memberships_email ON pending_memberships (email)",
+    "CREATE INDEX IF NOT EXISTS idx_pending_memberships_club ON pending_memberships (club_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations (event_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_reg_user  ON event_registrations (user_id)",
     "CREATE INDEX IF NOT EXISTS idx_club_images_club ON club_images (club_id)"

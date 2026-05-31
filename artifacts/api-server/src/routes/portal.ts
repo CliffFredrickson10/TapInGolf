@@ -508,29 +508,54 @@ router.post("/portal/members", requireClubAuth, async (req: Request, res: Respon
   if (!membership_type) { res.status(400).json({ message: "membership_type is required" }); return; }
   if (!start_date) { res.status(400).json({ message: "start_date is required" }); return; }
   if (!renewal_date) { res.status(400).json({ message: "renewal_date is required" }); return; }
-  const user = await row<any>("SELECT id FROM users WHERE email = ?", [email]);
-  if (!user) { res.status(404).json({ message: "No golfer account with that email" }); return; }
-  const existing = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
-  if (existing) { res.status(409).json({ message: "Already a member" }); return; }
+  const emailClean = String(email).trim().toLowerCase();
+  const stuClean = student_number ? String(student_number).trim() || null : null;
+  const user = await row<any>("SELECT id FROM users WHERE email = ?", [emailClean]);
+
+  // No TapIn account yet → stage the membership; it auto-links when the golfer registers.
+  if (!user) {
+    await exec(
+      `INSERT INTO pending_memberships
+         (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
+       VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+       ON CONFLICT (club_id, email) DO UPDATE SET
+         hna_number      = EXCLUDED.hna_number,
+         membership_type = EXCLUDED.membership_type,
+         status          = EXCLUDED.status,
+         start_date      = EXCLUDED.start_date,
+         renewal_date    = EXCLUDED.renewal_date,
+         benefits        = EXCLUDED.benefits,
+         prepaid_rounds  = EXCLUDED.prepaid_rounds,
+         student_number  = EXCLUDED.student_number`,
+      [club.id, emailClean, hnaClean, membership_type, start_date ?? null, renewal_date ?? null,
+       benefits ?? null, Number(prepaid_rounds) || 0, stuClean]
+    );
+    res.json({ message: "Member staged — will activate when the golfer signs up", pending: true });
+    return;
+  }
+
+  // Existing account → upsert the membership (re-adding renews it) and write the HNA
+  // authoritatively (the club roster is the source of truth).
   await exec(
     `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+     ON CONFLICT (club_id, user_id) DO UPDATE SET
+       membership_type = EXCLUDED.membership_type,
+       status          = 'active',
+       start_date      = EXCLUDED.start_date,
+       renewal_date    = EXCLUDED.renewal_date,
+       benefits        = EXCLUDED.benefits,
+       prepaid_rounds  = EXCLUDED.prepaid_rounds`,
     [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0]
   );
-  // Lock HNA and student number on the user
-  // hnaClean already set above
-  const stuClean = student_number ? String(student_number).trim() || null : null;
-  if (hnaClean || stuClean) {
-    await exec(
-      `UPDATE users SET
-        hna_number            = COALESCE(?, hna_number),
-        hna_locked            = IF(? IS NOT NULL AND ? != '', 1, hna_locked),
-        student_number        = COALESCE(?, student_number),
-        student_number_locked = IF(? IS NOT NULL AND ? != '', 1, student_number_locked)
-       WHERE id = ?`,
-      [hnaClean, hnaClean, hnaClean, stuClean, stuClean, stuClean, user.id]
-    );
-  }
+  await exec(
+    `UPDATE users SET
+       hna_number            = ?,
+       student_number        = COALESCE(?, student_number),
+       student_number_locked = CASE WHEN ? IS NOT NULL THEN 1 ELSE student_number_locked END
+     WHERE id = ?`,
+    [hnaClean, stuClean, stuClean, user.id]
+  );
   res.json({ message: "Member added" });
 });
 
@@ -539,9 +564,9 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
   const { rows } = req.body ?? {};
   if (!Array.isArray(rows) || rows.length === 0) { res.status(400).json({ message: "rows array required" }); return; }
 
-  let added = 0;
-  let already_members = 0;
-  const not_found: string[] = [];
+  let added = 0;       // new active membership created for an existing account
+  let renewed = 0;     // existing membership refreshed/renewed
+  let pending = 0;     // staged for a golfer with no account yet
   const errors: string[] = [];
 
   for (const r of rows) {
@@ -551,51 +576,81 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
     const renewal_date = r.renewal_date ?? null;
     const benefits = r.benefits ? String(r.benefits) : null;
     const prepaid_rounds = Number(r.prepaid_rounds) || 0;
-    const hnaImport = r.hna_number ? String(r.hna_number).trim().replace(/\D/g, "") : "";
+    const hnaClean = r.hna_number ? String(r.hna_number).trim().replace(/\D/g, "") : "";
+    const stuClean = r.student_number ? String(r.student_number).trim() || null : null;
     if (!email) continue;
-    if (!hnaImport) { errors.push(`${email}: HNA number is required`); continue; }
+    if (!hnaClean) { errors.push(`${email}: HNA number is required`); continue; }
     if (!membership_type) { errors.push(`${email}: Membership type is required`); continue; }
     if (!start_date) { errors.push(`${email}: Start date is required`); continue; }
     if (!renewal_date) { errors.push(`${email}: Renewal date is required`); continue; }
     try {
       const user = await row<any>("SELECT id FROM users WHERE email = ?", [email]);
-      if (!user) { not_found.push(email); continue; }
+
+      // No account → stage as pending (auto-links on signup)
+      if (!user) {
+        await exec(
+          `INSERT INTO pending_memberships
+             (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
+           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+           ON CONFLICT (club_id, email) DO UPDATE SET
+             hna_number      = EXCLUDED.hna_number,
+             membership_type = EXCLUDED.membership_type,
+             status          = EXCLUDED.status,
+             start_date      = EXCLUDED.start_date,
+             renewal_date    = EXCLUDED.renewal_date,
+             benefits        = EXCLUDED.benefits,
+             prepaid_rounds  = EXCLUDED.prepaid_rounds,
+             student_number  = EXCLUDED.student_number`,
+          [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
+        );
+        pending++;
+        continue;
+      }
+
       const existing = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
-      if (existing) { already_members++; continue; }
       await exec(
         `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)`,
+         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+         ON CONFLICT (club_id, user_id) DO UPDATE SET
+           membership_type = EXCLUDED.membership_type,
+           status          = 'active',
+           start_date      = EXCLUDED.start_date,
+           renewal_date    = EXCLUDED.renewal_date,
+           benefits        = EXCLUDED.benefits,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
         [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds]
       );
-      // Lock HNA and student number on the user
-      const hnaClean = hnaImport || null;
-      const stuClean = r.student_number ? String(r.student_number).trim() || null : null;
-      if (hnaClean || stuClean) {
-        await exec(
-          `UPDATE users SET
-            hna_number            = COALESCE(?, hna_number),
-            hna_locked            = IF(? IS NOT NULL AND ? != '', 1, hna_locked),
-            student_number        = COALESCE(?, student_number),
-            student_number_locked = IF(? IS NOT NULL AND ? != '', 1, student_number_locked)
-           WHERE id = ?`,
-          [hnaClean, hnaClean, hnaClean, stuClean, stuClean, stuClean, user.id]
-        );
-      }
-      added++;
+      // Roster is authoritative for the HNA number
+      await exec(
+        `UPDATE users SET
+           hna_number            = ?,
+           student_number        = COALESCE(?, student_number),
+           student_number_locked = CASE WHEN ? IS NOT NULL THEN 1 ELSE student_number_locked END
+         WHERE id = ?`,
+        [hnaClean, stuClean, stuClean, user.id]
+      );
+      if (existing) renewed++; else added++;
     } catch (err: any) {
       errors.push(`${email}: ${err.message}`);
     }
   }
 
-  res.json({ added, already_members, not_found, errors });
+  res.json({ added, renewed, pending, errors });
 });
 
 router.put("/portal/members/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const mId = Number(req.params.id);
-  const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds } = req.body ?? {};
-  const existing = await row<any>("SELECT id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
+  const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, hna_number } = req.body ?? {};
+  const existing = await row<any>("SELECT id, user_id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
   if (!existing) { res.status(404).json({ message: "Member not found" }); return; }
+  // Validate the HNA edit BEFORE any write so an invalid number can't leave the
+  // membership row updated while the user's HNA is rejected (partial write).
+  let hnaClean: string | null = null;
+  if (hna_number !== undefined && hna_number !== null && String(hna_number).trim() !== "") {
+    hnaClean = String(hna_number).trim().replace(/\D/g, "");
+    if (hnaClean.length !== 10) { res.status(400).json({ message: "HNA number must be exactly 10 digits" }); return; }
+  }
   await exec(
     `UPDATE club_members SET
        membership_type   = COALESCE(?, membership_type),
@@ -608,7 +663,50 @@ router.put("/portal/members/:id", requireClubAuth, async (req: Request, res: Res
     [membership_type ?? null, status ?? null, start_date ?? null, renewal_date ?? null,
      benefits ?? null, prepaid_rounds != null ? Number(prepaid_rounds) : null, mId, club.id]
   );
+  // The club can correct the golfer's HNA number (roster is authoritative)
+  if (hnaClean) {
+    await exec("UPDATE users SET hna_number = ? WHERE id = ?", [hnaClean, existing.user_id]);
+  }
   res.json({ message: "Updated" });
+});
+
+// Bulk-renew memberships: push the renewal date forward and reactivate. This is the
+// one-click annual renewal that keeps members' HNAs verified for another season.
+router.post("/portal/members/bulk-renew", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { ids, renewal_date } = req.body ?? {};
+  if (!Array.isArray(ids) || ids.length === 0) { res.status(400).json({ message: "ids array required" }); return; }
+  if (!renewal_date) { res.status(400).json({ message: "renewal_date required" }); return; }
+  const memberIds = ids.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n));
+  if (memberIds.length === 0) { res.status(400).json({ message: "no valid ids" }); return; }
+  const placeholders = memberIds.map(() => "?").join(",");
+  await exec(
+    `UPDATE club_members SET renewal_date = ?, status = 'active'
+     WHERE club_id = ? AND id IN (${placeholders})`,
+    [renewal_date, club.id, ...memberIds]
+  );
+  res.json({ message: "Renewed", renewed: memberIds.length });
+});
+
+// Pending members — roster rows for golfers who have not signed up yet.
+router.get("/portal/pending-members", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const rows = await query<any>(
+    `SELECT id, email, hna_number, membership_type, status, start_date, renewal_date,
+            benefits, prepaid_rounds, student_number, created_at
+     FROM pending_memberships WHERE club_id = ? ORDER BY created_at DESC`,
+    [club.id]
+  );
+  res.json(rows);
+});
+
+router.delete("/portal/pending-members/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const pId = Number(req.params.id);
+  const existing = await row<any>("SELECT id FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
+  if (!existing) { res.status(404).json({ message: "Pending member not found" }); return; }
+  await exec("DELETE FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
+  res.json({ message: "Removed" });
 });
 
 router.delete("/portal/members/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

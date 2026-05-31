@@ -51,9 +51,32 @@ interface ImportRow {
 
 interface ImportResult {
   added: number;
-  already_members: number;
-  not_found: string[];
+  renewed: number;
+  pending: number;
   errors: string[];
+}
+
+interface PendingMember {
+  id: number;
+  email: string;
+  hna_number: string | null;
+  membership_type: string;
+  status: string;
+  start_date: string | null;
+  renewal_date: string | null;
+  benefits: string | null;
+  prepaid_rounds: number;
+  student_number: string | null;
+  created_at: string;
+}
+
+// A member's HNA is "verified" while their membership is active and not past renewal.
+function isVerified(status: string, renewal_date: string | null): boolean {
+  if (status !== "active") return false;
+  if (!renewal_date) return true;
+  const r = new Date(String(renewal_date).slice(0, 10));
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  return r >= today;
 }
 
 const MEMBERSHIP_TYPES = [
@@ -178,17 +201,19 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
         body: JSON.stringify({
           rows: validRows.map(r => ({
             email: r.email,
+            hna_number: r.hna_number || null,
             membership_type: r.membership_type,
             start_date: r.start_date || null,
             renewal_date: r.renewal_date || null,
             benefits: r.benefits || null,
             prepaid_rounds: r.prepaid_rounds,
+            student_number: r.student_number || null,
           })),
         }),
       });
       setResult(res);
       setStep("result");
-      if (res.added > 0) onImported();
+      onImported();
     } catch (err: any) {
       toast({ title: "Import failed", description: err.message, variant: "destructive" });
     } finally {
@@ -216,10 +241,11 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
               <p className="text-sm font-semibold text-amber-800">Step 1 — Download the template</p>
               <p className="text-xs text-amber-700">
                 Download the required Excel template, fill in your members' details, then upload the completed file below.
-                Each row must have an <strong>email</strong> address matching a registered TapIn Golf account.
+                Each row needs an <strong>email</strong> and an <strong>HNA number</strong>. If the golfer already has a
+                TapIn Golf account it links immediately; if not, the row is held and links automatically when they sign up.
               </p>
               <div className="rounded border border-amber-200 bg-white text-xs px-3 py-2 font-mono text-amber-900">
-                email · membership_type · start_date · renewal_date · benefits · prepaid_rounds
+                email · membership_type · start_date · renewal_date · benefits · prepaid_rounds · hna_number · student_number
               </div>
               <Button variant="outline" className="gap-2 border-amber-400 text-amber-800 hover:bg-amber-100" onClick={downloadTemplate}>
                 <Download className="h-4 w-4" />Download Template (.xlsx)
@@ -273,6 +299,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                   <tr className="bg-muted/60 text-left">
                     <th className="px-2 py-2 font-semibold">Row</th>
                     <th className="px-2 py-2 font-semibold">Email</th>
+                    <th className="px-2 py-2 font-semibold">HNA</th>
                     <th className="px-2 py-2 font-semibold">Type</th>
                     <th className="px-2 py-2 font-semibold">Start</th>
                     <th className="px-2 py-2 font-semibold">Renewal</th>
@@ -285,6 +312,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                     <tr key={r._row} className={r._error ? "bg-red-50" : ""}>
                       <td className="px-2 py-1.5 text-muted-foreground">{r._row}</td>
                       <td className="px-2 py-1.5 font-mono">{r.email}</td>
+                      <td className="px-2 py-1.5 font-mono">{r.hna_number || "—"}</td>
                       <td className="px-2 py-1.5">{membershipLabel(r.membership_type)}</td>
                       <td className="px-2 py-1.5">{r.start_date || "—"}</td>
                       <td className="px-2 py-1.5">{r.renewal_date || "—"}</td>
@@ -314,27 +342,30 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
 
         {step === "result" && result && (
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-3 gap-3">
               <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-center">
                 <p className="text-3xl font-bold text-green-700">{result.added}</p>
-                <p className="text-xs text-green-600 mt-1">Members added</p>
+                <p className="text-xs text-green-600 mt-1">Added & verified</p>
               </div>
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-center">
-                <p className="text-3xl font-bold text-gray-500">{result.already_members}</p>
-                <p className="text-xs text-muted-foreground mt-1">Already members</p>
+              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-center">
+                <p className="text-3xl font-bold text-blue-700">{result.renewed}</p>
+                <p className="text-xs text-blue-600 mt-1">Renewed</p>
+              </div>
+              <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 text-center">
+                <p className="text-3xl font-bold text-amber-700">{result.pending}</p>
+                <p className="text-xs text-amber-600 mt-1">Held (no account)</p>
               </div>
             </div>
 
-            {result.not_found.length > 0 && (
+            {result.pending > 0 && (
               <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
                 <div className="flex items-center gap-2 text-sm font-semibold text-amber-800">
                   <AlertCircle className="h-4 w-4" />
-                  {result.not_found.length} email{result.not_found.length !== 1 ? "s" : ""} not found in TapIn Golf
+                  {result.pending} member{result.pending !== 1 ? "s" : ""} held — no TapIn Golf account yet
                 </div>
-                <p className="text-xs text-amber-700">These people don't have a TapIn Golf account yet. Ask them to register on the app first.</p>
-                <ul className="text-xs font-mono text-amber-800 space-y-0.5 max-h-32 overflow-y-auto">
-                  {result.not_found.map(e => <li key={e}>· {e}</li>)}
-                </ul>
+                <p className="text-xs text-amber-700">
+                  These golfers haven't registered yet. They're saved in your pending list and will be verified automatically the moment they sign up with that email.
+                </p>
               </div>
             )}
 
@@ -366,9 +397,12 @@ function EditMemberDialog({ member, onUpdated }: { member: Member; onUpdated: ()
     renewal_date: member.renewal_date ? String(member.renewal_date).slice(0, 10) : "",
     benefits: member.benefits ?? "",
     prepaid_rounds: String(member.prepaid_rounds),
+    hna_number: member.hna_number ?? "",
   });
 
   const handleSave = async () => {
+    const hnaClean = form.hna_number.trim().replace(/\D/g, "");
+    if (!hnaClean) { toast({ title: "HNA number required", variant: "destructive" }); return; }
     setSaving(true);
     try {
       await api(`/api/portal/members/${member.id}`, {
@@ -380,6 +414,7 @@ function EditMemberDialog({ member, onUpdated }: { member: Member; onUpdated: ()
           renewal_date: form.renewal_date || null,
           benefits: form.benefits || null,
           prepaid_rounds: Number(form.prepaid_rounds) || 0,
+          hna_number: hnaClean,
         }),
       });
       toast({ title: "Member updated" });
@@ -421,6 +456,20 @@ function EditMemberDialog({ member, onUpdated }: { member: Member; onUpdated: ()
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>HNA Number</Label>
+            <Input
+              type="text"
+              inputMode="numeric"
+              value={form.hna_number}
+              onChange={e => setForm(f => ({ ...f, hna_number: e.target.value.replace(/\D/g, "") }))}
+              placeholder="e.g. 1234567890"
+              maxLength={20}
+              className="h-8 text-sm font-mono"
+            />
+            <p className="text-xs text-muted-foreground">The club is the authority on this number — it overwrites and locks the golfer's HNA.</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -496,15 +545,59 @@ export default function Members() {
   const [open, setOpen] = useState(false);
   const [adding, setAdding] = useState(false);
   const [search, setSearch] = useState("");
+  const [pending, setPending] = useState<PendingMember[]>([]);
+  const [selected, setSelected] = useState<number[]>([]);
+  const [renewOpen, setRenewOpen] = useState(false);
+  const [renewDate, setRenewDate] = useState("");
+  const [renewing, setRenewing] = useState(false);
 
   const load = () => {
     setLoading(true);
     api<Member[]>("/api/portal/members")
-      .then(setMembers)
+      .then(m => { setMembers(m); setSelected(s => s.filter(id => m.some(x => x.id === id))); })
       .catch(e => toast({ title: "Error", description: e.message, variant: "destructive" }))
       .finally(() => setLoading(false));
   };
-  useEffect(() => { load(); }, []);
+  const loadPending = () => {
+    api<PendingMember[]>("/api/portal/pending-members")
+      .then(setPending)
+      .catch(() => { /* pending list is best-effort */ });
+  };
+  useEffect(() => { load(); loadPending(); }, []);
+
+  const reloadAll = () => { load(); loadPending(); };
+
+  const toggleSelect = (id: number) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
+
+  const handleBulkRenew = async () => {
+    if (selected.length === 0) { toast({ title: "Select members to renew", variant: "destructive" }); return; }
+    if (!renewDate) { toast({ title: "Pick a new renewal date", variant: "destructive" }); return; }
+    setRenewing(true);
+    try {
+      await api("/api/portal/members/bulk-renew", {
+        method: "POST",
+        body: JSON.stringify({ ids: selected, renewal_date: renewDate }),
+      });
+      toast({ title: `Renewed ${selected.length} member${selected.length !== 1 ? "s" : ""}` });
+      setRenewOpen(false); setRenewDate(""); setSelected([]);
+      load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setRenewing(false);
+    }
+  };
+
+  const handleRemovePending = async (id: number) => {
+    if (!confirm("Remove this pending member?")) return;
+    try {
+      await api(`/api/portal/pending-members/${id}`, { method: "DELETE" });
+      setPending(p => p.filter(x => x.id !== id));
+      toast({ title: "Pending member removed" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
 
   const resetAddForm = () => { setEmail(""); setHnaNumber(""); setMembershipType("standard"); setStartDate(""); setRenewalDate(""); setBenefits(""); setPrepaidRounds("0"); };
 
@@ -532,7 +625,7 @@ export default function Members() {
       toast({ title: "Member added" });
       setOpen(false);
       resetAddForm();
-      load();
+      reloadAll();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally {
@@ -564,7 +657,32 @@ export default function Members() {
           <p className="text-muted-foreground mt-1">{members.length} registered member{members.length !== 1 ? "s" : ""}.</p>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          <ImportDialog onImported={load} />
+          <Dialog open={renewOpen} onOpenChange={v => { setRenewOpen(v); if (!v) setRenewDate(""); }}>
+            <DialogTrigger asChild>
+              <Button
+                variant="outline"
+                disabled={selected.length === 0}
+                className="gap-2 border-blue-400 text-blue-700 hover:bg-blue-50 disabled:opacity-40"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Renew{selected.length > 0 ? ` (${selected.length})` : ""}
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-sm">
+              <DialogHeader><DialogTitle>Renew {selected.length} member{selected.length !== 1 ? "s" : ""}</DialogTitle></DialogHeader>
+              <div className="space-y-3 py-2">
+                <p className="text-sm text-muted-foreground">Set a new renewal date and reactivate the selected memberships. Their HNAs stay verified until this date.</p>
+                <div className="space-y-1.5">
+                  <Label>New Renewal Date *</Label>
+                  <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
+                </div>
+                <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleBulkRenew} disabled={renewing}>
+                  {renewing ? "Renewing…" : "Confirm Renewal"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+          <ImportDialog onImported={reloadAll} />
           <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetAddForm(); }}>
             <DialogTrigger asChild>
               <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2"><Plus className="h-4 w-4" />Add Member</Button>
@@ -572,7 +690,7 @@ export default function Members() {
             <DialogContent className="max-w-md">
               <DialogHeader><DialogTitle>Add Member</DialogTitle></DialogHeader>
               <div className="space-y-3 py-2">
-                <p className="text-sm text-muted-foreground">The golfer must already have a TapIn Golf account. Enter their registered email.</p>
+                <p className="text-sm text-muted-foreground">Enter the golfer's email. If they already have a TapIn Golf account they're verified immediately; if not, they're held in your pending list and verified automatically when they sign up.</p>
 
                 <div className="space-y-1.5">
                   <Label>Golfer Email *</Label>
@@ -589,7 +707,7 @@ export default function Members() {
                     placeholder="e.g. 1234567890"
                     maxLength={20}
                   />
-                  <p className="text-xs text-muted-foreground">Digits only — this will be locked on the member's profile.</p>
+                  <p className="text-xs text-muted-foreground">Digits only — the club is the authority, so this overwrites and locks the golfer's HNA.</p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -658,12 +776,28 @@ export default function Members() {
                 <Card key={m.id}>
                   <CardContent className="p-4">
                     <div className="flex items-start gap-4">
+                      <input
+                        type="checkbox"
+                        checked={selected.includes(m.id)}
+                        onChange={() => toggleSelect(m.id)}
+                        className="mt-2 h-4 w-4 accent-[#1a5c38] cursor-pointer flex-shrink-0"
+                        aria-label={`Select ${m.name}`}
+                      />
                       <div className="w-10 h-10 rounded-full bg-[#1a5c38]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
                         <UserCircle2 className="h-6 w-6 text-[#1a5c38]" />
                       </div>
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           <span className="font-medium text-sm">{m.name}</span>
+                          {isVerified(m.status, m.renewal_date) ? (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1">
+                              <CheckCircle2 className="h-3 w-3" />HNA Verified
+                            </span>
+                          ) : (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-red-100 text-red-700 flex items-center gap-1">
+                              <XCircle className="h-3 w-3" />Not verified
+                            </span>
+                          )}
                           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[m.status] ?? "bg-gray-100 text-gray-700"}`}>{m.status}</span>
                           <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{membershipLabel(m.membership_type)}</span>
                           <PrepaidBadge total={Number(m.prepaid_rounds)} used={Number(m.prepaid_rounds_used)} />
@@ -704,6 +838,48 @@ export default function Members() {
             })}
           </div>
         )
+      )}
+
+      {pending.length > 0 && (
+        <div className="space-y-2 pt-4">
+          <div className="flex items-center gap-2">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <h2 className="text-lg font-semibold">Pending members ({pending.length})</h2>
+          </div>
+          <p className="text-sm text-muted-foreground">
+            These golfers don't have a TapIn Golf account yet. Their membership links and verifies automatically the moment they register with the matching email.
+          </p>
+          <div className="space-y-2">
+            {pending.map(p => (
+              <Card key={p.id} className="border-amber-200 bg-amber-50/40">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-4">
+                    <div className="w-10 h-10 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <AlertCircle className="h-5 w-5 text-amber-600" />
+                    </div>
+                    <div className="flex-1 min-w-0 space-y-1.5">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-medium text-sm">{p.email}</span>
+                        <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Awaiting signup</span>
+                        <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{membershipLabel(p.membership_type)}</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        {p.hna_number ? `HNA: ${p.hna_number}` : "No HNA"}
+                        {p.start_date ? ` · Start: ${fmtDate(p.start_date)}` : ""}
+                        {p.renewal_date ? ` · Renewal: ${fmtDate(p.renewal_date)}` : ""}
+                        {p.prepaid_rounds ? ` · ${p.prepaid_rounds} prepaid rounds` : ""}
+                        {p.student_number ? ` · Student: ${p.student_number}` : ""}
+                      </p>
+                    </div>
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive flex-shrink-0" onClick={() => handleRemovePending(p.id)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
     </div>
   );

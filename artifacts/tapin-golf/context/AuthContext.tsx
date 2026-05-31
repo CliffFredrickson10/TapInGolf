@@ -20,6 +20,9 @@ export interface User {
   hna_number?: string | null;
   student_number?: string | null;
   hna_locked?: boolean;
+  hna_verified?: boolean;
+  hna_verified_club_name?: string | null;
+  hna_valid_until?: string | null;
   student_number_locked?: boolean;
   ad_free_until?: string | null;
   is_super_user?: boolean;

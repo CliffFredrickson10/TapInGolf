@@ -258,6 +258,27 @@ async function createSchema(): Promise<void> {
     )
   `);
 
+  // Roster rows for golfers a club has added who do NOT yet have a TapIn account.
+  // These hold the club's HNA claim until the golfer signs up with the matching email,
+  // at which point they are promoted to a real club_members row (see auth/register).
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pending_memberships (
+      id              SERIAL PRIMARY KEY,
+      club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      email           VARCHAR(255) NOT NULL,
+      hna_number      VARCHAR(50),
+      membership_type VARCHAR(50) NOT NULL DEFAULT 'standard',
+      status          VARCHAR(20) NOT NULL DEFAULT 'active',
+      start_date      DATE,
+      renewal_date    DATE,
+      benefits        TEXT,
+      prepaid_rounds  INT NOT NULL DEFAULT 0,
+      student_number  VARCHAR(100),
+      created_at      TIMESTAMP DEFAULT NOW(),
+      UNIQUE (club_id, email)
+    )
+  `);
+
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_registrations (
       id            SERIAL PRIMARY KEY,
@@ -597,6 +618,8 @@ async function createSchema(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS idx_golf_events_date ON golf_events (event_date)",
     "CREATE INDEX IF NOT EXISTS idx_club_members_club ON club_members (club_id)",
     "CREATE INDEX IF NOT EXISTS idx_club_members_user ON club_members (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_pending_memberships_email ON pending_memberships (email)",
+    "CREATE INDEX IF NOT EXISTS idx_pending_memberships_club ON pending_memberships (club_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations (event_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_reg_user  ON event_registrations (user_id)",
     "CREATE INDEX IF NOT EXISTS idx_club_images_club ON club_images (club_id)",

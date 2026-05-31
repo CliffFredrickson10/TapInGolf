@@ -1,0 +1,230 @@
+import { Router, type IRouter } from "express";
+import { query, row, exec } from "../lib/pg";
+import { getUser, isSuper } from "../lib/auth";
+import { getHnaStatus } from "../lib/hna";
+import { sendPushNotifications } from "../lib/notifications";
+
+const router: IRouter = Router();
+
+const cleanHna = (v: unknown): string => String(v ?? "").trim().replace(/\D/g, "");
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOLFER: GET /hna/verification
+// Returns the golfer's latest card submission (if any) plus their derived HNA status.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/hna/verification", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const fresh = await row<any>("SELECT hna_number FROM users WHERE id = ?", [user.id]);
+  const status = await getHnaStatus(user.id, fresh?.hna_number ?? null);
+
+  const submission = await row<any>(
+    `SELECT id, hna_number, status, review_note, valid_until, created_at, reviewed_at
+       FROM hna_verifications
+      WHERE user_id = ?
+      ORDER BY created_at DESC, id DESC
+      LIMIT 1`,
+    [user.id]
+  );
+
+  res.json({
+    hna_number:    status.hna_number,
+    hna_verified:  status.hna_verified,
+    hna_verified_source: status.hna_verified_source,
+    hna_verified_club_name: status.hna_verified_club_name,
+    hna_valid_until: status.hna_valid_until,
+    hna_locked:    status.hna_locked,
+    submission:    submission ?? null,
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// GOLFER: POST /hna/verification
+// Submit a photo of the physical SA Player ID (HNA) card for TapIn staff review.
+// body: { hna_number, card_image (base64 data URI) }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/hna/verification", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const { hna_number, card_image } = req.body ?? {};
+
+  const num = cleanHna(hna_number);
+  if (num.length !== 10) {
+    res.status(400).json({ message: "HNA number must be exactly 10 digits" });
+    return;
+  }
+  if (!card_image || typeof card_image !== "string" || !card_image.startsWith("data:image/")) {
+    res.status(400).json({ message: "A photo of your HNA card is required" });
+    return;
+  }
+  if (card_image.length > 2_800_000) {
+    res.status(413).json({ message: "Image too large (max ~2MB)" });
+    return;
+  }
+
+  // Already verified (by a club membership or an approved card)? Nothing to do.
+  const fresh = await row<any>("SELECT hna_number FROM users WHERE id = ?", [user.id]);
+  const status = await getHnaStatus(user.id, fresh?.hna_number ?? null);
+  if (status.hna_verified) {
+    res.status(400).json({ message: "Your HNA is already verified" });
+    return;
+  }
+
+  // Keep the HNA number on the profile so status reads consistently while pending.
+  await exec("UPDATE users SET hna_number = ? WHERE id = ?", [num, user.id]);
+
+  // Only one open (pending) submission at a time — supersede any earlier pending one.
+  await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
+
+  const result = await exec(
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
+     VALUES (?, ?, ?, 'pending')`,
+    [user.id, num, card_image]
+  );
+
+  res.status(201).json({ success: true, id: (result as any).insertId, status: "pending" });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/hna-verifications?status=pending
+// Review queue — metadata only (card image fetched per-row via the detail endpoint).
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/hna-verifications", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const status = String(req.query.status ?? "pending");
+  const valid = ["pending", "approved", "rejected", "all"];
+  if (!valid.includes(status)) {
+    res.status(400).json({ message: `status must be one of: ${valid.join(", ")}` });
+    return;
+  }
+
+  const where = status === "all" ? "" : "WHERE v.status = ?";
+  const params = status === "all" ? [] : [status];
+
+  const rows = await query<any>(
+    `SELECT v.id, v.user_id, v.hna_number, v.status, v.review_note,
+            v.valid_until, v.created_at, v.reviewed_at,
+            u.name AS user_name, u.email AS user_email,
+            r.name AS reviewer_name
+       FROM hna_verifications v
+       JOIN users u ON u.id = v.user_id
+       LEFT JOIN users r ON r.id = v.reviewed_by
+       ${where}
+      ORDER BY
+        CASE WHEN v.status = 'pending' THEN 0 ELSE 1 END,
+        v.created_at DESC, v.id DESC`,
+    params
+  );
+
+  res.json({ verifications: rows });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/hna-verifications/:id  (includes the card image)
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/hna-verifications/:id", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const v = await row<any>(
+    `SELECT v.id, v.user_id, v.hna_number, v.card_image, v.status, v.review_note,
+            v.valid_until, v.created_at, v.reviewed_at,
+            u.name AS user_name, u.email AS user_email, u.handicap,
+            r.name AS reviewer_name
+       FROM hna_verifications v
+       JOIN users u ON u.id = v.user_id
+       LEFT JOIN users r ON r.id = v.reviewed_by
+      WHERE v.id = ?`,
+    [id]
+  );
+  if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
+  res.json({ verification: v });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/hna-verifications/:id/approve  { valid_until? }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/hna-verifications/:id/approve", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const v = await row<any>("SELECT id, user_id, hna_number, status FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
+
+  const validUntil = req.body?.valid_until ? String(req.body.valid_until) : null;
+  if (validUntil && !/^\d{4}-\d{2}-\d{2}$/.test(validUntil)) {
+    res.status(400).json({ message: "valid_until must be YYYY-MM-DD" });
+    return;
+  }
+
+  await exec(
+    `UPDATE hna_verifications
+        SET status = 'approved', review_note = NULL, valid_until = ?,
+            reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?`,
+    [validUntil, user.id, id]
+  );
+
+  // Lock the approved number onto the golfer's profile so their HNA reads verified.
+  await exec("UPDATE users SET hna_number = ? WHERE id = ?", [v.hna_number, v.user_id]);
+
+  const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to:    target.push_token,
+      sound: "default",
+      title: "HNA Verified ✅",
+      body:  validUntil
+        ? `Your SA Player ID has been verified by TapIn (valid until ${validUntil}). You now get affiliated-visitor rates.`
+        : `Your SA Player ID has been verified by TapIn. You now get affiliated-visitor rates.`,
+      data:  { type: "hna_verification_update", status: "approved" },
+    }]);
+  }
+
+  res.json({ success: true, status: "approved" });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/hna-verifications/:id/reject  { note? }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/hna-verifications/:id/reject", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const v = await row<any>("SELECT id, user_id, status FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
+
+  const note = req.body?.note ? String(req.body.note).slice(0, 500) : null;
+
+  await exec(
+    `UPDATE hna_verifications
+        SET status = 'rejected', review_note = ?, valid_until = NULL,
+            reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?`,
+    [note, user.id, id]
+  );
+
+  const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to:    target.push_token,
+      sound: "default",
+      title: "HNA Verification Update",
+      body:  note
+        ? `Your HNA card could not be verified: ${note}. You can submit a clearer photo.`
+        : `Your HNA card could not be verified. Please submit a clearer photo of your SA Player ID.`,
+      data:  { type: "hna_verification_update", status: "rejected" },
+    }]);
+  }
+
+  res.json({ success: true, status: "rejected" });
+});
+
+export default router;

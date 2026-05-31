@@ -1,12 +1,12 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
-import { getUser } from "../lib/auth";
+import { getUser, isStaff, isPlatform } from "../lib/auth";
 
 const router: IRouter = Router();
 
-// Helper: is this user a platform admin (club_admin with no club assigned)?
+// Helper: is this user a platform admin (super-user, or club_admin with no club)?
 function isPlatformAdmin(user: any) {
-  return user?.role === "club_admin" && user?.club_id == null;
+  return isPlatform(user);
 }
 
 // Helper: build a WHERE clause fragment to scope to the admin's club (if assigned)
@@ -76,7 +76,7 @@ router.get("/admin/users", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin") { res.status(403).json({ message: "Forbidden" }); return; }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const scope = clubScope(user);
 
@@ -111,7 +111,7 @@ router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/revenue/bookings", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin") { res.status(403).json({ message: "Forbidden" }); return; }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const limit  = Math.min(parseInt(String(req.query.limit  ?? "50"), 10), 100);
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
@@ -157,7 +157,7 @@ router.get("/admin/revenue/bookings", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin") { res.status(403).json({ message: "Forbidden" }); return; }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const scope = clubScope(user);
   // For club-scoped admin the "clubs" list is just their one club

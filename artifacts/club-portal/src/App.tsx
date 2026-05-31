@@ -3,6 +3,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Layout } from "@/components/layout";
+import { StaffLayout } from "@/components/staff-layout";
 import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
@@ -15,9 +16,14 @@ import Members from "@/pages/members";
 import Vouchers from "@/pages/vouchers";
 import Notifications from "@/pages/notifications";
 import Pricing from "@/pages/pricing";
+import StaffRevenue from "@/pages/staff/revenue";
+import StaffBroadcast from "@/pages/staff/broadcast";
+import StaffGeofence from "@/pages/staff/geofence";
+import StaffEventsMembers from "@/pages/staff/events-members";
+import StaffHnaReview from "@/pages/staff/hna-review";
 
 function Router() {
-  const { club, loading } = useAuth();
+  const { club, staff, loading } = useAuth();
   const [location] = useLocation();
 
   if (loading) {
@@ -29,6 +35,22 @@ function Router() {
   }
 
   if (location === "/forgot-password") return <ForgotPassword />;
+  if (staff) {
+    return (
+      <StaffLayout>
+        <Switch>
+          <Route path="/" component={StaffRevenue} />
+          <Route path="/broadcast" component={StaffBroadcast} />
+          <Route path="/geofence" component={StaffGeofence} />
+          <Route path="/events-members" component={StaffEventsMembers} />
+          <Route path="/hna-review" component={StaffHnaReview} />
+          <Route>
+            <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+          </Route>
+        </Switch>
+      </StaffLayout>
+    );
+  }
   if (!club) return <Login />;
 
   return (

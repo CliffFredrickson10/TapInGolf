@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
-import { getUser } from "../lib/auth";
+import { getUser, isStaff, effectiveClubId } from "../lib/auth";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 
@@ -58,10 +58,9 @@ async function getBookedUsersForClub(clubId: number, affectedDate: string | null
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/notifications/preview", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const date = req.query.date ? String(req.query.date) : null;
   const today = new Date().toISOString().split("T")[0];
@@ -77,7 +76,7 @@ router.get("/admin/notifications/preview", async (req, res): Promise<void> => {
        WHERE c.id = ?
          AND pts.date = ?
          AND b.status IN ('confirmed','pending')`,
-      [user.club_id, date]
+      [clubId, date]
     );
   } else {
     countRow = await row<any>(
@@ -89,7 +88,7 @@ router.get("/admin/notifications/preview", async (req, res): Promise<void> => {
        WHERE c.id = ?
          AND pts.date >= ?
          AND b.status IN ('confirmed','pending')`,
-      [user.club_id, today]
+      [clubId, today]
     );
   }
 
@@ -102,10 +101,9 @@ router.get("/admin/notifications/preview", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.post("/admin/notifications/broadcast", async (req, res): Promise<void> => {
   const caller = await getUser(req);
-  if (!caller || caller.role !== "club_admin" || !caller.club_id) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
+  if (!isStaff(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(caller, req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const { type, title, body, tee_shift_minutes, affected_date } = req.body ?? {};
 
@@ -130,11 +128,11 @@ router.post("/admin/notifications/broadcast", async (req, res): Promise<void> =>
   }
 
   // Fetch club name for notification context
-  const club = await row<any>("SELECT id, name FROM clubs WHERE id = ?", [caller.club_id]);
+  const club = await row<any>("SELECT id, name FROM clubs WHERE id = ?", [clubId]);
   if (!club) { res.status(404).json({ message: "Club not found" }); return; }
 
   // Find all booked users
-  const recipients = await getBookedUsersForClub(caller.club_id, dateParam);
+  const recipients = await getBookedUsersForClub(clubId, dateParam);
   const withTokens = recipients.filter((u: any) => u.push_token?.startsWith("ExponentPushToken["));
 
   // Build push messages
@@ -153,7 +151,7 @@ router.post("/admin/notifications/broadcast", async (req, res): Promise<void> =>
     data:  {
       type:            "club_broadcast",
       broadcast_type:  type,
-      club_id:         caller.club_id,
+      club_id:         clubId,
       affected_date:   dateParam,
       tee_shift_minutes: tee_shift_minutes ?? null,
     },
@@ -170,7 +168,7 @@ router.post("/admin/notifications/broadcast", async (req, res): Promise<void> =>
        (club_id, sent_by, type, title, body, tee_shift_minutes, affected_date, recipient_count)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      caller.club_id,
+      clubId,
       caller.id,
       type,
       String(title),
@@ -185,7 +183,7 @@ router.post("/admin/notifications/broadcast", async (req, res): Promise<void> =>
   const fullTitle = `${club.name}: ${title}`;
   const fullBody  = `${body}${type === "tee_shift" && tee_shift_minutes != null ? (tee_shift_minutes > 0 ? ` (pushed out by ${tee_shift_minutes} min)` : ` (brought forward by ${Math.abs(tee_shift_minutes)} min)`) : ""}`;
   for (const u of recipients) {
-    saveUserNotification(u.id, "club_broadcast", fullTitle, fullBody, { club_id: caller.club_id, broadcast_type: type, affected_date: dateParam });
+    saveUserNotification(u.id, "club_broadcast", fullTitle, fullBody, { club_id: clubId, broadcast_type: type, affected_date: dateParam });
   }
 
   res.json({ success: true, recipient_count: withTokens.length, total_booked: recipients.length });
@@ -197,10 +195,9 @@ router.post("/admin/notifications/broadcast", async (req, res): Promise<void> =>
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/notifications", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const limit  = Math.min(parseInt(String(req.query.limit ?? "30"), 10), 100);
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
@@ -214,7 +211,7 @@ router.get("/admin/notifications", async (req, res): Promise<void> => {
      WHERE n.club_id = ?
      ORDER BY n.sent_at DESC
      LIMIT ${limit} OFFSET ${offset}`,
-    [user.club_id]
+    [clubId]
   );
 
   res.json({ notifications });

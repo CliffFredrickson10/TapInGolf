@@ -16,6 +16,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import CachedImage from "@/components/CachedImage";
+import HnaVerificationCard from "@/components/HnaVerificationCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
@@ -44,13 +45,6 @@ const dobFromApi = (dateStr: string): string => dateStr.slice(0, 10).replace(/-/
 // Convert YYYY/MM/DD (from input) → YYYY-MM-DD (for API)
 const dobToApi = (dateStr: string): string => dateStr.replace(/\//g, "-");
 
-// Format an ISO date (YYYY-MM-DD…) → "12 Jan 2027" for display
-const fmtValidUntil = (dateStr: string): string => {
-  const d = new Date(String(dateStr).slice(0, 10));
-  if (isNaN(d.getTime())) return String(dateStr).slice(0, 10);
-  return d.toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
-};
-
 export default function ProfileScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -62,7 +56,6 @@ export default function ProfileScreen() {
   const [name, setName] = useState(user?.name ?? "");
   const [phone, setPhone] = useState(user?.phone ?? "");
   const [handicap, setHandicap] = useState(user?.handicap?.toString() ?? "");
-  const [hnaNumber, setHnaNumber] = useState(user?.hna_number && user.hna_number !== "null" ? user.hna_number : "");
   const [studentNumber, setStudentNumber] = useState(user?.student_number ?? "");
   const [gender, setGender] = useState<string>(user?.gender ?? "");
   const [dob, setDob] = useState(user?.date_of_birth ? dobFromApi(user.date_of_birth) : "");
@@ -103,7 +96,6 @@ export default function ProfileScreen() {
     setName(user.name ?? "");
     setPhone(user.phone ?? "");
     setHandicap(user.handicap?.toString() ?? "");
-    setHnaNumber(user.hna_number && user.hna_number !== "null" ? user.hna_number : "");
     setStudentNumber(user.student_number ?? "");
     setGender(user.gender ?? "");
     setDob(user.date_of_birth ? dobFromApi(user.date_of_birth) : "");
@@ -231,9 +223,6 @@ export default function ProfileScreen() {
     if (newPassword && newPassword.length < 6) {
       setSaveError("Password must be at least 6 characters"); return;
     }
-    if (hnaNumber.length > 0 && hnaNumber.length !== 10) {
-      setSaveError("HNA membership number must be exactly 10 digits"); return;
-    }
     setSaving(true);
     setSaveError("");
     try {
@@ -241,7 +230,6 @@ export default function ProfileScreen() {
         name: name.trim(),
         phone: phone.trim(),
         handicap: handicap ? parseFloat(handicap) : null,
-        hna_number: hnaNumber.length === 10 ? hnaNumber : (hnaNumber.length === 0 ? null : undefined),
         student_number: isStudent ? (studentNumber.trim() || null) : null,
         gender: gender || null,
         date_of_birth: dob ? dobToApi(dob) : null,
@@ -431,49 +419,7 @@ export default function ProfileScreen() {
                 </>
               )}
 
-              <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>HNA Membership Number</Text>
-              {user?.hna_verified ? (
-                <>
-                  <View style={[styles.lockedField, { borderColor: colors.primary + "40", backgroundColor: colors.primary + "10" }]}>
-                    <Text style={[styles.lockedFieldValue, { color: colors.foreground }]}>
-                      {hnaNumber || "—"}
-                    </Text>
-                    <View style={[styles.lockedBadge, { backgroundColor: colors.primary + "20" }]}>
-                      <Ionicons name="checkmark-circle" size={11} color={colors.primary} />
-                      <Text style={[styles.lockedBadgeText, { color: colors.primary }]}>Verified</Text>
-                    </View>
-                  </View>
-                  <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
-                    {user.hna_verified_club_name ? `Verified by ${user.hna_verified_club_name}` : "Verified by your club"}
-                    {user.hna_valid_until ? ` · valid until ${fmtValidUntil(user.hna_valid_until)}` : ""}
-                  </Text>
-                </>
-              ) : (
-                <>
-                  <TextInput
-                    style={[styles.fieldInput, {
-                      borderColor: hnaNumber && hnaNumber.replace(/\D/g,"").length !== 10 ? colors.destructive : colors.border,
-                      color: colors.foreground, backgroundColor: colors.background,
-                    }]}
-                    value={hnaNumber}
-                    onChangeText={t => setHnaNumber(t.replace(/\D/g, "").slice(0, 10))}
-                    placeholder="10-digit number"
-                    placeholderTextColor={colors.mutedForeground}
-                    keyboardType="number-pad"
-                    maxLength={10}
-                  />
-                  {hnaNumber.length > 0 && hnaNumber.length !== 10 && (
-                    <Text style={{ color: colors.destructive, fontSize: 11, marginTop: 2 }}>
-                      Must be exactly 10 digits ({hnaNumber.length}/10)
-                    </Text>
-                  )}
-                  {hnaNumber.replace(/\D/g,"").length === 10 && (
-                    <Text style={{ color: colors.mutedForeground, fontSize: 11, marginTop: 4 }}>
-                      Not yet verified. A club confirms your HNA when they add you to their member roster — only then do you get affiliated-visitor rates.
-                    </Text>
-                  )}
-                </>
-              )}
+              {/* HNA membership is verified via the dedicated HNA card below (TapIn card review or club roster). */}
 
               {/* Gender */}
               <Text style={[styles.fieldLabel, { color: colors.mutedForeground }]}>Gender</Text>
@@ -620,6 +566,16 @@ export default function ProfileScreen() {
               <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
             </TouchableOpacity>
           )}
+
+          {/* HNA card verification */}
+          <HnaVerificationCard
+            token={user.token}
+            onVerified={() => {
+              apiFetch("/profile", user.token, { cache: "no-store" } as any)
+                .then((data: any) => { if (data?.user) updateUser({ ...data.user, token: user.token }); })
+                .catch(() => {});
+            }}
+          />
 
           {/* Super User tools */}
           {user.is_super_user && (

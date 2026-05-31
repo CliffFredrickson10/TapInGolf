@@ -27,19 +27,31 @@ function BrandLogo() {
 }
 
 export default function Login() {
-  const { login } = useAuth();
+  const { login, staffLogin } = useAuth();
+  const [tab, setTab] = useState<"club" | "staff">("club");
   const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+
+  const switchTab = (next: "club" | "staff") => {
+    setTab(next);
+    setError("");
+    setPassword("");
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setLoading(true);
     try {
-      await login(username.trim(), password);
+      if (tab === "staff") {
+        await staffLogin(email.trim().toLowerCase(), password);
+      } else {
+        await login(username.trim(), password);
+      }
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {
@@ -47,30 +59,74 @@ export default function Login() {
     }
   };
 
+  const isStaff = tab === "staff";
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f0f7f3] via-white to-[#f5f5f0]">
       <div className="w-full max-w-md px-4">
         <BrandLogo />
         <Card className="shadow-xl border-0 ring-1 ring-black/5">
           <CardHeader className="pb-4">
-            <CardTitle className="text-xl">Sign in to your club</CardTitle>
-            <CardDescription>Enter your club credentials to access the management portal.</CardDescription>
+            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted mb-4">
+              <button
+                type="button"
+                onClick={() => switchTab("club")}
+                className={`text-sm font-medium py-2 rounded-md transition-colors ${
+                  !isStaff ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Club login
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab("staff")}
+                className={`text-sm font-medium py-2 rounded-md transition-colors ${
+                  isStaff ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                TapIn staff
+              </button>
+            </div>
+            <CardTitle className="text-xl">
+              {isStaff ? "TapIn staff sign in" : "Sign in to your club"}
+            </CardTitle>
+            <CardDescription>
+              {isStaff
+                ? "Sign in with your TapIn super-user account to manage all clubs."
+                : "Enter your club credentials to access the management portal."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Club Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="e.g. glendower_golf_club"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                  autoComplete="username"
-                  className="h-11"
-                />
-              </div>
+              {isStaff ? (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@tapingolf.co.za"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                    autoComplete="username"
+                    className="h-11"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="username">Club Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="e.g. glendower_golf_club"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    required
+                    autoComplete="username"
+                    className="h-11"
+                  />
+                </div>
+              )}
               <div className="space-y-2">
                 <Label htmlFor="password">Password</Label>
                 <div className="relative">
@@ -102,14 +158,16 @@ export default function Login() {
                 {loading ? "Signing in…" : "Sign in"}
               </Button>
             </form>
-            <div className="flex items-center justify-between mt-5 pt-4 border-t">
-              <p className="text-xs text-muted-foreground">
-                Default: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">Golf2026!</code>
-              </p>
-              <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
-                Forgot password?
-              </a>
-            </div>
+            {!isStaff && (
+              <div className="flex items-center justify-between mt-5 pt-4 border-t">
+                <p className="text-xs text-muted-foreground">
+                  Default: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">Golf2026!</code>
+                </p>
+                <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
+                  Forgot password?
+                </a>
+              </div>
+            )}
           </CardContent>
         </Card>
         <p className="text-center text-xs text-muted-foreground mt-6">

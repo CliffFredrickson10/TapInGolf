@@ -1,13 +1,8 @@
 import { Router, type IRouter } from "express";
 import { query, exec, row } from "../lib/pg";
-import { getUser } from "../lib/auth";
+import { getUser, isStaff } from "../lib/auth";
 
 const router: IRouter = Router();
-
-// Helper: platform admin = club_admin with no club assigned
-function isPlatformAdmin(user: any) {
-  return user?.role === "club_admin" && user?.club_id == null;
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // GET /clubs/geofences
@@ -30,10 +25,7 @@ router.get("/clubs/geofences", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/clubs", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin") {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const where  = user.club_id != null ? "WHERE active = 1 AND id = ?" : "WHERE active = 1";
   const params = user.club_id != null ? [user.club_id] : [];
@@ -65,10 +57,7 @@ router.get("/admin/clubs", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────
 router.patch("/admin/clubs/:id/geofence", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin") {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const clubId = parseInt(req.params.id, 10);
   if (isNaN(clubId)) { res.status(400).json({ message: "Invalid club id" }); return; }

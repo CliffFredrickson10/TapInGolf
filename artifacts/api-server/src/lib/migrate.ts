@@ -279,6 +279,26 @@ async function createSchema(): Promise<void> {
     )
   `);
 
+  // ── HNA card verifications ─────────────────────────────────────────────────
+  // A golfer submits a photo of their physical SA Player ID (HNA) card. A TapIn
+  // super-user reviews it and approves/rejects. An APPROVED, non-expired row is one
+  // of the two sources that make a golfer's HNA "verified" (see lib/hna.ts).
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS hna_verifications (
+      id            SERIAL PRIMARY KEY,
+      user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      hna_number    VARCHAR(50) NOT NULL,
+      card_image    TEXT NOT NULL,
+      status        VARCHAR(20) NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','approved','rejected')),
+      review_note   TEXT,
+      reviewed_by   INT REFERENCES users(id) ON DELETE SET NULL,
+      reviewed_at   TIMESTAMP,
+      valid_until   DATE,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_registrations (
       id            SERIAL PRIMARY KEY,
@@ -623,6 +643,8 @@ async function createSchema(): Promise<void> {
     "CREATE INDEX IF NOT EXISTS idx_event_reg_event ON event_registrations (event_id)",
     "CREATE INDEX IF NOT EXISTS idx_event_reg_user  ON event_registrations (user_id)",
     "CREATE INDEX IF NOT EXISTS idx_club_images_club ON club_images (club_id)",
+    "CREATE INDEX IF NOT EXISTS idx_hna_verif_user   ON hna_verifications (user_id)",
+    "CREATE INDEX IF NOT EXISTS idx_hna_verif_status ON hna_verifications (status)",
   ];
   for (const idx of indexes) {
     await ddl(idx);

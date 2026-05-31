@@ -1,0 +1,1 @@
+- [Staff admin authz](staff-admin-authz.md) — shared /admin/* gate on isStaff (club_admin OR super); only HNA card review is isSuper-only. Don't tighten to super-only.

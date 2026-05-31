@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
-import { getUser } from "../lib/auth";
+import { getUser, isStaff, effectiveClubId } from "../lib/auth";
 import { sendPushNotifications } from "../lib/notifications";
 
 const router: IRouter = Router();
@@ -104,9 +104,9 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/admin/events", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const upcoming = req.query.upcoming !== "false";
   const today    = new Date().toISOString().split("T")[0];
@@ -120,7 +120,7 @@ router.get("/admin/events", async (req, res): Promise<void> => {
      FROM golf_events e
      WHERE e.club_id = ? ${dateFilter}
      ORDER BY e.event_date ASC, e.start_time ASC`,
-    [user.club_id]
+    [clubId]
   );
 
   res.json({
@@ -140,9 +140,9 @@ router.get("/admin/events", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/admin/events", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants } = req.body ?? {};
 
@@ -164,7 +164,7 @@ router.post("/admin/events", async (req, res): Promise<void> => {
        (club_id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, created_by)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
-      user.club_id,
+      clubId,
       String(name),
       description ?? null,
       event_date,
@@ -187,12 +187,12 @@ router.post("/admin/events", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.put("/admin/events/:id", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const eventId = parseInt(req.params.id, 10);
-  const event   = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, user.club_id]);
+  const event   = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
 
   const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status } = req.body ?? {};
@@ -213,7 +213,7 @@ router.put("/admin/events/:id", async (req, res): Promise<void> => {
 
   if (!updates.length) { res.json({ success: true }); return; }
 
-  vals.push(eventId, user.club_id);
+  vals.push(eventId, clubId);
   await exec(`UPDATE golf_events SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
 
   res.json({ success: true });
@@ -224,14 +224,14 @@ router.put("/admin/events/:id", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete("/admin/events/:id", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const eventId = parseInt(req.params.id, 10);
   await exec(
     "UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?",
-    [eventId, user.club_id]
+    [eventId, clubId]
   );
   res.json({ success: true });
 });
@@ -242,12 +242,12 @@ router.delete("/admin/events/:id", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/admin/events/:id/registrations", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const eventId = parseInt(req.params.id, 10);
-  const event   = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, user.club_id]);
+  const event   = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
 
   const regs = await query<any>(
@@ -269,9 +269,9 @@ router.get("/admin/events/:id/registrations", async (req, res): Promise<void> =>
 // ─────────────────────────────────────────────────────────────────────────────
 router.put("/admin/events/:id/registrations/:userId", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const eventId = parseInt(req.params.id, 10);
   const targetId = parseInt(req.params.userId, 10);
@@ -283,7 +283,7 @@ router.put("/admin/events/:id/registrations/:userId", async (req, res): Promise<
 
   const event = await row<any>(
     "SELECT e.id, e.name, c.name as club_name FROM golf_events e JOIN clubs c ON c.id = e.club_id WHERE e.id = ? AND e.club_id = ?",
-    [eventId, user.club_id]
+    [eventId, clubId]
   );
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
 
@@ -315,9 +315,9 @@ router.put("/admin/events/:id/registrations/:userId", async (req, res): Promise<
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/admin/members", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const members = await query<any>(
     `SELECT cm.id, cm.membership_type, cm.status, cm.created_at,
@@ -326,7 +326,7 @@ router.get("/admin/members", async (req, res): Promise<void> => {
      JOIN users u ON u.id = cm.user_id
      WHERE cm.club_id = ?
      ORDER BY u.name ASC`,
-    [user.club_id]
+    [clubId]
   );
 
   res.json({ members });
@@ -338,9 +338,9 @@ router.get("/admin/members", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.get("/admin/members/search", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const q = String(req.query.q ?? "").trim();
   if (q.length < 2) { res.json({ users: [] }); return; }
@@ -352,7 +352,7 @@ router.get("/admin/members/search", async (req, res): Promise<void> => {
      WHERE (u.name ILIKE ? OR u.email ILIKE ?)
        AND u.id != ?
      LIMIT 10`,
-    [user.club_id, `%${q}%`, `%${q}%`, user.id]
+    [clubId, `%${q}%`, `%${q}%`, user.id]
   );
 
   res.json({ users: users.map((u: any) => ({ ...u, already_member: !!u.already_member })) });
@@ -364,9 +364,9 @@ router.get("/admin/members/search", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/admin/members", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const { user_id, membership_type = "standard" } = req.body ?? {};
 
@@ -378,19 +378,19 @@ router.post("/admin/members", async (req, res): Promise<void> => {
   const target = await row<any>("SELECT id, name FROM users WHERE id = ?", [user_id]);
   if (!target) { res.status(404).json({ message: "User not found" }); return; }
 
-  const club = await row<any>("SELECT name FROM clubs WHERE id = ?", [user.club_id]);
+  const club = await row<any>("SELECT name FROM clubs WHERE id = ?", [clubId]);
 
   try {
     await exec(
       "INSERT INTO club_members (club_id, user_id, membership_type, added_by) VALUES (?, ?, ?, ?)",
-      [user.club_id, user_id, membership_type, user.id]
+      [clubId, user_id, membership_type, user.id]
     );
   } catch (err: any) {
     if (err.code === "ER_DUP_ENTRY") {
       // Already a member — update status to active if suspended
       await exec(
         "UPDATE club_members SET status = 'active', membership_type = ? WHERE club_id = ? AND user_id = ?",
-        [membership_type, user.club_id, user_id]
+        [membership_type, clubId, user_id]
       );
     } else throw err;
   }
@@ -403,7 +403,7 @@ router.post("/admin/members", async (req, res): Promise<void> => {
       sound: "default",
       title: "Club Membership ⛳",
       body:  `You have been added as a ${membership_type} member of ${club?.name ?? "the club"}. You now have access to members-only events.`,
-      data:  { type: "club_membership_added", club_id: user.club_id },
+      data:  { type: "club_membership_added", club_id: clubId },
     }]);
   }
 
@@ -416,9 +416,9 @@ router.post("/admin/members", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.put("/admin/members/:userId", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const targetId = parseInt(req.params.userId, 10);
   const { membership_type, status } = req.body ?? {};
@@ -435,7 +435,7 @@ router.put("/admin/members/:userId", async (req, res): Promise<void> => {
 
   if (!updates.length) { res.json({ success: true }); return; }
 
-  vals.push(user.club_id, targetId);
+  vals.push(clubId, targetId);
   await exec(`UPDATE club_members SET ${updates.join(", ")} WHERE club_id = ? AND user_id = ?`, vals);
 
   res.json({ success: true });
@@ -447,14 +447,14 @@ router.put("/admin/members/:userId", async (req, res): Promise<void> => {
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete("/admin/members/:userId", async (req, res): Promise<void> => {
   const user = await getUser(req);
-  if (!user || user.role !== "club_admin" || !user.club_id) {
-    res.status(403).json({ message: "Forbidden" }); return;
-  }
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
 
   const targetId = parseInt(req.params.userId, 10);
   await exec(
     "DELETE FROM club_members WHERE club_id = ? AND user_id = ?",
-    [user.club_id, targetId]
+    [clubId, targetId]
   );
 
   res.json({ success: true });

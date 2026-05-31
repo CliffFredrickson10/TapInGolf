@@ -269,6 +269,9 @@ export default function JoinGameScreen() {
   const [refreshing,    setRefreshing]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
   const [expandedClubId, setExpandedClubId] = useState<number | null>(null);
+  // Tracks whether we've auto-expanded the first club for the current result set,
+  // so it fires once per fetch and never fights a manual collapse.
+  const autoExpandedRef = useRef(false);
 
   // ── Filters ──────────────────────────────────────────────────────────────────
   const dateOptions                        = useMemo(() => buildDateOptions(), []);
@@ -335,6 +338,7 @@ export default function JoinGameScreen() {
       setGames(data.games ?? []);
       setError(null);
       setExpandedClubId(null);
+      autoExpandedRef.current = false;
     } catch {
       setError("Could not load open games. Please try again.");
     }
@@ -424,6 +428,15 @@ export default function JoinGameScreen() {
         return 0;
       });
   }, [games, hasLocation, userLat, userLon, radiusKm, sortByDistance]);
+
+  // Auto-expand the first club (the first available spot) once results load,
+  // so the user lands directly on a joinable tee time without tapping.
+  useEffect(() => {
+    if (!loading && !autoExpandedRef.current && clubGroups.length > 0) {
+      setExpandedClubId(clubGroups[0].club_id);
+      autoExpandedRef.current = true;
+    }
+  }, [loading, clubGroups]);
 
   const onJoinGame = (game: OpenGame) => {
     Haptics.selectionAsync();

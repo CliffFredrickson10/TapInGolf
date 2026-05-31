@@ -150,8 +150,9 @@ export default function NewBookingScreen() {
   const [numPlayers, setNumPlayers]   = useState(1);
   const [splitBill, setSplitBill]     = useState(false);
   const [includeCart, setIncludeCart] = useState(cartCompulsory);
-  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid">("stitch");
+  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet">("stitch");
   const [prepaidBalance, setPrepaidBalance] = useState<{ total: number; used: number; remaining: number } | null>(null);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [isMember, setIsMember]       = useState(false);
   const [submitting, setSubmitting]   = useState(false);
   const [bookError, setBookError]     = useState<string | null>(null);
@@ -272,6 +273,14 @@ export default function NewBookingScreen() {
       })
       .catch(() => { setIsMember(false); setPrepaidBalance(null); });
   }, [user, params.club_id]);
+
+  // ── Load wallet balance ──────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    apiFetch("/payments/methods", user.token)
+      .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
+      .catch(() => setWalletBalance(0));
+  }, [user]);
 
   // ── User search (debounced) ─────────────────────────────────────────────────
   useEffect(() => {
@@ -693,6 +702,40 @@ export default function NewBookingScreen() {
             </TouchableOpacity>
           ))}
 
+          {/* Wallet option — always shown once balance is loaded */}
+          {walletBalance !== null && (
+            <TouchableOpacity
+              style={[
+                styles.paymentOption,
+                {
+                  backgroundColor: paymentMethod === "wallet" ? colors.primaryLight : colors.card,
+                  borderColor:     paymentMethod === "wallet" ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => { Haptics.selectionAsync(); setPaymentMethod("wallet"); }}
+            >
+              <Ionicons name="wallet-outline" size={22} color={paymentMethod === "wallet" ? colors.primary : colors.mutedForeground} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.payLabel, { color: colors.foreground }]}>TapIn Wallet</Text>
+                <Text style={[styles.paySub, { color: walletBalance >= myAmount ? colors.primary : "#e53e3e" }]}>
+                  R {walletBalance.toFixed(2)} available
+                  {walletBalance < myAmount ? " — insufficient balance" : ""}
+                </Text>
+              </View>
+              {paymentMethod === "wallet" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          )}
+
+          {/* Insufficient wallet balance notice */}
+          {paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
+            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fef3cd", borderRadius: 8, padding: 8 }}>
+              <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
+                Your wallet balance (R {walletBalance.toFixed(2)}) is less than the amount due (R {myAmount.toFixed(2)}). Top up your wallet in the Profile tab before booking.
+              </Text>
+            </View>
+          )}
+
           {/* Prepaid rounds option — shown only when member has rounds at this club */}
           {prepaidBalance !== null && (
             <TouchableOpacity
@@ -1009,9 +1052,9 @@ export default function NewBookingScreen() {
 
           {/* Book button */}
           <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}
+            style={[styles.bookBtn, { backgroundColor: (submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)) ? colors.muted : colors.primary }]}
             onPress={() => { setBookError(null); handleBook(); }}
-            disabled={submitting}
+            disabled={submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)}
             activeOpacity={0.85}
           >
             <Text style={styles.bookBtnText}>{submitting ? "Processing…" : "Confirm Booking"}</Text>

@@ -272,6 +272,10 @@ export default function JoinGameScreen() {
   // Tracks whether we've auto-expanded the first club for the current result set,
   // so it fires once per fetch and never fights a manual collapse.
   const autoExpandedRef = useRef(false);
+  // On first open, we jump the date selector to the earliest date that actually
+  // has open games. dateReady gates the per-date fetch until that's resolved.
+  const [dateReady, setDateReady] = useState(false);
+  const didInitDateRef = useRef(false);
 
   // ── Filters ──────────────────────────────────────────────────────────────────
   const dateOptions                        = useMemo(() => buildDateOptions(), []);
@@ -346,10 +350,32 @@ export default function JoinGameScreen() {
     setRefreshing(false);
   }, [selectedDate, province, suburb, user?.token]);
 
+  // On first open, discover the earliest date with open games (the endpoint
+  // returns all upcoming games ordered by date when no date is passed) and jump
+  // the date selector to it, so the user lands on the first available game.
   useEffect(() => {
+    if (didInitDateRef.current) return;
+    didInitDateRef.current = true;
+    (async () => {
+      try {
+        const data = await apiFetch(`/bookings/open`, user?.token);
+        const upcoming: OpenGame[] = data.games ?? [];
+        if (upcoming.length > 0 && upcoming[0].date) {
+          setSelectedDate(upcoming[0].date);
+        }
+      } catch {
+        // fall through — we'll just load the default (today) date
+      } finally {
+        setDateReady(true);
+      }
+    })();
+  }, [user?.token]);
+
+  useEffect(() => {
+    if (!dateReady) return;
     setLoading(true);
     fetchGames();
-  }, [fetchGames]);
+  }, [fetchGames, dateReady]);
 
   // ── Handlers ──────────────────────────────────────────────────────────────────
   const onSuburbChange = (text: string) => {

@@ -62793,7 +62793,10 @@ router19.post("/admin/reports/:id/resolve", async (req, res) => {
     return;
   }
   const id = parseInt(req.params.id, 10);
-  const report = await row("SELECT id, status FROM message_reports WHERE id = ?", [id]);
+  const report = await row(
+    "SELECT id, status, reporter_id, reported_user_id FROM message_reports WHERE id = ?",
+    [id]
+  );
   if (!report) {
     res.status(404).json({ message: "Report not found" });
     return;
@@ -62811,7 +62814,17 @@ router19.post("/admin/reports/:id/resolve", async (req, res) => {
       WHERE id = ?`,
     [newStatus, reviewNote, user.id, id]
   );
-  res.json({ success: true, status: newStatus });
+  let blocked = false;
+  if (action === "uphold") {
+    await exec(
+      `INSERT INTO user_blocks (user_id, blocked_user_id)
+       VALUES (?, ?)
+       ON CONFLICT (user_id, blocked_user_id) DO NOTHING`,
+      [report.reporter_id, report.reported_user_id]
+    );
+    blocked = true;
+  }
+  res.json({ success: true, status: newStatus, blocked });
 });
 var moderation_default = router19;
 

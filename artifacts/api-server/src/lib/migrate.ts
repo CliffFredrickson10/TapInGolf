@@ -709,6 +709,9 @@ async function createSchema(): Promise<void> {
   `);
   // Allow bookings to reference a portal slot (portal_tee_slots is now the only slot source)
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_slot_id INT REFERENCES portal_tee_slots(id)");
+  // chat_disabled: set when a chat report is upheld — globally suspends the user's
+  // ability to start conversations or send messages anywhere in the app.
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

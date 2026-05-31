@@ -32,7 +32,7 @@ export async function getUser(req: Request): Promise<any | null> {
   const token = header.slice(7);
   const userId = verifyToken(token);
   if (!userId) return null;
-  return row("SELECT id, name, email, phone, handicap, role, club_id, is_super_user FROM users WHERE id = ?", [userId]);
+  return row("SELECT id, name, email, phone, handicap, role, club_id, is_super_user, chat_disabled FROM users WHERE id = ?", [userId]);
 }
 
 // ── Staff authorization helpers ──────────────────────────────────────────────

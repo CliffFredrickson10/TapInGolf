@@ -223,9 +223,11 @@ router.post("/admin/reports/:id/resolve", async (req, res): Promise<void> => {
     [newStatus, reviewNote, user.id, id]
   );
 
-  // Upholding a report enforces a block between the two users so they can no
-  // longer DM each other. blockedBetween() checks both directions, so a single
-  // row is enough to sever the chat either way. ON CONFLICT keeps this idempotent.
+  // Upholding a report enforces two things on the reported user:
+  //  1. A block between the two users (blockedBetween() is bidirectional, so a
+  //     single row severs the DM either way). ON CONFLICT keeps it idempotent.
+  //  2. A global chat ban — chat_disabled blocks them from starting conversations
+  //     or sending messages anywhere in the app.
   let blocked = false;
   if (action === "uphold") {
     await exec(
@@ -234,6 +236,7 @@ router.post("/admin/reports/:id/resolve", async (req, res): Promise<void> => {
        ON CONFLICT (user_id, blocked_user_id) DO NOTHING`,
       [report.reporter_id, report.reported_user_id]
     );
+    await exec("UPDATE users SET chat_disabled = 1 WHERE id = ?", [report.reported_user_id]);
     blocked = true;
   }
 

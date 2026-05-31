@@ -56426,7 +56426,7 @@ async function getUser(req) {
   const token = header.slice(7);
   const userId = verifyToken(token);
   if (!userId) return null;
-  return row("SELECT id, name, email, phone, handicap, role, club_id, is_super_user FROM users WHERE id = ?", [userId]);
+  return row("SELECT id, name, email, phone, handicap, role, club_id, is_super_user, chat_disabled FROM users WHERE id = ?", [userId]);
 }
 function isSuper(user) {
   return !!user && (user.is_super_user === 1 || user.is_super_user === true);
@@ -58761,6 +58761,9 @@ async function blockedBetween(a, b) {
   );
   return !!r;
 }
+function chatDisabled(user) {
+  return !!user && (user.chat_disabled === 1 || user.chat_disabled === true);
+}
 async function dmPartnerId(conversationId, userId) {
   const convo = await row("SELECT is_group FROM conversations WHERE id = ?", [conversationId]);
   if (!convo || convo.is_group) return null;
@@ -58847,6 +58850,10 @@ router7.post("/conversations", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  if (chatDisabled(user)) {
+    res.status(403).json({ message: "Your chat access has been disabled." });
     return;
   }
   const { member_ids, name, is_group = false } = req.body ?? {};
@@ -59124,6 +59131,10 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  if (chatDisabled(user)) {
+    res.status(403).json({ message: "Your chat access has been disabled." });
     return;
   }
   const id = parseInt(req.params.id, 10);
@@ -62822,6 +62833,7 @@ router19.post("/admin/reports/:id/resolve", async (req, res) => {
        ON CONFLICT (user_id, blocked_user_id) DO NOTHING`,
       [report.reporter_id, report.reported_user_id]
     );
+    await exec("UPDATE users SET chat_disabled = 1 WHERE id = ?", [report.reported_user_id]);
     blocked = true;
   }
   res.json({ success: true, status: newStatus, blocked });
@@ -63543,6 +63555,7 @@ async function createSchema() {
     END $$
   `);
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_slot_id INT REFERENCES portal_tee_slots(id)");
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

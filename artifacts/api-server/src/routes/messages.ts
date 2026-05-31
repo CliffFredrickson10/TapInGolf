@@ -27,6 +27,11 @@ async function blockedBetween(a: number, b: number): Promise<boolean> {
   return !!r;
 }
 
+// Helper: true if the user has been globally banned from chat (e.g. an upheld report).
+function chatDisabled(user: any): boolean {
+  return !!user && (user.chat_disabled === 1 || user.chat_disabled === true);
+}
+
 // Helper: the other member of a 1:1 (DM) conversation, or null for groups/empty.
 async function dmPartnerId(conversationId: number, userId: number): Promise<number | null> {
   const convo = await row<any>("SELECT is_group FROM conversations WHERE id = ?", [conversationId]);
@@ -122,6 +127,12 @@ router.get("/conversations", async (req, res): Promise<void> => {
 router.post("/conversations", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  // Globally chat-banned users (upheld report) cannot start conversations.
+  if (chatDisabled(user)) {
+    res.status(403).json({ message: "Your chat access has been disabled." });
+    return;
+  }
 
   const { member_ids, name, is_group = false } = req.body ?? {};
   if (!Array.isArray(member_ids) || member_ids.length === 0) {
@@ -380,6 +391,12 @@ router.get("/conversations/:id/messages", async (req, res): Promise<void> => {
 router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  // Globally chat-banned users (upheld report) cannot send any messages.
+  if (chatDisabled(user)) {
+    res.status(403).json({ message: "Your chat access has been disabled." });
+    return;
+  }
 
   const id = parseInt(req.params.id, 10);
   if (!await isMember(id, user.id)) { res.status(403).json({ message: "Forbidden" }); return; }

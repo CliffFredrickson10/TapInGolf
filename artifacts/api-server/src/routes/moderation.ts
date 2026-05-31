@@ -243,4 +243,31 @@ router.post("/admin/reports/:id/resolve", async (req, res): Promise<void> => {
   res.json({ success: true, status: newStatus, blocked });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/reports/:id/restore
+// Reverses an upheld report: lifts the reported user's global chat ban and
+// removes the block created between reporter and reported user.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/reports/:id/restore", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const report = await row<any>(
+    "SELECT id, status, reporter_id, reported_user_id FROM message_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+
+  // Lift the global chat ban on the reported user.
+  await exec("UPDATE users SET chat_disabled = 0 WHERE id = ?", [report.reported_user_id]);
+  // Remove the block this report created (between reporter and reported user).
+  await exec(
+    "DELETE FROM user_blocks WHERE user_id = ? AND blocked_user_id = ?",
+    [report.reporter_id, report.reported_user_id]
+  );
+
+  res.json({ success: true, restored: true });
+});
+
 export default router;

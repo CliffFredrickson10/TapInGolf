@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { ShieldAlert, Check, X } from "lucide-react";
+import { ShieldAlert, Check, X, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 
 interface ReportRow {
@@ -121,6 +121,19 @@ export default function StaffModeration() {
     } finally { setActing(false); }
   };
 
+  const restore = async () => {
+    if (!detail) return;
+    setActing(true);
+    try {
+      await api(`/api/admin/reports/${detail.id}/restore`, { method: "POST" });
+      toast({ title: "Chat access restored", description: detail.reported_name });
+      setDetail(null);
+      load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setActing(false); }
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -224,10 +237,19 @@ export default function StaffModeration() {
                   </DialogFooter>
                 </div>
               ) : (
-                <div className="text-sm space-y-1 pt-1 border-t">
-                  <div><span className="text-muted-foreground">Status: </span><span className="capitalize font-medium">{detail.status}</span></div>
-                  {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
-                  {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}
+                <div className="text-sm space-y-3 pt-1 border-t">
+                  <div className="space-y-1">
+                    <div><span className="text-muted-foreground">Status: </span><span className="capitalize font-medium">{detail.status}</span></div>
+                    {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
+                    {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}
+                  </div>
+                  {detail.status === "actioned" && (
+                    <DialogFooter>
+                      <Button variant="outline" onClick={restore} disabled={acting} className="gap-1.5">
+                        <RotateCcw className="h-4 w-4" />Restore chat access
+                      </Button>
+                    </DialogFooter>
+                  )}
                 </div>
               )}
             </div>

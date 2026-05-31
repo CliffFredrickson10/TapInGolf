@@ -62838,6 +62838,28 @@ router19.post("/admin/reports/:id/resolve", async (req, res) => {
   }
   res.json({ success: true, status: newStatus, blocked });
 });
+router19.post("/admin/reports/:id/restore", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row(
+    "SELECT id, status, reporter_id, reported_user_id FROM message_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  await exec("UPDATE users SET chat_disabled = 0 WHERE id = ?", [report.reported_user_id]);
+  await exec(
+    "DELETE FROM user_blocks WHERE user_id = ? AND blocked_user_id = ?",
+    [report.reporter_id, report.reported_user_id]
+  );
+  res.json({ success: true, restored: true });
+});
 var moderation_default = router19;
 
 // src/routes/index.ts

@@ -28,10 +28,18 @@ export default function RegisterScreen() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [agreed, setAgreed] = useState(false);
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
       Alert.alert("Missing fields", "Please fill in all required fields.");
+      return;
+    }
+    if (!agreed) {
+      Alert.alert(
+        "Agreement required",
+        "Please agree to the Terms of Use and Community Guidelines, including our zero-tolerance policy for objectionable content, to create an account."
+      );
       return;
     }
     setLoading(true);
@@ -116,7 +124,32 @@ export default function RegisterScreen() {
           </View>
 
           <TouchableOpacity
-            style={[styles.btn, { backgroundColor: loading ? colors.muted : colors.primary }]}
+            style={styles.agreeRow}
+            onPress={() => setAgreed(v => !v)}
+            activeOpacity={0.7}
+          >
+            <View
+              style={[
+                styles.checkbox,
+                { borderColor: agreed ? colors.primary : colors.border, backgroundColor: agreed ? colors.primary : "transparent" },
+              ]}
+            >
+              {agreed && <Ionicons name="checkmark" size={14} color="#fff" />}
+            </View>
+            <Text style={[styles.agreeText, { color: colors.mutedForeground }]}>
+              I agree to the{" "}
+              <Text
+                style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}
+                onPress={(e) => { e.stopPropagation?.(); router.push("/legal/terms"); }}
+              >
+                Terms of Use & Community Guidelines
+              </Text>
+              , including a zero-tolerance policy for objectionable content and abusive users.
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.btn, { backgroundColor: loading || !agreed ? colors.muted : colors.primary }]}
             onPress={handleRegister}
             disabled={loading}
             activeOpacity={0.85}
@@ -154,6 +187,22 @@ const styles = StyleSheet.create({
     height: 52,
   },
   input: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  agreeRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 10,
+    marginTop: 20,
+  },
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 1.5,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 1,
+  },
+  agreeText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
   btn: {
     height: 54,
     borderRadius: 14,

@@ -189,7 +189,7 @@ export function MenuDrawer({
         {
           icon: "document-text-outline",
           label: "Terms of use",
-          onPress: () => {},
+          onPress: () => { onClose(); router.push("/legal/terms"); },
         },
         {
           icon: "shield-checkmark-outline",

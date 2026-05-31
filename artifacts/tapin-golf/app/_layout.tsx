@@ -111,6 +111,7 @@ function RootLayoutNav() {
       <Stack.Screen name="notifications" options={{ headerShown: false }} />
       <Stack.Screen name="payments" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
+      <Stack.Screen name="legal/terms" options={{ headerShown: false, presentation: "modal" }} />
     </Stack>
   );
 }

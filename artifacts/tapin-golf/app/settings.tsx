@@ -505,7 +505,7 @@ export default function SettingsScreen() {
                     <Text style={[styles.settingDesc, { color: colors.mutedForeground }]}>
                       TapIn Golf collects usage data to improve the app experience, such as analytics and usage statistics. Required for use of the service.
                     </Text>
-                    <TouchableOpacity onPress={() => {}}>
+                    <TouchableOpacity onPress={() => router.push("/legal/terms")}>
                       <Text style={[styles.policyLink, { color: colors.primary }]}>Terms of Use & Privacy Policy</Text>
                     </TouchableOpacity>
                   </View>

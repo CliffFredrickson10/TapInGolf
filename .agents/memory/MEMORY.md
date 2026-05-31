@@ -1,2 +1,3 @@
 - [Staff admin authz](staff-admin-authz.md) — shared /admin/* gate on isStaff (club_admin OR super); only HNA card review is isSuper-only. Don't tighten to super-only.
 - [Tee-slot seat counts](booking-seat-counts.md) — player_count is denormalized; Stitch bookings stay pending until webhook, abandoned holds auto-released; never read seat/paid status from booking.status alone for Stitch.
+- [Test setup](test-setup.md) — vitest per artifact; club-portal needs its own vitest.config.ts (vite.config.ts throws without PORT/BASE_PATH); typecheck has pre-existing unrelated failures.

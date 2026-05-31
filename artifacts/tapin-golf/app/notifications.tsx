@@ -91,20 +91,28 @@ function NotifRow({
       style={[
         styles.row,
         {
-          backgroundColor: notif.is_read ? colors.card : colors.primary + "10",
+          backgroundColor: notif.is_read ? colors.card : colors.primaryLight,
           borderBottomColor: colors.border,
+          borderLeftWidth: notif.is_read ? 0 : 3,
+          borderLeftColor: notif.is_read ? "transparent" : colors.primary,
         },
       ]}
       onPress={() => onPress(notif)}
       activeOpacity={0.82}
     >
-      <View style={[styles.iconWrap, { backgroundColor: icon.color + "18" }]}>
+      <View style={[styles.iconWrap, { backgroundColor: icon.color + "22" }]}>
         <Ionicons name={icon.name} size={22} color={icon.color} />
       </View>
       <View style={styles.rowContent}>
         <View style={styles.rowTop}>
           <Text
-            style={[styles.rowTitle, { color: colors.foreground }]}
+            style={[
+              styles.rowTitle,
+              {
+                color: notif.is_read ? colors.foreground : colors.primary,
+                fontFamily: notif.is_read ? "Inter_600SemiBold" : "Inter_700Bold",
+              },
+            ]}
             numberOfLines={1}
           >
             {notif.title}

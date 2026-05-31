@@ -47,6 +47,7 @@ export default function GroupSettingsScreen() {
   const [addingId, setAddingId]           = useState<number | null>(null);
   const [removingId, setRemovingId]       = useState<number | null>(null);
   const [confirmRemoveId, setConfirmRemoveId] = useState<number | null>(null);
+  const [deleting, setDeleting]           = useState(false);
 
   const isAdmin = !!user && createdBy === user.id;
 
@@ -152,6 +153,32 @@ export default function GroupSettingsScreen() {
     await loadFriends();
     setFriendSearch("");
     setShowAddModal(true);
+  };
+
+  const deleteGroup = () => {
+    if (!user || !isAdmin) return;
+    Alert.alert(
+      "Delete Group",
+      `Delete "${groupName}" and all its messages? This cannot be undone.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Delete",
+          style: "destructive",
+          onPress: async () => {
+            setDeleting(true);
+            try {
+              await apiFetch(`/conversations/${id}`, user.token, { method: "DELETE" });
+              Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+              router.replace("/(tabs)/chat" as any);
+            } catch (e: any) {
+              showToast(e.message ?? "Could not delete group", true);
+              setDeleting(false);
+            }
+          },
+        },
+      ]
+    );
   };
 
   const groupInitials = groupName
@@ -274,6 +301,23 @@ export default function GroupSettingsScreen() {
             </TouchableOpacity>
           )}
         </View>
+
+        {isAdmin && (
+          <TouchableOpacity
+            style={[styles.deleteGroupBtn, { borderColor: colors.destructive + "55", backgroundColor: colors.destructive + "08" }]}
+            onPress={deleteGroup}
+            disabled={deleting}
+            activeOpacity={0.8}
+          >
+            {deleting
+              ? <ActivityIndicator size="small" color={colors.destructive} />
+              : <>
+                  <Ionicons name="trash-outline" size={18} color={colors.destructive} />
+                  <Text style={[styles.deleteGroupText, { color: colors.destructive }]}>Delete Group</Text>
+                </>
+            }
+          </TouchableOpacity>
+        )}
 
         {members.map(member => {
           const isMe = member.id === user?.id;
@@ -553,6 +597,19 @@ const styles = StyleSheet.create({
     height: 44,
   },
   modalSearchInput: { flex: 1, fontSize: 14, fontFamily: "Inter_400Regular" },
+  deleteGroupBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 4,
+    borderRadius: 12,
+    borderWidth: 1,
+    paddingVertical: 13,
+  },
+  deleteGroupText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
   friendRow: {
     flexDirection: "row",
     alignItems: "center",

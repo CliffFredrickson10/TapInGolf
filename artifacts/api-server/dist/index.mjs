@@ -58911,6 +58911,29 @@ router7.put("/conversations/:id", async (req, res) => {
   const updated = await row("SELECT * FROM conversations WHERE id = ?", [id]);
   res.json({ success: true, conversation: updated });
 });
+router7.delete("/conversations/:id", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const convo = await row("SELECT * FROM conversations WHERE id = ?", [id]);
+  if (!convo) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  if (!convo.is_group) {
+    res.status(400).json({ message: "Can only delete group conversations" });
+    return;
+  }
+  if (convo.created_by !== user.id) {
+    res.status(403).json({ message: "Only the group admin can delete this group" });
+    return;
+  }
+  await exec("DELETE FROM conversations WHERE id = ?", [id]);
+  res.json({ success: true });
+});
 router7.post("/conversations/:id/members", async (req, res) => {
   const user = await getUser(req);
   if (!user) {

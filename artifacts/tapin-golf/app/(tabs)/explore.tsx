@@ -400,7 +400,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     height: 50,
   },
-  searchInput: { flex: 1, fontSize: 15, fontFamily: "Inter_400Regular" },
+  searchInput: { flex: 1, minWidth: 0, fontSize: 15, fontFamily: "Inter_400Regular" },
   iconBtn: {
     width: 44,
     height: 44,

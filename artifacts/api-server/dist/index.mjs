@@ -62331,7 +62331,11 @@ router18.post("/admin/hna-verifications/:id/reject", async (req, res) => {
     res.status(404).json({ message: "Verification not found" });
     return;
   }
-  const note = req.body?.note ? String(req.body.note).slice(0, 500) : null;
+  const note = req.body?.note ? String(req.body.note).trim().slice(0, 500) : null;
+  if (!note) {
+    res.status(400).json({ message: "A rejection note is required" });
+    return;
+  }
   await exec(
     `UPDATE hna_verifications
         SET status = 'rejected', review_note = ?, valid_until = NULL,

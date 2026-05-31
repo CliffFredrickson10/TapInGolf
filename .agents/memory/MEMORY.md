@@ -1,1 +1,2 @@
 - [Staff admin authz](staff-admin-authz.md) — shared /admin/* gate on isStaff (club_admin OR super); only HNA card review is isSuper-only. Don't tighten to super-only.
+- [Tee-slot seat counts](booking-seat-counts.md) — player_count is denormalized; Stitch bookings stay pending until webhook, abandoned holds auto-released; never read seat/paid status from booking.status alone for Stitch.

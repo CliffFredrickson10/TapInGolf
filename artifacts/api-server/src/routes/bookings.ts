@@ -13,6 +13,30 @@ function generateRef(): string {
   return "TG" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
+// Release seats reserved by Stitch checkouts that were never completed.
+// Such bookings stay 'pending' (the webhook confirms them on payment); past a
+// short grace window they are cancelled so the slot opens back up.
+async function releaseStalePendingBookings(): Promise<void> {
+  await exec(`
+    WITH stale AS (
+      UPDATE bookings SET status = 'cancelled'
+      WHERE status = 'pending'
+        AND payment_method = 'stitch'
+        AND created_at < NOW() - INTERVAL '15 minutes'
+      RETURNING portal_slot_id, players
+    ), agg AS (
+      SELECT portal_slot_id, SUM(players)::int AS total
+      FROM stale
+      WHERE portal_slot_id IS NOT NULL
+      GROUP BY portal_slot_id
+    )
+    UPDATE portal_tee_slots pts
+    SET player_count = GREATEST(0, pts.player_count - agg.total)
+    FROM agg
+    WHERE pts.id = agg.portal_slot_id
+  `);
+}
+
 // ── Open games (portal slots with space still available) ──────────────────────
 router.get("/bookings/open", async (req, res): Promise<void> => {
   const province = String(req.query.province ?? "").trim();
@@ -237,6 +261,9 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
 router.post("/bookings", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  // Free up seats held by abandoned Stitch checkouts before checking availability
+  await releaseStalePendingBookings();
 
   const {
     tee_time_id, players = 1, split_bill = false,
@@ -494,7 +521,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
       }
     }
 
-    await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+    // Confirm immediately only for payments settled at creation (prepaid, wallet).
+    // Stitch bookings stay 'pending' until the payment webhook confirms them, so
+    // an abandoned checkout never permanently holds the slot.
+    if (payment_method !== "stitch") {
+      await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+    }
     if (appliedVoucher) {
       await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
     }
@@ -653,8 +685,8 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
 
-  const booking = await row(
-    "SELECT id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
+  const booking = await row<any>(
+    "SELECT id, players, portal_slot_id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
     [id, user.id]
   );
 
@@ -663,7 +695,16 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
     return;
   }
 
-  await run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+  await withTransaction(async (client) => {
+    await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+    // Release the seats this booking reserved so the slot opens back up
+    if (booking.portal_slot_id) {
+      await clientQuery(client,
+        "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - ?) WHERE id = ?",
+        [parseInt(booking.players, 10) || 1, booking.portal_slot_id]
+      );
+    }
+  });
   res.json({ success: true });
 });
 

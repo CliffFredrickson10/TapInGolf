@@ -57691,6 +57691,26 @@ var router4 = (0, import_express4.Router)();
 function generateRef() {
   return "TG" + crypto4.randomBytes(4).toString("hex").toUpperCase();
 }
+async function releaseStalePendingBookings() {
+  await exec(`
+    WITH stale AS (
+      UPDATE bookings SET status = 'cancelled'
+      WHERE status = 'pending'
+        AND payment_method = 'stitch'
+        AND created_at < NOW() - INTERVAL '15 minutes'
+      RETURNING portal_slot_id, players
+    ), agg AS (
+      SELECT portal_slot_id, SUM(players)::int AS total
+      FROM stale
+      WHERE portal_slot_id IS NOT NULL
+      GROUP BY portal_slot_id
+    )
+    UPDATE portal_tee_slots pts
+    SET player_count = GREATEST(0, pts.player_count - agg.total)
+    FROM agg
+    WHERE pts.id = agg.portal_slot_id
+  `);
+}
 router4.get("/bookings/open", async (req, res) => {
   const province = String(req.query.province ?? "").trim();
   const suburb = String(req.query.suburb ?? "").trim();
@@ -57895,6 +57915,7 @@ router4.post("/bookings", async (req, res) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+  await releaseStalePendingBookings();
   const {
     tee_time_id,
     players = 1,
@@ -58120,7 +58141,9 @@ router4.post("/bookings", async (req, res) => {
         );
       }
     }
-    await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+    if (payment_method !== "stitch") {
+      await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+    }
     if (appliedVoucher) {
       await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
     }
@@ -58269,14 +58292,23 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
   const booking = await row(
-    "SELECT id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
+    "SELECT id, players, portal_slot_id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
     [id, user.id]
   );
   if (!booking) {
     res.status(404).json({ message: "Booking not found or cannot be cancelled" });
     return;
   }
-  await run("UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+  await withTransaction(async (client) => {
+    await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+    if (booking.portal_slot_id) {
+      await clientQuery(
+        client,
+        "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - ?) WHERE id = ?",
+        [parseInt(booking.players, 10) || 1, booking.portal_slot_id]
+      );
+    }
+  });
   res.json({ success: true });
 });
 router4.post("/stitch/webhook", async (req, res) => {
@@ -63228,10 +63260,39 @@ async function seedData() {
   }
   if (credCount > 0) logger.info({ count: credCount }, "Club portal credentials seeded");
 }
+async function reconcileSlotPlayerCounts() {
+  await exec(
+    `UPDATE bookings SET status = 'cancelled'
+      WHERE payment_method = 'stitch'
+        AND status IN ('pending','confirmed')
+        AND created_at < NOW() - INTERVAL '15 minutes'
+        AND NOT EXISTS (
+          SELECT 1 FROM booking_players bp
+           WHERE bp.booking_id = bookings.id AND bp.paid = 1
+        )`
+  );
+  const fixed = await exec(
+    `UPDATE portal_tee_slots pts
+       SET player_count = COALESCE((
+         SELECT SUM(b.players)::int
+           FROM bookings b
+          WHERE b.portal_slot_id = pts.id
+            AND b.status <> 'cancelled'
+       ), 0)
+     WHERE pts.player_count <> COALESCE((
+         SELECT SUM(b.players)::int
+           FROM bookings b
+          WHERE b.portal_slot_id = pts.id
+            AND b.status <> 'cancelled'
+       ), 0)`
+  );
+  if (fixed > 0) logger.info({ slots: fixed }, "Reconciled tee-slot player counts");
+}
 async function migrate() {
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();
+  await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }
 

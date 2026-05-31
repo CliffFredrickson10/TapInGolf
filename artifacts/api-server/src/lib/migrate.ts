@@ -937,9 +937,45 @@ async function seedData(): Promise<void> {
   if (credCount > 0) logger.info({ count: credCount }, "Club portal credentials seeded");
 }
 
+// Recompute portal_tee_slots.player_count from active (non-cancelled) bookings.
+// Historically player_count was only ever incremented, so cancelled/abandoned
+// bookings left phantom reservations that made open slots look full.
+async function reconcileSlotPlayerCounts(): Promise<void> {
+  // Legacy cleanup: Stitch bookings used to be marked 'confirmed' at creation,
+  // before payment. Abandoned ones (no player ever paid) past the grace window
+  // are cancelled so they stop holding seats.
+  await exec(
+    `UPDATE bookings SET status = 'cancelled'
+      WHERE payment_method = 'stitch'
+        AND status IN ('pending','confirmed')
+        AND created_at < NOW() - INTERVAL '15 minutes'
+        AND NOT EXISTS (
+          SELECT 1 FROM booking_players bp
+           WHERE bp.booking_id = bookings.id AND bp.paid = 1
+        )`
+  );
+  const fixed = await exec(
+    `UPDATE portal_tee_slots pts
+       SET player_count = COALESCE((
+         SELECT SUM(b.players)::int
+           FROM bookings b
+          WHERE b.portal_slot_id = pts.id
+            AND b.status <> 'cancelled'
+       ), 0)
+     WHERE pts.player_count <> COALESCE((
+         SELECT SUM(b.players)::int
+           FROM bookings b
+          WHERE b.portal_slot_id = pts.id
+            AND b.status <> 'cancelled'
+       ), 0)`
+  );
+  if (fixed > 0) logger.info({ slots: fixed }, "Reconciled tee-slot player counts");
+}
+
 export async function migrate(): Promise<void> {
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();
+  await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

@@ -1,1 +1,2 @@
 - [app_preview screenshot port](screenshot-tool-port.md) — app_preview hits localhost:5000; Expo runs on 26107, so verify Expo UI via workflow restart + browser console logs, not screenshots.
+- [Terms / EULA acceptance](terms-acceptance.md) — terms_accepted_at gates UGC; register must server-enforce; login+register+profile must all return terms_accepted.

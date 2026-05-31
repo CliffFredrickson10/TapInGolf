@@ -27,6 +27,7 @@ export interface User {
   student_number_locked?: boolean;
   ad_free_until?: string | null;
   is_super_user?: boolean;
+  terms_accepted?: boolean;
 }
 
 interface AuthContextType {
@@ -36,6 +37,7 @@ interface AuthContextType {
   register: (name: string, email: string, password: string, phone: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
+  acceptTerms: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -133,7 +135,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, password, phone }),
+      body: JSON.stringify({ name, email, password, phone, terms_accepted: true }),
     });
     const data = await res.json();
     if (!res.ok) throw new Error(data.message || "Registration failed");
@@ -156,8 +158,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     AsyncStorage.setItem("tapin_user", JSON.stringify(updated));
   };
 
+  const acceptTerms = async () => {
+    const current = userRef.current;
+    if (!current) return;
+    const res = await fetch(`${API_BASE}/profile/accept-terms`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${current.token}` },
+    });
+    if (!res.ok) throw new Error("Could not record acceptance");
+    setUser((prev) => {
+      if (!prev) return prev;
+      const updated = { ...prev, terms_accepted: true };
+      AsyncStorage.setItem("tapin_user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser }}>
+    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, acceptTerms }}>
       {children}
     </AuthContext.Provider>
   );

@@ -194,7 +194,7 @@ export function MenuDrawer({
         {
           icon: "shield-checkmark-outline",
           label: "Privacy policy",
-          onPress: () => {},
+          onPress: () => { onClose(); router.push("/legal/privacy"); },
         },
       ],
     },

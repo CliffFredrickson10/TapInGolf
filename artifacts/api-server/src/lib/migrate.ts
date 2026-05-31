@@ -712,6 +712,10 @@ async function createSchema(): Promise<void> {
   // chat_disabled: set when a chat report is upheld — globally suspends the user's
   // ability to start conversations or send messages anywhere in the app.
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
+  // terms_accepted_at: timestamp the user agreed to the Terms of Use & Community
+  // Guidelines. New sign-ups set this at registration; existing users (NULL) are
+  // shown a one-time acceptance gate on next app launch.
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

@@ -62,15 +62,20 @@ router.post("/auth/login", async (req, res): Promise<void> => {
       hna_locked:            hna.hna_locked,
       student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
       is_super_user:         user.is_super_user === 1 || user.is_super_user === true,
+      terms_accepted:        user.terms_accepted_at != null,
       token,
     },
   });
 });
 
 router.post("/auth/register", async (req, res): Promise<void> => {
-  const { name, email, password, phone } = req.body ?? {};
+  const { name, email, password, phone, terms_accepted } = req.body ?? {};
   if (!name || !email || !password) {
     res.status(400).json({ message: "Name, email and password are required" });
+    return;
+  }
+  if (terms_accepted !== true) {
+    res.status(400).json({ message: "You must accept the Terms of Use & Community Guidelines to create an account" });
     return;
   }
 
@@ -91,7 +96,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const hash = await bcrypt.hash(String(password), 10);
   const id = await exec(
-    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
     [String(name).trim(), emailStr, hash, phone ? String(phone).trim() : null, "golfer", isSuperUser ? 1 : 0]
   );
 
@@ -183,6 +188,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       hna_locked:            hna.hna_locked,
       student_number_locked: false,
       is_super_user:         isSuperUser,
+      terms_accepted:        true,
       token,
     },
   });
@@ -225,8 +231,18 @@ router.get("/profile", async (req, res): Promise<void> => {
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
       ad_free_until: adSub ? String(adSub.expires_at) : null,
       is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true,
+      terms_accepted: fresh.terms_accepted_at != null,
     },
   });
+});
+
+// One-time acceptance of the Terms of Use & Community Guidelines. Used by the
+// launch-time gate shown to users who registered before terms acceptance existed.
+router.post("/profile/accept-terms", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+  await exec("UPDATE users SET terms_accepted_at = NOW() WHERE id = ? AND terms_accepted_at IS NULL", [user.id]);
+  res.json({ success: true });
 });
 
 router.put("/profile", async (req, res): Promise<void> => {

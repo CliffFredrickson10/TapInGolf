@@ -16,6 +16,7 @@ import { KeyboardProvider } from "react-native-keyboard-controller";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { TermsGate } from "@/components/TermsGate";
 import { AuthProvider } from "@/context/AuthContext";
 // Import geofencing so the background task is registered at app startup
 import "@/lib/geofencing";
@@ -112,6 +113,7 @@ function RootLayoutNav() {
       <Stack.Screen name="payments" options={{ headerShown: false }} />
       <Stack.Screen name="settings" options={{ headerShown: false }} />
       <Stack.Screen name="legal/terms" options={{ headerShown: false, presentation: "modal" }} />
+      <Stack.Screen name="legal/privacy" options={{ headerShown: false, presentation: "modal" }} />
     </Stack>
   );
 }
@@ -141,6 +143,7 @@ export default function RootLayout() {
             <KeyboardProvider>
               <AuthProvider>
                 <RootLayoutNav />
+                <TermsGate />
               </AuthProvider>
             </KeyboardProvider>
           </GestureHandlerRootView>

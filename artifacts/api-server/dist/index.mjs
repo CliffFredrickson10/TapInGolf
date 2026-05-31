@@ -56696,14 +56696,19 @@ router2.post("/auth/login", async (req, res) => {
       hna_locked: hna.hna_locked,
       student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
       is_super_user: user.is_super_user === 1 || user.is_super_user === true,
+      terms_accepted: user.terms_accepted_at != null,
       token
     }
   });
 });
 router2.post("/auth/register", async (req, res) => {
-  const { name, email, password, phone } = req.body ?? {};
+  const { name, email, password, phone, terms_accepted } = req.body ?? {};
   if (!name || !email || !password) {
     res.status(400).json({ message: "Name, email and password are required" });
+    return;
+  }
+  if (terms_accepted !== true) {
+    res.status(400).json({ message: "You must accept the Terms of Use & Community Guidelines to create an account" });
     return;
   }
   const emailStr = String(email).trim().toLowerCase();
@@ -56720,7 +56725,7 @@ router2.post("/auth/register", async (req, res) => {
   const isSuperUser = SUPER_USER_EMAILS.includes(emailStr);
   const hash2 = await bcryptjs_default.hash(String(password), 10);
   const id = await exec(
-    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user) VALUES (?, ?, ?, ?, ?, ?)",
+    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
     [String(name).trim(), emailStr, hash2, phone ? String(phone).trim() : null, "golfer", isSuperUser ? 1 : 0]
   );
   const pendingInvites = await query(
@@ -56813,6 +56818,7 @@ router2.post("/auth/register", async (req, res) => {
       hna_locked: hna.hna_locked,
       student_number_locked: false,
       is_super_user: isSuperUser,
+      terms_accepted: true,
       token
     }
   });
@@ -56856,9 +56862,19 @@ router2.get("/profile", async (req, res) => {
       hna_locked: hna.hna_locked,
       student_number_locked: fresh.student_number_locked === 1 || fresh.student_number_locked === true,
       ad_free_until: adSub ? String(adSub.expires_at) : null,
-      is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true
+      is_super_user: fresh.is_super_user === 1 || fresh.is_super_user === true,
+      terms_accepted: fresh.terms_accepted_at != null
     }
   });
+});
+router2.post("/profile/accept-terms", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  await exec("UPDATE users SET terms_accepted_at = NOW() WHERE id = ? AND terms_accepted_at IS NULL", [user.id]);
+  res.json({ success: true });
 });
 router2.put("/profile", async (req, res) => {
   const user = await getUser(req);
@@ -63578,6 +63594,7 @@ async function createSchema() {
   `);
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_slot_id INT REFERENCES portal_tee_slots(id)");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

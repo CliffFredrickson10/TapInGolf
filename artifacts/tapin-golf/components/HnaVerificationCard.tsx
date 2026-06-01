@@ -123,12 +123,17 @@ export default function HnaVerificationCard({
 
   // Already verified — show a green confirmation card.
   if (status?.hna_verified) {
-    const bySource =
-      status.hna_verified_source === "club"
-        ? status.hna_verified_club_name
-          ? `Verified by ${status.hna_verified_club_name}`
-          : "Verified by your club"
-        : "Verified by TapIn";
+    const isClubSource = status.hna_verified_source === "club";
+    const verifierLine = isClubSource
+      ? status.hna_verified_club_name
+        ? `Verified by ${status.hna_verified_club_name}`
+        : "Verified by your club"
+      : "Verified by TapIn";
+    const tapinClubLine =
+      !isClubSource && status.hna_verified_club_name
+        ? `Home Club: ${status.hna_verified_club_name}`
+        : null;
+
     return (
       <View style={[styles.card, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
         <View style={styles.headerRow}>
@@ -137,9 +142,12 @@ export default function HnaVerificationCard({
         </View>
         <Text style={[styles.numberText, { color: colors.foreground }]}>{status.hna_number || "—"}</Text>
         <Text style={[styles.muted, { color: colors.mutedForeground }]}>
-          {bySource}
+          {verifierLine}
           {status.hna_valid_until ? ` · valid until ${fmtDate(status.hna_valid_until)}` : ""}
         </Text>
+        {tapinClubLine ? (
+          <Text style={[styles.muted, { color: colors.mutedForeground }]}>{tapinClubLine}</Text>
+        ) : null}
       </View>
     );
   }

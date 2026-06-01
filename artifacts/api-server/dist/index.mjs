@@ -63335,22 +63335,10 @@ router18.post("/hna/verification", async (req, res) => {
   }
   await exec("UPDATE users SET hna_number = ? WHERE id = ?", [num, user.id]);
   await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
-  const clubRow = await row(
-    `SELECT c.name AS club_name
-       FROM club_members cm
-       JOIN clubs c ON c.id = cm.club_id
-      WHERE cm.user_id = ?
-        AND cm.status = 'active'
-        AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
-      ORDER BY cm.renewal_date DESC NULLS LAST
-      LIMIT 1`,
-    [user.id]
-  ).catch(() => null);
-  const clubName = clubRow?.club_name ?? null;
   const result = await exec(
-    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status, club_name)
-     VALUES (?, ?, ?, 'pending', ?)`,
-    [user.id, num, card_image, clubName]
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
+     VALUES (?, ?, ?, 'pending')`,
+    [user.id, num, card_image]
   );
   res.status(201).json({ success: true, id: result.insertId, status: "pending" });
 });
@@ -63436,21 +63424,7 @@ router18.post("/admin/hna-verifications/:id/approve", async (req, res) => {
     res.status(400).json({ message: "valid_until must be YYYY-MM-DD" });
     return;
   }
-  let clubName = v.club_name ?? null;
-  if (!clubName) {
-    const clubRow = await row(
-      `SELECT c.name AS club_name
-         FROM club_members cm
-         JOIN clubs c ON c.id = cm.club_id
-        WHERE cm.user_id = ?
-          AND cm.status = 'active'
-          AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
-        ORDER BY cm.renewal_date DESC NULLS LAST
-        LIMIT 1`,
-      [v.user_id]
-    ).catch(() => null);
-    clubName = clubRow?.club_name ?? null;
-  }
+  const clubName = req.body?.club_name ? String(req.body.club_name).trim().slice(0, 255) || null : v.club_name ?? null;
   await exec(
     `UPDATE hna_verifications
         SET status = 'approved', review_note = NULL, valid_until = ?,

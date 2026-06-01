@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useHnaPending } from "@/context/HnaPendingContext";
@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { IdCard, Check, X, RotateCcw } from "lucide-react";
+import { IdCard, Check, X, RotateCcw, Search } from "lucide-react";
 import { format } from "date-fns";
 
 interface VerificationRow {
@@ -21,6 +21,7 @@ interface VerificationRow {
 interface VerificationDetail extends VerificationRow {
   card_image: string | null; handicap: number | null;
 }
+interface ClubOption { id: number; name: string; location: string | null; }
 
 const STATUSES = [
   { value: "pending", label: "Pending" },
@@ -38,6 +39,101 @@ const statusBadge = (s: string) => {
   return map[s] ?? "bg-gray-100 text-gray-600";
 };
 
+function ClubSearch({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (name: string) => void;
+}) {
+  const [query, setQuery] = useState(value);
+  const [results, setResults] = useState<ClubOption[]>([]);
+  const [open, setOpen] = useState(false);
+  const [searching, setSearching] = useState(false);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (value === "") setQuery("");
+  }, [value]);
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const q = query.trim();
+    if (!q || q === value) { setResults([]); setOpen(false); return; }
+    timerRef.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api<{ clubs: ClubOption[] }>(`/api/clubs?q=${encodeURIComponent(q)}&limit=8`);
+        setResults(data.clubs ?? []);
+        setOpen(true);
+      } catch { setResults([]); }
+      finally { setSearching(false); }
+    }, 280);
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [query]);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const select = (club: ClubOption) => {
+    setQuery(club.name);
+    setOpen(false);
+    onChange(club.name);
+  };
+
+  const clear = () => {
+    setQuery("");
+    setOpen(false);
+    onChange("");
+  };
+
+  return (
+    <div ref={wrapperRef} className="relative">
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+        <Input
+          value={query}
+          onChange={e => { setQuery(e.target.value); if (value) onChange(""); }}
+          placeholder="Search clubs by name…"
+          className="pl-8 pr-8 text-sm"
+        />
+        {(query || value) && (
+          <button
+            onClick={clear}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+          ><X className="h-3.5 w-3.5" /></button>
+        )}
+      </div>
+      {open && results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
+          {searching && <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>}
+          {results.map(c => (
+            <button
+              key={c.id}
+              onMouseDown={() => select(c)}
+              className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
+            >
+              <span className="font-medium">{c.name}</span>
+              {c.location && <span className="text-xs text-muted-foreground">{c.location}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      {value && (
+        <p className="mt-1 text-xs text-[#1a5c38] font-medium">✓ {value}</p>
+      )}
+    </div>
+  );
+}
+
 export default function StaffHnaReview() {
   const { toast } = useToast();
   const { refresh: refreshPending } = useHnaPending();
@@ -48,6 +144,7 @@ export default function StaffHnaReview() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [validUntil, setValidUntil] = useState("");
   const [note, setNote] = useState("");
+  const [clubName, setClubName] = useState("");
   const [acting, setActing] = useState(false);
 
   const load = useCallback(async () => {
@@ -63,7 +160,7 @@ export default function StaffHnaReview() {
 
   const openDetail = async (id: number) => {
     setDetailLoading(true);
-    setValidUntil(""); setNote("");
+    setValidUntil(""); setNote(""); setClubName("");
     try {
       const data = await api<{ verification: VerificationDetail }>(`/api/admin/hna-verifications/${id}`);
       setDetail(data.verification);
@@ -78,7 +175,7 @@ export default function StaffHnaReview() {
     try {
       await api(`/api/admin/hna-verifications/${detail.id}/approve`, {
         method: "POST",
-        body: JSON.stringify({ valid_until: validUntil || null }),
+        body: JSON.stringify({ valid_until: validUntil || null, club_name: clubName || null }),
       });
       toast({ title: "Approved", description: detail.user_name });
       setDetail(null);
@@ -185,10 +282,6 @@ export default function StaffHnaReview() {
                 <div><div className="text-muted-foreground text-xs">Email</div><div>{detail.user_email}</div></div>
                 <div><div className="text-muted-foreground text-xs">HNA Number</div><div className="font-mono">{detail.hna_number}</div></div>
                 <div><div className="text-muted-foreground text-xs">Handicap</div><div>{detail.handicap ?? "—"}</div></div>
-                <div className="col-span-2">
-                  <div className="text-muted-foreground text-xs">Club</div>
-                  <div className="font-medium">{detail.club_name ?? <span className="text-muted-foreground italic">No club membership found</span>}</div>
-                </div>
               </div>
 
               {detail.card_image ? (
@@ -202,6 +295,11 @@ export default function StaffHnaReview() {
 
               {detail.status === "pending" ? (
                 <div className="space-y-3 pt-1 border-t">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Associated Club (optional)</Label>
+                    <p className="text-xs text-muted-foreground -mt-0.5">Search and link the club that this HNA number belongs to.</p>
+                    <ClubSearch value={clubName} onChange={setClubName} />
+                  </div>
                   <div className="space-y-1.5">
                     <Label className="text-xs">Valid until (optional — leave blank for no expiry)</Label>
                     <Input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)} />
@@ -219,6 +317,7 @@ export default function StaffHnaReview() {
                 <div className="space-y-3 pt-1 border-t">
                   <div className="text-sm space-y-1">
                     <div><span className="text-muted-foreground">Status: </span><span className="capitalize font-medium">{detail.status}</span></div>
+                    {detail.club_name && <div><span className="text-muted-foreground">Club: </span><span className="font-medium">{detail.club_name}</span></div>}
                     {detail.valid_until && <div><span className="text-muted-foreground">Valid until: </span>{format(new Date(detail.valid_until), "dd MMM yyyy")}</div>}
                     {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
                     {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}

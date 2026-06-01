@@ -78,24 +78,10 @@ router.post("/hna/verification", async (req, res): Promise<void> => {
   // Only one open (pending) submission at a time — supersede any earlier pending one.
   await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
 
-  // Auto-populate the golfer's home club from their active club membership (if any).
-  const clubRow = await row<any>(
-    `SELECT c.name AS club_name
-       FROM club_members cm
-       JOIN clubs c ON c.id = cm.club_id
-      WHERE cm.user_id = ?
-        AND cm.status = 'active'
-        AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
-      ORDER BY cm.renewal_date DESC NULLS LAST
-      LIMIT 1`,
-    [user.id]
-  ).catch(() => null);
-  const clubName: string | null = clubRow?.club_name ?? null;
-
   const result = await exec(
-    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status, club_name)
-     VALUES (?, ?, ?, 'pending', ?)`,
-    [user.id, num, card_image, clubName]
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
+     VALUES (?, ?, ?, 'pending')`,
+    [user.id, num, card_image]
   );
 
   res.status(201).json({ success: true, id: (result as any).insertId, status: "pending" });
@@ -192,22 +178,11 @@ router.post("/admin/hna-verifications/:id/approve", async (req, res): Promise<vo
     return;
   }
 
-  // If club_name wasn't captured at submission time, try to look it up now.
-  let clubName: string | null = v.club_name ?? null;
-  if (!clubName) {
-    const clubRow = await row<any>(
-      `SELECT c.name AS club_name
-         FROM club_members cm
-         JOIN clubs c ON c.id = cm.club_id
-        WHERE cm.user_id = ?
-          AND cm.status = 'active'
-          AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
-        ORDER BY cm.renewal_date DESC NULLS LAST
-        LIMIT 1`,
-      [v.user_id]
-    ).catch(() => null);
-    clubName = clubRow?.club_name ?? null;
-  }
+  // club_name is supplied by the reviewer from the portal's club search.
+  // It is optional: some HNA numbers may belong to clubs not yet in the DB.
+  const clubName: string | null = req.body?.club_name
+    ? String(req.body.club_name).trim().slice(0, 255) || null
+    : (v.club_name ?? null);
 
   await exec(
     `UPDATE hna_verifications

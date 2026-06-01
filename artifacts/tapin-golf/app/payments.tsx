@@ -128,6 +128,7 @@ export default function PaymentsScreen() {
 
   // Delete confirmation
   const [deletingId, setDeletingId] = useState<number | null>(null);
+  const [vatPct, setVatPct] = useState(15);
 
   const load = useCallback(async () => {
     if (!user) return;
@@ -147,6 +148,10 @@ export default function PaymentsScreen() {
   useEffect(() => {
     load().finally(() => setLoading(false));
   }, [load]);
+
+  useEffect(() => {
+    apiFetch("/settings").then((d) => { if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct)); }).catch(() => {});
+  }, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -565,6 +570,9 @@ export default function PaymentsScreen() {
                         </View>
                         <View style={{ alignItems: "flex-end", gap: 4 }}>
                           <Text style={[styles.txAmount, { color: colors.foreground }]}>{fmtAmount(tx.my_amount)}</Text>
+                          <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>
+                            incl. VAT R{(tx.my_amount * vatPct / (100 + vatPct)).toFixed(2)}
+                          </Text>
                           <View style={[styles.statusBadge, { backgroundColor: statusColor + "22" }]}>
                             <Text style={[styles.statusText, { color: statusColor }]}>{tx.status}</Text>
                           </View>

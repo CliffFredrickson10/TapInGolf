@@ -82,11 +82,13 @@ function fmtTier(t: string | null | undefined) {
   return t ? (TIER_LABELS[t] ?? t) : "Standard";
 }
 
-function generateInvoiceHTML(b: Payment, clubName: string): string {
+function generateInvoiceHTML(b: Payment, clubName: string, vatPct: number): string {
   const hasCart = b.cart_fee > 0;
   // Use my_amount (what this user was charged) as the invoice total.
   // Derive green fee: my_amount minus cart hire plus any discount already applied.
-  const greenFee = b.my_amount - b.cart_fee + b.discount_amount;
+  const greenFee  = b.my_amount - b.cart_fee + b.discount_amount;
+  const vatAmount = Math.round(b.my_amount * vatPct / (100 + vatPct) * 100) / 100;
+  const exclVat   = Math.round((b.my_amount - vatAmount) * 100) / 100;
 
   const statusBg = b.status === "confirmed" || b.status === "completed"
     ? "background:#dcfce7;color:#166534"
@@ -183,8 +185,16 @@ function generateInvoiceHTML(b: Payment, clubName: string): string {
           </tr>` : ""}
         </tbody>
         <tfoot>
+          <tr>
+            <td style="padding:8px 10px 2px;color:#6b7280;font-size:13px">Subtotal (excl. VAT)</td>
+            <td style="padding:8px 10px 2px;text-align:right;color:#6b7280;font-size:13px">R ${exclVat.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 10px 10px;color:#6b7280;font-size:13px">VAT (${vatPct}%)</td>
+            <td style="padding:2px 10px 10px;text-align:right;color:#6b7280;font-size:13px">R ${vatAmount.toFixed(2)}</td>
+          </tr>
           <tr style="background:#f0fdf4">
-            <td style="padding:14px 10px;font-weight:700;font-size:16px;border-top:2px solid #bbf7d0">Total Charged</td>
+            <td style="padding:14px 10px;font-weight:700;font-size:16px;border-top:2px solid #bbf7d0">Total (incl. VAT)</td>
             <td style="padding:14px 10px;font-weight:800;font-size:20px;text-align:right;color:#1a5c38;border-top:2px solid #bbf7d0">R ${b.my_amount.toFixed(2)}</td>
           </tr>
         </tfoot>
@@ -207,8 +217,8 @@ function generateInvoiceHTML(b: Payment, clubName: string): string {
 </html>`;
 }
 
-function downloadInvoice(b: Payment, clubName: string) {
-  const html = generateInvoiceHTML(b, clubName);
+function downloadInvoice(b: Payment, clubName: string, vatPct: number) {
+  const html = generateInvoiceHTML(b, clubName, vatPct);
   const w = window.open("", "_blank");
   if (!w) { alert("Please allow pop-ups to download invoices."); return; }
   w.document.write(html);
@@ -225,6 +235,7 @@ export default function Payments() {
   const [loading, setLoading]   = useState(true);
   const [selected, setSelected] = useState<Payment | null>(null);
   const [resending, setResending] = useState(false);
+  const [vatPct, setVatPct]     = useState(15);
 
   const [search, setSearch]         = useState("");
   const [statusFilter, setStatus]   = useState("all");
@@ -294,6 +305,9 @@ export default function Payments() {
   };
 
   useEffect(() => { load(); }, [statusFilter, fromDate, toDate]);
+  useEffect(() => {
+    api<{ vat_pct: number }>("/api/settings").then(d => setVatPct(d.vat_pct ?? 15)).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     let list = payments;
@@ -641,10 +655,26 @@ export default function Payments() {
                             <span className="font-medium">−{fmtRand(selected.discount_amount)}</span>
                           </div>
                         )}
-                        <div className="flex justify-between font-bold text-base pt-2 border-t">
-                          <span>Total Charged</span>
-                          <span className="text-[#1a5c38]">{fmtRand(selected.my_amount)}</span>
-                        </div>
+                        {(() => {
+                          const vat  = Math.round(selected.my_amount * vatPct / (100 + vatPct) * 100) / 100;
+                          const excl = Math.round((selected.my_amount - vat) * 100) / 100;
+                          return (
+                            <>
+                              <div className="flex justify-between text-muted-foreground text-xs pt-2 border-t">
+                                <span>Subtotal (excl. VAT)</span>
+                                <span>{fmtRand(excl)}</span>
+                              </div>
+                              <div className="flex justify-between text-muted-foreground text-xs">
+                                <span>VAT ({vatPct}%)</span>
+                                <span>{fmtRand(vat)}</span>
+                              </div>
+                              <div className="flex justify-between font-bold text-base pt-1 border-t">
+                                <span>Total (incl. VAT)</span>
+                                <span className="text-[#1a5c38]">{fmtRand(selected.my_amount)}</span>
+                              </div>
+                            </>
+                          );
+                        })()}
                       </>
                     );
                   })()}
@@ -655,7 +685,7 @@ export default function Payments() {
               <div className="flex gap-3 pt-2">
                 <Button
                   className="flex-1 gap-2 bg-[#1a5c38] hover:bg-[#154d30]"
-                  onClick={() => downloadInvoice(selected, club?.name ?? "TapIn Golf")}
+                  onClick={() => downloadInvoice(selected, club?.name ?? "TapIn Golf", vatPct)}
                 >
                   <Download className="h-4 w-4" />
                   Download Invoice

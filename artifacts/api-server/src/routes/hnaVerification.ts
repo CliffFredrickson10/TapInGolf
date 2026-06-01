@@ -3,6 +3,7 @@ import { query, row, exec } from "../lib/pg";
 import { getUser, isSuper } from "../lib/auth";
 import { getHnaStatus } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
+import { saveUserNotification } from "../lib/userNotifications";
 
 const router: IRouter = Router();
 
@@ -218,17 +219,17 @@ router.post("/admin/hna-verifications/:id/approve", async (req, res): Promise<vo
   // Lock the approved number onto the golfer's profile so their HNA reads verified.
   await exec("UPDATE users SET hna_number = ? WHERE id = ?", [v.hna_number, v.user_id]);
 
+  const approveTitle = "HNA Verified ✅";
+  const approveBody  = validUntil
+    ? `Your SA Player ID has been verified by TapIn (valid until ${validUntil}). You now get affiliated-visitor rates.`
+    : `Your SA Player ID has been verified by TapIn. You now get affiliated-visitor rates.`;
+  const approveData  = { type: "hna_verification_update", status: "approved" };
+
+  saveUserNotification(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
+
   const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{
-      to:    target.push_token,
-      sound: "default",
-      title: "HNA Verified ✅",
-      body:  validUntil
-        ? `Your SA Player ID has been verified by TapIn (valid until ${validUntil}). You now get affiliated-visitor rates.`
-        : `Your SA Player ID has been verified by TapIn. You now get affiliated-visitor rates.`,
-      data:  { type: "hna_verification_update", status: "approved" },
-    }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
   }
 
   res.json({ success: true, status: "approved" });
@@ -259,17 +260,17 @@ router.post("/admin/hna-verifications/:id/reject", async (req, res): Promise<voi
     [note, user.id, id]
   );
 
+  const rejectTitle = "HNA Verification Update";
+  const rejectBody  = note
+    ? `Your HNA card could not be verified: ${note}. Please submit a clearer photo.`
+    : `Your HNA card could not be verified. Please submit a clearer photo of your SA Player ID.`;
+  const rejectData  = { type: "hna_verification_update", status: "rejected" };
+
+  saveUserNotification(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
+
   const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{
-      to:    target.push_token,
-      sound: "default",
-      title: "HNA Verification Update",
-      body:  note
-        ? `Your HNA card could not be verified: ${note}. You can submit a clearer photo.`
-        : `Your HNA card could not be verified. Please submit a clearer photo of your SA Player ID.`,
-      data:  { type: "hna_verification_update", status: "rejected" },
-    }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
   }
 
   res.json({ success: true, status: "rejected" });
@@ -301,15 +302,15 @@ router.post("/admin/hna-verifications/:id/reset", async (req, res): Promise<void
     [id]
   );
 
+  const resetTitle = "HNA Verification Update";
+  const resetBody  = "Your HNA card is under review again. You'll be notified once it's finalised.";
+  const resetData  = { type: "hna_verification_update", status: "pending" };
+
+  saveUserNotification(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
+
   const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{
-      to:    target.push_token,
-      sound: "default",
-      title: "HNA Verification Update",
-      body:  "Your HNA card is under review again. You'll be notified once it's finalised.",
-      data:  { type: "hna_verification_update", status: "pending" },
-    }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
   }
 
   res.json({ success: true, status: "pending" });
@@ -334,15 +335,15 @@ router.delete("/admin/hna-verifications/:id", async (req, res): Promise<void> =>
   // Clear the HNA number from their profile so they can submit fresh.
   await exec("UPDATE users SET hna_number = NULL WHERE id = ?", [v.user_id]);
 
+  const deleteTitle = "HNA Verification Reset";
+  const deleteBody  = "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.";
+  const deleteData  = { type: "hna_verification_update", status: "deleted" };
+
+  saveUserNotification(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
+
   const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{
-      to:    target.push_token,
-      sound: "default",
-      title: "HNA Verification Reset",
-      body:  "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.",
-      data:  { type: "hna_verification_update", status: "deleted" },
-    }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
   }
 
   res.json({ success: true, deleted: true });

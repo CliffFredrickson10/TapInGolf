@@ -1,1 +1,2 @@
 - [Portal auth vs user auth](portal-auth.md) — portal uses club tokens (not HMAC user tokens); admin voucher routes must use requireClubAuth from lib/portalAuth.ts
+- [Architect includeGitDiff fails in sandbox](architect-gitdiff-sandbox.md) — never use includeGitDiff:true when calling architect from code_execution; capture diff via bash and pass inline instead

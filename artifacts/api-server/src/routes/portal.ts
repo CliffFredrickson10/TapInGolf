@@ -1029,7 +1029,7 @@ router.get("/portal/payments", requireClubAuth, async (req: Request, res: Respon
                 'name',  COALESCE(pu.name, bp.guest_name, 'Guest'),
                 'email', pu.email,
                 'amount', COALESCE(bp.amount, 0),
-                'paid', CASE WHEN bp.paid = 1 OR bp.paid IS TRUE THEN true ELSE false END
+                'paid', CASE WHEN bp.paid = 1 THEN true ELSE false END
              ) ORDER BY bp.id)
               FROM booking_players bp
               LEFT JOIN users pu ON bp.user_id = pu.id

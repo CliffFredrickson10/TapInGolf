@@ -21,13 +21,13 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/profile", label: "Club Profile", icon: Building2 },
   { href: "/tee-times", label: "Tee Schedule", icon: CalendarDays },
+  { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/reviews", label: "Reviews", icon: Star },
   { href: "/ads", label: "Advertisements", icon: Megaphone },
   { href: "/events", label: "Events", icon: Calendar },
   { href: "/members", label: "Members", icon: Users },
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign },
   { href: "/vouchers", label: "Vouchers", icon: Ticket },
-  { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 

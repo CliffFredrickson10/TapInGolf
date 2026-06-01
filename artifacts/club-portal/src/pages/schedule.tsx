@@ -1351,7 +1351,7 @@ export default function Schedule() {
                         <span className="font-medium">
                           {tt.promotional_price
                             ? <span>R{tt.promotional_price}</span>
-                            : <span className="text-muted-foreground italic text-[11px]">Tier pricing</span>}
+                            : <span className="text-green-600 italic text-[11px]">Click to block slot</span>}
                         </span>
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}

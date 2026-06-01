@@ -108,16 +108,22 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
 
 const STATUS_BADGE: Record<string, string> = {
   confirmed: "bg-green-100 text-green-700 border-green-200",
-  pending: "bg-amber-100 text-amber-700 border-amber-200",
+  pending: "bg-yellow-100 text-yellow-700 border-yellow-300",
   cancelled: "bg-red-100 text-red-600 border-red-200",
   completed: "bg-blue-100 text-blue-700 border-blue-200",
+};
+const STATUS_LABEL: Record<string, string> = {
+  confirmed: "Confirmed",
+  pending: "Pending Payment",
+  cancelled: "Cancelled",
+  completed: "Completed",
 };
 const CELL_BG: Record<string, string> = {
   open: "bg-green-50 text-green-700",
   unavailable: "bg-red-50 text-red-500",
   na: "bg-gray-50 text-gray-300",
   confirmed: "bg-green-100 text-green-800",
-  pending: "bg-amber-50 text-amber-800",
+  pending: "bg-yellow-50 text-yellow-900 ring-1 ring-inset ring-yellow-300",
   cancelled: "bg-red-50 text-red-400 line-through",
   completed: "bg-blue-50 text-blue-700",
 };
@@ -1204,7 +1210,7 @@ export default function Schedule() {
       <div className="px-8 pb-3 flex items-center gap-4 text-xs text-muted-foreground flex-shrink-0">
         {[
           { color: "bg-green-100 border-green-200", label: "Confirmed" },
-          { color: "bg-amber-100 border-amber-200", label: "Pending" },
+          { color: "bg-yellow-50 border-yellow-300 ring-1 ring-yellow-300", label: "Pending Payment" },
           { color: "bg-green-50 border-green-200",  label: "Open" },
           { color: "bg-red-50 border-red-200",       label: "Unavailable" },
           { color: "bg-gray-100 border-gray-200",    label: "N/A" },
@@ -1293,16 +1299,19 @@ export default function Schedule() {
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
                       {slot.kind === "booked" && slot.playerIndex === 0 && (
-                        <span className="font-medium truncate leading-tight">
-                          {slot.booking.player_names?.[0] ?? slot.booking.guest_name}
-                          <span className={`ml-1 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.booking.status] ?? ""}`}>
-                            {slot.booking.status}
+                        <span className="font-medium truncate leading-tight flex items-center gap-1 flex-wrap">
+                          <span className="truncate">{slot.booking.player_names?.[0] ?? slot.booking.guest_name}</span>
+                          <span className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.booking.status] ?? ""}`}>
+                            {STATUS_LABEL[slot.booking.status] ?? slot.booking.status}
                           </span>
                         </span>
                       )}
                       {slot.kind === "booked" && slot.playerIndex > 0 && (
-                        <span className="truncate opacity-70 italic text-[11px]">
-                          {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
+                        <span className="truncate italic text-[11px] flex items-center gap-1">
+                          <span className="truncate opacity-70">{slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}</span>
+                          {slot.booking.status === "pending" && (
+                            <span className="flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold bg-yellow-100 text-yellow-700 border-yellow-300">!</span>
+                          )}
                         </span>
                       )}
                     </div>

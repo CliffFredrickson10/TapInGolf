@@ -8,6 +8,11 @@ import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
+// Version of the Privacy Policy currently in force (matches the Effective date shown
+// in the mobile app's Privacy Policy screen). Stored against each user at sign-up so
+// we have an auditable record of what they consented to (POPIA).
+const PRIVACY_POLICY_VERSION = "2026-05-31";
+
 // pg driver returns DATE columns as JS Date objects; String() gives "Fri Jan 29 …"
 // Use toISOString() when available so we always get "YYYY-MM-DD".
 const fmtDate = (d: unknown): string | null => {
@@ -86,6 +91,17 @@ router.post("/auth/register", async (req, res): Promise<void> => {
     return;
   }
 
+  // Validate + normalise phone to E.164 if one was supplied (POPIA data quality —
+  // reject arbitrary strings rather than storing them). Phone remains optional.
+  let normalizedPhone: string | null = null;
+  if (phone && String(phone).trim() !== "") {
+    normalizedPhone = normalizePhone(String(phone));
+    if (!normalizedPhone) {
+      res.status(400).json({ message: "Enter a valid South African phone number (e.g. 082 123 4567)" });
+      return;
+    }
+  }
+
   const existing = await row("SELECT id FROM users WHERE email = ?", [emailStr]);
   if (existing) {
     res.status(409).json({ message: "An account with this email already exists" });
@@ -97,8 +113,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
 
   const hash = await bcrypt.hash(String(password), 10);
   const id = await exec(
-    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
-    [String(name).trim(), emailStr, hash, phone ? String(phone).trim() : null, "golfer", isSuperUser ? 1 : 0]
+    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at, privacy_accepted_at, privacy_policy_version) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)",
+    [String(name).trim(), emailStr, hash, normalizedPhone, "golfer", isSuperUser ? 1 : 0, PRIVACY_POLICY_VERSION]
   );
 
   // Auto-create friendships from any pending invitations sent to this email
@@ -173,7 +189,7 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       id,
       name:                  String(name).trim(),
       email:                 emailStr,
-      phone:                 phone ?? null,
+      phone:                 normalizedPhone,
       handicap:              null,
       role:                  "golfer",
       club_id:               null,
@@ -254,6 +270,16 @@ router.put("/profile", async (req, res): Promise<void> => {
 
   const { name, phone, handicap, gender, date_of_birth, home_province, hna_number, student_number, email, password } = req.body ?? {};
 
+  // Validate + normalise phone to E.164 if one was supplied (POPIA data quality).
+  // Phone remains optional; clearing it stores NULL.
+  let normalizedPhone: string | null = null;
+  if (phone && String(phone).trim() !== "") {
+    normalizedPhone = normalizePhone(String(phone));
+    if (!normalizedPhone) {
+      res.status(400).json({ message: "Enter a valid South African phone number (e.g. 082 123 4567)" }); return;
+    }
+  }
+
   // Email change — validate + uniqueness check
   if (email && String(email).trim().toLowerCase() !== user.email) {
     const emailStr = String(email).trim().toLowerCase();
@@ -310,7 +336,7 @@ router.put("/profile", async (req, res): Promise<void> => {
      WHERE id = ?`,
     [
       name ?? user.name,
-      phone || null,
+      normalizedPhone,
       handicap ?? null,
       gender || null,
       date_of_birth || null,

@@ -35447,7 +35447,17 @@ var init_logger = __esm({
       redact: [
         "req.headers.authorization",
         "req.headers.cookie",
-        "res.headers['set-cookie']"
+        "res.headers['set-cookie']",
+        // Defense-in-depth: never emit personal data / secrets even if an object
+        // carrying these keys is passed to the logger.
+        "phone",
+        "*.phone",
+        "otp",
+        "*.otp",
+        "password",
+        "*.password",
+        "password_hash",
+        "*.password_hash"
       ],
       ...isProduction ? {} : {
         transport: {
@@ -56545,6 +56555,13 @@ function hashOTP(otp) {
 function generateResetToken() {
   return crypto3.randomBytes(32).toString("hex");
 }
+function normalizePhone(raw) {
+  const digits = raw.replace(/\D/g, "");
+  if (digits.startsWith("27") && digits.length === 11) return `+${digits}`;
+  if (digits.startsWith("0") && digits.length === 10) return `+27${digits.slice(1)}`;
+  if (digits.length === 9) return `+27${digits}`;
+  return null;
+}
 var SMTP_HOST = () => process.env["SMTP_HOST"] ?? "";
 var SMTP_PORT = () => parseInt(process.env["SMTP_PORT"] ?? "587", 10);
 var SMTP_USER = () => process.env["SMTP_USER"] ?? "";
@@ -56770,6 +56787,7 @@ TapIn Golf \u2014 tapingolf.co.za`;
 // src/routes/auth.ts
 init_logger();
 var router2 = (0, import_express2.Router)();
+var PRIVACY_POLICY_VERSION = "2026-05-31";
 var fmtDate2 = (d) => {
   if (!d) return null;
   if (d instanceof Date) return d.toISOString().slice(0, 10);
@@ -56838,6 +56856,14 @@ router2.post("/auth/register", async (req, res) => {
     res.status(400).json({ message: "Invalid email address" });
     return;
   }
+  let normalizedPhone = null;
+  if (phone && String(phone).trim() !== "") {
+    normalizedPhone = normalizePhone(String(phone));
+    if (!normalizedPhone) {
+      res.status(400).json({ message: "Enter a valid South African phone number (e.g. 082 123 4567)" });
+      return;
+    }
+  }
   const existing = await row("SELECT id FROM users WHERE email = ?", [emailStr]);
   if (existing) {
     res.status(409).json({ message: "An account with this email already exists" });
@@ -56847,8 +56873,8 @@ router2.post("/auth/register", async (req, res) => {
   const isSuperUser = SUPER_USER_EMAILS.includes(emailStr);
   const hash2 = await bcryptjs_default.hash(String(password), 10);
   const id = await exec(
-    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at) VALUES (?, ?, ?, ?, ?, ?, NOW())",
-    [String(name).trim(), emailStr, hash2, phone ? String(phone).trim() : null, "golfer", isSuperUser ? 1 : 0]
+    "INSERT INTO users (name, email, password_hash, phone, role, is_super_user, terms_accepted_at, privacy_accepted_at, privacy_policy_version) VALUES (?, ?, ?, ?, ?, ?, NOW(), NOW(), ?)",
+    [String(name).trim(), emailStr, hash2, normalizedPhone, "golfer", isSuperUser ? 1 : 0, PRIVACY_POLICY_VERSION]
   );
   const pendingInvites = await query(
     `SELECT inviter_id FROM pending_invitations WHERE invitee_email = ?`,
@@ -56924,7 +56950,7 @@ router2.post("/auth/register", async (req, res) => {
       id,
       name: String(name).trim(),
       email: emailStr,
-      phone: phone ?? null,
+      phone: normalizedPhone,
       handicap: null,
       role: "golfer",
       club_id: null,
@@ -57007,6 +57033,14 @@ router2.put("/profile", async (req, res) => {
     return;
   }
   const { name, phone, handicap, gender, date_of_birth, home_province, hna_number, student_number, email, password } = req.body ?? {};
+  let normalizedPhone = null;
+  if (phone && String(phone).trim() !== "") {
+    normalizedPhone = normalizePhone(String(phone));
+    if (!normalizedPhone) {
+      res.status(400).json({ message: "Enter a valid South African phone number (e.g. 082 123 4567)" });
+      return;
+    }
+  }
   if (email && String(email).trim().toLowerCase() !== user.email) {
     const emailStr = String(email).trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailStr)) {
@@ -57048,7 +57082,7 @@ router2.put("/profile", async (req, res) => {
      WHERE id = ?`,
     [
       name ?? user.name,
-      phone || null,
+      normalizedPhone,
       handicap ?? null,
       gender || null,
       date_of_birth || null,
@@ -63822,6 +63856,8 @@ async function createSchema() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_slot_id INT REFERENCES portal_tee_slots(id)");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMP");
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT");
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
   await query(`
     DO $$ BEGIN

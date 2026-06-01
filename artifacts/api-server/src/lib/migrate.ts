@@ -716,6 +716,10 @@ async function createSchema(): Promise<void> {
   // Guidelines. New sign-ups set this at registration; existing users (NULL) are
   // shown a one-time acceptance gate on next app launch.
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
+  // privacy_accepted_at / privacy_policy_version: auditable record (POPIA) of which
+  // Privacy Policy version the user consented to and when. Set at registration.
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMP");
+  await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT");
   // blocked_slots: JSON array of slot indices (0–3) the club has individually blocked.
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration

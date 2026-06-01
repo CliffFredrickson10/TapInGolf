@@ -8,6 +8,16 @@ export const logger = pino({
     "req.headers.authorization",
     "req.headers.cookie",
     "res.headers['set-cookie']",
+    // Defense-in-depth: never emit personal data / secrets even if an object
+    // carrying these keys is passed to the logger.
+    "phone",
+    "*.phone",
+    "otp",
+    "*.otp",
+    "password",
+    "*.password",
+    "password_hash",
+    "*.password_hash",
   ],
   ...(isProduction
     ? {}

@@ -144,6 +144,13 @@ export default function RegisterScreen() {
               >
                 Terms of Use & Community Guidelines
               </Text>
+              {" "}and{" "}
+              <Text
+                style={{ color: colors.primary, fontFamily: "Inter_600SemiBold" }}
+                onPress={(e) => { e.stopPropagation?.(); router.push("/legal/privacy"); }}
+              >
+                Privacy Policy
+              </Text>
               , including a zero-tolerance policy for objectionable content and abusive users.
             </Text>
           </TouchableOpacity>

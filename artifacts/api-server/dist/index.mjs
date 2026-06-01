@@ -61133,6 +61133,12 @@ router13.get("/portal/bookings", requireClubAuth, async (req, res) => {
                         WHERE bp.booking_id = b.id),
                       '[]'::json
                     ) AS player_names,
+                    COALESCE(
+                      (SELECT json_agg(bp.paid ORDER BY bp.id)
+                         FROM booking_players bp
+                        WHERE bp.booking_id = b.id),
+                      '[]'::json
+                    ) AS player_paid,
                     pts.date, pts.tee_time AS time, 0 AS tee_price
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id

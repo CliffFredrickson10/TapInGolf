@@ -46,13 +46,18 @@ interface Booking {
   tee_price: number;
   voucher_code: string | null;
   player_names: string[];
+  // Per-player paid flags (0/1) from booking_players, ordered by bp.id.
+  // Only populated for split-bill bookings. Used to colour each slot independently.
+  player_paid: (0 | 1)[];
 }
 
 type SlotKind =
   | { kind: "open"; price: number }
   | { kind: "unavailable" }
   | { kind: "na" }
-  | { kind: "booked"; booking: Booking; playerIndex: number };
+  // effectiveStatus: booking status for non-split bookings; per-player
+  // "confirmed" / "pending" for split-bill bookings.
+  | { kind: "booked"; booking: Booking; playerIndex: number; effectiveStatus: string };
 
 interface Block {
   start: string;
@@ -101,7 +106,17 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
   let idx = 0;
   for (const b of bookings) {
     if (b.status === "cancelled") continue;
-    for (let p = 0; p < b.players && idx < tt.total_slots; p++, idx++) slots[idx] = { kind: "booked", booking: b, playerIndex: p };
+    for (let p = 0; p < b.players && idx < tt.total_slots; p++, idx++) {
+      // For split-bill bookings colour each slot by that player's individual paid flag.
+      // For non-split bookings the whole booking status applies to every slot.
+      let effectiveStatus = b.status;
+      if (b.split_bill && b.player_paid && b.player_paid.length > p) {
+        effectiveStatus = (b.player_paid[p] === 1 || b.player_paid[p] as any === true)
+          ? "confirmed"
+          : "pending";
+      }
+      slots[idx] = { kind: "booked", booking: b, playerIndex: p, effectiveStatus };
+    }
   }
   return slots;
 }
@@ -131,7 +146,7 @@ function slotBg(s: SlotKind) {
   if (s.kind === "open") return CELL_BG.open;
   if (s.kind === "unavailable") return CELL_BG.unavailable;
   if (s.kind === "na") return CELL_BG.na;
-  return CELL_BG[s.booking.status] ?? CELL_BG.pending;
+  return CELL_BG[s.effectiveStatus] ?? CELL_BG.pending;
 }
 
 // ─── Config A defaults ────────────────────────────────────────────────────────
@@ -1298,20 +1313,14 @@ export default function Schedule() {
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
-                      {slot.kind === "booked" && slot.playerIndex === 0 && (
+                      {slot.kind === "booked" && (
                         <span className="font-medium truncate leading-tight flex items-center gap-1 flex-wrap">
-                          <span className="truncate">{slot.booking.player_names?.[0] ?? slot.booking.guest_name}</span>
-                          <span className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.booking.status] ?? ""}`}>
-                            {STATUS_LABEL[slot.booking.status] ?? slot.booking.status}
+                          <span className={`truncate ${slot.playerIndex > 0 ? "opacity-70 italic text-[11px]" : ""}`}>
+                            {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
                           </span>
-                        </span>
-                      )}
-                      {slot.kind === "booked" && slot.playerIndex > 0 && (
-                        <span className="truncate italic text-[11px] flex items-center gap-1">
-                          <span className="truncate opacity-70">{slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}</span>
-                          {slot.booking.status === "pending" && (
-                            <span className="flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold bg-yellow-100 text-yellow-700 border-yellow-300">!</span>
-                          )}
+                          <span className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.effectiveStatus] ?? ""}`}>
+                            {STATUS_LABEL[slot.effectiveStatus] ?? slot.effectiveStatus}
+                          </span>
                         </span>
                       )}
                     </div>

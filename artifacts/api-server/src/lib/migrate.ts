@@ -782,6 +782,35 @@ async function createSchema(): Promise<void> {
   // and surfaced on the golfer's profile when approved via TapIn staff card.
   await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
 
+  // ── Review responses + moderation ─────────────────────────────────────────
+  // Clubs can publicly respond to a golfer review; the response is shown in the
+  // mobile app. `hidden` lets a TapIn super-admin remove an abusive review from
+  // public listings (and from rating aggregates) without deleting it.
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS response TEXT");
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS responded_at TIMESTAMP");
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS hidden SMALLINT NOT NULL DEFAULT 0");
+  // review_reports: a club flags an abusive review → a TapIn super-admin reviews
+  // it and either dismisses it or removes (hides) the review. Mirrors message_reports.
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS review_reports (
+      id               SERIAL PRIMARY KEY,
+      review_id        INT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      club_id          INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      reported_excerpt TEXT,
+      rating           INT,
+      reason           VARCHAR(40) NOT NULL,
+      note             TEXT,
+      status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending','dismissed','actioned')),
+      review_note      TEXT,
+      reviewed_by      INT REFERENCES users(id),
+      reviewed_at      TIMESTAMP,
+      created_at       TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
+
   // ── Cancellation vouchers ─────────────────────────────────────────────────
   // One batch per issuance event (club cancels a day due to flooding etc.)
   // One voucher row per affected user (unique code, user-specific)

@@ -322,7 +322,7 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
   const [teeTimes, bookings, reviews, members, events] = await Promise.all([
     row<any>("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
     row<any>("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
-    row<any>("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ?", [club.id]),
+    row<any>("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
     row<any>("SELECT COUNT(*) AS total FROM club_members WHERE club_id = ? AND status = 'active'", [club.id]),
     row<any>("SELECT COUNT(*) AS total FROM golf_events WHERE club_id = ? AND status = 'active'", [club.id]),
   ]);
@@ -484,12 +484,79 @@ router.put("/portal/bookings/:id", requireClubAuth, async (req: Request, res: Re
 router.get("/portal/reviews", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const rows = await query<any>(
-    `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS guest_name, u.email AS guest_email
-     FROM reviews r JOIN users u ON r.user_id = u.id
+    `SELECT r.id, r.rating, r.comment, r.created_at, r.response, r.responded_at, r.hidden,
+            u.name AS guest_name, u.email AS guest_email,
+            rep.status AS report_status
+     FROM reviews r
+     JOIN users u ON r.user_id = u.id
+     LEFT JOIN LATERAL (
+       SELECT status FROM review_reports rr
+       WHERE rr.review_id = r.id
+       ORDER BY rr.created_at DESC LIMIT 1
+     ) rep ON true
      WHERE r.club_id = ? ORDER BY r.created_at DESC LIMIT 200`,
     [club.id]
   );
   res.json(rows);
+});
+
+// Club publicly responds to a golfer review (shown in the mobile app).
+// Passing an empty/blank response clears it.
+router.post("/portal/reviews/:id/respond", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(req.params.id, 10);
+  const review = await row<any>("SELECT id, club_id FROM reviews WHERE id = ?", [id]);
+  if (!review || review.club_id !== club.id) {
+    res.status(404).json({ message: "Review not found" });
+    return;
+  }
+  const raw = req.body?.response;
+  const text = raw == null ? "" : String(raw).trim().slice(0, 2000);
+  if (text) {
+    await run("UPDATE reviews SET response = ?, responded_at = NOW() WHERE id = ?", [text, id]);
+  } else {
+    await run("UPDATE reviews SET response = NULL, responded_at = NULL WHERE id = ?", [id]);
+  }
+  res.json({ success: true, response: text || null });
+});
+
+// Allowed reasons a club can cite when reporting an abusive review.
+const REVIEW_REPORT_REASONS = ["spam", "harassment", "hate_speech", "inappropriate", "false_info", "other"];
+
+// Club flags a review as abusive → a TapIn super-admin reviews & decides.
+router.post("/portal/reviews/:id/report", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(req.params.id, 10);
+  const review = await row<any>("SELECT id, club_id, rating, comment FROM reviews WHERE id = ?", [id]);
+  if (!review || review.club_id !== club.id) {
+    res.status(404).json({ message: "Review not found" });
+    return;
+  }
+
+  const reason = String(req.body?.reason ?? "");
+  if (!REVIEW_REPORT_REASONS.includes(reason)) {
+    res.status(400).json({ message: `reason must be one of: ${REVIEW_REPORT_REASONS.join(", ")}` });
+    return;
+  }
+  const note = req.body?.note ? String(req.body.note).trim().slice(0, 1000) : null;
+
+  // Collapse duplicate open reports against the same review.
+  const dup = await row<any>(
+    "SELECT id FROM review_reports WHERE review_id = ? AND status = 'pending'",
+    [id]
+  );
+  if (dup) {
+    res.status(200).json({ success: true, id: dup.id, duplicate: true });
+    return;
+  }
+
+  const excerpt = review.comment ? String(review.comment).slice(0, 500) : null;
+  const reportId = await exec(
+    `INSERT INTO review_reports (review_id, club_id, reported_excerpt, rating, reason, note)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, club.id, excerpt, review.rating, reason, note]
+  );
+  res.status(201).json({ success: true, id: reportId, status: "pending" });
 });
 
 // ─── ADS ─────────────────────────────────────────────────────────────────────

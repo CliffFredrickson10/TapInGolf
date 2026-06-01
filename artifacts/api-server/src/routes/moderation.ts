@@ -270,4 +270,153 @@ router.post("/admin/reports/:id/restore", async (req, res): Promise<void> => {
   res.json({ success: true, restored: true });
 });
 
+// ═════════════════════════════════════════════════════════════════════════════
+// REVIEW REPORTS — clubs flag abusive golfer reviews; a super-user removes/hides.
+// ═════════════════════════════════════════════════════════════════════════════
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/review-reports?status=pending
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/review-reports", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const status = String(req.query.status ?? "pending");
+  const valid = ["pending", "dismissed", "actioned", "all"];
+  if (!valid.includes(status)) {
+    res.status(400).json({ message: `status must be one of: ${valid.join(", ")}` });
+    return;
+  }
+
+  const where = status === "all" ? "" : "WHERE rr.status = ?";
+  const params = status === "all" ? [] : [status];
+
+  const rows = await query<any>(
+    `SELECT rr.id, rr.review_id, rr.club_id, rr.reported_excerpt, rr.rating,
+            rr.reason, rr.note, rr.status, rr.review_note, rr.created_at, rr.reviewed_at,
+            c.name AS club_name,
+            rv.comment AS review_comment, rv.rating AS review_rating,
+            rv.created_at AS review_created_at, rv.hidden AS review_hidden,
+            u.name AS reviewer_name, u.email AS reviewer_email,
+            reviewer.name AS resolver_name
+       FROM review_reports rr
+       JOIN clubs c ON c.id = rr.club_id
+       LEFT JOIN reviews rv ON rv.id = rr.review_id
+       LEFT JOIN users u ON u.id = rv.user_id
+       LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+       ${where}
+      ORDER BY
+        CASE WHEN rr.status = 'pending' THEN 0 ELSE 1 END,
+        rr.created_at DESC, rr.id DESC`,
+    params
+  );
+
+  res.json({ reports: rows });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/review-reports/count  → { pending }
+// Declared before /:id so "count" isn't captured as an id.
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/review-reports/count", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const result = await row<any>(
+    "SELECT COUNT(*) AS pending FROM review_reports WHERE status = 'pending'"
+  );
+  res.json({ pending: Number(result?.pending ?? 0) });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): GET /admin/review-reports/:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.get("/admin/review-reports/:id", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const report = await row<any>(
+    `SELECT rr.id, rr.review_id, rr.club_id, rr.reported_excerpt, rr.rating,
+            rr.reason, rr.note, rr.status, rr.review_note, rr.created_at, rr.reviewed_at,
+            c.name AS club_name,
+            rv.comment AS review_comment, rv.rating AS review_rating,
+            rv.created_at AS review_created_at, rv.hidden AS review_hidden,
+            u.name AS reviewer_name, u.email AS reviewer_email,
+            reviewer.name AS resolver_name
+       FROM review_reports rr
+       JOIN clubs c ON c.id = rr.club_id
+       LEFT JOIN reviews rv ON rv.id = rr.review_id
+       LEFT JOIN users u ON u.id = rv.user_id
+       LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+      WHERE rr.id = ?`,
+    [id]
+  );
+  if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+
+  res.json({ report });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/review-reports/:id/resolve
+// body: { action: 'dismiss' | 'remove', review_note? }
+//   dismiss → status 'dismissed'  (no policy violation found)
+//   remove  → status 'actioned'   (hide the review from public listings)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/review-reports/:id/resolve", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const report = await row<any>(
+    "SELECT id, status, review_id FROM review_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+
+  const action = String(req.body?.action ?? "");
+  if (action !== "dismiss" && action !== "remove") {
+    res.status(400).json({ message: "action must be 'dismiss' or 'remove'" });
+    return;
+  }
+  const newStatus = action === "remove" ? "actioned" : "dismissed";
+  const reviewNote = req.body?.review_note ? String(req.body.review_note).trim().slice(0, 1000) : null;
+
+  await exec(
+    `UPDATE review_reports
+        SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?`,
+    [newStatus, reviewNote, user!.id, id]
+  );
+
+  // Removing hides the review from public listings and rating aggregates.
+  let hidden = false;
+  if (action === "remove") {
+    await exec("UPDATE reviews SET hidden = 1 WHERE id = ?", [report.review_id]);
+    hidden = true;
+  }
+
+  res.json({ success: true, status: newStatus, hidden });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/review-reports/:id/restore
+// Reverses a removal: un-hides the review so it appears publicly again.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/review-reports/:id/restore", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const report = await row<any>(
+    "SELECT id, status, review_id FROM review_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) { res.status(404).json({ message: "Report not found" }); return; }
+
+  await exec("UPDATE reviews SET hidden = 0 WHERE id = ?", [report.review_id]);
+
+  res.json({ success: true, restored: true });
+});
+
 export default router;

@@ -2,6 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useHnaPending } from "@/context/HnaPendingContext";
 import { useReportsPending } from "@/context/ReportsPendingContext";
+import { useReviewReportsPending } from "@/context/ReviewReportsPendingContext";
 import {
   BarChart3,
   Megaphone,
@@ -9,6 +10,7 @@ import {
   CalendarRange,
   IdCard,
   ShieldAlert,
+  MessageSquareWarning,
   LogOut,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -21,6 +23,7 @@ const navItems = [
   { href: "/events-members", label: "Events & Members", icon: CalendarRange },
   { href: "/hna-review", label: "HNA Verifications", icon: IdCard, badge: "hnaPending" as const },
   { href: "/moderation", label: "Chat Reports", icon: ShieldAlert, badge: "reportsPending" as const },
+  { href: "/review-reports", label: "Review Reports", icon: MessageSquareWarning, badge: "reviewReportsPending" as const },
 ];
 
 // Pages that operate on a single selected club need the club selector shown.
@@ -31,6 +34,7 @@ export function StaffLayout({ children }: { children: React.ReactNode }) {
   const { staff, logout, clubs, selectedClubId, setSelectedClubId } = useAuth();
   const { pending } = useHnaPending();
   const { pending: reportsPending } = useReportsPending();
+  const { pending: reviewReportsPending } = useReviewReportsPending();
 
   const showClubSelector = CLUB_SCOPED.includes(location);
 
@@ -46,7 +50,7 @@ export function StaffLayout({ children }: { children: React.ReactNode }) {
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
-            const badgeCount = item.badge === "hnaPending" ? pending : item.badge === "reportsPending" ? reportsPending : 0;
+            const badgeCount = item.badge === "hnaPending" ? pending : item.badge === "reportsPending" ? reportsPending : item.badge === "reviewReportsPending" ? reviewReportsPending : 0;
             const showBadge = badgeCount > 0;
             return (
               <Link key={item.href} href={item.href}>

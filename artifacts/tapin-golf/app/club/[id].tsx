@@ -70,6 +70,8 @@ type Review = {
   comment: string | null;
   created_at: string;
   reviewer_name: string;
+  response?: string | null;
+  responded_at?: string | null;
 };
 
 function StarRow({ rating, size = 14, onPress }: { rating: number; size?: number; onPress?: (r: number) => void }) {
@@ -113,6 +115,7 @@ export default function ClubDetailScreen() {
   const [reviewError, setReviewError] = useState("");
   const [photos, setPhotos] = useState<{ id: number; url: string; caption: string | null }[]>([]);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; caption: string | null } | null>(null);
+  const [expandedReviews, setExpandedReviews] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     (async () => {
@@ -519,8 +522,20 @@ export default function ClubDetailScreen() {
             </Text>
           </View>
         ) : (
-          reviews.slice(0, 5).map((rev) => (
-            <View key={rev.id} style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          reviews.slice(0, 5).map((rev) => {
+            const hasResponse = !!rev.response;
+            const expanded = !!expandedReviews[rev.id];
+            return (
+            <TouchableOpacity
+              key={rev.id}
+              activeOpacity={hasResponse ? 0.7 : 1}
+              onPress={() => {
+                if (!hasResponse) return;
+                Haptics.selectionAsync();
+                setExpandedReviews((prev) => ({ ...prev, [rev.id]: !prev[rev.id] }));
+              }}
+              style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+            >
               <View style={styles.reviewTop}>
                 <View style={[styles.reviewAvatar, { backgroundColor: colors.primary }]}>
                   <Text style={styles.reviewAvatarText}>
@@ -540,8 +555,37 @@ export default function ClubDetailScreen() {
               {rev.comment ? (
                 <Text style={[styles.reviewComment, { color: colors.foreground }]}>{rev.comment}</Text>
               ) : null}
-            </View>
-          ))
+              {hasResponse ? (
+                <>
+                  {!expanded ? (
+                    <View style={styles.responseHint}>
+                      <Ionicons name="chatbubble-ellipses-outline" size={13} color={colors.primary} />
+                      <Text style={[styles.responseHintText, { color: colors.primary }]}>
+                        Response from {club.name}
+                      </Text>
+                      <Ionicons name="chevron-down" size={13} color={colors.primary} />
+                    </View>
+                  ) : (
+                    <View style={[styles.responseBox, { backgroundColor: colors.primaryLight, borderLeftColor: colors.primary }]}>
+                      <View style={styles.responseHeader}>
+                        <Ionicons name="chatbubble-ellipses" size={13} color={colors.primary} />
+                        <Text style={[styles.responseTitle, { color: colors.primary }]}>
+                          Response from {club.name}
+                        </Text>
+                      </View>
+                      <Text style={[styles.responseText, { color: colors.foreground }]}>{rev.response}</Text>
+                      {rev.responded_at ? (
+                        <Text style={[styles.reviewDate, { color: colors.mutedForeground, marginTop: 4 }]}>
+                          {new Date(rev.responded_at).toLocaleDateString("en-ZA", { month: "short", year: "numeric" })}
+                        </Text>
+                      ) : null}
+                    </View>
+                  )}
+                </>
+              ) : null}
+            </TouchableOpacity>
+            );
+          })
         )}
       </View>
 
@@ -692,6 +736,12 @@ const styles = StyleSheet.create({
   reviewerName: { fontSize: 14, fontFamily: "Inter_600SemiBold", marginBottom: 2 },
   reviewDate: { fontSize: 11, fontFamily: "Inter_400Regular" },
   reviewComment: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  responseHint: { flexDirection: "row", alignItems: "center", gap: 5 },
+  responseHintText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  responseBox: { borderLeftWidth: 3, borderRadius: 8, padding: 10, gap: 2 },
+  responseHeader: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 2 },
+  responseTitle: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  responseText: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 19 },
   modalOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.5)", justifyContent: "flex-end" },
   modalCard: { borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, gap: 16, paddingBottom: 40 },
   modalTitle: { fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },

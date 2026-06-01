@@ -146,7 +146,7 @@ router.get("/clubs", async (req, res): Promise<void> => {
       COUNT(DISTINCT r.id) as review_count,
       ${distanceExpr} as distance
     FROM clubs c
-    LEFT JOIN reviews r ON r.club_id = c.id
+    LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
   `;
 
   function normalize(clubs: any[]): any[] {
@@ -189,7 +189,7 @@ router.get("/clubs/:id", async (req, res): Promise<void> => {
        ROUND(AVG(r.rating)::numeric, 1) as rating,
        COUNT(DISTINCT r.id) as review_count
      FROM clubs c
-     LEFT JOIN reviews r ON r.club_id = c.id
+     LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
      WHERE c.id = ? AND c.active = 1
      GROUP BY c.id`,
     [id]
@@ -496,10 +496,11 @@ router.get("/clubs/:id/reviews", async (req, res): Promise<void> => {
 
   const reviews = await query<any>(
     `SELECT rv.id, rv.rating, rv.comment, rv.created_at,
+            rv.response, rv.responded_at,
             u.name as reviewer_name
      FROM reviews rv
      JOIN users u ON u.id = rv.user_id
-     WHERE rv.club_id = ?
+     WHERE rv.club_id = ? AND rv.hidden = 0
      ORDER BY rv.created_at DESC
      LIMIT ?`,
     [clubId, limit]

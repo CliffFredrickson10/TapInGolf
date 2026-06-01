@@ -57656,7 +57656,7 @@ router3.get("/clubs", async (req, res) => {
       COUNT(DISTINCT r.id) as review_count,
       ${distanceExpr} as distance
     FROM clubs c
-    LEFT JOIN reviews r ON r.club_id = c.id
+    LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
   `;
   function normalize(clubs2) {
     clubs2.forEach((c) => {
@@ -57694,7 +57694,7 @@ router3.get("/clubs/:id", async (req, res) => {
        ROUND(AVG(r.rating)::numeric, 1) as rating,
        COUNT(DISTINCT r.id) as review_count
      FROM clubs c
-     LEFT JOIN reviews r ON r.club_id = c.id
+     LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
      WHERE c.id = ? AND c.active = 1
      GROUP BY c.id`,
     [id]
@@ -57954,10 +57954,11 @@ router3.get("/clubs/:id/reviews", async (req, res) => {
   const limit = Math.min(parseInt(String(req.query.limit ?? "10")), 50);
   const reviews = await query(
     `SELECT rv.id, rv.rating, rv.comment, rv.created_at,
+            rv.response, rv.responded_at,
             u.name as reviewer_name
      FROM reviews rv
      JOIN users u ON u.id = rv.user_id
-     WHERE rv.club_id = ?
+     WHERE rv.club_id = ? AND rv.hidden = 0
      ORDER BY rv.created_at DESC
      LIMIT ?`,
     [clubId, limit]
@@ -62181,7 +62182,7 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
   const [teeTimes, bookings, reviews, members, events] = await Promise.all([
     row("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
     row("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
-    row("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ?", [club.id]),
+    row("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
     row("SELECT COUNT(*) AS total FROM club_members WHERE club_id = ? AND status = 'active'", [club.id]),
     row("SELECT COUNT(*) AS total FROM golf_events WHERE club_id = ? AND status = 'active'", [club.id])
   ]);
@@ -62368,12 +62369,68 @@ router14.put("/portal/bookings/:id", requireClubAuth2, async (req, res) => {
 router14.get("/portal/reviews", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
-    `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS guest_name, u.email AS guest_email
-     FROM reviews r JOIN users u ON r.user_id = u.id
+    `SELECT r.id, r.rating, r.comment, r.created_at, r.response, r.responded_at, r.hidden,
+            u.name AS guest_name, u.email AS guest_email,
+            rep.status AS report_status
+     FROM reviews r
+     JOIN users u ON r.user_id = u.id
+     LEFT JOIN LATERAL (
+       SELECT status FROM review_reports rr
+       WHERE rr.review_id = r.id
+       ORDER BY rr.created_at DESC LIMIT 1
+     ) rep ON true
      WHERE r.club_id = ? ORDER BY r.created_at DESC LIMIT 200`,
     [club.id]
   );
   res.json(rows);
+});
+router14.post("/portal/reviews/:id/respond", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const id = parseInt(req.params.id, 10);
+  const review = await row("SELECT id, club_id FROM reviews WHERE id = ?", [id]);
+  if (!review || review.club_id !== club.id) {
+    res.status(404).json({ message: "Review not found" });
+    return;
+  }
+  const raw = req.body?.response;
+  const text = raw == null ? "" : String(raw).trim().slice(0, 2e3);
+  if (text) {
+    await run("UPDATE reviews SET response = ?, responded_at = NOW() WHERE id = ?", [text, id]);
+  } else {
+    await run("UPDATE reviews SET response = NULL, responded_at = NULL WHERE id = ?", [id]);
+  }
+  res.json({ success: true, response: text || null });
+});
+var REVIEW_REPORT_REASONS = ["spam", "harassment", "hate_speech", "inappropriate", "false_info", "other"];
+router14.post("/portal/reviews/:id/report", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const id = parseInt(req.params.id, 10);
+  const review = await row("SELECT id, club_id, rating, comment FROM reviews WHERE id = ?", [id]);
+  if (!review || review.club_id !== club.id) {
+    res.status(404).json({ message: "Review not found" });
+    return;
+  }
+  const reason = String(req.body?.reason ?? "");
+  if (!REVIEW_REPORT_REASONS.includes(reason)) {
+    res.status(400).json({ message: `reason must be one of: ${REVIEW_REPORT_REASONS.join(", ")}` });
+    return;
+  }
+  const note = req.body?.note ? String(req.body.note).trim().slice(0, 1e3) : null;
+  const dup = await row(
+    "SELECT id FROM review_reports WHERE review_id = ? AND status = 'pending'",
+    [id]
+  );
+  if (dup) {
+    res.status(200).json({ success: true, id: dup.id, duplicate: true });
+    return;
+  }
+  const excerpt = review.comment ? String(review.comment).slice(0, 500) : null;
+  const reportId = await exec(
+    `INSERT INTO review_reports (review_id, club_id, reported_excerpt, rating, reason, note)
+     VALUES (?, ?, ?, ?, ?, ?)`,
+    [id, club.id, excerpt, review.rating, reason, note]
+  );
+  res.status(201).json({ success: true, id: reportId, status: "pending" });
 });
 router14.get("/portal/ads", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -64417,6 +64474,134 @@ router20.post("/admin/reports/:id/restore", async (req, res) => {
   );
   res.json({ success: true, restored: true });
 });
+router20.get("/admin/review-reports", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const status = String(req.query.status ?? "pending");
+  const valid = ["pending", "dismissed", "actioned", "all"];
+  if (!valid.includes(status)) {
+    res.status(400).json({ message: `status must be one of: ${valid.join(", ")}` });
+    return;
+  }
+  const where = status === "all" ? "" : "WHERE rr.status = ?";
+  const params = status === "all" ? [] : [status];
+  const rows = await query(
+    `SELECT rr.id, rr.review_id, rr.club_id, rr.reported_excerpt, rr.rating,
+            rr.reason, rr.note, rr.status, rr.review_note, rr.created_at, rr.reviewed_at,
+            c.name AS club_name,
+            rv.comment AS review_comment, rv.rating AS review_rating,
+            rv.created_at AS review_created_at, rv.hidden AS review_hidden,
+            u.name AS reviewer_name, u.email AS reviewer_email,
+            reviewer.name AS resolver_name
+       FROM review_reports rr
+       JOIN clubs c ON c.id = rr.club_id
+       LEFT JOIN reviews rv ON rv.id = rr.review_id
+       LEFT JOIN users u ON u.id = rv.user_id
+       LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+       ${where}
+      ORDER BY
+        CASE WHEN rr.status = 'pending' THEN 0 ELSE 1 END,
+        rr.created_at DESC, rr.id DESC`,
+    params
+  );
+  res.json({ reports: rows });
+});
+router20.get("/admin/review-reports/count", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const result = await row(
+    "SELECT COUNT(*) AS pending FROM review_reports WHERE status = 'pending'"
+  );
+  res.json({ pending: Number(result?.pending ?? 0) });
+});
+router20.get("/admin/review-reports/:id", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row(
+    `SELECT rr.id, rr.review_id, rr.club_id, rr.reported_excerpt, rr.rating,
+            rr.reason, rr.note, rr.status, rr.review_note, rr.created_at, rr.reviewed_at,
+            c.name AS club_name,
+            rv.comment AS review_comment, rv.rating AS review_rating,
+            rv.created_at AS review_created_at, rv.hidden AS review_hidden,
+            u.name AS reviewer_name, u.email AS reviewer_email,
+            reviewer.name AS resolver_name
+       FROM review_reports rr
+       JOIN clubs c ON c.id = rr.club_id
+       LEFT JOIN reviews rv ON rv.id = rr.review_id
+       LEFT JOIN users u ON u.id = rv.user_id
+       LEFT JOIN users reviewer ON reviewer.id = rr.reviewed_by
+      WHERE rr.id = ?`,
+    [id]
+  );
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  res.json({ report });
+});
+router20.post("/admin/review-reports/:id/resolve", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row(
+    "SELECT id, status, review_id FROM review_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  const action = String(req.body?.action ?? "");
+  if (action !== "dismiss" && action !== "remove") {
+    res.status(400).json({ message: "action must be 'dismiss' or 'remove'" });
+    return;
+  }
+  const newStatus = action === "remove" ? "actioned" : "dismissed";
+  const reviewNote = req.body?.review_note ? String(req.body.review_note).trim().slice(0, 1e3) : null;
+  await exec(
+    `UPDATE review_reports
+        SET status = ?, review_note = ?, reviewed_by = ?, reviewed_at = NOW()
+      WHERE id = ?`,
+    [newStatus, reviewNote, user.id, id]
+  );
+  let hidden = false;
+  if (action === "remove") {
+    await exec("UPDATE reviews SET hidden = 1 WHERE id = ?", [report.review_id]);
+    hidden = true;
+  }
+  res.json({ success: true, status: newStatus, hidden });
+});
+router20.post("/admin/review-reports/:id/restore", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const report = await row(
+    "SELECT id, status, review_id FROM review_reports WHERE id = ?",
+    [id]
+  );
+  if (!report) {
+    res.status(404).json({ message: "Report not found" });
+    return;
+  }
+  await exec("UPDATE reviews SET hidden = 0 WHERE id = ?", [report.review_id]);
+  res.json({ success: true, restored: true });
+});
 var moderation_default = router20;
 
 // src/routes/index.ts
@@ -65181,6 +65366,28 @@ async function createSchema() {
     END $$
   `);
   await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS response TEXT");
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS responded_at TIMESTAMP");
+  await ddl("ALTER TABLE reviews ADD COLUMN IF NOT EXISTS hidden SMALLINT NOT NULL DEFAULT 0");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS review_reports (
+      id               SERIAL PRIMARY KEY,
+      review_id        INT NOT NULL REFERENCES reviews(id) ON DELETE CASCADE,
+      club_id          INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      reported_excerpt TEXT,
+      rating           INT,
+      reason           VARCHAR(40) NOT NULL,
+      note             TEXT,
+      status           VARCHAR(20) NOT NULL DEFAULT 'pending'
+                         CHECK (status IN ('pending','dismissed','actioned')),
+      review_note      TEXT,
+      reviewed_by      INT REFERENCES users(id),
+      reviewed_at      TIMESTAMP,
+      created_at       TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS cancellation_voucher_batches (
       id            SERIAL PRIMARY KEY,

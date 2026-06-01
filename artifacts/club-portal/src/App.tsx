@@ -4,6 +4,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { HnaPendingProvider } from "@/context/HnaPendingContext";
 import { ReportsPendingProvider } from "@/context/ReportsPendingContext";
+import { ReviewReportsPendingProvider } from "@/context/ReviewReportsPendingContext";
 import { Layout } from "@/components/layout";
 import { StaffLayout } from "@/components/staff-layout";
 import Login from "@/pages/login";
@@ -24,6 +25,7 @@ import StaffGeofence from "@/pages/staff/geofence";
 import StaffEventsMembers from "@/pages/staff/events-members";
 import StaffHnaReview from "@/pages/staff/hna-review";
 import StaffModeration from "@/pages/staff/moderation";
+import StaffReviewModeration from "@/pages/staff/review-moderation";
 import Payments from "@/pages/payments";
 import CancellationPolicy from "@/pages/cancellation-policy";
 
@@ -44,19 +46,22 @@ function Router() {
     return (
       <HnaPendingProvider>
         <ReportsPendingProvider>
-          <StaffLayout>
-            <Switch>
-              <Route path="/" component={StaffRevenue} />
-              <Route path="/broadcast" component={StaffBroadcast} />
-              <Route path="/geofence" component={StaffGeofence} />
-              <Route path="/events-members" component={StaffEventsMembers} />
-              <Route path="/hna-review" component={StaffHnaReview} />
-              <Route path="/moderation" component={StaffModeration} />
-              <Route>
-                <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
-              </Route>
-            </Switch>
-          </StaffLayout>
+          <ReviewReportsPendingProvider>
+            <StaffLayout>
+              <Switch>
+                <Route path="/" component={StaffRevenue} />
+                <Route path="/broadcast" component={StaffBroadcast} />
+                <Route path="/geofence" component={StaffGeofence} />
+                <Route path="/events-members" component={StaffEventsMembers} />
+                <Route path="/hna-review" component={StaffHnaReview} />
+                <Route path="/moderation" component={StaffModeration} />
+                <Route path="/review-reports" component={StaffReviewModeration} />
+                <Route>
+                  <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+                </Route>
+              </Switch>
+            </StaffLayout>
+          </ReviewReportsPendingProvider>
         </ReportsPendingProvider>
       </HnaPendingProvider>
     );

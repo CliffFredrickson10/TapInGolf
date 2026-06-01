@@ -7,6 +7,7 @@ import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment, getStitchPayment } from "../lib/stitch";
 import { sendInvoiceEmail } from "../lib/otp";
+import { getUserTierPrices } from "../lib/pricing";
 
 const router: IRouter = Router();
 
@@ -173,6 +174,19 @@ router.get("/bookings/open", async (req, res): Promise<void> => {
     return `${parts[0]} ${parts[parts.length - 1][0]}.`;
   };
 
+  // Resolve the viewer's tier price per club (the hardcoded `0 AS price` above is
+  // a placeholder — greens fees come from club_pricing_tiers, same as the club
+  // tee-times screen). Compute once per distinct club for the authenticated user.
+  const viewer = await getUser(req).catch(() => null);
+  const clubIds = [...new Set(rows.map((r: any) => r.club_id))];
+  const priceByClub = new Map<number, number>();
+  await Promise.all(
+    clubIds.map(async (cid) => {
+      const { price18 } = await getUserTierPrices(viewer?.id ?? null, cid);
+      priceByClub.set(cid, price18 ?? 0);
+    })
+  );
+
   const games = rows.map((r: any) => {
     let existingPlayers: { name: string; players: number }[] = [];
     try {
@@ -185,7 +199,7 @@ router.get("/bookings/open", async (req, res): Promise<void> => {
       tee_time_id:       r.tee_time_id,
       date:              String(r.date).slice(0, 10),
       time:              String(r.time).slice(0, 5),
-      price:             parseFloat(r.price),
+      price:             priceByClub.get(r.club_id) ?? 0,
       promotional_price: r.promotional_price != null ? parseFloat(r.promotional_price) : null,
       total_slots:       parseInt(r.total_slots),
       available:         parseInt(r.available),

@@ -58154,6 +58154,100 @@ async function getStitchPayment(paymentId) {
   };
 }
 
+// src/lib/pricing.ts
+init_pg();
+var calcAge2 = (dob) => {
+  if (!dob) return null;
+  const birth = dob instanceof Date ? dob : new Date(String(dob));
+  if (isNaN(birth.getTime())) return null;
+  const today = /* @__PURE__ */ new Date();
+  let age = today.getFullYear() - birth.getFullYear();
+  const m = today.getMonth() - birth.getMonth();
+  if (m < 0 || m === 0 && today.getDate() < birth.getDate()) age--;
+  return age;
+};
+var ageIsJunior2 = (dob) => {
+  const a = calcAge2(dob);
+  return a !== null && a <= 18;
+};
+var ageIsStudent2 = (dob) => {
+  const a = calcAge2(dob);
+  return a !== null && a >= 18 && a <= 24;
+};
+var ageIsPensioner2 = (dob) => {
+  const a = calcAge2(dob);
+  return a !== null && a >= 65;
+};
+var pensionerMemberTierType2 = (membershipType) => {
+  if (membershipType.includes("six_day")) return "pensioner_six_day";
+  if (membershipType.includes("week_day") || membershipType.includes("weekday")) return "pensioner_week_day";
+  return "pensioner_full";
+};
+async function getUserTierPrices(userId, clubId) {
+  let tierType = "non_affiliated_visitor";
+  const tierCandidates = [];
+  if (userId) {
+    const [memberRow, userRow] = await Promise.all([
+      row(
+        "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+        [clubId, userId]
+      ).catch(() => null),
+      row("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null)
+    ]);
+    const dob = userRow?.date_of_birth ?? null;
+    const hasHna = await isHnaVerified(userId);
+    const memberType = memberRow?.membership_type ?? null;
+    const isHonorary = memberType === "honorary";
+    const isJunior = !isHonorary && ageIsJunior2(dob);
+    const isStudent = !isHonorary && !isJunior && ageIsStudent2(dob);
+    const isPensioner = ageIsPensioner2(dob);
+    if (isHonorary) {
+      tierType = "honorary";
+      tierCandidates.push("honorary");
+      if (isPensioner) tierCandidates.push("pensioner_full");
+    } else if (isJunior) {
+      tierType = memberRow ? "junior_member" : "junior_visitor";
+      tierCandidates.push(tierType);
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isStudent) {
+      tierType = memberRow ? "student_member" : "student_visitor";
+      tierCandidates.push(tierType);
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isPensioner) {
+      if (memberRow) {
+        tierType = pensionerMemberTierType2(memberType ?? "");
+      } else {
+        tierType = hasHna ? "affiliated_pensioner" : "non_affiliated_pensioner";
+      }
+      tierCandidates.push(tierType);
+    } else {
+      tierType = memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+      tierCandidates.push(tierType);
+    }
+  } else {
+    tierType = "non_affiliated_visitor";
+    tierCandidates.push(tierType);
+  }
+  const candidateRows = await Promise.all(
+    tierCandidates.map(
+      (t) => row(
+        "SELECT price_18h, price_9h FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?",
+        [clubId, t]
+      ).catch(() => null)
+    )
+  );
+  let price18 = null;
+  let price9 = null;
+  for (const tr of candidateRows) {
+    if (!tr) continue;
+    const p18 = tr.price_18h != null ? parseFloat(tr.price_18h) : null;
+    const p9 = tr.price_9h != null ? parseFloat(tr.price_9h) : null;
+    if (p18 !== null && (price18 === null || p18 < price18)) price18 = p18;
+    if (p9 !== null && (price9 === null || p9 < price9)) price9 = p9;
+  }
+  return { price18, price9, tierType };
+}
+
 // src/routes/bookings.ts
 var router4 = (0, import_express4.Router)();
 function verifySvixSignature(secret, svixId, svixTimestamp, svixSignature, rawBody) {
@@ -58286,6 +58380,15 @@ router4.get("/bookings/open", async (req, res) => {
     if (parts.length < 2) return parts[0] ?? "Guest";
     return `${parts[0]} ${parts[parts.length - 1][0]}.`;
   };
+  const viewer = await getUser(req).catch(() => null);
+  const clubIds = [...new Set(rows.map((r) => r.club_id))];
+  const priceByClub = /* @__PURE__ */ new Map();
+  await Promise.all(
+    clubIds.map(async (cid) => {
+      const { price18 } = await getUserTierPrices(viewer?.id ?? null, cid);
+      priceByClub.set(cid, price18 ?? 0);
+    })
+  );
   const games = rows.map((r) => {
     let existingPlayers = [];
     try {
@@ -58297,7 +58400,7 @@ router4.get("/bookings/open", async (req, res) => {
       tee_time_id: r.tee_time_id,
       date: String(r.date).slice(0, 10),
       time: String(r.time).slice(0, 5),
-      price: parseFloat(r.price),
+      price: priceByClub.get(r.club_id) ?? 0,
       promotional_price: r.promotional_price != null ? parseFloat(r.promotional_price) : null,
       total_slots: parseInt(r.total_slots),
       available: parseInt(r.available),

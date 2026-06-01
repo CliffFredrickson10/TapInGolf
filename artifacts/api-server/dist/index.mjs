@@ -57757,7 +57757,7 @@ router3.get("/clubs/:id/logo", async (req, res) => {
 router3.get("/clubs/:id/tee-times", async (req, res) => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const clubId = parseInt(rawId, 10);
-  const date = String(req.query.date ?? (/* @__PURE__ */ new Date()).toISOString().split("T")[0]);
+  const date = String(req.query.date ?? (/* @__PURE__ */ new Date()).toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }));
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ message: "Invalid date format" });
     return;
@@ -57842,7 +57842,15 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
     [clubId, date]
   );
   const isJuniorResponse = !!(authUser?.id && (tierType === "junior_member" || tierType === "junior_visitor"));
-  const formatted = portalSlots.map((s) => ({
+  const nowMs = Date.now();
+  const isPastSlot = (dateStr, timeStr) => {
+    const dt = /* @__PURE__ */ new Date(`${dateStr}T${String(timeStr).slice(0, 5)}:00+02:00`);
+    return !isNaN(dt.getTime()) && dt.getTime() < nowMs;
+  };
+  const formatted = portalSlots.filter((s) => {
+    const dateStr = (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10);
+    return !isPastSlot(dateStr, s.tee_time);
+  }).map((s) => ({
     id: s.id,
     date: (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10),
     time: s.tee_time,
@@ -58475,6 +58483,15 @@ router4.post("/bookings", async (req, res) => {
   if (!rawSlot) {
     res.status(404).json({ message: "Tee time not found" });
     return;
+  }
+  {
+    const slotDateStr = rawSlot.date instanceof Date ? rawSlot.date.toISOString().split("T")[0] : String(rawSlot.date).split("T")[0];
+    const slotTimeStr = String(rawSlot.tee_time).slice(0, 5);
+    const slotDateTime = /* @__PURE__ */ new Date(`${slotDateStr}T${slotTimeStr}:00+02:00`);
+    if (isNaN(slotDateTime.getTime()) || slotDateTime.getTime() < Date.now()) {
+      res.status(409).json({ message: "This tee time has already passed and can no longer be booked." });
+      return;
+    }
   }
   const slot = {
     ...rawSlot,

@@ -389,6 +389,21 @@ router.post("/bookings", async (req, res): Promise<void> => {
 
   if (!rawSlot) { res.status(404).json({ message: "Tee time not found" }); return; }
 
+  // Reject booking a tee time that has already passed (clubs operate in SAST = UTC+2)
+  {
+    const slotDateStr = rawSlot.date instanceof Date
+      ? rawSlot.date.toISOString().split("T")[0]
+      : String(rawSlot.date).split("T")[0];
+    const slotTimeStr = String(rawSlot.tee_time).slice(0, 5);
+    const slotDateTime = new Date(`${slotDateStr}T${slotTimeStr}:00+02:00`);
+    // Reject if the slot is in the past, or if its date/time can't be parsed
+    // (a valid slot always parses — fail safe rather than allow an unverifiable time).
+    if (isNaN(slotDateTime.getTime()) || slotDateTime.getTime() < Date.now()) {
+      res.status(409).json({ message: "This tee time has already passed and can no longer be booked." });
+      return;
+    }
+  }
+
   const slot = {
     ...rawSlot,
     time:             rawSlot.tee_time,

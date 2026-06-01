@@ -261,7 +261,9 @@ router.get("/clubs/:id/logo", async (req, res): Promise<void> => {
 router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const clubId = parseInt(rawId, 10);
-  const date   = String(req.query.date ?? new Date().toISOString().split("T")[0]);
+  // Default to today's date in SAST (UTC+2), not UTC, so clients that omit
+  // ?date= near midnight get the correct South African calendar day.
+  const date   = String(req.query.date ?? new Date().toLocaleDateString("en-CA", { timeZone: "Africa/Johannesburg" }));
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ message: "Invalid date format" });
@@ -359,7 +361,18 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
   );
 
   const isJuniorResponse = !!(authUser?.id && (tierType === "junior_member" || tierType === "junior_visitor"));
-  const formatted = portalSlots.map((s: any) => ({
+  // Hide tee times that have already passed (clubs operate in SAST = UTC+2)
+  const nowMs = Date.now();
+  const isPastSlot = (dateStr: string, timeStr: string): boolean => {
+    const dt = new Date(`${dateStr}T${String(timeStr).slice(0, 5)}:00+02:00`);
+    return !isNaN(dt.getTime()) && dt.getTime() < nowMs;
+  };
+  const formatted = portalSlots
+    .filter((s: any) => {
+      const dateStr = (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10);
+      return !isPastSlot(dateStr, s.tee_time);
+    })
+    .map((s: any) => ({
     id:               s.id,
     date:             (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10),
     time:             s.tee_time,

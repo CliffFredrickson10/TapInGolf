@@ -313,7 +313,28 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
   const voucherCount   = issued.filter(i => !i.prepaid_rollback).length;
   const rollbackCount  = issued.filter(i =>  i.prepaid_rollback).length;
 
-  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount });
+  // ── Close all affected tee slots (even unbooked ones) ─────────────────────
+  // Any pending bookings on those slots are also cancelled (payment never confirmed).
+  const slotTimeFilter = fromTime ? "AND tee_time >= ?" : "";
+  const slotParams     = fromTime ? [clubId, dateParam, fromTime] : [clubId, dateParam];
+
+  await exec(
+    `UPDATE portal_tee_slots SET is_active = 0
+     WHERE club_id = ? AND date = ? ${slotTimeFilter}`,
+    slotParams
+  );
+
+  await exec(
+    `UPDATE bookings SET status = 'cancelled'
+     WHERE status = 'pending'
+       AND portal_slot_id IN (
+         SELECT id FROM portal_tee_slots
+         WHERE club_id = ? AND date = ? ${slotTimeFilter}
+       )`,
+    slotParams
+  );
+
+  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount, slots_closed: true });
 });
 
 // ── GET /admin/cancellation-vouchers/batches ──────────────────────────────────

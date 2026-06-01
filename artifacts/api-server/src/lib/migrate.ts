@@ -817,6 +817,8 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch  ON cancellation_vouchers (batch_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_club   ON cancellation_vouchers (club_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
+  await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS from_time TIME");
+  await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
 }
 
 // ── Seed reviews ──────────────────────────────────────────────────────────────

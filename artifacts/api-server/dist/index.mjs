@@ -18886,14 +18886,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto7 = __require("crypto");
+    var crypto8 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash2 = crypto7.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash2 = crypto8.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash2 + '"';
     }
@@ -22368,17 +22368,17 @@ var require_content_disposition = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto7 = __require("crypto");
+    var crypto8 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto7.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto8.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto7.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto8.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -31688,7 +31688,7 @@ var require_cert_signatures = __commonJS({
 var require_sasl = __commonJS({
   "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
-    var crypto7 = require_utils5();
+    var crypto8 = require_utils5();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
     function startSession(mechanisms, stream) {
       const candidates = ["SCRAM-SHA-256"];
@@ -31700,7 +31700,7 @@ var require_sasl = __commonJS({
       if (mechanism === "SCRAM-SHA-256-PLUS" && typeof stream.getPeerCertificate !== "function") {
         throw new Error("SASL: Mechanism SCRAM-SHA-256-PLUS requires a certificate");
       }
-      const clientNonce = crypto7.randomBytes(18).toString("base64");
+      const clientNonce = crypto8.randomBytes(18).toString("base64");
       const gs2Header = mechanism === "SCRAM-SHA-256-PLUS" ? "p=tls-server-end-point" : stream ? "y" : "n";
       return {
         mechanism,
@@ -31735,20 +31735,20 @@ var require_sasl = __commonJS({
         const peerCert = stream.getPeerCertificate().raw;
         let hashName = signatureAlgorithmHashFromCertificate(peerCert);
         if (hashName === "MD5" || hashName === "SHA-1") hashName = "SHA-256";
-        const certHash = await crypto7.hashByName(hashName, peerCert);
+        const certHash = await crypto8.hashByName(hashName, peerCert);
         const bindingData = Buffer.concat([Buffer.from("p=tls-server-end-point,,"), Buffer.from(certHash)]);
         channelBinding = bindingData.toString("base64");
       }
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto7.deriveKey(password, saltBytes, sv.iteration);
-      const clientKey = await crypto7.hmacSha256(saltedPassword, "Client Key");
-      const storedKey = await crypto7.sha256(clientKey);
-      const clientSignature = await crypto7.hmacSha256(storedKey, authMessage);
+      const saltedPassword = await crypto8.deriveKey(password, saltBytes, sv.iteration);
+      const clientKey = await crypto8.hmacSha256(saltedPassword, "Client Key");
+      const storedKey = await crypto8.sha256(clientKey);
+      const clientSignature = await crypto8.hmacSha256(storedKey, authMessage);
       const clientProof = xorBuffers(Buffer.from(clientKey), Buffer.from(clientSignature)).toString("base64");
-      const serverKey = await crypto7.hmacSha256(saltedPassword, "Server Key");
-      const serverSignatureBytes = await crypto7.hmacSha256(serverKey, authMessage);
+      const serverKey = await crypto8.hmacSha256(saltedPassword, "Server Key");
+      const serverSignatureBytes = await crypto8.hmacSha256(serverKey, authMessage);
       session.message = "SASLResponse";
       session.serverSignature = Buffer.from(serverSignatureBytes).toString("base64");
       session.response = clientFinalMessageWithoutProof + ",p=" + clientProof;
@@ -33916,7 +33916,7 @@ var require_client = __commonJS({
     var Query2 = require_query();
     var defaults2 = require_defaults();
     var Connection2 = require_connection();
-    var crypto7 = require_utils5();
+    var crypto8 = require_utils5();
     var activeQueryDeprecationNotice = nodeUtils.deprecate(
       () => {
       },
@@ -34151,7 +34151,7 @@ var require_client = __commonJS({
       _handleAuthMD5Password(msg) {
         this._getPassword(async () => {
           try {
-            const hashedPassword = await crypto7.postgresMd5PasswordHash(this.user, this.password, msg.salt);
+            const hashedPassword = await crypto8.postgresMd5PasswordHash(this.user, this.password, msg.salt);
             this.connection.password(hashedPassword);
           } catch (e) {
             this.emit("error", e);
@@ -48705,9 +48705,9 @@ var require_disk = __commonJS({
     var fs = __require("fs");
     var os = __require("os");
     var path3 = __require("path");
-    var crypto7 = __require("crypto");
+    var crypto8 = __require("crypto");
     function getFilename(req, file, cb) {
-      crypto7.randomBytes(16, function(err, raw) {
+      crypto8.randomBytes(16, function(err, raw) {
         cb(err, err ? void 0 : raw.toString("hex"));
       });
     }
@@ -59850,6 +59850,56 @@ var vouchers_default = router8;
 // src/routes/cancellationVouchers.ts
 var import_express9 = __toESM(require_express2(), 1);
 init_pg();
+
+// src/lib/portalAuth.ts
+init_pg();
+import crypto5 from "crypto";
+var SECRET = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
+function verifyClubToken(token) {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto5.createHmac("sha256", SECRET).update(payload).digest("hex");
+  if (!crypto5.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.type !== "club") return null;
+    if (data.exp < Date.now()) return null;
+    return data.sub;
+  } catch {
+    return null;
+  }
+}
+async function requireClubAuth(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const clubId = verifyClubToken(header.slice(7));
+  if (!clubId) {
+    res.status(401).json({ message: "Invalid or expired token" });
+    return;
+  }
+  const club = await row(
+    `SELECT id, name, location, province, image_url, logo_url, holes, price_from,
+            facilities, website, description, phone, email, address, featured, active,
+            cart_available, cart_compulsory, cart_price, latitude, longitude,
+            geofence_enabled, geofence_radius_m, username
+     FROM clubs WHERE id = ? AND active = 1`,
+    [clubId]
+  );
+  if (!club) {
+    res.status(401).json({ message: "Club not found" });
+    return;
+  }
+  req.club = club;
+  next();
+}
+function getClub(req) {
+  return req.club;
+}
+
+// src/routes/cancellationVouchers.ts
 var router9 = (0, import_express9.Router)();
 function generateVoucherCode(clubName, userId) {
   const slug = clubName.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "X");
@@ -59865,111 +59915,126 @@ async function ensureUniqueCode(clubName, userId) {
   }
   throw new Error("Could not generate unique voucher code");
 }
-router9.get("/admin/cancellation-vouchers/preview", async (req, res) => {
-  const user = await getUser(req);
-  if (!isStaff(user)) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
+async function fetchAffectedPlayers(clubId, date, fromTime) {
+  const timeFilter = fromTime ? "AND pts.tee_time >= ?" : "";
+  const timeParam = fromTime ?? null;
+  const creatorsParams = [clubId, date];
+  if (timeParam) creatorsParams.push(timeParam);
+  const creators = await query(
+    `SELECT
+       u.id, u.name, u.email, u.push_token,
+       b.id AS booking_id,
+       b.total_amount, b.my_amount, b.split_bill,
+       pts.tee_time AS time,
+       (SELECT bp.amount FROM booking_players bp
+         WHERE bp.booking_id = b.id AND bp.user_id = u.id LIMIT 1) AS bp_amount
+     FROM bookings b
+     JOIN users u ON u.id = b.user_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE pts.club_id = ?
+       AND pts.date = ?
+       AND b.status IN ('confirmed','pending')
+       ${timeFilter}
+     ORDER BY pts.tee_time, u.name`,
+    creatorsParams
+  );
+  const coParams = [clubId, date];
+  if (timeParam) coParams.push(timeParam);
+  const coPlayers = await query(
+    `SELECT
+       u.id, u.name, u.email, u.push_token,
+       b.id AS booking_id,
+       bp.amount AS voucher_value,
+       pts.tee_time AS time
+     FROM bookings b
+     JOIN booking_players bp
+       ON bp.booking_id = b.id
+       AND bp.user_id IS NOT NULL
+       AND bp.user_id != b.user_id
+     JOIN users u ON u.id = bp.user_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE pts.club_id = ?
+       AND pts.date = ?
+       AND b.split_bill = 1
+       AND b.status IN ('confirmed','pending')
+       ${timeFilter}
+     ORDER BY pts.tee_time, u.name`,
+    coParams
+  );
+  const creatorRows = creators.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    push_token: r.push_token ?? null,
+    booking_id: r.booking_id,
+    time: String(r.time).slice(0, 5),
+    voucher_value: r.bp_amount != null ? parseFloat(r.bp_amount) : r.split_bill ? parseFloat(r.my_amount ?? 0) : parseFloat(r.total_amount ?? 0)
+  }));
+  const coPlayerRows = coPlayers.map((r) => ({
+    id: r.id,
+    name: r.name,
+    email: r.email,
+    push_token: r.push_token ?? null,
+    booking_id: r.booking_id,
+    time: String(r.time).slice(0, 5),
+    voucher_value: r.voucher_value != null ? parseFloat(r.voucher_value) : null
+  }));
+  const all = [...creatorRows, ...coPlayerRows];
+  const seen = /* @__PURE__ */ new Map();
+  for (const p of all) {
+    if (!seen.has(p.id)) seen.set(p.id, p);
   }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) {
-    res.status(400).json({ message: "club_id required" });
-    return;
-  }
+  return Array.from(seen.values()).sort(
+    (a, b) => a.time.localeCompare(b.time) || a.name.localeCompare(b.name)
+  );
+}
+router9.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const clubId = club.id;
   const date = req.query.date ? String(req.query.date) : null;
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  const fromTime = req.query.from_time ? String(req.query.from_time) : null;
+  if (!date) {
+    res.status(400).json({ message: "date is required" });
+    return;
+  }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ message: "date must be YYYY-MM-DD" });
     return;
   }
-  let affected;
-  if (date) {
-    affected = await query(
-      `SELECT DISTINCT u.id, u.name, u.email, b.id as booking_id,
-              pts.tee_time as time
-       FROM bookings b
-       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-       JOIN users u ON u.id = b.user_id
-       WHERE pts.club_id = ?
-         AND pts.date = ?
-         AND b.status IN ('confirmed','pending')
-       ORDER BY pts.tee_time, u.name`,
-      [clubId, date]
-    );
-  } else {
-    affected = [];
-  }
-  res.json({ count: affected.length, users: affected });
+  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null);
+  res.json({ count: players.length, users: players });
 });
-router9.post("/admin/cancellation-vouchers/issue", async (req, res) => {
-  const caller = await getUser(req);
-  if (!isStaff(caller)) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
-  const clubId = effectiveClubId(caller, req.body?.club_id);
-  if (!clubId) {
-    res.status(400).json({ message: "club_id required" });
-    return;
-  }
-  const { affected_date, reason, value_rands, expires_in_days, booking_ids } = req.body ?? {};
+router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const clubId = club.id;
+  const { affected_date, reason, from_time, expires_in_days } = req.body ?? {};
   if (!reason || !String(reason).trim()) {
     res.status(400).json({ message: "reason is required" });
     return;
   }
-  const club = await row("SELECT id, name FROM clubs WHERE id = ?", [clubId]);
-  if (!club) {
-    res.status(404).json({ message: "Club not found" });
+  if (!affected_date) {
+    res.status(400).json({ message: "affected_date is required" });
     return;
   }
   const expiresAt = expires_in_days ? new Date(Date.now() + Number(expires_in_days) * 864e5).toISOString() : null;
-  const dateParam = affected_date || null;
-  let recipients;
-  if (Array.isArray(booking_ids) && booking_ids.length > 0) {
-    recipients = await query(
-      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
-       FROM bookings b
-       JOIN users u ON u.id = b.user_id
-       WHERE b.id = ANY(?::int[])
-         AND b.status IN ('confirmed','pending')`,
-      [booking_ids]
-    );
-  } else if (dateParam) {
-    recipients = await query(
-      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
-       FROM bookings b
-       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-       JOIN users u ON u.id = b.user_id
-       WHERE pts.club_id = ?
-         AND pts.date = ?
-         AND b.status IN ('confirmed','pending')`,
-      [clubId, dateParam]
-    );
-  } else {
-    res.status(400).json({ message: "Either affected_date or booking_ids is required" });
-    return;
-  }
+  const fromTime = from_time || null;
+  const dateParam = String(affected_date);
+  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime);
   if (recipients.length === 0) {
     res.status(400).json({ message: "No affected bookings found for the given criteria" });
     return;
   }
-  const seen = /* @__PURE__ */ new Set();
-  const uniqueRecipients = recipients.filter((r) => {
-    if (seen.has(r.id)) return false;
-    seen.add(r.id);
-    return true;
-  });
   const batchRow = await row(
     `INSERT INTO cancellation_voucher_batches
-       (club_id, issued_by, reason, affected_date, value_rands, expires_at, voucher_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (club_id, issued_by, reason, affected_date, from_time, value_rands, expires_at, voucher_count)
+     VALUES (?, NULL, ?, ?, ?, NULL, ?, ?)
      RETURNING id`,
-    [clubId, caller.id, String(reason).trim(), dateParam, value_rands ?? null, expiresAt, uniqueRecipients.length]
+    [clubId, String(reason).trim(), dateParam, fromTime, expiresAt, recipients.length]
   );
   const batchId = batchRow.id;
   const issued = [];
-  for (const recipient of uniqueRecipients) {
+  for (const recipient of recipients) {
     const code = await ensureUniqueCode(club.name, recipient.id);
-    const bookingForUser = recipients.find((r) => r.id === recipient.id);
     await exec(
       `INSERT INTO cancellation_vouchers
          (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
@@ -59979,22 +60044,22 @@ router9.post("/admin/cancellation-vouchers/issue", async (req, res) => {
         batchId,
         clubId,
         recipient.id,
-        bookingForUser?.booking_id ?? null,
+        recipient.booking_id ?? null,
         String(reason).trim(),
-        value_rands ?? null,
+        recipient.voucher_value ?? null,
         expiresAt
       ]
     );
-    issued.push({ userId: recipient.id, name: recipient.name, code });
+    issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value });
     const notifTitle = `Voucher from ${club.name}`;
-    const valueStr = value_rands ? ` worth R${Number(value_rands).toFixed(2)}` : "";
+    const valueStr = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
     const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
-    const notifBody = `You've received a cancellation voucher${valueStr}${expiryStr}. Your code: ${code}`;
+    const notifBody = `Your tee time was cancelled${valueStr ? ` \u2014 here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
     saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
       code,
       club_id: clubId,
       batch_id: batchId,
-      value_rands: value_rands ?? null
+      value_rands: recipient.voucher_value ?? null
     });
     if (recipient.push_token?.startsWith("ExponentPushToken[")) {
       sendPushNotifications([{
@@ -60008,26 +60073,18 @@ router9.post("/admin/cancellation-vouchers/issue", async (req, res) => {
   }
   res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued });
 });
-router9.get("/admin/cancellation-vouchers/batches", async (req, res) => {
-  const user = await getUser(req);
-  if (!isStaff(user)) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) {
-    res.status(400).json({ message: "club_id required" });
-    return;
-  }
+router9.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const clubId = club.id;
   const limit = Math.min(parseInt(String(req.query.limit ?? "30"), 10), 100);
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
   const batches = await query(
-    `SELECT b.id, b.reason, b.affected_date, b.value_rands, b.expires_at,
+    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.value_rands, b.expires_at,
             b.voucher_count, b.created_at,
-            u.name as issued_by_name,
+            COALESCE(u.name, 'Portal') as issued_by_name,
             COUNT(cv.id) FILTER (WHERE cv.redeemed_at IS NOT NULL) as redeemed_count
      FROM cancellation_voucher_batches b
-     JOIN users u ON u.id = b.issued_by
+     LEFT JOIN users u ON u.id = b.issued_by
      LEFT JOIN cancellation_vouchers cv ON cv.batch_id = b.id
      WHERE b.club_id = ?
      GROUP BY b.id, u.name
@@ -60037,17 +60094,9 @@ router9.get("/admin/cancellation-vouchers/batches", async (req, res) => {
   );
   res.json({ batches });
 });
-router9.get("/admin/cancellation-vouchers/batches/:batchId", async (req, res) => {
-  const user = await getUser(req);
-  if (!isStaff(user)) {
-    res.status(403).json({ message: "Forbidden" });
-    return;
-  }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) {
-    res.status(400).json({ message: "club_id required" });
-    return;
-  }
+router9.get("/admin/cancellation-vouchers/batches/:batchId", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const clubId = club.id;
   const batchId = parseInt(req.params.batchId, 10);
   const batch = await row(
     "SELECT * FROM cancellation_voucher_batches WHERE id = ? AND club_id = ?",
@@ -61171,7 +61220,7 @@ var import_express14 = __toESM(require_express2(), 1);
 init_bcryptjs();
 var import_multer = __toESM(require_multer(), 1);
 init_pg();
-import crypto5 from "crypto";
+import crypto6 from "crypto";
 import { randomUUID as randomUUID2 } from "crypto";
 import path from "path";
 
@@ -61467,19 +61516,19 @@ var upload = (0, import_multer.default)({
   }
 });
 var router14 = (0, import_express14.Router)();
-var SECRET = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
+var SECRET2 = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
 function generateClubToken(clubId) {
   const payload = Buffer.from(
     JSON.stringify({ sub: clubId, type: "club", iat: Date.now(), exp: Date.now() + 7 * 24 * 60 * 60 * 1e3 })
   ).toString("base64url");
-  const sig = crypto5.createHmac("sha256", SECRET).update(payload).digest("hex");
+  const sig = crypto6.createHmac("sha256", SECRET2).update(payload).digest("hex");
   return `${payload}.${sig}`;
 }
-function verifyClubToken(token) {
+function verifyClubToken2(token) {
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return null;
-  const expected = crypto5.createHmac("sha256", SECRET).update(payload).digest("hex");
-  if (!crypto5.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  const expected = crypto6.createHmac("sha256", SECRET2).update(payload).digest("hex");
+  if (!crypto6.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
     if (data.type !== "club") return null;
@@ -61489,13 +61538,13 @@ function verifyClubToken(token) {
     return null;
   }
 }
-async function requireClubAuth(req, res, next) {
+async function requireClubAuth2(req, res, next) {
   const header = req.headers.authorization ?? "";
   if (!header.startsWith("Bearer ")) {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
-  const clubId = verifyClubToken(header.slice(7));
+  const clubId = verifyClubToken2(header.slice(7));
   if (!clubId) {
     res.status(401).json({ message: "Invalid or expired token" });
     return;
@@ -61508,7 +61557,7 @@ async function requireClubAuth(req, res, next) {
   req.club = club;
   next();
 }
-function getClub(req) {
+function getClub2(req) {
   return req.club;
 }
 router14.post("/portal/auth/login", async (req, res) => {
@@ -61629,8 +61678,8 @@ router14.post("/portal/auth/reset-password", async (req, res) => {
   await exec("UPDATE club_password_reset_otps SET used_at = NOW() WHERE id = ?", [record.id]);
   res.json({ success: true, message: "Password has been reset successfully." });
 });
-router14.get("/portal/auth/me", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/auth/me", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json({
     id: club.id,
     name: club.name,
@@ -61657,8 +61706,8 @@ router14.get("/portal/auth/me", requireClubAuth, async (req, res) => {
     username: club.username
   });
 });
-router14.get("/portal/me", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/me", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json({
     id: club.id,
     name: club.name,
@@ -61684,8 +61733,8 @@ router14.get("/portal/me", requireClubAuth, async (req, res) => {
     geofence_radius_m: club.geofence_radius_m
   });
 });
-router14.put("/portal/me", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/me", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const {
     name,
     location,
@@ -61744,8 +61793,8 @@ router14.put("/portal/me", requireClubAuth, async (req, res) => {
   const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
 });
-router14.get("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const [data, feeSetting] = await Promise.all([
     row(
       `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
@@ -61773,8 +61822,8 @@ router14.get("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
     min_fee_pct: minFeePct
   });
 });
-router14.put("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const {
     preset,
     full_refund_hours,
@@ -61835,8 +61884,8 @@ router14.put("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
   );
   res.json({ success: true });
 });
-router14.get("/portal/dashboard", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const [teeTimes, bookings, reviews, members, events] = await Promise.all([
     row("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
@@ -61868,8 +61917,8 @@ router14.get("/portal/dashboard", requireClubAuth, async (req, res) => {
     recent_bookings: recentBookings.map((b) => ({ ...b, time: String(b.time).slice(0, 5) }))
   });
 });
-router14.get("/portal/tee-times", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { date, from, to } = req.query;
   let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ?";
   const params = [club.id];
@@ -61895,8 +61944,8 @@ router14.get("/portal/tee-times", requireClubAuth, async (req, res) => {
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]")
   })));
 });
-router14.post("/portal/tee-times", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes } = req.body ?? {};
   if (!date || !time) {
     res.status(400).json({ message: "date and time required" });
@@ -61910,8 +61959,8 @@ router14.post("/portal/tee-times", requireClubAuth, async (req, res) => {
   const inserted = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId]);
   res.json({ ...inserted, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!inserted.active });
 });
-router14.delete("/portal/tee-times/clear", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/tee-times/clear", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { from, to } = req.query;
   if (!from || !to) {
     res.status(400).json({ message: "from and to dates required" });
@@ -61920,8 +61969,8 @@ router14.delete("/portal/tee-times/clear", requireClubAuth, async (req, res) => 
   const deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ?", [club.id, from, to]);
   res.json({ message: "Cleared", deleted });
 });
-router14.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const ttId = Number(req.params.id);
   const existing = await row("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) {
@@ -61956,8 +62005,8 @@ router14.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   const updated = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE id = ?", [ttId]);
   res.json({ ...updated, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!updated.active, blocked_slots: JSON.parse(updated.blocked_slots ?? "[]") });
 });
-router14.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const ttId = Number(req.params.id);
   const existing = await row("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) {
@@ -61967,8 +62016,8 @@ router14.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   res.json({ message: "Deleted" });
 });
-router14.get("/portal/bookings", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { status, date, from, to, limit = 50, offset = 0 } = req.query;
   let sql = `SELECT b.id, b.portal_slot_id, b.portal_slot_id AS tee_time_id,
                     b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
@@ -62009,8 +62058,8 @@ router14.get("/portal/bookings", requireClubAuth, async (req, res) => {
   const rows = await query(sql, params);
   res.json(rows.map((r) => ({ ...r, time: String(r.time).slice(0, 5), total_amount: Number(r.total_amount), tee_price: Number(r.tee_price) })));
 });
-router14.put("/portal/bookings/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/bookings/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const bId = Number(req.params.id);
   const { status } = req.body ?? {};
   if (!["pending", "confirmed", "cancelled", "completed"].includes(status)) {
@@ -62025,8 +62074,8 @@ router14.put("/portal/bookings/:id", requireClubAuth, async (req, res) => {
   await exec("UPDATE bookings SET status = ? WHERE id = ?", [status, bId]);
   res.json({ message: "Updated", status });
 });
-router14.get("/portal/reviews", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/reviews", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const rows = await query(
     `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS guest_name, u.email AS guest_email
      FROM reviews r JOIN users u ON r.user_id = u.id
@@ -62035,12 +62084,12 @@ router14.get("/portal/reviews", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router14.get("/portal/ads", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/ads", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json(await query("SELECT id, title, subtitle, image_url, cta_text, link_url, placement, priority, active, created_at FROM ads WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
 });
-router14.post("/portal/ads", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/ads", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { title, subtitle, image_url, cta_text, link_url, placement = "home", priority = 0, active = 1 } = req.body ?? {};
   if (!title) {
     res.status(400).json({ message: "title required" });
@@ -62053,8 +62102,8 @@ router14.post("/portal/ads", requireClubAuth, async (req, res) => {
   const inserted = await row("SELECT * FROM ads WHERE id = ?", [result.insertId]);
   res.json(inserted);
 });
-router14.put("/portal/ads/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/ads/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const adId = Number(req.params.id);
   const existing = await row("SELECT id FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
   if (!existing) {
@@ -62081,8 +62130,8 @@ router14.put("/portal/ads/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM ads WHERE id = ?", [adId]));
 });
-router14.delete("/portal/ads/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/ads/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const adId = Number(req.params.id);
   const existing = await row("SELECT id FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
   if (!existing) {
@@ -62092,12 +62141,12 @@ router14.delete("/portal/ads/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
   res.json({ message: "Deleted" });
 });
-router14.get("/portal/events", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/events", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json(await query("SELECT id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_at FROM golf_events WHERE club_id = ? ORDER BY event_date DESC LIMIT 200", [club.id]));
 });
-router14.post("/portal/events", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/events", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const {
     name,
     description,
@@ -62120,8 +62169,8 @@ router14.post("/portal/events", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [result.insertId]));
 });
-router14.put("/portal/events/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const evId = Number(req.params.id);
   const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) {
@@ -62150,8 +62199,8 @@ router14.put("/portal/events/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
-router14.delete("/portal/events/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const evId = Number(req.params.id);
   const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) {
@@ -62161,8 +62210,8 @@ router14.delete("/portal/events/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   res.json({ message: "Deleted" });
 });
-router14.get("/portal/members", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/members", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const rows = await query(
     `SELECT cm.id, cm.membership_type, cm.status, cm.created_at,
             cm.start_date, cm.renewal_date, cm.benefits,
@@ -62174,8 +62223,8 @@ router14.get("/portal/members", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router14.post("/portal/members", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/members", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { email, membership_type = "standard", start_date, renewal_date, benefits, prepaid_rounds = 0, hna_number, student_number } = req.body ?? {};
   if (!email) {
     res.status(400).json({ message: "email required" });
@@ -62252,8 +62301,8 @@ router14.post("/portal/members", requireClubAuth, async (req, res) => {
   );
   res.json({ message: "Member added" });
 });
-router14.post("/portal/members/import", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { rows } = req.body ?? {};
   if (!Array.isArray(rows) || rows.length === 0) {
     res.status(400).json({ message: "rows array required" });
@@ -62339,8 +62388,8 @@ router14.post("/portal/members/import", requireClubAuth, async (req, res) => {
   }
   res.json({ added, renewed, pending, errors });
 });
-router14.put("/portal/members/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/members/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const mId = Number(req.params.id);
   const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, hna_number } = req.body ?? {};
   const existing = await row("SELECT id, user_id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
@@ -62381,8 +62430,8 @@ router14.put("/portal/members/:id", requireClubAuth, async (req, res) => {
   }
   res.json({ message: "Updated" });
 });
-router14.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/members/bulk-renew", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { ids, renewal_date } = req.body ?? {};
   if (!Array.isArray(ids) || ids.length === 0) {
     res.status(400).json({ message: "ids array required" });
@@ -62405,8 +62454,8 @@ router14.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) =>
   );
   res.json({ message: "Renewed", renewed: memberIds.length });
 });
-router14.get("/portal/pending-members", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/pending-members", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const rows = await query(
     `SELECT id, email, hna_number, membership_type, status, start_date, renewal_date,
             benefits, prepaid_rounds, student_number, created_at
@@ -62415,8 +62464,8 @@ router14.get("/portal/pending-members", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router14.delete("/portal/pending-members/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/pending-members/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const pId = Number(req.params.id);
   const existing = await row("SELECT id FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
   if (!existing) {
@@ -62426,8 +62475,8 @@ router14.delete("/portal/pending-members/:id", requireClubAuth, async (req, res)
   await exec("DELETE FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
   res.json({ message: "Removed" });
 });
-router14.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/members/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const mId = Number(req.params.id);
   const existing = await row("SELECT id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
   if (!existing) {
@@ -62437,12 +62486,12 @@ router14.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
   res.json({ message: "Removed" });
 });
-router14.get("/portal/vouchers", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/vouchers", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json(await query("SELECT id, code, discount_type, discount_value, min_amount, max_uses, uses_count, active, expires_at, created_at FROM vouchers WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
 });
-router14.post("/portal/vouchers", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/vouchers", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { code, discount_type, discount_value, min_amount, max_uses, expires_at } = req.body ?? {};
   if (!code || !discount_type || discount_value == null) {
     res.status(400).json({ message: "code, discount_type and discount_value required" });
@@ -62459,8 +62508,8 @@ router14.post("/portal/vouchers", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM vouchers WHERE id = ?", [result.insertId]));
 });
-router14.put("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const vId = Number(req.params.id);
   const existing = await row("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   if (!existing) {
@@ -62474,8 +62523,8 @@ router14.put("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM vouchers WHERE id = ?", [vId]));
 });
-router14.delete("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const vId = Number(req.params.id);
   const existing = await row("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   if (!existing) {
@@ -62485,37 +62534,37 @@ router14.delete("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   res.json({ message: "Deleted" });
 });
-router14.get("/portal/inbox", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/inbox", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json(await query(
     "SELECT id, type, title, body, meta, read_at, created_at FROM club_inbox_notifications WHERE club_id = ? ORDER BY created_at DESC LIMIT 50",
     [club.id]
   ));
 });
-router14.get("/portal/inbox/unread-count", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/inbox/unread-count", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const r = await row("SELECT COUNT(*) AS cnt FROM club_inbox_notifications WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ count: Number(r?.cnt ?? 0) });
 });
-router14.put("/portal/inbox/:id/read", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/inbox/:id/read", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const nid = parseInt(req.params.id, 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
-router14.put("/portal/inbox/read-all", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/inbox/read-all", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ ok: true });
 });
-router14.put("/portal/inbox/:id/unread", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/inbox/:id/unread", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const nid = parseInt(req.params.id, 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
-router14.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/inbox/:id/refund-processed", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const nid = parseInt(req.params.id, 10);
   await exec(
     "UPDATE club_inbox_notifications SET refund_processed_at = NOW(), read_at = COALESCE(read_at, NOW()) WHERE id = ? AND club_id = ? AND type = 'cancellation'",
@@ -62523,12 +62572,12 @@ router14.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, 
   );
   res.json({ ok: true });
 });
-router14.get("/portal/notifications", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/notifications", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   res.json(await query("SELECT id, type, title, body, tee_shift_minutes, affected_date, recipient_count, sent_at FROM club_notifications WHERE club_id = ? ORDER BY sent_at DESC LIMIT 100", [club.id]));
 });
-router14.post("/portal/notifications", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/notifications", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { type = "general", title, body, tee_shift_minutes, affected_date } = req.body ?? {};
   if (!title || !body) {
     res.status(400).json({ message: "title and body required" });
@@ -62544,7 +62593,7 @@ router14.post("/portal/notifications", requireClubAuth, async (req, res) => {
 });
 router14.post(
   "/portal/logo/upload",
-  requireClubAuth,
+  requireClubAuth2,
   upload.single("logo"),
   async (req, res) => {
     const file = req.file;
@@ -62552,7 +62601,7 @@ router14.post(
       res.status(400).json({ message: "No image file provided" });
       return;
     }
-    const club = getClub(req);
+    const club = getClub2(req);
     const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
     if (!privateDir) {
       res.status(500).json({ message: "Object storage not configured" });
@@ -62576,7 +62625,7 @@ router14.post(
 );
 router14.post(
   "/portal/images/upload",
-  requireClubAuth,
+  requireClubAuth2,
   upload.single("photo"),
   async (req, res) => {
     const file = req.file;
@@ -62584,7 +62633,7 @@ router14.post(
       res.status(400).json({ message: "No image file provided" });
       return;
     }
-    const club = getClub(req);
+    const club = getClub2(req);
     const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
     if (!privateDir) {
       res.status(500).json({ message: "Object storage not configured" });
@@ -62611,16 +62660,16 @@ router14.post(
     res.status(201).json({ image, url });
   }
 );
-router14.get("/portal/images", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/images", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const images = await query(
     "SELECT id, url, caption, display_order, created_at FROM club_images WHERE club_id = ? ORDER BY display_order ASC, id ASC",
     [club.id]
   );
   res.json({ images });
 });
-router14.post("/portal/images", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/images", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { url, caption, display_order = 0 } = req.body ?? {};
   if (!url || typeof url !== "string" || !url.startsWith("http")) {
     res.status(400).json({ message: "A valid image URL is required" });
@@ -62633,8 +62682,8 @@ router14.post("/portal/images", requireClubAuth, async (req, res) => {
   const image = await row("SELECT * FROM club_images WHERE id = ?", [result.insertId]);
   res.status(201).json({ image });
 });
-router14.put("/portal/images/:imageId", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/images/:imageId", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const imageId = parseInt(req.params.imageId, 10);
   const { caption, display_order } = req.body ?? {};
   await exec(
@@ -62648,8 +62697,8 @@ router14.put("/portal/images/:imageId", requireClubAuth, async (req, res) => {
   }
   res.json({ image });
 });
-router14.delete("/portal/images/:imageId", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/images/:imageId", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const imageId = parseInt(req.params.imageId, 10);
   await exec("DELETE FROM club_images WHERE id = ? AND club_id = ?", [imageId, club.id]);
   res.json({ message: "Deleted" });
@@ -62671,16 +62720,16 @@ var PRICING_TIERS = [
   "student_visitor",
   "junior_visitor"
 ];
-router14.get("/portal/schedule-configs", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/schedule-configs", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const rows = await query(
     "SELECT id, name, config_type, config_data, created_at, updated_at FROM tee_time_schedule_configs WHERE club_id = ? ORDER BY created_at ASC",
     [club.id]
   );
   res.json(rows.map((r) => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
 });
-router14.post("/portal/schedule-configs", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/schedule-configs", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { name, config_type, config_data } = req.body ?? {};
   if (!name || !config_type || !config_data) {
     res.status(400).json({ message: "name, config_type and config_data are required" });
@@ -62692,8 +62741,8 @@ router14.post("/portal/schedule-configs", requireClubAuth, async (req, res) => {
   );
   res.status(201).json({ id, name, config_type, config_data });
 });
-router14.put("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/schedule-configs/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const cfgId = Number(req.params.id);
   const existing = await row("SELECT id FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
   if (!existing) {
@@ -62717,14 +62766,14 @@ router14.put("/portal/schedule-configs/:id", requireClubAuth, async (req, res) =
   );
   res.json({ message: "Updated" });
 });
-router14.delete("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.delete("/portal/schedule-configs/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const cfgId = Number(req.params.id);
   await run("DELETE FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
   res.json({ message: "Deleted" });
 });
-router14.get("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/pricing-tiers", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   let rows;
   try {
     rows = await query(
@@ -62742,8 +62791,8 @@ router14.get("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   for (const r of rows) map[r.tier_type] = { price_18h: r.price_18h != null ? parseFloat(r.price_18h) : null, price_9h: r.price_9h != null ? parseFloat(r.price_9h) : null, hidden: !!r.hidden };
   res.json(map);
 });
-router14.put("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.put("/portal/pricing-tiers", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { tiers } = req.body ?? {};
   if (!tiers || typeof tiers !== "object") {
     res.status(400).json({ message: "tiers object required" });
@@ -62763,8 +62812,8 @@ router14.put("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   }
   res.json({ message: "Pricing tiers saved" });
 });
-router14.get("/portal/payments", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.get("/portal/payments", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const { status, from, to, search, limit = 200, offset = 0 } = req.query;
   let sql = `
     SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
@@ -62823,8 +62872,8 @@ router14.get("/portal/payments", requireClubAuth, async (req, res) => {
     players_list: typeof r.players_list === "string" ? JSON.parse(r.players_list) : r.players_list ?? []
   })));
 });
-router14.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req, res) => {
-  const club = getClub(req);
+router14.post("/portal/payments/:id/resend-invoice", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
   const bId = Number(req.params.id);
   const b = await row(
     `
@@ -63142,7 +63191,7 @@ var payments_default = router16;
 // src/routes/settings.ts
 var import_express17 = __toESM(require_express2(), 1);
 init_pg();
-import crypto6 from "crypto";
+import crypto7 from "crypto";
 function buildAdRemovalPayFastUrl(purchaseId, amount, host) {
   const merchantId = process.env["PAYFAST_MERCHANT_ID"] ?? "";
   const merchantKey = process.env["PAYFAST_MERCHANT_KEY"] ?? "";
@@ -63163,7 +63212,7 @@ function buildAdRemovalPayFastUrl(purchaseId, amount, host) {
   };
   const paramStr = Object.entries(data).map(([k, v]) => `${k}=${encodeURIComponent(v.trim())}`).join("&");
   const signatureStr = passphrase ? `${paramStr}&passphrase=${encodeURIComponent(passphrase.trim())}` : paramStr;
-  data["signature"] = crypto6.createHash("md5").update(signatureStr).digest("hex");
+  data["signature"] = crypto7.createHash("md5").update(signatureStr).digest("hex");
   const qs = Object.entries(data).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
   return `${pfUrl}?${qs}`;
 }
@@ -64873,6 +64922,8 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch  ON cancellation_vouchers (batch_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_club   ON cancellation_vouchers (club_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
+  await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS from_time TIME");
+  await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
 }
 var SEED_REVIEWS = [
   {
@@ -64997,8 +65048,8 @@ async function seedData() {
     if (firstUser) {
       reviewerId = firstUser.id;
     } else {
-      const crypto7 = await import("crypto");
-      const demoHash = crypto7.createHmac("sha256", "tapin-seed-key").update("demo-reviewer-2024").digest("hex");
+      const crypto8 = await import("crypto");
+      const demoHash = crypto8.createHmac("sha256", "tapin-seed-key").update("demo-reviewer-2024").digest("hex");
       reviewerId = await exec(
         "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'golfer')",
         ["Demo Golfer", "demo@tapingolf.co.za", demoHash]

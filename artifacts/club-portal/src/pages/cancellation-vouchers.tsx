@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearch, useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
@@ -9,13 +10,14 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
-import { ChevronDown, ChevronRight, Send, Users, Ticket, CheckCircle2, Clock } from "lucide-react";
+import { ChevronDown, ChevronRight, Send, Users, Ticket, CheckCircle2, Clock, Info } from "lucide-react";
 
 interface PreviewUser {
   id: number;
   name: string;
   email: string;
   booking_id: number;
+  voucher_value: number | null;
   time: string;
 }
 
@@ -23,6 +25,7 @@ interface Batch {
   id: number;
   reason: string;
   affected_date: string | null;
+  from_time: string | null;
   value_rands: string | null;
   expires_at: string | null;
   voucher_count: number;
@@ -44,15 +47,28 @@ interface BatchVoucher {
 export default function CancellationVouchers() {
   const { toast } = useToast();
   const { club } = useAuth();
+  const search = useSearch();
+  const [, navigate] = useLocation();
+
+  // Read pre-filled values from URL (e.g. from Schedule page link)
+  const params    = new URLSearchParams(search);
+  const urlDate   = params.get("date")      ?? "";
+  const urlFromTime = params.get("from_time") ?? "";
 
   // Issue form
-  const [date, setDate]           = useState("");
+  const [date, setDate]           = useState(urlDate);
+  const [fromTime, setFromTime]   = useState(urlFromTime);
   const [reason, setReason]       = useState("");
-  const [value, setValue]         = useState("");
   const [expiryDays, setExpiryDays] = useState("365");
   const [previewing, setPreviewing] = useState(false);
   const [preview, setPreview]     = useState<PreviewUser[] | null>(null);
   const [issuing, setIssuing]     = useState(false);
+
+  // Sync URL params → state when they change (e.g. navigating from Schedule)
+  useEffect(() => {
+    if (urlDate) setDate(urlDate);
+    if (urlFromTime) setFromTime(urlFromTime);
+  }, [urlDate, urlFromTime]);
 
   // History
   const [batches, setBatches]     = useState<Batch[]>([]);
@@ -76,8 +92,10 @@ export default function CancellationVouchers() {
     setPreviewing(true);
     setPreview(null);
     try {
+      const qs = new URLSearchParams({ date });
+      if (fromTime) qs.set("from_time", fromTime);
       const d = await api<{ count: number; users: PreviewUser[] }>(
-        `/api/admin/cancellation-vouchers/preview?date=${date}`
+        `/api/admin/cancellation-vouchers/preview?${qs}`
       );
       setPreview(d.users);
     } catch (e: any) {
@@ -89,8 +107,8 @@ export default function CancellationVouchers() {
 
   const handleIssue = async () => {
     if (!reason.trim()) { toast({ title: "Reason is required", variant: "destructive" }); return; }
-    if (!date && (!preview || preview.length === 0)) {
-      toast({ title: "Select a date and preview affected golfers first", variant: "destructive" });
+    if (!date) {
+      toast({ title: "Select a date first", variant: "destructive" });
       return;
     }
     if (preview !== null && preview.length === 0) {
@@ -99,17 +117,24 @@ export default function CancellationVouchers() {
     }
     setIssuing(true);
     try {
-      const body: Record<string, any> = { reason: reason.trim() };
-      if (date) body.affected_date = date;
-      if (value) body.value_rands = parseFloat(value);
+      const body: Record<string, any> = {
+        reason:        reason.trim(),
+        affected_date: date,
+      };
+      if (fromTime)   body.from_time      = fromTime;
       if (expiryDays) body.expires_in_days = parseInt(expiryDays, 10);
 
       const result = await api<{ success: boolean; voucher_count: number; batch_id: number }>(
         "/api/admin/cancellation-vouchers/issue",
         { method: "POST", body: JSON.stringify(body) }
       );
-      toast({ title: `${result.voucher_count} voucher${result.voucher_count !== 1 ? "s" : ""} issued`, description: "Golfers have been notified via in-app notification." });
-      setDate(""); setReason(""); setValue(""); setPreview(null);
+      toast({
+        title: `${result.voucher_count} voucher${result.voucher_count !== 1 ? "s" : ""} issued`,
+        description: "Each golfer receives a voucher equal to their booking amount via in-app notification.",
+      });
+      setDate(""); setFromTime(""); setReason(""); setPreview(null);
+      // Strip URL params so the form doesn't re-fill on reload
+      navigate("/cancellation-vouchers", { replace: true });
       loadBatches();
     } catch (e: any) {
       toast({ title: "Failed to issue vouchers", description: e.message, variant: "destructive" });
@@ -133,13 +158,27 @@ export default function CancellationVouchers() {
     }
   };
 
+  // Group preview rows by tee time
+  const previewByTime = preview
+    ? Object.entries(
+        preview.reduce<Record<string, PreviewUser[]>>((acc, u) => {
+          const key = u.time || "—";
+          if (!acc[key]) acc[key] = [];
+          acc[key].push(u);
+          return acc;
+        }, {})
+      ).sort(([a], [b]) => a.localeCompare(b))
+    : null;
+
+  const totalVoucherValue = preview?.reduce((s, u) => s + (u.voucher_value ?? 0), 0) ?? 0;
+
   return (
     <div className="p-8 space-y-8 max-w-4xl">
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Cancellation Vouchers</h1>
         <p className="text-muted-foreground mt-1">
-          Issue unique voucher codes to golfers affected by a cancellation (e.g. flooding, maintenance).
-          Each golfer receives their own code stored on their profile and delivered via in-app notification.
+          Issue vouchers to affected golfers. Voucher value is automatically set to what each player paid.
+          Linked directly to your Tee Schedule bookings.
         </p>
       </div>
 
@@ -162,25 +201,29 @@ export default function CancellationVouchers() {
               />
               <p className="text-xs text-muted-foreground">The date of the cancelled tee times</p>
             </div>
+
             <div className="space-y-1.5">
-              <Label>Voucher Value (R)</Label>
+              <Label>From Tee Time (optional)</Label>
               <Input
-                type="number"
-                min="0"
-                step="50"
-                value={value}
-                onChange={e => setValue(e.target.value)}
-                placeholder="e.g. 350 — leave blank for no fixed value"
+                type="time"
+                value={fromTime}
+                onChange={e => { setFromTime(e.target.value); setPreview(null); }}
+                placeholder="Leave blank for all tee times"
               />
+              <p className="text-xs text-muted-foreground">
+                Only affect bookings at or after this time (e.g. 11:00 if only afternoon is flooded)
+              </p>
             </div>
+
             <div className="space-y-1.5 md:col-span-2">
               <Label>Reason for Cancellation *</Label>
               <Input
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                placeholder="e.g. Course flooded due to heavy rainfall — all tee times cancelled"
+                placeholder="e.g. Course flooded due to heavy rainfall — afternoon tee times cancelled"
               />
             </div>
+
             <div className="space-y-1.5">
               <Label>Voucher Valid For (days)</Label>
               <Input
@@ -190,11 +233,24 @@ export default function CancellationVouchers() {
                 onChange={e => setExpiryDays(e.target.value)}
                 placeholder="365"
               />
-              <p className="text-xs text-muted-foreground">Number of days before the voucher expires</p>
+              <p className="text-xs text-muted-foreground">Number of days before vouchers expire</p>
+            </div>
+
+            <div className="flex items-end pb-0.5">
+              <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-4 py-3 text-sm text-[#1a5c38] w-full">
+                <div className="flex items-center gap-2 font-medium mb-0.5">
+                  <Info className="h-4 w-4 flex-shrink-0" />
+                  Auto-calculated voucher values
+                </div>
+                <p className="text-xs text-[#1a5c38]/80 leading-relaxed">
+                  Each golfer receives a voucher worth exactly what they paid —
+                  full amount for non-split bookings, their share for split-bill bookings.
+                </p>
+              </div>
             </div>
           </div>
 
-          {/* Preview step */}
+          {/* Preview / Issue actions */}
           <div className="flex flex-wrap gap-3 items-start">
             <Button
               variant="outline"
@@ -222,27 +278,49 @@ export default function CancellationVouchers() {
             )}
           </div>
 
-          {/* Preview list */}
-          {preview !== null && (
+          {/* Preview list — grouped by tee time */}
+          {previewByTime !== null && (
             <div className="rounded-lg border bg-muted/40 overflow-hidden">
-              {preview.length === 0 ? (
+              {preview!.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
-                  No confirmed or pending bookings found for {date}.
+                  No confirmed or pending bookings found for {date}
+                  {fromTime ? ` from ${fromTime} onwards` : ""}.
                 </div>
               ) : (
                 <>
-                  <div className="px-4 py-2.5 border-b bg-background text-sm font-medium text-muted-foreground flex items-center gap-2">
-                    <Users className="h-3.5 w-3.5" />
-                    {preview.length} golfer{preview.length !== 1 ? "s" : ""} will receive a unique voucher
+                  <div className="px-4 py-2.5 border-b bg-background text-sm font-medium text-muted-foreground flex items-center justify-between">
+                    <span className="flex items-center gap-2">
+                      <Users className="h-3.5 w-3.5" />
+                      {preview!.length} golfer{preview!.length !== 1 ? "s" : ""} will receive a voucher
+                      {fromTime && (
+                        <Badge variant="secondary" className="text-xs">
+                          from {fromTime}
+                        </Badge>
+                      )}
+                    </span>
+                    {totalVoucherValue > 0 && (
+                      <span className="text-xs font-semibold text-[#1a5c38]">
+                        Total value: R{totalVoucherValue.toFixed(2)}
+                      </span>
+                    )}
                   </div>
-                  <div className="divide-y max-h-48 overflow-y-auto">
-                    {preview.map(u => (
-                      <div key={u.id} className="px-4 py-2.5 flex items-center justify-between text-sm">
-                        <div>
-                          <span className="font-medium">{u.name}</span>
-                          <span className="text-muted-foreground ml-2">{u.email}</span>
+                  <div className="divide-y max-h-72 overflow-y-auto">
+                    {previewByTime.map(([time, users]) => (
+                      <div key={time}>
+                        <div className="px-4 py-1.5 bg-muted/60 text-xs font-semibold text-muted-foreground tracking-wide">
+                          Tee time {time}
                         </div>
-                        {u.time && <span className="text-xs text-muted-foreground">{u.time}</span>}
+                        {users.map(u => (
+                          <div key={`${u.id}-${u.booking_id}`} className="px-4 py-2.5 flex items-center justify-between text-sm border-t border-muted/40 first:border-0">
+                            <div>
+                              <span className="font-medium">{u.name}</span>
+                              <span className="text-muted-foreground ml-2 text-xs">{u.email}</span>
+                            </div>
+                            <span className="font-semibold text-[#1a5c38] text-sm">
+                              {u.voucher_value != null ? `R${u.voucher_value.toFixed(2)}` : "—"}
+                            </span>
+                          </div>
+                        ))}
                       </div>
                     ))}
                   </div>
@@ -289,14 +367,16 @@ export default function CancellationVouchers() {
                             {format(new Date(b.affected_date), "dd MMM yyyy")}
                           </Badge>
                         )}
-                        {b.value_rands && (
-                          <Badge variant="outline" className="text-xs">R{Number(b.value_rands).toFixed(2)}</Badge>
+                        {b.from_time && (
+                          <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">
+                            from {String(b.from_time).slice(0, 5)}
+                          </Badge>
                         )}
                       </div>
                       <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground flex-wrap">
                         <span className="flex items-center gap-1">
                           <Ticket className="h-3 w-3" />
-                          {b.voucher_count} issued
+                          {b.voucher_count} issued (per-player value)
                         </span>
                         {redeemedCount > 0 && (
                           <span className="flex items-center gap-1 text-green-700">
@@ -328,6 +408,7 @@ export default function CancellationVouchers() {
                               <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
                                 <th className="text-left px-4 py-2 font-medium">Golfer</th>
                                 <th className="text-left px-4 py-2 font-medium">Voucher Code</th>
+                                <th className="text-left px-4 py-2 font-medium">Value</th>
                                 <th className="text-left px-4 py-2 font-medium">Status</th>
                                 <th className="text-left px-4 py-2 font-medium">Expires</th>
                               </tr>
@@ -343,6 +424,9 @@ export default function CancellationVouchers() {
                                     <code className="font-mono text-xs bg-muted px-1.5 py-0.5 rounded tracking-wide">
                                       {v.code}
                                     </code>
+                                  </td>
+                                  <td className="px-4 py-2.5 font-semibold text-[#1a5c38] text-xs">
+                                    {v.value_rands ? `R${Number(v.value_rands).toFixed(2)}` : "—"}
                                   </td>
                                   <td className="px-4 py-2.5">
                                     {v.redeemed_at ? (

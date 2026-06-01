@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef, useMemo } from "react";
+import { useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
-  CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X,
+  CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X, TicketX,
 } from "lucide-react";
 import { format, addDays, parseISO, subDays } from "date-fns";
 
@@ -1037,6 +1038,7 @@ function DeleteTeeTimesDialog({
 
 export default function Schedule() {
   const { toast } = useToast();
+  const [, navigate] = useLocation();
   const stripRef = useRef<HTMLDivElement>(null);
 
   const [rangeStart, setRangeStart] = useState(today());
@@ -1237,15 +1239,25 @@ export default function Schedule() {
 
       {/* Day stats bar */}
       <div className="px-8 py-3 flex-shrink-0">
-        <div className="bg-[#1a5c38] text-white rounded-lg px-5 py-3 flex items-center justify-between">
-          <h2 className="font-semibold text-sm">{format(parseISO(selectedDate + "T00:00:00"), "EEEE, dd MMMM yyyy")}</h2>
+        <div className="bg-[#1a5c38] text-white rounded-lg px-5 py-3 flex items-center justify-between gap-4">
+          <h2 className="font-semibold text-sm shrink-0">{format(parseISO(selectedDate + "T00:00:00"), "EEEE, dd MMMM yyyy")}</h2>
           {!loading && (
-            <div className="flex items-center gap-5 text-xs text-white/80">
+            <div className="flex items-center gap-5 text-xs text-white/80 flex-1">
               <span><span className="font-bold text-white">{dayTeeTimes.length}</span> slots</span>
               <span><span className="font-bold text-white">{bookedSlots}</span> booked</span>
               <span><span className="font-bold text-white">{Math.max(0, totalSlots - bookedSlots)}</span> open</span>
               <span><span className="font-bold text-white">{dayBookings.filter(b => b.status === "pending").length}</span> pending</span>
             </div>
+          )}
+          {bookedSlots > 0 && (
+            <button
+              onClick={() => navigate(`/cancellation-vouchers?date=${selectedDate}`)}
+              className="shrink-0 flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 rounded-md px-3 py-1.5 transition-colors"
+              title="Cancel bookings and issue vouchers for this day"
+            >
+              <TicketX className="h-3.5 w-3.5" />
+              Issue Vouchers
+            </button>
           )}
         </div>
       </div>

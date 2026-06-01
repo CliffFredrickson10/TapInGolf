@@ -1,6 +1,7 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import { query, row, exec } from "../lib/pg";
-import { getUser, isStaff, effectiveClubId } from "../lib/auth";
+import { getUser } from "../lib/auth";
+import { requireClubAuth, getClub } from "../lib/portalAuth";
 import { saveUserNotification } from "../lib/userNotifications";
 import { sendPushNotifications } from "../lib/notifications";
 
@@ -24,125 +25,180 @@ async function ensureUniqueCode(clubName: string, userId: number): Promise<strin
   throw new Error("Could not generate unique voucher code");
 }
 
+// ── Fetch affected players for a date (+ optional from_time) ─────────────────
+// Returns one record per (user, booking) combo:
+//   - Booking creators: voucher_value = total_amount (non-split) or my_amount/bp.amount (split)
+//   - Split-bill co-players: voucher_value = their bp.amount
+// Then de-duplicated by user_id (first booking wins per user).
+async function fetchAffectedPlayers(
+  clubId: number,
+  date: string,
+  fromTime: string | null
+): Promise<Array<{
+  id: number;
+  name: string;
+  email: string;
+  push_token: string | null;
+  booking_id: number;
+  voucher_value: number | null;
+  time: string;
+}>> {
+  const timeFilter   = fromTime ? "AND pts.tee_time >= ?" : "";
+  const timeParam    = fromTime ?? null;
+
+  // 1. Booking creators
+  const creatorsParams: any[] = [clubId, date];
+  if (timeParam) creatorsParams.push(timeParam);
+
+  const creators = await query<any>(
+    `SELECT
+       u.id, u.name, u.email, u.push_token,
+       b.id AS booking_id,
+       b.total_amount, b.my_amount, b.split_bill,
+       pts.tee_time AS time,
+       (SELECT bp.amount FROM booking_players bp
+         WHERE bp.booking_id = b.id AND bp.user_id = u.id LIMIT 1) AS bp_amount
+     FROM bookings b
+     JOIN users u ON u.id = b.user_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE pts.club_id = ?
+       AND pts.date = ?
+       AND b.status IN ('confirmed','pending')
+       ${timeFilter}
+     ORDER BY pts.tee_time, u.name`,
+    creatorsParams
+  );
+
+  // 2. Split-bill co-players (registered users who are NOT the booking creator)
+  const coParams: any[] = [clubId, date];
+  if (timeParam) coParams.push(timeParam);
+
+  const coPlayers = await query<any>(
+    `SELECT
+       u.id, u.name, u.email, u.push_token,
+       b.id AS booking_id,
+       bp.amount AS voucher_value,
+       pts.tee_time AS time
+     FROM bookings b
+     JOIN booking_players bp
+       ON bp.booking_id = b.id
+       AND bp.user_id IS NOT NULL
+       AND bp.user_id != b.user_id
+     JOIN users u ON u.id = bp.user_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE pts.club_id = ?
+       AND pts.date = ?
+       AND b.split_bill = 1
+       AND b.status IN ('confirmed','pending')
+       ${timeFilter}
+     ORDER BY pts.tee_time, u.name`,
+    coParams
+  );
+
+  // Map creators → compute voucher_value
+  const creatorRows = creators.map((r: any) => ({
+    id:           r.id,
+    name:         r.name,
+    email:        r.email,
+    push_token:   r.push_token ?? null,
+    booking_id:   r.booking_id,
+    time:         String(r.time).slice(0, 5),
+    voucher_value: r.bp_amount != null
+      ? parseFloat(r.bp_amount)
+      : r.split_bill
+        ? parseFloat(r.my_amount ?? 0)
+        : parseFloat(r.total_amount ?? 0),
+  }));
+
+  const coPlayerRows = coPlayers.map((r: any) => ({
+    id:           r.id,
+    name:         r.name,
+    email:        r.email,
+    push_token:   r.push_token ?? null,
+    booking_id:   r.booking_id,
+    time:         String(r.time).slice(0, 5),
+    voucher_value: r.voucher_value != null ? parseFloat(r.voucher_value) : null,
+  }));
+
+  // Merge: booking creators first, then co-players; de-dup by user_id
+  const all = [...creatorRows, ...coPlayerRows];
+  const seen = new Map<number, typeof all[0]>();
+  for (const p of all) {
+    if (!seen.has(p.id)) seen.set(p.id, p);
+  }
+
+  return Array.from(seen.values()).sort((a, b) =>
+    a.time.localeCompare(b.time) || a.name.localeCompare(b.name)
+  );
+}
+
 // ── GET /admin/cancellation-vouchers/preview ──────────────────────────────────
-// Preview affected bookings for a given date (before issuing vouchers)
-router.get("/admin/cancellation-vouchers/preview", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }
+// Preview affected players for a given date (+ optional from_time filter)
+// Returns per-player voucher_value auto-calculated from booking data.
+router.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club   = getClub(req);
+  const clubId = club.id as number;
 
-  const date = req.query.date ? String(req.query.date) : null;
+  const date     = req.query.date      ? String(req.query.date)      : null;
+  const fromTime = req.query.from_time ? String(req.query.from_time) : null;
 
-  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+  if (!date) { res.status(400).json({ message: "date is required" }); return; }
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
     res.status(400).json({ message: "date must be YYYY-MM-DD" });
     return;
   }
 
-  let affected: any[];
-  if (date) {
-    affected = await query<any>(
-      `SELECT DISTINCT u.id, u.name, u.email, b.id as booking_id,
-              pts.tee_time as time
-       FROM bookings b
-       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-       JOIN users u ON u.id = b.user_id
-       WHERE pts.club_id = ?
-         AND pts.date = ?
-         AND b.status IN ('confirmed','pending')
-       ORDER BY pts.tee_time, u.name`,
-      [clubId, date]
-    );
-  } else {
-    affected = [];
-  }
-
-  res.json({ count: affected.length, users: affected });
+  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null);
+  res.json({ count: players.length, users: players });
 });
 
 // ── POST /admin/cancellation-vouchers/issue ───────────────────────────────────
-// Issue unique per-user vouchers for all affected bookings on a date
-// Body: { affected_date?, reason, value_rands?, expires_in_days?, booking_ids? }
-router.post("/admin/cancellation-vouchers/issue", async (req, res): Promise<void> => {
-  const caller = await getUser(req);
-  if (!isStaff(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
-  const clubId = effectiveClubId(caller, req.body?.club_id);
-  if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }
+// Issue unique per-user vouchers for all affected bookings on a date.
+// Body: { affected_date, reason, from_time?, expires_in_days? }
+// Voucher value is automatically calculated per player from booking data.
+router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club   = getClub(req);
+  const clubId = club.id as number;
 
-  const { affected_date, reason, value_rands, expires_in_days, booking_ids } = req.body ?? {};
+  const { affected_date, reason, from_time, expires_in_days } = req.body ?? {};
 
   if (!reason || !String(reason).trim()) {
     res.status(400).json({ message: "reason is required" });
     return;
   }
+  if (!affected_date) {
+    res.status(400).json({ message: "affected_date is required" });
+    return;
+  }
 
-  const club = await row<any>("SELECT id, name FROM clubs WHERE id = ?", [clubId]);
-  if (!club) { res.status(404).json({ message: "Club not found" }); return; }
-
-  // Compute expiry timestamp
   const expiresAt: string | null = expires_in_days
     ? new Date(Date.now() + Number(expires_in_days) * 86_400_000).toISOString()
     : null;
 
-  const dateParam: string | null = affected_date || null;
+  const fromTime: string | null = from_time || null;
+  const dateParam: string       = String(affected_date);
 
-  // Get affected users — either from explicit booking_ids or from the date
-  let recipients: any[];
-  if (Array.isArray(booking_ids) && booking_ids.length > 0) {
-    recipients = await query<any>(
-      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
-       FROM bookings b
-       JOIN users u ON u.id = b.user_id
-       WHERE b.id = ANY(?::int[])
-         AND b.status IN ('confirmed','pending')`,
-      [booking_ids]
-    );
-  } else if (dateParam) {
-    recipients = await query<any>(
-      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
-       FROM bookings b
-       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-       JOIN users u ON u.id = b.user_id
-       WHERE pts.club_id = ?
-         AND pts.date = ?
-         AND b.status IN ('confirmed','pending')`,
-      [clubId, dateParam]
-    );
-  } else {
-    res.status(400).json({ message: "Either affected_date or booking_ids is required" });
-    return;
-  }
+  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime);
 
   if (recipients.length === 0) {
     res.status(400).json({ message: "No affected bookings found for the given criteria" });
     return;
   }
 
-  // De-duplicate by user (one voucher per user per batch, even if they had multiple bookings)
-  const seen = new Set<number>();
-  const uniqueRecipients = recipients.filter((r: any) => {
-    if (seen.has(r.id)) return false;
-    seen.add(r.id);
-    return true;
-  });
-
-  // Create the batch record
+  // Create the batch record (value_rands is null — amounts vary per player; issued_by is null for portal)
   const batchRow = await row<any>(
     `INSERT INTO cancellation_voucher_batches
-       (club_id, issued_by, reason, affected_date, value_rands, expires_at, voucher_count)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
+       (club_id, issued_by, reason, affected_date, from_time, value_rands, expires_at, voucher_count)
+     VALUES (?, NULL, ?, ?, ?, NULL, ?, ?)
      RETURNING id`,
-    [clubId, caller.id, String(reason).trim(), dateParam, value_rands ?? null, expiresAt, uniqueRecipients.length]
+    [clubId, String(reason).trim(), dateParam, fromTime, expiresAt, recipients.length]
   );
   const batchId = batchRow.id;
 
-  // Issue one voucher per unique user
-  const issued: { userId: number; name: string; code: string }[] = [];
-  for (const recipient of uniqueRecipients) {
-    const code = await ensureUniqueCode(club.name, recipient.id);
+  const issued: { userId: number; name: string; code: string; voucher_value: number | null }[] = [];
 
-    // Find the first booking for this user on the date (for the booking_id link)
-    const bookingForUser = recipients.find((r: any) => r.id === recipient.id);
+  for (const recipient of recipients) {
+    const code = await ensureUniqueCode(club.name, recipient.id);
 
     await exec(
       `INSERT INTO cancellation_vouchers
@@ -153,31 +209,29 @@ router.post("/admin/cancellation-vouchers/issue", async (req, res): Promise<void
         batchId,
         clubId,
         recipient.id,
-        bookingForUser?.booking_id ?? null,
+        recipient.booking_id ?? null,
         String(reason).trim(),
-        value_rands ?? null,
+        recipient.voucher_value ?? null,
         expiresAt,
       ]
     );
 
-    issued.push({ userId: recipient.id, name: recipient.name, code });
+    issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value });
 
-    // In-app notification (always)
     const notifTitle = `Voucher from ${club.name}`;
-    const valueStr   = value_rands ? ` worth R${Number(value_rands).toFixed(2)}` : "";
+    const valueStr   = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
     const expiryStr  = expiresAt
       ? ` — valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
       : "";
-    const notifBody  = `You've received a cancellation voucher${valueStr}${expiryStr}. Your code: ${code}`;
+    const notifBody  = `Your tee time was cancelled${valueStr ? ` — here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
 
     saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
       code,
-      club_id:    clubId,
-      batch_id:   batchId,
-      value_rands: value_rands ?? null,
+      club_id:      clubId,
+      batch_id:     batchId,
+      value_rands:  recipient.voucher_value ?? null,
     });
 
-    // Push notification (best-effort)
     if (recipient.push_token?.startsWith("ExponentPushToken[")) {
       sendPushNotifications([{
         to:    recipient.push_token,
@@ -193,23 +247,20 @@ router.post("/admin/cancellation-vouchers/issue", async (req, res): Promise<void
 });
 
 // ── GET /admin/cancellation-vouchers/batches ──────────────────────────────────
-// List past voucher batches for this club
-router.get("/admin/cancellation-vouchers/batches", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }
+router.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club   = getClub(req);
+  const clubId = club.id as number;
 
   const limit  = Math.min(parseInt(String(req.query.limit  ?? "30"), 10), 100);
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
 
   const batches = await query<any>(
-    `SELECT b.id, b.reason, b.affected_date, b.value_rands, b.expires_at,
+    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.value_rands, b.expires_at,
             b.voucher_count, b.created_at,
-            u.name as issued_by_name,
+            COALESCE(u.name, 'Portal') as issued_by_name,
             COUNT(cv.id) FILTER (WHERE cv.redeemed_at IS NOT NULL) as redeemed_count
      FROM cancellation_voucher_batches b
-     JOIN users u ON u.id = b.issued_by
+     LEFT JOIN users u ON u.id = b.issued_by
      LEFT JOIN cancellation_vouchers cv ON cv.batch_id = b.id
      WHERE b.club_id = ?
      GROUP BY b.id, u.name
@@ -222,16 +273,12 @@ router.get("/admin/cancellation-vouchers/batches", async (req, res): Promise<voi
 });
 
 // ── GET /admin/cancellation-vouchers/batches/:batchId ────────────────────────
-// List individual vouchers in a batch
-router.get("/admin/cancellation-vouchers/batches/:batchId", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
-  const clubId = effectiveClubId(user, req.query.club_id);
-  if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }
+router.get("/admin/cancellation-vouchers/batches/:batchId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club   = getClub(req);
+  const clubId = club.id as number;
 
   const batchId = parseInt(req.params.batchId, 10);
 
-  // Confirm the batch belongs to this club
   const batch = await row<any>(
     "SELECT * FROM cancellation_voucher_batches WHERE id = ? AND club_id = ?",
     [batchId, clubId]
@@ -252,7 +299,6 @@ router.get("/admin/cancellation-vouchers/batches/:batchId", async (req, res): Pr
 });
 
 // ── GET /profile/cancellation-vouchers ───────────────────────────────────────
-// A user's own cancellation vouchers (for mobile profile screen)
 router.get("/profile/cancellation-vouchers", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
@@ -273,7 +319,6 @@ router.get("/profile/cancellation-vouchers", async (req, res): Promise<void> => 
 });
 
 // ── POST /cancellation-vouchers/validate ─────────────────────────────────────
-// Validate a cancellation voucher code for the authenticated user at checkout
 router.post("/cancellation-vouchers/validate", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }

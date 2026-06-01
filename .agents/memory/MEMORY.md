@@ -1,4 +1,1 @@
-- [pdfkit-swc-helpers](pdfkit-swc-helpers.md) — pdfkit 0.18 needs @swc/helpers installed separately; fontkit crashes without it at runtime
-- [Stitch Express API](stitch-express-api.md) — repl creds are for Stitch Express (REST), NOT OAuth/GraphQL Payins; amounts in cents; Svix-signed webhooks registered via API.
-- [Secret injection verification](secret-injection-verification.md) — viewEnvVars omits user secrets; verify a workflow truly has a key via /proc/<pid>/environ, not viewEnvVars/<available_secrets>.
-- [Stitch WebView redirect matching](stitch-webview-redirect.md) — match payment-return URL by pathname, not substring; redirect_url query param causes premature success bounce.
+- [Portal auth vs user auth](portal-auth.md) — portal uses club tokens (not HMAC user tokens); admin voucher routes must use requireClubAuth from lib/portalAuth.ts

@@ -234,6 +234,65 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
   res.json({ ...updated, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 
+// ─── CANCELLATION POLICY ─────────────────────────────────────────────────────
+
+router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const data = await row<any>(
+    `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
+            cancel_partial_hours, cancel_payment_hours, cancel_weather, cancel_contact_email, cancel_contact_phone
+     FROM clubs WHERE id = ?`,
+    [club.id]
+  );
+  res.json({
+    preset:             data?.cancel_policy_preset   ?? "standard",
+    full_refund_hours:  data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
+    has_partial:        data?.cancel_has_partial != null ? !!Number(data.cancel_has_partial) : true,
+    partial_pct:        data?.cancel_partial_pct  != null ? Number(data.cancel_partial_pct)  : 50,
+    partial_hours:      data?.cancel_partial_hours != null ? Number(data.cancel_partial_hours) : 24,
+    payment_hours:      data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) : 24,
+    weather:            data?.cancel_weather ?? "full_refund",
+    contact_email:      data?.cancel_contact_email  ?? null,
+    contact_phone:      data?.cancel_contact_phone  ?? null,
+  });
+});
+
+router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { preset, full_refund_hours, has_partial, partial_pct, partial_hours,
+          payment_hours, weather, contact_email, contact_phone } = req.body ?? {};
+
+  const VALID_PRESETS  = ["flexible", "standard", "strict", "non_refundable"];
+  const VALID_WEATHER  = ["full_refund", "rebook_only", "no_refund"];
+  const presetVal      = VALID_PRESETS.includes(String(preset)) ? String(preset) : "standard";
+  const weatherVal     = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
+  const payHours       = [24, 48].includes(Number(payment_hours)) ? Number(payment_hours) : 24;
+  const fullHours      = full_refund_hours != null ? Number(full_refund_hours) : null;
+  const hasPartial     = !!has_partial && presetVal !== "non_refundable";
+  const partialPct     = partial_pct  != null ? Math.min(100, Math.max(1, Number(partial_pct)))  : null;
+  const partialHours   = partial_hours != null ? Number(partial_hours) : null;
+
+  await exec(
+    `UPDATE clubs SET
+       cancel_policy_preset    = ?,
+       cancel_full_refund_hours = ?,
+       cancel_has_partial      = ?,
+       cancel_partial_pct      = ?,
+       cancel_partial_hours    = ?,
+       cancel_payment_hours    = ?,
+       cancel_weather          = ?,
+       cancel_contact_email    = ?,
+       cancel_contact_phone    = ?
+     WHERE id = ?`,
+    [presetVal, fullHours, hasPartial ? 1 : 0, partialPct, partialHours,
+     payHours, weatherVal,
+     contact_email ? String(contact_email).trim() || null : null,
+     contact_phone ? String(contact_phone).trim() || null : null,
+     club.id]
+  );
+  res.json({ success: true });
+});
+
 // ─── DASHBOARD ───────────────────────────────────────────────────────────────
 
 router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

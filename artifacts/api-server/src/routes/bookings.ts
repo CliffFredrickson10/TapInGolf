@@ -202,6 +202,15 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
             COALESCE(c.address, '') as club_address,
             c.latitude as club_latitude,
             c.longitude as club_longitude,
+            c.cancel_policy_preset,
+            c.cancel_full_refund_hours,
+            c.cancel_has_partial,
+            c.cancel_partial_pct,
+            c.cancel_partial_hours,
+            c.cancel_payment_hours,
+            c.cancel_weather,
+            c.cancel_contact_email,
+            c.cancel_contact_phone,
             pts.tee_time as time,
             pts.date as date,
             0 as price
@@ -808,7 +817,21 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
       );
     }
   });
-  res.json({ success: true });
+  // Return club contact details so the golfer knows where to send refund requests.
+  const club = booking.portal_slot_id
+    ? await row<any>(
+        `SELECT c.cancel_contact_email, c.cancel_contact_phone
+         FROM portal_tee_slots pts
+         JOIN clubs c ON c.id = pts.club_id
+         WHERE pts.id = ?`,
+        [booking.portal_slot_id]
+      )
+    : null;
+  res.json({
+    success: true,
+    contact_email: club?.cancel_contact_email ?? null,
+    contact_phone: club?.cancel_contact_phone ?? null,
+  });
 });
 
 // Stitch webhook — server-to-server payment status notification

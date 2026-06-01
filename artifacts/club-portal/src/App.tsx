@@ -25,6 +25,7 @@ import StaffEventsMembers from "@/pages/staff/events-members";
 import StaffHnaReview from "@/pages/staff/hna-review";
 import StaffModeration from "@/pages/staff/moderation";
 import Payments from "@/pages/payments";
+import CancellationPolicy from "@/pages/cancellation-policy";
 
 function Router() {
   const { club, staff, loading } = useAuth();
@@ -77,6 +78,7 @@ function Router() {
         <Route path="/pricing" component={Pricing} />
         <Route path="/payments" component={Payments} />
         <Route path="/notifications" component={Notifications} />
+        <Route path="/cancellation-policy" component={CancellationPolicy} />
         <Route>
           <div className="p-8">
             <h1 className="text-2xl font-bold">Page not found</h1>

@@ -725,6 +725,23 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS is_muted SMALLINT NOT NULL DEFAULT 0");
   // blocked_slots: JSON array of slot indices (0–3) the club has individually blocked.
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
+  // Cancellation policy: per-club configurable cancellation/refund rules shown to golfers.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_policy_preset VARCHAR(20) NOT NULL DEFAULT 'standard'");
+  // cancel_full_refund_hours: hours before tee time a cancellation qualifies for 100% refund (null = non-refundable).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_full_refund_hours INT DEFAULT 48");
+  // cancel_has_partial: whether a partial-refund middle tier exists.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_has_partial SMALLINT NOT NULL DEFAULT 1");
+  // cancel_partial_pct: percentage refunded in the partial window (e.g. 50).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_partial_pct INT DEFAULT 50");
+  // cancel_partial_hours: lower-bound hours for partial-refund window (above this and below full-refund window).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_partial_hours INT DEFAULT 24");
+  // cancel_payment_hours: hours after booking creation before unpaid bookings are auto-cancelled (24 or 48).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_hours INT NOT NULL DEFAULT 24");
+  // cancel_weather: policy when the club closes the course (full_refund / rebook_only / no_refund).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_weather VARCHAR(20) NOT NULL DEFAULT 'full_refund'");
+  // cancel_contact_email / _phone: where golfers send refund requests — routes to the club, not TapIn Golf.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_email VARCHAR(255)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_phone VARCHAR(50)");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

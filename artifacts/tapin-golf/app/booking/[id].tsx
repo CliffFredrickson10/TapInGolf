@@ -27,6 +27,33 @@ interface BookingDetail extends Booking {
   club_address?: string;
   club_latitude?: number;
   club_longitude?: number;
+  cancel_policy_preset?: string;
+  cancel_full_refund_hours?: number | null;
+  cancel_has_partial?: number | boolean;
+  cancel_partial_pct?: number | null;
+  cancel_partial_hours?: number | null;
+  cancel_weather?: string;
+  cancel_contact_email?: string | null;
+  cancel_contact_phone?: string | null;
+}
+
+function calcRefundTier(booking: BookingDetail): "full" | "partial" | "none" {
+  const fullH = booking.cancel_full_refund_hours != null ? Number(booking.cancel_full_refund_hours) : null;
+  if (fullH == null) return "none";
+  const teeDate = new Date(`${booking.date}T${(booking.time ?? "").slice(0, 5)}:00`);
+  const hoursUntil = (teeDate.getTime() - Date.now()) / 3_600_000;
+  if (hoursUntil >= fullH) return "full";
+  const hasPartial = booking.cancel_has_partial === 1 || booking.cancel_has_partial === true;
+  const partH = booking.cancel_partial_hours != null ? Number(booking.cancel_partial_hours) : 0;
+  if (hasPartial && hoursUntil >= partH) return "partial";
+  return "none";
+}
+
+function fmtHours(h: number | null | undefined): string {
+  if (h == null) return "—";
+  if (h >= 168) return `${Math.round(h / 168)} wk`;
+  if (h >= 24) return `${Math.round(h / 24)} day${Math.round(h / 24) !== 1 ? "s" : ""}`;
+  return `${h}h`;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -45,6 +72,7 @@ export default function BookingDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [cancelContact, setCancelContact] = useState<{ email: string | null; phone: string | null } | null>(null);
   const [payLoading, setPayLoading]       = useState(false);
   const [payMethod, setPayMethod]         = useState<"stitch" | "wallet" | "prepaid">("stitch");
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -83,10 +111,14 @@ export default function BookingDetailScreen() {
     if (!user || !booking) return;
     setCancelling(true);
     try {
-      await apiFetch(`/bookings/${booking.id}/cancel`, user.token, { method: "PUT" });
+      const resp = await apiFetch(`/bookings/${booking.id}/cancel`, user.token, { method: "PUT" });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setBooking((prev) => prev ? { ...prev, status: "cancelled" } : prev);
       setConfirmCancel(false);
+      // Show club contact card if available, sourced from the cancel response
+      const email = resp?.contact_email ?? booking.cancel_contact_email ?? null;
+      const phone = resp?.contact_phone ?? booking.cancel_contact_phone ?? null;
+      if (email || phone) setCancelContact({ email, phone });
     } catch {
       // silently fail — user can retry
     } finally {
@@ -425,6 +457,123 @@ export default function BookingDetailScreen() {
                 </View>
               </View>
             ))}
+          </View>
+        )}
+
+        {/* Cancellation policy card — show for organizer on confirmed or cancelled bookings */}
+        {!isInvited && (booking.status === "confirmed" || booking.status === "cancelled") && booking.cancel_full_refund_hours !== undefined && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Cancellation Policy</Text>
+            {booking.cancel_full_refund_hours != null ? (
+              <>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Ionicons name="checkmark-circle-outline" size={15} color="#1a5c38" />
+                    <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                      Full refund if cancelled {fmtHours(booking.cancel_full_refund_hours)}+ before
+                    </Text>
+                  </View>
+                </View>
+                {(booking.cancel_has_partial === 1 || booking.cancel_has_partial === true) && (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLeft}>
+                      <Ionicons name="remove-circle-outline" size={15} color="#c8a84b" />
+                      <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                        {booking.cancel_partial_pct ?? 50}% refund between {fmtHours(booking.cancel_partial_hours)} and {fmtHours(booking.cancel_full_refund_hours)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Ionicons name="close-circle-outline" size={15} color={colors.destructive} />
+                    <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                      No refund within {fmtHours((booking.cancel_has_partial === 1 || booking.cancel_has_partial === true) ? booking.cancel_partial_hours : booking.cancel_full_refund_hours)}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Ionicons name="close-circle-outline" size={15} color={colors.destructive} />
+                  <Text style={[styles.detailLabel, { color: colors.foreground }]}>Non-refundable — no refunds on cancellation</Text>
+                </View>
+              </View>
+            )}
+            {booking.cancel_weather && (
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Ionicons name="rainy-outline" size={15} color={colors.mutedForeground} />
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>
+                    Weather closure:{" "}
+                    {booking.cancel_weather === "full_refund" ? "full refund"
+                     : booking.cancel_weather === "rebook_only" ? "rebook credit"
+                     : "no refund"}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+        )}
+
+        {/* Refund tier notice when about to cancel */}
+        {!isInvited && booking.status === "confirmed" && confirmCancel && booking.cancel_full_refund_hours !== undefined && (() => {
+          const tier = calcRefundTier(booking);
+          const pct = Number(booking.cancel_partial_pct ?? 50);
+          const msg = tier === "full"
+            ? "You qualify for a full refund based on the club's policy."
+            : tier === "partial"
+            ? `You qualify for a ${pct}% refund based on the club's policy.`
+            : "You are outside the refund window — no refund will be given.";
+          const col = tier === "full" ? "#1a5c38" : tier === "partial" ? "#c8a84b" : colors.destructive;
+          return (
+            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: col + "18", borderRadius: 8, padding: 10, marginBottom: -4 }}>
+              <Ionicons name={tier === "full" ? "checkmark-circle-outline" : tier === "partial" ? "remove-circle-outline" : "close-circle-outline"} size={15} color={col} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: col, lineHeight: 17 }}>{msg}</Text>
+            </View>
+          );
+        })()}
+
+        {/* Contact card after cancellation */}
+        {cancelContact && booking.status === "cancelled" && (
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Refund Request</Text>
+            <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
+              Contact the club directly to arrange any eligible refund. TapIn Golf does not process refunds.
+            </Text>
+            {cancelContact.email && (
+              <TouchableOpacity
+                style={[styles.contactRow, { borderColor: colors.border }]}
+                onPress={() => Linking.openURL(`mailto:${cancelContact.email}`)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.contactIcon, { backgroundColor: colors.primary + "15" }]}>
+                  <Ionicons name="mail-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.contactLabel, { color: colors.foreground }]}>Email the club</Text>
+                  <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>{cancelContact.email}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
+            {cancelContact.phone && (
+              <TouchableOpacity
+                style={[styles.contactRow, { borderColor: colors.border }]}
+                onPress={() => Linking.openURL(`tel:${cancelContact.phone}`)}
+                activeOpacity={0.7}
+              >
+                <View style={[styles.contactIcon, { backgroundColor: colors.primary + "15" }]}>
+                  <Ionicons name="call-outline" size={18} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.contactLabel, { color: colors.foreground }]}>Call the club</Text>
+                  <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>{cancelContact.phone}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            )}
           </View>
         )}
 

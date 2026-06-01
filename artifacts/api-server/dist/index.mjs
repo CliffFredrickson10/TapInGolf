@@ -58108,6 +58108,15 @@ router4.get("/bookings/:id", async (req, res) => {
             COALESCE(c.address, '') as club_address,
             c.latitude as club_latitude,
             c.longitude as club_longitude,
+            c.cancel_policy_preset,
+            c.cancel_full_refund_hours,
+            c.cancel_has_partial,
+            c.cancel_partial_pct,
+            c.cancel_partial_hours,
+            c.cancel_payment_hours,
+            c.cancel_weather,
+            c.cancel_contact_email,
+            c.cancel_contact_phone,
             pts.tee_time as time,
             pts.date as date,
             0 as price
@@ -58643,7 +58652,18 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
       );
     }
   });
-  res.json({ success: true });
+  const club = booking.portal_slot_id ? await row(
+    `SELECT c.cancel_contact_email, c.cancel_contact_phone
+         FROM portal_tee_slots pts
+         JOIN clubs c ON c.id = pts.club_id
+         WHERE pts.id = ?`,
+    [booking.portal_slot_id]
+  ) : null;
+  res.json({
+    success: true,
+    contact_email: club?.cancel_contact_email ?? null,
+    contact_phone: club?.cancel_contact_phone ?? null
+  });
 });
 router4.post("/stitch/webhook", async (req, res) => {
   const body = req.body;
@@ -61094,6 +61114,75 @@ router13.put("/portal/me", requireClubAuth, async (req, res) => {
   );
   const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
+});
+router13.get("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const data = await row(
+    `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
+            cancel_partial_hours, cancel_payment_hours, cancel_weather, cancel_contact_email, cancel_contact_phone
+     FROM clubs WHERE id = ?`,
+    [club.id]
+  );
+  res.json({
+    preset: data?.cancel_policy_preset ?? "standard",
+    full_refund_hours: data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
+    has_partial: data?.cancel_has_partial != null ? !!Number(data.cancel_has_partial) : true,
+    partial_pct: data?.cancel_partial_pct != null ? Number(data.cancel_partial_pct) : 50,
+    partial_hours: data?.cancel_partial_hours != null ? Number(data.cancel_partial_hours) : 24,
+    payment_hours: data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) : 24,
+    weather: data?.cancel_weather ?? "full_refund",
+    contact_email: data?.cancel_contact_email ?? null,
+    contact_phone: data?.cancel_contact_phone ?? null
+  });
+});
+router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const {
+    preset,
+    full_refund_hours,
+    has_partial,
+    partial_pct,
+    partial_hours,
+    payment_hours,
+    weather,
+    contact_email,
+    contact_phone
+  } = req.body ?? {};
+  const VALID_PRESETS = ["flexible", "standard", "strict", "non_refundable"];
+  const VALID_WEATHER = ["full_refund", "rebook_only", "no_refund"];
+  const presetVal = VALID_PRESETS.includes(String(preset)) ? String(preset) : "standard";
+  const weatherVal = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
+  const payHours = [24, 48].includes(Number(payment_hours)) ? Number(payment_hours) : 24;
+  const fullHours = full_refund_hours != null ? Number(full_refund_hours) : null;
+  const hasPartial = !!has_partial && presetVal !== "non_refundable";
+  const partialPct = partial_pct != null ? Math.min(100, Math.max(1, Number(partial_pct))) : null;
+  const partialHours = partial_hours != null ? Number(partial_hours) : null;
+  await exec(
+    `UPDATE clubs SET
+       cancel_policy_preset    = ?,
+       cancel_full_refund_hours = ?,
+       cancel_has_partial      = ?,
+       cancel_partial_pct      = ?,
+       cancel_partial_hours    = ?,
+       cancel_payment_hours    = ?,
+       cancel_weather          = ?,
+       cancel_contact_email    = ?,
+       cancel_contact_phone    = ?
+     WHERE id = ?`,
+    [
+      presetVal,
+      fullHours,
+      hasPartial ? 1 : 0,
+      partialPct,
+      partialHours,
+      payHours,
+      weatherVal,
+      contact_email ? String(contact_email).trim() || null : null,
+      contact_phone ? String(contact_phone).trim() || null : null,
+      club.id
+    ]
+  );
+  res.json({ success: true });
 });
 router13.get("/portal/dashboard", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -63931,6 +64020,15 @@ async function createSchema() {
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT");
   await ddl("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS is_muted SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_policy_preset VARCHAR(20) NOT NULL DEFAULT 'standard'");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_full_refund_hours INT DEFAULT 48");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_has_partial SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_partial_pct INT DEFAULT 50");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_partial_hours INT DEFAULT 24");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_hours INT NOT NULL DEFAULT 24");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_weather VARCHAR(20) NOT NULL DEFAULT 'full_refund'");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_email VARCHAR(255)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_phone VARCHAR(50)");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

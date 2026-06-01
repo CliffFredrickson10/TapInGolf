@@ -227,7 +227,7 @@ export default function BookingDetailScreen() {
             <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: "#fef3c7", borderRadius: 8, padding: 10 }}>
               <Ionicons name="warning-outline" size={15} color="#92400e" style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontSize: 12, color: "#92400e", lineHeight: 17 }}>
-                A <Text style={{ fontFamily: "Inter_700Bold" }}>{booking.cancel_fee_pct ?? 5}% cancellation fee</Text> is always withheld on cancellation. TapIn Golf's platform fee is non-refundable.
+                A <Text style={{ fontFamily: "Inter_700Bold" }}>{booking.cancel_fee_pct ?? 5}% cancellation fee</Text> applies to all cancellations regardless of when you cancel.
               </Text>
             </View>
             {booking.cancel_full_refund_hours != null ? (
@@ -680,19 +680,14 @@ export default function BookingDetailScreen() {
           const tier = calcRefundTier(booking);
           const partialPct = Number(booking.cancel_partial_pct ?? 50);
           const netRefundPct = tier === "full" ? (100 - feePct) : tier === "partial" ? partialPct : 0;
-          const feeMsg = `A ${feePct}% cancellation fee is always withheld — TapIn Golf's platform fee is non-refundable.`;
           const refundMsg = tier === "full"
-            ? `You qualify for a ${100 - feePct}% refund based on the club's policy (${feePct}% cancellation fee withheld).`
+            ? `You qualify for a ${100 - feePct}% refund (${feePct}% cancellation fee applies).`
             : tier === "partial"
-            ? `You qualify for a ${partialPct}% refund based on the club's policy.`
-            : "You are outside the refund window — no refund will be given by the club.";
+            ? `You qualify for a ${partialPct}% refund based on the club's cancellation policy.`
+            : `No refund applies — you are outside the refund window. A ${feePct}% cancellation fee applies.`;
           const col = tier === "full" ? "#1a5c38" : tier === "partial" ? "#c8a84b" : colors.destructive;
           return (
             <View style={{ gap: 6, marginBottom: -4 }}>
-              <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: "#fef3c722", borderRadius: 8, padding: 10, borderWidth: 1, borderColor: "#f59e0b44" }}>
-                <Ionicons name="warning-outline" size={14} color="#92400e" style={{ marginTop: 1 }} />
-                <Text style={{ flex: 1, fontSize: 12, color: "#92400e", lineHeight: 17 }}>{feeMsg}</Text>
-              </View>
               <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: col + "18", borderRadius: 8, padding: 10 }}>
                 <Ionicons name={tier === "full" ? "checkmark-circle-outline" : tier === "partial" ? "remove-circle-outline" : "close-circle-outline"} size={15} color={col} style={{ marginTop: 1 }} />
                 <Text style={{ flex: 1, fontSize: 12, color: col, lineHeight: 17 }}>{refundMsg}</Text>

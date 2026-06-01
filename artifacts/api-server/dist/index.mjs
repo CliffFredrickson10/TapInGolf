@@ -60293,7 +60293,7 @@ router9.get("/profile/cancellation-vouchers", async (req, res) => {
     return;
   }
   const vouchers = await query(
-    `SELECT cv.id, cv.code, cv.value_rands, cv.redeemed_at, cv.expires_at, cv.created_at,
+    `SELECT cv.id, cv.code, cv.value_rands, cv.value_remaining, cv.redeemed_at, cv.expires_at, cv.created_at,
             c.name as club_name, c.location as club_location,
             cvb.reason, cvb.affected_date
      FROM cancellation_vouchers cv

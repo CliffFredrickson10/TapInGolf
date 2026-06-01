@@ -37,6 +37,7 @@ interface BookingDetail extends Booking {
   cancel_contact_email?: string | null;
   cancel_contact_phone?: string | null;
   cancel_other_policies?: string | null;
+  cancel_fee_pct?: number | null;
 }
 
 function calcRefundTier(booking: BookingDetail): "full" | "partial" | "none" {
@@ -222,13 +223,20 @@ export default function BookingDetailScreen() {
           {/* Cancellation Policy */}
           <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <Text style={[styles.cardTitle, { color: colors.foreground }]}>Cancellation Policy</Text>
+            {/* Always-withheld fee notice */}
+            <View style={{ flexDirection: "row", gap: 8, alignItems: "flex-start", backgroundColor: "#fef3c7", borderRadius: 8, padding: 10 }}>
+              <Ionicons name="warning-outline" size={15} color="#92400e" style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: "#92400e", lineHeight: 17 }}>
+                A <Text style={{ fontFamily: "Inter_700Bold" }}>{booking.cancel_fee_pct ?? 5}% cancellation fee</Text> is always withheld on cancellation. TapIn Golf's platform fee is non-refundable.
+              </Text>
+            </View>
             {booking.cancel_full_refund_hours != null ? (
               <>
                 <View style={styles.detailRow}>
                   <View style={styles.detailLeft}>
                     <Ionicons name="checkmark-circle-outline" size={15} color="#1a5c38" />
                     <Text style={[styles.detailLabel, { color: colors.foreground }]}>
-                      Full refund if cancelled {fmtHours(booking.cancel_full_refund_hours)}+ before tee time
+                      Cancel {fmtHours(booking.cancel_full_refund_hours)}+ before → {100 - (booking.cancel_fee_pct ?? 5)}% refund
                     </Text>
                   </View>
                 </View>
@@ -667,19 +675,28 @@ export default function BookingDetailScreen() {
         )}
 
         {/* Refund tier notice when about to cancel */}
-        {!isInvited && booking.status === "confirmed" && confirmCancel && booking.cancel_full_refund_hours !== undefined && (() => {
+        {!isInvited && booking.status === "confirmed" && confirmCancel && (() => {
+          const feePct = Number(booking.cancel_fee_pct ?? 5);
           const tier = calcRefundTier(booking);
-          const pct = Number(booking.cancel_partial_pct ?? 50);
-          const msg = tier === "full"
-            ? "You qualify for a full refund based on the club's policy."
+          const partialPct = Number(booking.cancel_partial_pct ?? 50);
+          const netRefundPct = tier === "full" ? (100 - feePct) : tier === "partial" ? partialPct : 0;
+          const feeMsg = `A ${feePct}% cancellation fee is always withheld — TapIn Golf's platform fee is non-refundable.`;
+          const refundMsg = tier === "full"
+            ? `You qualify for a ${100 - feePct}% refund based on the club's policy (${feePct}% cancellation fee withheld).`
             : tier === "partial"
-            ? `You qualify for a ${pct}% refund based on the club's policy.`
-            : "You are outside the refund window — no refund will be given.";
+            ? `You qualify for a ${partialPct}% refund based on the club's policy.`
+            : "You are outside the refund window — no refund will be given by the club.";
           const col = tier === "full" ? "#1a5c38" : tier === "partial" ? "#c8a84b" : colors.destructive;
           return (
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: col + "18", borderRadius: 8, padding: 10, marginBottom: -4 }}>
-              <Ionicons name={tier === "full" ? "checkmark-circle-outline" : tier === "partial" ? "remove-circle-outline" : "close-circle-outline"} size={15} color={col} style={{ marginTop: 1 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: col, lineHeight: 17 }}>{msg}</Text>
+            <View style={{ gap: 6, marginBottom: -4 }}>
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: "#fef3c722", borderRadius: 8, padding: 10, borderWidth: 1, borderColor: "#f59e0b44" }}>
+                <Ionicons name="warning-outline" size={14} color="#92400e" style={{ marginTop: 1 }} />
+                <Text style={{ flex: 1, fontSize: 12, color: "#92400e", lineHeight: 17 }}>{feeMsg}</Text>
+              </View>
+              <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", backgroundColor: col + "18", borderRadius: 8, padding: 10 }}>
+                <Ionicons name={tier === "full" ? "checkmark-circle-outline" : tier === "partial" ? "remove-circle-outline" : "close-circle-outline"} size={15} color={col} style={{ marginTop: 1 }} />
+                <Text style={{ flex: 1, fontSize: 12, color: col, lineHeight: 17 }}>{refundMsg}</Text>
+              </View>
             </View>
           );
         })()}

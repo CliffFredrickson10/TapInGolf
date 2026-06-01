@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { CheckCircle2, Clock, CloudRain, FileText, Mail, Phone, Save, ShieldAlert } from "lucide-react";
+import { AlertTriangle, CheckCircle2, Clock, CloudRain, FileText, Mail, Phone, Save, ShieldAlert } from "lucide-react";
 
 interface CancelPolicy {
   preset: string;
@@ -21,26 +21,28 @@ interface CancelPolicy {
   contact_email: string;
   contact_phone: string;
   other_policies: string;
+  fee_pct: number;
+  min_fee_pct: number;
 }
 
 type PresetKey = "flexible" | "standard" | "strict" | "non_refundable";
 
-const PRESET_DEFAULTS: Record<PresetKey, Omit<CancelPolicy, "contact_email" | "contact_phone" | "preset" | "other_policies">> = {
+const PRESET_DEFAULTS: Record<PresetKey, Omit<CancelPolicy, "contact_email" | "contact_phone" | "preset" | "other_policies" | "min_fee_pct">> = {
   flexible: {
     full_refund_hours: 24, has_partial: false, partial_pct: 50, partial_hours: 12,
-    payment_minutes: 1440, weather: "full_refund",
+    payment_minutes: 1440, weather: "full_refund", fee_pct: 5,
   },
   standard: {
     full_refund_hours: 48, has_partial: true, partial_pct: 50, partial_hours: 24,
-    payment_minutes: 1440, weather: "full_refund",
+    payment_minutes: 1440, weather: "full_refund", fee_pct: 5,
   },
   strict: {
     full_refund_hours: 72, has_partial: true, partial_pct: 50, partial_hours: 24,
-    payment_minutes: 1440, weather: "full_refund",
+    payment_minutes: 1440, weather: "full_refund", fee_pct: 5,
   },
   non_refundable: {
     full_refund_hours: null, has_partial: false, partial_pct: 0, partial_hours: 0,
-    payment_minutes: 1440, weather: "no_refund",
+    payment_minutes: 1440, weather: "no_refund", fee_pct: 5,
   },
 };
 
@@ -93,6 +95,8 @@ export default function CancellationPolicy() {
     contact_email: "",
     contact_phone: "",
     other_policies: "",
+    fee_pct: 5,
+    min_fee_pct: 5,
   });
 
   useEffect(() => {
@@ -102,6 +106,8 @@ export default function CancellationPolicy() {
         contact_email: d.contact_email ?? "",
         contact_phone: d.contact_phone ?? "",
         other_policies: d.other_policies ?? "",
+        fee_pct: d.fee_pct ?? 5,
+        min_fee_pct: d.min_fee_pct ?? 5,
       }))
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -280,6 +286,51 @@ export default function CancellationPolicy() {
         </CardContent>
       </Card>
 
+      {/* Cancellation Fee */}
+      <Card className="border-amber-300 bg-amber-50/40">
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <AlertTriangle className="h-4 w-4 text-amber-600" />
+            Cancellation Fee
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="rounded-lg bg-amber-50 border border-amber-200 p-3 text-sm text-amber-900 leading-snug">
+            <strong>TapIn Golf policy:</strong> TapIn's{" "}
+            <strong>{policy.min_fee_pct}% platform fee is non-refundable</strong> on any cancellation.
+            This means every cancelled booking has a minimum cancellation fee of{" "}
+            <strong>{policy.min_fee_pct}%</strong>. You can increase this but not reduce it below{" "}
+            {policy.min_fee_pct}%.
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="space-y-1">
+              <Label>Cancellation fee (%)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min={policy.min_fee_pct}
+                  max={100}
+                  step={1}
+                  value={policy.fee_pct}
+                  onChange={(e) => {
+                    const v = Math.max(policy.min_fee_pct, Math.min(100, Math.round(Number(e.target.value) || policy.min_fee_pct)));
+                    setPolicy((p) => ({ ...p, fee_pct: v, preset: "custom" }));
+                  }}
+                  className="w-24"
+                />
+                <span className="text-sm text-muted-foreground">
+                  of booking total · min {policy.min_fee_pct}% (TapIn fee)
+                </span>
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            A <strong>{policy.fee_pct}% cancellation fee</strong> is always charged regardless of when
+            the golfer cancels. The golfer is shown this fee at the time of booking and cancellation.
+          </p>
+        </CardContent>
+      </Card>
+
       {/* Auto-cancel unpaid bookings */}
       <Card>
         <CardHeader>
@@ -405,12 +456,19 @@ export default function CancellationPolicy() {
         </CardHeader>
         <CardContent>
           <div className="space-y-1.5 text-sm text-[#1a5c38]">
+            <div className="flex items-start gap-2 pb-2 border-b border-amber-300/60 mb-1">
+              <span className="text-amber-600 mt-0.5">⚠</span>
+              <span>
+                <strong>{policy.fee_pct}% cancellation fee</strong> always withheld (TapIn {policy.min_fee_pct}% platform fee is non-refundable)
+              </span>
+            </div>
             {policy.full_refund_hours != null ? (
               <div className="flex items-start gap-2">
                 <span className="text-green-600 mt-0.5">●</span>
                 <span>
                   Cancel <strong>{fmtHours(policy.full_refund_hours)}+</strong> before tee time →{" "}
-                  <strong>Full refund (100%)</strong>
+                  <strong>{100 - policy.fee_pct}% refund</strong>{" "}
+                  <span className="text-muted-foreground">({policy.fee_pct}% fee withheld)</span>
                 </span>
               </div>
             ) : (
@@ -443,7 +501,7 @@ export default function CancellationPolicy() {
               <span>
                 Weather closure:{" "}
                 <strong>
-                  {policy.weather === "full_refund" ? "Full refund"
+                  {policy.weather === "full_refund" ? `${100 - policy.fee_pct}% refund`
                     : policy.weather === "rebook_only" ? "Rebook credit"
                     : "No refund"}
                 </strong>

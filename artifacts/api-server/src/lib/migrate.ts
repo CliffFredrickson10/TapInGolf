@@ -746,6 +746,8 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_minutes INT NOT NULL DEFAULT 1440");
   // cancel_other_policies: free-text block for dress code, check-in time, tee-box arrival, etc.
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
+  // cancel_fee_pct: cancellation fee % always withheld (must be >= platform_fee_pct, default 5).
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_fee_pct INT NOT NULL DEFAULT 5");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

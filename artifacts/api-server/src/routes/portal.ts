@@ -238,13 +238,18 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
 
 router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const data = await row<any>(
-    `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
-            cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
-            cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies
-     FROM clubs WHERE id = ?`,
-    [club.id]
-  );
+  const [data, feeSetting] = await Promise.all([
+    row<any>(
+      `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
+              cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
+              cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies,
+              cancel_fee_pct
+       FROM clubs WHERE id = ?`,
+      [club.id]
+    ),
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
+  ]);
+  const minFeePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
   res.json({
     preset:             data?.cancel_policy_preset   ?? "standard",
     full_refund_hours:  data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
@@ -258,6 +263,8 @@ router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
     contact_email:      data?.cancel_contact_email  ?? null,
     contact_phone:      data?.cancel_contact_phone  ?? null,
     other_policies:     data?.cancel_other_policies ?? null,
+    fee_pct:            data?.cancel_fee_pct != null ? Math.max(Number(data.cancel_fee_pct), minFeePct) : minFeePct,
+    min_fee_pct:        minFeePct,
   });
 });
 
@@ -265,7 +272,7 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
   const club = getClub(req);
   const { preset, full_refund_hours, has_partial, partial_pct, partial_hours,
           payment_hours, payment_minutes, weather, contact_email, contact_phone,
-          other_policies } = req.body ?? {};
+          other_policies, fee_pct } = req.body ?? {};
 
   const VALID_PRESETS  = ["flexible", "standard", "strict", "non_refundable"];
   const VALID_WEATHER  = ["full_refund", "rebook_only", "no_refund"];
@@ -273,6 +280,9 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
   const weatherVal     = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
   const rawMins        = payment_minutes != null ? Number(payment_minutes) : (payment_hours != null ? Number(payment_hours) * 60 : 1440);
   const payMins        = Math.min(2880, Math.max(30, Math.round(rawMins)));
+  const platformFeeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
+  const minFeePct      = platformFeeSetting ? parseFloat(platformFeeSetting.setting_value) : 5;
+  const feePct         = Math.max(minFeePct, Math.min(100, Math.round(Number(fee_pct) || minFeePct)));
   const fullHours      = full_refund_hours != null ? Number(full_refund_hours) : null;
   const hasPartial     = !!has_partial && presetVal !== "non_refundable";
   const partialPct     = partial_pct  != null ? Math.min(100, Math.max(1, Number(partial_pct)))  : null;
@@ -290,13 +300,15 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
        cancel_weather          = ?,
        cancel_contact_email    = ?,
        cancel_contact_phone    = ?,
-       cancel_other_policies   = ?
+       cancel_other_policies   = ?,
+       cancel_fee_pct          = ?
      WHERE id = ?`,
     [presetVal, fullHours, hasPartial ? 1 : 0, partialPct, partialHours,
      Math.round(payMins / 60), payMins, weatherVal,
      contact_email ? String(contact_email).trim() || null : null,
      contact_phone ? String(contact_phone).trim() || null : null,
      other_policies ? String(other_policies).trim() || null : null,
+     feePct,
      club.id]
   );
   res.json({ success: true });

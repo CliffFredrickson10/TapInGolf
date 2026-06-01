@@ -8,6 +8,7 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import GoogleAdBanner from "@/components/GoogleAdBanner";
+import { MenuDrawer } from "@/components/MenuDrawer";
 
 function NativeTabLayout() {
   return (
@@ -28,10 +29,6 @@ function NativeTabLayout() {
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
         <Label>Friends</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="scoring">
-        <Icon sf={{ default: "list.clipboard", selected: "list.clipboard.fill" }} />
-        <Label>Scoring</Label>
-      </NativeTabs.Trigger>
     </NativeTabs>
   );
 }
@@ -42,8 +39,10 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
+  const [menuOpen, setMenuOpen] = React.useState(false);
 
   return (
+    <>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
@@ -120,13 +119,19 @@ function ClassicTabLayout() {
       <Tabs.Screen
         name="scoring"
         options={{
-          title: "Scoring",
-          tabBarIcon: ({ color, focused }) =>
+          title: "Menu",
+          tabBarIcon: ({ color }) =>
             isIOS ? (
-              <SymbolView name={focused ? "list.clipboard.fill" : "list.clipboard"} tintColor={color} size={24} />
+              <SymbolView name="line.3.horizontal" tintColor={color} size={24} />
             ) : (
-              <Ionicons name={focused ? "stats-chart" : "stats-chart-outline"} size={22} color={color} />
+              <Ionicons name="menu" size={24} color={color} />
             ),
+        }}
+        listeners={{
+          tabPress: (e: any) => {
+            e.preventDefault();
+            setMenuOpen(true);
+          },
         }}
       />
       <Tabs.Screen
@@ -134,6 +139,8 @@ function ClassicTabLayout() {
         options={{ href: null }}
       />
     </Tabs>
+    <MenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} />
+    </>
   );
 }
 

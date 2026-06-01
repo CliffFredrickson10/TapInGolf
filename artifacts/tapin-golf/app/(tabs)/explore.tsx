@@ -183,6 +183,14 @@ export default function ExploreScreen() {
     if (params.q) { setSearch(params.q); doSearch(params.q, province); }
   }, [params.q]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Sync province when arriving from the dashboard chips. The Explore tab can
+  // stay mounted, so params.province must update state (which re-runs the
+  // search via the [province] effect) instead of only seeding the initial value.
+  useEffect(() => {
+    const next = params.province || "All";
+    setProvince((prev) => (prev === next ? prev : next));
+  }, [params.province]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ─── Location button ──────────────────────────────────────────────────────
 
   const handleLocationBtn = async () => {

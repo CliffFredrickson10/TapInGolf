@@ -762,6 +762,7 @@ async function createSchema(): Promise<void> {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_inbox_club ON club_inbox_notifications (club_id, created_at DESC)");
+  await ddl("ALTER TABLE club_inbox_notifications ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

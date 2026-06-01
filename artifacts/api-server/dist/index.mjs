@@ -61913,6 +61913,15 @@ router13.put("/portal/inbox/read-all", requireClubAuth, async (req, res) => {
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ ok: true });
 });
+router13.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const nid = parseInt(req.params.id, 10);
+  await exec(
+    "UPDATE club_inbox_notifications SET refund_processed_at = NOW(), read_at = COALESCE(read_at, NOW()) WHERE id = ? AND club_id = ? AND type = 'cancellation'",
+    [nid, club.id]
+  );
+  res.json({ ok: true });
+});
 router13.get("/portal/notifications", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query("SELECT id, type, title, body, tee_shift_minutes, affected_date, recipient_count, sent_at FROM club_notifications WHERE club_id = ? ORDER BY sent_at DESC LIMIT 100", [club.id]));
@@ -64124,6 +64133,7 @@ async function createSchema() {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_inbox_club ON club_inbox_notifications (club_id, created_at DESC)");
+  await ddl("ALTER TABLE club_inbox_notifications ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

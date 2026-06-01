@@ -7,7 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Bell, Inbox, XCircle, CheckCheck } from "lucide-react";
+import { Send, Bell, Inbox, XCircle, CheckCheck, BadgeCheck } from "lucide-react";
 import { format } from "date-fns";
 
 interface OutboundNotification {
@@ -23,6 +23,7 @@ interface InboxItem {
   body: string;
   meta: string | null;
   read_at: string | null;
+  refund_processed_at: string | null;
   created_at: string;
 }
 
@@ -69,6 +70,12 @@ export default function Notifications() {
   const markAllRead = async () => {
     await api("/api/portal/inbox/read-all", { method: "PUT" }).catch(() => {});
     setInbox(prev => prev.map(n => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
+  };
+
+  const markRefundProcessed = async (id: number) => {
+    await api(`/api/portal/inbox/${id}/refund-processed`, { method: "PUT" }).catch(() => {});
+    const now = new Date().toISOString();
+    setInbox(prev => prev.map(n => n.id === id ? { ...n, refund_processed_at: now, read_at: n.read_at ?? now } : n));
   };
 
   const unreadCount = inbox.filter(n => !n.read_at).length;
@@ -144,6 +151,8 @@ export default function Notifications() {
             {inbox.map(n => {
               const style = inboxStyle(n.type);
               const isUnread = !n.read_at;
+              const refundDone = !!n.refund_processed_at;
+              const isCancellation = n.type === "cancellation";
               return (
                 <Card
                   key={n.id}
@@ -152,34 +161,56 @@ export default function Notifications() {
                   <CardContent className="p-4">
                     <div className="flex items-start gap-3">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${style.bg}`}>
-                        {n.type === "cancellation"
+                        {isCancellation
                           ? <XCircle className={`h-4.5 w-4.5 ${style.text}`} />
                           : <Bell className={`h-4.5 w-4.5 ${style.text}`} />
                         }
                       </div>
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
-                          <div>
+                          <div className="flex-1 min-w-0">
                             <p className={`text-sm font-semibold ${isUnread ? "text-foreground" : "text-muted-foreground"}`}>
                               {n.title}
                               {isUnread && <span className="ml-2 inline-block w-2 h-2 rounded-full bg-red-500 align-middle" />}
                             </p>
                             <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line leading-relaxed">{n.body}</p>
                           </div>
-                          {isUnread && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs text-muted-foreground shrink-0 h-7 px-2"
-                              onClick={() => markRead(n.id)}
-                            >
-                              Dismiss
-                            </Button>
+                          <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            {isUnread && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs text-muted-foreground h-7 px-2"
+                                onClick={() => markRead(n.id)}
+                              >
+                                Dismiss
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-3 mt-2 flex-wrap">
+                          <p className="text-xs text-muted-foreground">
+                            {format(new Date(n.created_at), "dd MMM yyyy HH:mm")}
+                          </p>
+                          {isCancellation && (
+                            refundDone ? (
+                              <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                                <BadgeCheck className="h-3.5 w-3.5" />
+                                Refund Processed · {format(new Date(n.refund_processed_at!), "dd MMM HH:mm")}
+                              </span>
+                            ) : (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2.5 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50"
+                                onClick={() => markRefundProcessed(n.id)}
+                              >
+                                <BadgeCheck className="h-3.5 w-3.5" />
+                                Mark Refund Processed
+                              </Button>
+                            )
                           )}
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1.5">
-                          {format(new Date(n.created_at), "dd MMM yyyy HH:mm")}
-                        </p>
                       </div>
                     </div>
                   </CardContent>

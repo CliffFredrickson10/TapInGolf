@@ -886,6 +886,16 @@ router.put("/portal/inbox/read-all", requireClubAuth, async (req: Request, res: 
   res.json({ ok: true });
 });
 
+router.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const nid = parseInt(req.params.id, 10);
+  await exec(
+    "UPDATE club_inbox_notifications SET refund_processed_at = NOW(), read_at = COALESCE(read_at, NOW()) WHERE id = ? AND club_id = ? AND type = 'cancellation'",
+    [nid, club.id]
+  );
+  res.json({ ok: true });
+});
+
 // ─── NOTIFICATIONS (club → golfers) ──────────────────────────────────────────
 
 router.get("/portal/notifications", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

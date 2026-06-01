@@ -58114,9 +58114,11 @@ router4.get("/bookings/:id", async (req, res) => {
             c.cancel_partial_pct,
             c.cancel_partial_hours,
             c.cancel_payment_hours,
+            c.cancel_payment_minutes,
             c.cancel_weather,
             c.cancel_contact_email,
             c.cancel_contact_phone,
+            c.cancel_other_policies,
             pts.tee_time as time,
             pts.date as date,
             0 as price
@@ -61119,7 +61121,8 @@ router13.get("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
   const club = getClub(req);
   const data = await row(
     `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
-            cancel_partial_hours, cancel_payment_hours, cancel_weather, cancel_contact_email, cancel_contact_phone
+            cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
+            cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies
      FROM clubs WHERE id = ?`,
     [club.id]
   );
@@ -61129,10 +61132,11 @@ router13.get("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
     has_partial: data?.cancel_has_partial != null ? !!Number(data.cancel_has_partial) : true,
     partial_pct: data?.cancel_partial_pct != null ? Number(data.cancel_partial_pct) : 50,
     partial_hours: data?.cancel_partial_hours != null ? Number(data.cancel_partial_hours) : 24,
-    payment_hours: data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) : 24,
+    payment_minutes: data?.cancel_payment_minutes != null ? Number(data.cancel_payment_minutes) : data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) * 60 : 1440,
     weather: data?.cancel_weather ?? "full_refund",
     contact_email: data?.cancel_contact_email ?? null,
-    contact_phone: data?.cancel_contact_phone ?? null
+    contact_phone: data?.cancel_contact_phone ?? null,
+    other_policies: data?.cancel_other_policies ?? null
   });
 });
 router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
@@ -61144,15 +61148,18 @@ router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
     partial_pct,
     partial_hours,
     payment_hours,
+    payment_minutes,
     weather,
     contact_email,
-    contact_phone
+    contact_phone,
+    other_policies
   } = req.body ?? {};
   const VALID_PRESETS = ["flexible", "standard", "strict", "non_refundable"];
   const VALID_WEATHER = ["full_refund", "rebook_only", "no_refund"];
   const presetVal = VALID_PRESETS.includes(String(preset)) ? String(preset) : "standard";
   const weatherVal = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
-  const payHours = [24, 48].includes(Number(payment_hours)) ? Number(payment_hours) : 24;
+  const rawMins = payment_minutes != null ? Number(payment_minutes) : payment_hours != null ? Number(payment_hours) * 60 : 1440;
+  const payMins = Math.min(2880, Math.max(30, Math.round(rawMins)));
   const fullHours = full_refund_hours != null ? Number(full_refund_hours) : null;
   const hasPartial = !!has_partial && presetVal !== "non_refundable";
   const partialPct = partial_pct != null ? Math.min(100, Math.max(1, Number(partial_pct))) : null;
@@ -61165,9 +61172,11 @@ router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
        cancel_partial_pct      = ?,
        cancel_partial_hours    = ?,
        cancel_payment_hours    = ?,
+       cancel_payment_minutes  = ?,
        cancel_weather          = ?,
        cancel_contact_email    = ?,
-       cancel_contact_phone    = ?
+       cancel_contact_phone    = ?,
+       cancel_other_policies   = ?
      WHERE id = ?`,
     [
       presetVal,
@@ -61175,10 +61184,12 @@ router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
       hasPartial ? 1 : 0,
       partialPct,
       partialHours,
-      payHours,
+      Math.round(payMins / 60),
+      payMins,
       weatherVal,
       contact_email ? String(contact_email).trim() || null : null,
       contact_phone ? String(contact_phone).trim() || null : null,
+      other_policies ? String(other_policies).trim() || null : null,
       club.id
     ]
   );
@@ -64029,6 +64040,8 @@ async function createSchema() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_weather VARCHAR(20) NOT NULL DEFAULT 'full_refund'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_email VARCHAR(255)");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_phone VARCHAR(50)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_minutes INT NOT NULL DEFAULT 1440");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

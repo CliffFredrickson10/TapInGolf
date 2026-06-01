@@ -208,9 +208,11 @@ router.get("/bookings/:id", async (req, res): Promise<void> => {
             c.cancel_partial_pct,
             c.cancel_partial_hours,
             c.cancel_payment_hours,
+            c.cancel_payment_minutes,
             c.cancel_weather,
             c.cancel_contact_email,
             c.cancel_contact_phone,
+            c.cancel_other_policies,
             pts.tee_time as time,
             pts.date as date,
             0 as price

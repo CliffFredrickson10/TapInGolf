@@ -240,7 +240,8 @@ router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
   const club = getClub(req);
   const data = await row<any>(
     `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
-            cancel_partial_hours, cancel_payment_hours, cancel_weather, cancel_contact_email, cancel_contact_phone
+            cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
+            cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies
      FROM clubs WHERE id = ?`,
     [club.id]
   );
@@ -250,23 +251,28 @@ router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
     has_partial:        data?.cancel_has_partial != null ? !!Number(data.cancel_has_partial) : true,
     partial_pct:        data?.cancel_partial_pct  != null ? Number(data.cancel_partial_pct)  : 50,
     partial_hours:      data?.cancel_partial_hours != null ? Number(data.cancel_partial_hours) : 24,
-    payment_hours:      data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) : 24,
+    payment_minutes:    data?.cancel_payment_minutes != null
+                          ? Number(data.cancel_payment_minutes)
+                          : (data?.cancel_payment_hours != null ? Number(data.cancel_payment_hours) * 60 : 1440),
     weather:            data?.cancel_weather ?? "full_refund",
     contact_email:      data?.cancel_contact_email  ?? null,
     contact_phone:      data?.cancel_contact_phone  ?? null,
+    other_policies:     data?.cancel_other_policies ?? null,
   });
 });
 
 router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const { preset, full_refund_hours, has_partial, partial_pct, partial_hours,
-          payment_hours, weather, contact_email, contact_phone } = req.body ?? {};
+          payment_hours, payment_minutes, weather, contact_email, contact_phone,
+          other_policies } = req.body ?? {};
 
   const VALID_PRESETS  = ["flexible", "standard", "strict", "non_refundable"];
   const VALID_WEATHER  = ["full_refund", "rebook_only", "no_refund"];
   const presetVal      = VALID_PRESETS.includes(String(preset)) ? String(preset) : "standard";
   const weatherVal     = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
-  const payHours       = [24, 48].includes(Number(payment_hours)) ? Number(payment_hours) : 24;
+  const rawMins        = payment_minutes != null ? Number(payment_minutes) : (payment_hours != null ? Number(payment_hours) * 60 : 1440);
+  const payMins        = Math.min(2880, Math.max(30, Math.round(rawMins)));
   const fullHours      = full_refund_hours != null ? Number(full_refund_hours) : null;
   const hasPartial     = !!has_partial && presetVal !== "non_refundable";
   const partialPct     = partial_pct  != null ? Math.min(100, Math.max(1, Number(partial_pct)))  : null;
@@ -280,14 +286,17 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
        cancel_partial_pct      = ?,
        cancel_partial_hours    = ?,
        cancel_payment_hours    = ?,
+       cancel_payment_minutes  = ?,
        cancel_weather          = ?,
        cancel_contact_email    = ?,
-       cancel_contact_phone    = ?
+       cancel_contact_phone    = ?,
+       cancel_other_policies   = ?
      WHERE id = ?`,
     [presetVal, fullHours, hasPartial ? 1 : 0, partialPct, partialHours,
-     payHours, weatherVal,
+     Math.round(payMins / 60), payMins, weatherVal,
      contact_email ? String(contact_email).trim() || null : null,
      contact_phone ? String(contact_phone).trim() || null : null,
+     other_policies ? String(other_policies).trim() || null : null,
      club.id]
   );
   res.json({ success: true });

@@ -4,6 +4,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   Linking,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -35,6 +36,7 @@ interface BookingDetail extends Booking {
   cancel_weather?: string;
   cancel_contact_email?: string | null;
   cancel_contact_phone?: string | null;
+  cancel_other_policies?: string | null;
 }
 
 function calcRefundTier(booking: BookingDetail): "full" | "partial" | "none" {
@@ -73,6 +75,7 @@ export default function BookingDetailScreen() {
   const [cancelling, setCancelling] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [cancelContact, setCancelContact] = useState<{ email: string | null; phone: string | null } | null>(null);
+  const [showPolicies, setShowPolicies] = useState(false);
   const [payLoading, setPayLoading]       = useState(false);
   const [payMethod, setPayMethod]         = useState<"stitch" | "wallet" | "prepaid">("stitch");
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -192,7 +195,140 @@ export default function BookingDetailScreen() {
     return `${h12}:${String(m).padStart(2, "0")} ${ampm}`;
   };
 
+  const hasPolicies = !!(booking.cancel_full_refund_hours !== undefined || booking.cancel_other_policies);
+
   return (
+    <>
+    {/* Booking Policies Modal */}
+    <Modal
+      visible={showPolicies}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowPolicies(false)}
+    >
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={[styles.header, { paddingTop: topPad + 12, borderBottomWidth: 1, borderBottomColor: colors.border }]}>
+          <View style={{ width: 24 }} />
+          <Text style={[styles.headerTitle, { color: colors.foreground }]}>Booking Policies</Text>
+          <TouchableOpacity onPress={() => setShowPolicies(false)}>
+            <Ionicons name="close" size={24} color={colors.foreground} />
+          </TouchableOpacity>
+        </View>
+        <ScrollView contentContainerStyle={{ padding: 20, gap: 16 }} showsVerticalScrollIndicator={false}>
+          <Text style={[{ fontSize: 13, color: colors.mutedForeground, lineHeight: 18 }]}>
+            Policies set by {booking.club_name}. For questions, contact the club directly.
+          </Text>
+
+          {/* Cancellation Policy */}
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <Text style={[styles.cardTitle, { color: colors.foreground }]}>Cancellation Policy</Text>
+            {booking.cancel_full_refund_hours != null ? (
+              <>
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Ionicons name="checkmark-circle-outline" size={15} color="#1a5c38" />
+                    <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                      Full refund if cancelled {fmtHours(booking.cancel_full_refund_hours)}+ before tee time
+                    </Text>
+                  </View>
+                </View>
+                {(booking.cancel_has_partial === 1 || booking.cancel_has_partial === true) && (
+                  <View style={styles.detailRow}>
+                    <View style={styles.detailLeft}>
+                      <Ionicons name="remove-circle-outline" size={15} color="#c8a84b" />
+                      <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                        {booking.cancel_partial_pct ?? 50}% refund between {fmtHours(booking.cancel_partial_hours)} and {fmtHours(booking.cancel_full_refund_hours)}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                <View style={styles.detailRow}>
+                  <View style={styles.detailLeft}>
+                    <Ionicons name="close-circle-outline" size={15} color={colors.destructive} />
+                    <Text style={[styles.detailLabel, { color: colors.foreground }]}>
+                      No refund within {fmtHours((booking.cancel_has_partial === 1 || booking.cancel_has_partial === true) ? booking.cancel_partial_hours : booking.cancel_full_refund_hours)}
+                    </Text>
+                  </View>
+                </View>
+              </>
+            ) : (
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Ionicons name="close-circle-outline" size={15} color={colors.destructive} />
+                  <Text style={[styles.detailLabel, { color: colors.foreground }]}>Non-refundable — no refunds on cancellation</Text>
+                </View>
+              </View>
+            )}
+            {booking.cancel_weather && (
+              <View style={styles.detailRow}>
+                <View style={styles.detailLeft}>
+                  <Ionicons name="rainy-outline" size={15} color={colors.mutedForeground} />
+                  <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>
+                    Weather closure:{" "}
+                    {booking.cancel_weather === "full_refund" ? "full refund"
+                      : booking.cancel_weather === "rebook_only" ? "rebook credit"
+                      : "no refund"}
+                  </Text>
+                </View>
+              </View>
+            )}
+          </View>
+
+          {/* Other Club Policies */}
+          {!!booking.cancel_other_policies && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Club Policies</Text>
+              <Text style={[{ fontSize: 14, color: colors.foreground, lineHeight: 22 }]}>
+                {booking.cancel_other_policies}
+              </Text>
+            </View>
+          )}
+
+          {/* Club contact */}
+          {(booking.cancel_contact_email || booking.cancel_contact_phone) && (
+            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Contact the Club</Text>
+              <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>For refund requests or queries about these policies</Text>
+              {booking.cancel_contact_email && (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderColor: colors.border }]}
+                  onPress={() => Linking.openURL(`mailto:${booking.cancel_contact_email}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.contactIcon, { backgroundColor: colors.primary + "15" }]}>
+                    <Ionicons name="mail-outline" size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.contactLabel, { color: colors.foreground }]}>Email</Text>
+                    <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>{booking.cancel_contact_email}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+              {booking.cancel_contact_phone && (
+                <TouchableOpacity
+                  style={[styles.contactRow, { borderColor: colors.border }]}
+                  onPress={() => Linking.openURL(`tel:${booking.cancel_contact_phone}`)}
+                  activeOpacity={0.7}
+                >
+                  <View style={[styles.contactIcon, { backgroundColor: colors.primary + "15" }]}>
+                    <Ionicons name="call-outline" size={18} color={colors.primary} />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.contactLabel, { color: colors.foreground }]}>Phone</Text>
+                    <Text style={[styles.contactSub, { color: colors.mutedForeground }]}>{booking.cancel_contact_phone}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              )}
+            </View>
+          )}
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </View>
+    </Modal>
+
     <ScrollView style={{ flex: 1, backgroundColor: colors.background }} showsVerticalScrollIndicator={false}>
       <View style={[styles.header, { paddingTop: topPad + 12 }]}>
         <TouchableOpacity onPress={() => router.replace("/(tabs)/bookings")}>
@@ -222,6 +358,19 @@ export default function BookingDetailScreen() {
             </View>
           )}
         </View>
+
+        {/* View Booking Policies link */}
+        {hasPolicies && (
+          <TouchableOpacity
+            style={[styles.policiesLink, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => setShowPolicies(true)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+            <Text style={[styles.policiesLinkText, { color: colors.primary }]}>View Booking Policies</Text>
+            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+          </TouchableOpacity>
+        )}
 
         {/* Pay your share */}
         {needsPayment && (
@@ -621,6 +770,7 @@ export default function BookingDetailScreen() {
 
       <View style={{ height: Platform.OS === "web" ? 50 : 40 }} />
     </ScrollView>
+    </>
   );
 }
 
@@ -676,4 +826,6 @@ const styles = StyleSheet.create({
   contactLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   contactSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
   directionsDisclaimer: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: 8, marginBottom: 2 },
+  policiesLink: { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 12 },
+  policiesLinkText: { fontSize: 14, fontFamily: "Inter_600SemiBold", flex: 1 },
 });

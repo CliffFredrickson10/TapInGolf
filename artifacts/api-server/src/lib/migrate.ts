@@ -742,6 +742,10 @@ async function createSchema(): Promise<void> {
   // cancel_contact_email / _phone: where golfers send refund requests — routes to the club, not TapIn Golf.
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_email VARCHAR(255)");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_contact_phone VARCHAR(50)");
+  // cancel_payment_minutes: replaces cancel_payment_hours with granular 30 min–48 h range.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_minutes INT NOT NULL DEFAULT 1440");
+  // cancel_other_policies: free-text block for dress code, check-in time, tee-box arrival, etc.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

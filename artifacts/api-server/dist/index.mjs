@@ -56697,6 +56697,7 @@ function invoiceHtml(booking, clubName) {
           <div><span style="color:#6b7280;font-size:13px">Players</span><div style="font-weight:600;font-size:14px">${booking.players}</div></div>
           <div><span style="color:#6b7280;font-size:13px">Service</span><div style="font-weight:600;font-size:14px">${holes} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
           <div><span style="color:#6b7280;font-size:13px">Pricing Tier</span><div style="font-weight:600;font-size:14px">${fmtTier(booking.price_tier)}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Paid On</span><div style="font-weight:600;font-size:14px">${new Date(booking.created_at).toLocaleString("en-ZA", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</div></div>
         </div>
       </div>
 

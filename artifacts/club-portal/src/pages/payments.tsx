@@ -151,6 +151,7 @@ function generateInvoiceHTML(b: Payment, clubName: string): string {
           <div><div style="color:#6b7280;font-size:12px">Players</div><div style="font-weight:600;font-size:14px;margin-top:3px">${b.players} player${b.players !== 1 ? "s" : ""}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Service</div><div style="font-weight:600;font-size:14px;margin-top:3px">${b.holes} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Pricing Tier</div><div style="font-weight:600;font-size:14px;margin-top:3px">${fmtTier(b.price_tier)}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Paid On</div><div style="font-weight:600;font-size:14px;margin-top:3px">${format(parseISO(b.created_at), "dd MMM yyyy, HH:mm")}</div></div>
         </div>
       </div>
 
@@ -404,12 +405,13 @@ export default function Payments() {
       ) : (
         <div className="rounded-lg border bg-white overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_110px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             <div className="px-4 py-3">Reference</div>
             <div className="px-4 py-3">Golfer</div>
             <div className="px-4 py-3">Tee Date</div>
             <div className="px-4 py-3">Time</div>
             <div className="px-4 py-3">Service</div>
+            <div className="px-4 py-3">Paid On</div>
             <div className="px-4 py-3 text-right">Amount</div>
             <div className="px-4 py-3 text-center">Status</div>
           </div>
@@ -417,7 +419,7 @@ export default function Payments() {
           {filtered.map(p => (
             <div
               key={p.id}
-              className="grid grid-cols-[140px_1fr_100px_90px_120px_110px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
+              className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
               onClick={() => setSelected(p)}
             >
               <div className="px-4 py-3">
@@ -432,6 +434,10 @@ export default function Payments() {
               <div className="px-4 py-3 text-sm">
                 <span>{p.holes}H{p.cart_fee > 0 ? " + Cart" : ""}</span>
                 <span className="text-xs text-muted-foreground block">{p.players} player{p.players !== 1 ? "s" : ""}</span>
+              </div>
+              <div className="px-4 py-3 text-sm">
+                <span className="block">{format(parseISO(p.created_at), "dd MMM yyyy")}</span>
+                <span className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "HH:mm")}</span>
               </div>
               <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(p.total_amount)}</div>
               <div className="px-4 py-3 text-center">

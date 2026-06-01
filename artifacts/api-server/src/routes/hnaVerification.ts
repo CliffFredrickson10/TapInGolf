@@ -315,4 +315,37 @@ router.post("/admin/hna-verifications/:id/reset", async (req, res): Promise<void
   res.json({ success: true, status: "pending" });
 });
 
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): DELETE /admin/hna-verifications/:id
+// Completely wipes all HNA verification records for the golfer associated with
+// this verification ID, and clears their hna_number so they can start fresh.
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete("/admin/hna-verifications/:id", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const v = await row<any>("SELECT id, user_id FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
+
+  // Delete every verification row for this golfer (full reset — clears attempt history).
+  await exec("DELETE FROM hna_verifications WHERE user_id = ?", [v.user_id]);
+
+  // Clear the HNA number from their profile so they can submit fresh.
+  await exec("UPDATE users SET hna_number = NULL WHERE id = ?", [v.user_id]);
+
+  const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to:    target.push_token,
+      sound: "default",
+      title: "HNA Verification Reset",
+      body:  "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.",
+      data:  { type: "hna_verification_update", status: "deleted" },
+    }]);
+  }
+
+  res.json({ success: true, deleted: true });
+});
+
 export default router;

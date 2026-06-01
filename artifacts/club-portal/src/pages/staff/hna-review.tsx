@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { IdCard, Check, X, RotateCcw, Search } from "lucide-react";
+import { IdCard, Check, X, RotateCcw, Search, Trash2, AlertTriangle } from "lucide-react";
 import { format } from "date-fns";
 
 interface VerificationRow {
@@ -39,13 +39,7 @@ const statusBadge = (s: string) => {
   return map[s] ?? "bg-gray-100 text-gray-600";
 };
 
-function ClubSearch({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (name: string) => void;
-}) {
+function ClubSearch({ value, onChange }: { value: string; onChange: (name: string) => void }) {
   const [query, setQuery] = useState(value);
   const [results, setResults] = useState<ClubOption[]>([]);
   const [open, setOpen] = useState(false);
@@ -53,9 +47,7 @@ function ClubSearch({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
-    if (value === "") setQuery("");
-  }, [value]);
+  useEffect(() => { if (value === "") setQuery(""); }, [value]);
 
   useEffect(() => {
     if (timerRef.current) clearTimeout(timerRef.current);
@@ -75,25 +67,14 @@ function ClubSearch({
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) setOpen(false);
     };
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
-  const select = (club: ClubOption) => {
-    setQuery(club.name);
-    setOpen(false);
-    onChange(club.name);
-  };
-
-  const clear = () => {
-    setQuery("");
-    setOpen(false);
-    onChange("");
-  };
+  const select = (club: ClubOption) => { setQuery(club.name); setOpen(false); onChange(club.name); };
+  const clear = () => { setQuery(""); setOpen(false); onChange(""); };
 
   return (
     <div ref={wrapperRef} className="relative">
@@ -106,30 +87,23 @@ function ClubSearch({
           className="pl-8 pr-8 text-sm"
         />
         {(query || value) && (
-          <button
-            onClick={clear}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-          ><X className="h-3.5 w-3.5" /></button>
+          <button onClick={clear} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+            <X className="h-3.5 w-3.5" />
+          </button>
         )}
       </div>
       {open && results.length > 0 && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
           {searching && <div className="px-3 py-2 text-xs text-muted-foreground">Searching…</div>}
           {results.map(c => (
-            <button
-              key={c.id}
-              onMouseDown={() => select(c)}
-              className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col"
-            >
+            <button key={c.id} onMouseDown={() => select(c)} className="w-full text-left px-3 py-2 text-sm hover:bg-muted flex flex-col">
               <span className="font-medium">{c.name}</span>
               {c.location && <span className="text-xs text-muted-foreground">{c.location}</span>}
             </button>
           ))}
         </div>
       )}
-      {value && (
-        <p className="mt-1 text-xs text-[#1a5c38] font-medium">✓ {value}</p>
-      )}
+      {value && <p className="mt-1 text-xs text-[#1a5c38] font-medium">✓ {value}</p>}
     </div>
   );
 }
@@ -146,6 +120,7 @@ export default function StaffHnaReview() {
   const [note, setNote] = useState("");
   const [clubName, setClubName] = useState("");
   const [acting, setActing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -160,7 +135,7 @@ export default function StaffHnaReview() {
 
   const openDetail = async (id: number) => {
     setDetailLoading(true);
-    setValidUntil(""); setNote(""); setClubName("");
+    setValidUntil(""); setNote(""); setClubName(""); setConfirmDelete(false);
     try {
       const data = await api<{ verification: VerificationDetail }>(`/api/admin/hna-verifications/${id}`);
       setDetail(data.verification);
@@ -168,6 +143,8 @@ export default function StaffHnaReview() {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setDetailLoading(false); }
   };
+
+  const closeDetail = () => { setDetail(null); setConfirmDelete(false); };
 
   const approve = async () => {
     if (!detail) return;
@@ -178,9 +155,7 @@ export default function StaffHnaReview() {
         body: JSON.stringify({ valid_until: validUntil || null, club_name: clubName || null }),
       });
       toast({ title: "Approved", description: detail.user_name });
-      setDetail(null);
-      load();
-      refreshPending();
+      closeDetail(); load(); refreshPending();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setActing(false); }
@@ -196,9 +171,7 @@ export default function StaffHnaReview() {
         body: JSON.stringify({ note: note.trim() }),
       });
       toast({ title: "Rejected", description: detail.user_name });
-      setDetail(null);
-      load();
-      refreshPending();
+      closeDetail(); load(); refreshPending();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setActing(false); }
@@ -210,9 +183,19 @@ export default function StaffHnaReview() {
     try {
       await api(`/api/admin/hna-verifications/${detail.id}/reset`, { method: "POST" });
       toast({ title: "Reset to Pending", description: `${detail.user_name}'s verification is back in the review queue.` });
-      setDetail(null);
-      load();
-      refreshPending();
+      closeDetail(); load(); refreshPending();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setActing(false); }
+  };
+
+  const deleteVerification = async () => {
+    if (!detail) return;
+    setActing(true);
+    try {
+      await api(`/api/admin/hna-verifications/${detail.id}`, { method: "DELETE" });
+      toast({ title: "Verification deleted", description: `All HNA data for ${detail.user_name} has been removed. They can submit again from scratch.` });
+      closeDetail(); load(); refreshPending();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setActing(false); }
@@ -270,7 +253,7 @@ export default function StaffHnaReview() {
         </Card>
       )}
 
-      <Dialog open={detail != null || detailLoading} onOpenChange={(o) => { if (!o) setDetail(null); }}>
+      <Dialog open={detail != null || detailLoading} onOpenChange={(o) => { if (!o) closeDetail(); }}>
         <DialogContent className="max-w-lg">
           <DialogHeader><DialogTitle>Review Verification</DialogTitle></DialogHeader>
           {detailLoading || !detail ? (
@@ -293,7 +276,26 @@ export default function StaffHnaReview() {
                 <p className="text-sm text-muted-foreground">No card image submitted.</p>
               )}
 
-              {detail.status === "pending" ? (
+              {/* ── Confirmation state (delete) ──────────────────────────── */}
+              {confirmDelete ? (
+                <div className="space-y-3 pt-1 border-t border-destructive/20">
+                  <div className="flex gap-3 p-3 rounded-lg bg-destructive/8 border border-destructive/25">
+                    <AlertTriangle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                    <p className="text-sm text-destructive leading-snug">
+                      This will permanently delete <strong>all HNA verification records</strong> for <strong>{detail.user_name}</strong> and clear their HNA number.
+                      Their attempt count will reset and they can submit a new card from scratch.
+                    </p>
+                  </div>
+                  <DialogFooter className="gap-2">
+                    <Button variant="outline" onClick={() => setConfirmDelete(false)} disabled={acting}>Cancel</Button>
+                    <Button variant="destructive" onClick={deleteVerification} disabled={acting} className="gap-1.5">
+                      <Trash2 className="h-4 w-4" />{acting ? "Deleting…" : "Confirm Delete"}
+                    </Button>
+                  </DialogFooter>
+                </div>
+
+              /* ── Pending actions ────────────────────────────────────────── */
+              ) : detail.status === "pending" ? (
                 <div className="space-y-3 pt-1 border-t">
                   <div className="space-y-1.5">
                     <Label className="text-xs">Associated Club (optional)</Label>
@@ -309,10 +311,21 @@ export default function StaffHnaReview() {
                     <Input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Card image unclear" />
                   </div>
                   <DialogFooter className="gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/5 gap-1.5 mr-auto"
+                      onClick={() => setConfirmDelete(true)}
+                      disabled={acting}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />Delete
+                    </Button>
                     <Button variant="outline" className="text-destructive gap-1.5" onClick={reject} disabled={acting}><X className="h-4 w-4" />Reject</Button>
                     <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-1.5" onClick={approve} disabled={acting}><Check className="h-4 w-4" />Approve</Button>
                   </DialogFooter>
                 </div>
+
+              /* ── Approved / Rejected actions ────────────────────────────── */
               ) : (
                 <div className="space-y-3 pt-1 border-t">
                   <div className="text-sm space-y-1">
@@ -322,7 +335,16 @@ export default function StaffHnaReview() {
                     {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
                     {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}
                   </div>
-                  <DialogFooter>
+                  <DialogFooter className="gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-destructive border-destructive/30 hover:bg-destructive/5 gap-1.5 mr-auto"
+                      onClick={() => setConfirmDelete(true)}
+                      disabled={acting}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />Delete
+                    </Button>
                     <Button
                       variant="outline"
                       className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50"

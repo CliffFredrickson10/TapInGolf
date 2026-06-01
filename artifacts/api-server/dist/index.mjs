@@ -63536,6 +63536,32 @@ router18.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   }
   res.json({ success: true, status: "pending" });
 });
+router18.delete("/admin/hna-verifications/:id", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const v = await row("SELECT id, user_id FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) {
+    res.status(404).json({ message: "Verification not found" });
+    return;
+  }
+  await exec("DELETE FROM hna_verifications WHERE user_id = ?", [v.user_id]);
+  await exec("UPDATE users SET hna_number = NULL WHERE id = ?", [v.user_id]);
+  const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to: target.push_token,
+      sound: "default",
+      title: "HNA Verification Reset",
+      body: "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.",
+      data: { type: "hna_verification_update", status: "deleted" }
+    }]);
+  }
+  res.json({ success: true, deleted: true });
+});
 var hnaVerification_default = router18;
 
 // src/routes/moderation.ts

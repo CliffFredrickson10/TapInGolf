@@ -25,7 +25,7 @@ async function ensureUniqueCode(clubName: string, userId: number): Promise<strin
   throw new Error("Could not generate unique voucher code");
 }
 
-// ── Fetch affected players for a date (+ optional from_time) ─────────────────
+// ── Fetch affected players for a date (+ optional from_time / to_time) ────────
 // Returns one record per (user, booking) combo:
 //   - Booking creators: voucher_value = total_amount (non-split) or my_amount/bp.amount (split)
 //   - Split-bill co-players: voucher_value = their bp.amount
@@ -33,7 +33,8 @@ async function ensureUniqueCode(clubName: string, userId: number): Promise<strin
 async function fetchAffectedPlayers(
   clubId: number,
   date: string,
-  fromTime: string | null
+  fromTime: string | null,
+  toTime: string | null = null
 ): Promise<Array<{
   id: number;
   name: string;
@@ -44,12 +45,15 @@ async function fetchAffectedPlayers(
   time: string;
   payment_method: string | null;
 }>> {
-  const timeFilter   = fromTime ? "AND pts.tee_time >= ?" : "";
-  const timeParam    = fromTime ?? null;
+  // Build a time-range filter from the optional from_time / to_time bounds.
+  const timeClauses: string[] = [];
+  const timeValues: string[]  = [];
+  if (fromTime) { timeClauses.push("pts.tee_time >= ?"); timeValues.push(fromTime); }
+  if (toTime)   { timeClauses.push("pts.tee_time <= ?"); timeValues.push(toTime);   }
+  const timeFilter = timeClauses.length ? "AND " + timeClauses.join(" AND ") : "";
 
   // 1. Booking creators — only confirmed bookings (pending = Stitch payment not yet received)
-  const creatorsParams: any[] = [clubId, date];
-  if (timeParam) creatorsParams.push(timeParam);
+  const creatorsParams: any[] = [clubId, date, ...timeValues];
 
   const creators = await query<any>(
     `SELECT
@@ -74,8 +78,7 @@ async function fetchAffectedPlayers(
   // 2. Split-bill co-players (registered users who are NOT the booking creator)
   //    Only include co-players who have actually paid their share (bp.paid = 1).
   //    bp.payment_method tracks how they paid (stitch/wallet/prepaid/null for legacy).
-  const coParams: any[] = [clubId, date];
-  if (timeParam) coParams.push(timeParam);
+  const coParams: any[] = [clubId, date, ...timeValues];
 
   const coPlayers = await query<any>(
     `SELECT
@@ -158,6 +161,7 @@ router.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req: 
 
   const date     = req.query.date      ? String(req.query.date)      : null;
   const fromTime = req.query.from_time ? String(req.query.from_time) : null;
+  const toTime   = req.query.to_time   ? String(req.query.to_time)   : null;
 
   if (!date) { res.status(400).json({ message: "date is required" }); return; }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
@@ -165,7 +169,7 @@ router.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req: 
     return;
   }
 
-  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null);
+  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null, toTime ?? null);
   res.json({ count: players.length, users: players });
 });
 
@@ -177,7 +181,7 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
   const club   = getClub(req);
   const clubId = club.id as number;
 
-  const { affected_date, reason, from_time, expires_in_days } = req.body ?? {};
+  const { affected_date, reason, from_time, to_time, expires_in_days } = req.body ?? {};
 
   if (!reason || !String(reason).trim()) {
     res.status(400).json({ message: "reason is required" });
@@ -193,9 +197,10 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
     : null;
 
   const fromTime: string | null = from_time || null;
+  const toTime:   string | null = to_time   || null;
   const dateParam: string       = String(affected_date);
 
-  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime);
+  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime, toTime);
 
   if (recipients.length === 0) {
     res.status(400).json({ message: "No affected bookings found for the given criteria" });
@@ -205,10 +210,10 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
   // Create the batch record (value_rands is null — amounts vary per player; issued_by is null for portal)
   const batchRow = await row<any>(
     `INSERT INTO cancellation_voucher_batches
-       (club_id, issued_by, reason, affected_date, from_time, value_rands, expires_at, voucher_count)
-     VALUES (?, NULL, ?, ?, ?, NULL, ?, ?)
+       (club_id, issued_by, reason, affected_date, from_time, to_time, value_rands, expires_at, voucher_count)
+     VALUES (?, NULL, ?, ?, ?, ?, NULL, ?, ?)
      RETURNING id`,
-    [clubId, String(reason).trim(), dateParam, fromTime, expiresAt, recipients.length]
+    [clubId, String(reason).trim(), dateParam, fromTime, toTime, expiresAt, recipients.length]
   );
   const batchId = batchRow.id;
 
@@ -315,13 +320,16 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
 
   // ── Close all affected tee slots (even unbooked ones) ─────────────────────
   // Any pending bookings on those slots are also cancelled (payment never confirmed).
-  const slotTimeFilter = fromTime ? "AND tee_time >= ?" : "";
-  const slotParams     = fromTime ? [clubId, dateParam, fromTime] : [clubId, dateParam];
+  const slotClauses: string[] = [];
+  const slotValues:  any[]    = [clubId, dateParam];
+  if (fromTime) { slotClauses.push("tee_time >= ?"); slotValues.push(fromTime); }
+  if (toTime)   { slotClauses.push("tee_time <= ?"); slotValues.push(toTime);   }
+  const slotTimeFilter = slotClauses.length ? "AND " + slotClauses.join(" AND ") : "";
 
   await exec(
     `UPDATE portal_tee_slots SET is_active = 0
      WHERE club_id = ? AND date = ? ${slotTimeFilter}`,
-    slotParams
+    slotValues
   );
 
   await exec(
@@ -331,7 +339,7 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
          SELECT id FROM portal_tee_slots
          WHERE club_id = ? AND date = ? ${slotTimeFilter}
        )`,
-    slotParams
+    slotValues
   );
 
   res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount, slots_closed: true });
@@ -346,7 +354,7 @@ router.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req: 
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
 
   const batches = await query<any>(
-    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.value_rands, b.expires_at,
+    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.to_time, b.value_rands, b.expires_at,
             b.voucher_count, b.created_at,
             COALESCE(u.name, 'Portal') as issued_by_name,
             COUNT(cv.id) FILTER (WHERE cv.redeemed_at IS NOT NULL) as redeemed_count

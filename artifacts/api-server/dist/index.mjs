@@ -59915,11 +59915,19 @@ async function ensureUniqueCode(clubName, userId) {
   }
   throw new Error("Could not generate unique voucher code");
 }
-async function fetchAffectedPlayers(clubId, date, fromTime) {
-  const timeFilter = fromTime ? "AND pts.tee_time >= ?" : "";
-  const timeParam = fromTime ?? null;
-  const creatorsParams = [clubId, date];
-  if (timeParam) creatorsParams.push(timeParam);
+async function fetchAffectedPlayers(clubId, date, fromTime, toTime = null) {
+  const timeClauses = [];
+  const timeValues = [];
+  if (fromTime) {
+    timeClauses.push("pts.tee_time >= ?");
+    timeValues.push(fromTime);
+  }
+  if (toTime) {
+    timeClauses.push("pts.tee_time <= ?");
+    timeValues.push(toTime);
+  }
+  const timeFilter = timeClauses.length ? "AND " + timeClauses.join(" AND ") : "";
+  const creatorsParams = [clubId, date, ...timeValues];
   const creators = await query(
     `SELECT
        u.id, u.name, u.email, u.push_token,
@@ -59939,8 +59947,7 @@ async function fetchAffectedPlayers(clubId, date, fromTime) {
      ORDER BY pts.tee_time, u.name`,
     creatorsParams
   );
-  const coParams = [clubId, date];
-  if (timeParam) coParams.push(timeParam);
+  const coParams = [clubId, date, ...timeValues];
   const coPlayers = await query(
     `SELECT
        u.id, u.name, u.email, u.push_token,
@@ -60005,6 +60012,7 @@ router9.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req,
   const clubId = club.id;
   const date = req.query.date ? String(req.query.date) : null;
   const fromTime = req.query.from_time ? String(req.query.from_time) : null;
+  const toTime = req.query.to_time ? String(req.query.to_time) : null;
   if (!date) {
     res.status(400).json({ message: "date is required" });
     return;
@@ -60013,13 +60021,13 @@ router9.get("/admin/cancellation-vouchers/preview", requireClubAuth, async (req,
     res.status(400).json({ message: "date must be YYYY-MM-DD" });
     return;
   }
-  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null);
+  const players = await fetchAffectedPlayers(clubId, date, fromTime ?? null, toTime ?? null);
   res.json({ count: players.length, users: players });
 });
 router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const clubId = club.id;
-  const { affected_date, reason, from_time, expires_in_days } = req.body ?? {};
+  const { affected_date, reason, from_time, to_time, expires_in_days } = req.body ?? {};
   if (!reason || !String(reason).trim()) {
     res.status(400).json({ message: "reason is required" });
     return;
@@ -60030,18 +60038,19 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
   }
   const expiresAt = expires_in_days ? new Date(Date.now() + Number(expires_in_days) * 864e5).toISOString() : null;
   const fromTime = from_time || null;
+  const toTime = to_time || null;
   const dateParam = String(affected_date);
-  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime);
+  const recipients = await fetchAffectedPlayers(clubId, dateParam, fromTime, toTime);
   if (recipients.length === 0) {
     res.status(400).json({ message: "No affected bookings found for the given criteria" });
     return;
   }
   const batchRow = await row(
     `INSERT INTO cancellation_voucher_batches
-       (club_id, issued_by, reason, affected_date, from_time, value_rands, expires_at, voucher_count)
-     VALUES (?, NULL, ?, ?, ?, NULL, ?, ?)
+       (club_id, issued_by, reason, affected_date, from_time, to_time, value_rands, expires_at, voucher_count)
+     VALUES (?, NULL, ?, ?, ?, ?, NULL, ?, ?)
      RETURNING id`,
-    [clubId, String(reason).trim(), dateParam, fromTime, expiresAt, recipients.length]
+    [clubId, String(reason).trim(), dateParam, fromTime, toTime, expiresAt, recipients.length]
   );
   const batchId = batchRow.id;
   const issued = [];
@@ -60126,12 +60135,21 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
   }
   const voucherCount = issued.filter((i) => !i.prepaid_rollback).length;
   const rollbackCount = issued.filter((i) => i.prepaid_rollback).length;
-  const slotTimeFilter = fromTime ? "AND tee_time >= ?" : "";
-  const slotParams = fromTime ? [clubId, dateParam, fromTime] : [clubId, dateParam];
+  const slotClauses = [];
+  const slotValues = [clubId, dateParam];
+  if (fromTime) {
+    slotClauses.push("tee_time >= ?");
+    slotValues.push(fromTime);
+  }
+  if (toTime) {
+    slotClauses.push("tee_time <= ?");
+    slotValues.push(toTime);
+  }
+  const slotTimeFilter = slotClauses.length ? "AND " + slotClauses.join(" AND ") : "";
   await exec(
     `UPDATE portal_tee_slots SET is_active = 0
      WHERE club_id = ? AND date = ? ${slotTimeFilter}`,
-    slotParams
+    slotValues
   );
   await exec(
     `UPDATE bookings SET status = 'cancelled'
@@ -60140,7 +60158,7 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
          SELECT id FROM portal_tee_slots
          WHERE club_id = ? AND date = ? ${slotTimeFilter}
        )`,
-    slotParams
+    slotValues
   );
   res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount, slots_closed: true });
 });
@@ -60150,7 +60168,7 @@ router9.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req,
   const limit = Math.min(parseInt(String(req.query.limit ?? "30"), 10), 100);
   const offset = parseInt(String(req.query.offset ?? "0"), 10);
   const batches = await query(
-    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.value_rands, b.expires_at,
+    `SELECT b.id, b.reason, b.affected_date, b.from_time, b.to_time, b.value_rands, b.expires_at,
             b.voucher_count, b.created_at,
             COALESCE(u.name, 'Portal') as issued_by_name,
             COUNT(cv.id) FILTER (WHERE cv.redeemed_at IS NOT NULL) as redeemed_count
@@ -64994,6 +65012,7 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_club   ON cancellation_vouchers (club_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
   await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS from_time TIME");
+  await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS to_time TIME");
   await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
 }

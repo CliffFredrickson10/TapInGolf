@@ -31,7 +31,7 @@ interface PreviewUser {
 }
 
 interface Batch {
-  id: number; reason: string; affected_date: string | null; from_time: string | null;
+  id: number; reason: string; affected_date: string | null; from_time: string | null; to_time: string | null;
   value_rands: string | null; expires_at: string | null;
   voucher_count: number; redeemed_count: number | string;
   created_at: string; issued_by_name: string;
@@ -232,13 +232,14 @@ function DiscountVouchersTab() {
 // ─── Cancellation Vouchers tab ────────────────────────────────────────────────
 
 function CancellationVouchersTab({
-  urlDate, urlFromTime, onIssued,
-}: { urlDate: string; urlFromTime: string; onIssued: () => void }) {
+  urlDate, urlFromTime, urlToTime, onIssued,
+}: { urlDate: string; urlFromTime: string; urlToTime: string; onIssued: () => void }) {
   const { toast } = useToast();
   const [, navigate] = useLocation();
 
   const [date, setDate]           = useState(urlDate);
   const [fromTime, setFromTime]   = useState(urlFromTime);
+  const [toTime, setToTime]       = useState(urlToTime);
   const [reason, setReason]       = useState("");
   const [expiryDays, setExpiryDays] = useState("365");
   const [previewing, setPreviewing] = useState(false);
@@ -248,7 +249,8 @@ function CancellationVouchersTab({
   useEffect(() => {
     if (urlDate)     setDate(urlDate);
     if (urlFromTime) setFromTime(urlFromTime);
-  }, [urlDate, urlFromTime]);
+    if (urlToTime)   setToTime(urlToTime);
+  }, [urlDate, urlFromTime, urlToTime]);
 
   const [batches, setBatches]     = useState<Batch[]>([]);
   const [loadingBatches, setLoadingBatches] = useState(true);
@@ -272,6 +274,7 @@ function CancellationVouchersTab({
     try {
       const qs = new URLSearchParams({ date });
       if (fromTime) qs.set("from_time", fromTime);
+      if (toTime)   qs.set("to_time",   toTime);
       const d = await api<{ count: number; users: PreviewUser[] }>(
         `/api/admin/cancellation-vouchers/preview?${qs}`
       );
@@ -291,6 +294,7 @@ function CancellationVouchersTab({
     try {
       const body: Record<string, any> = { reason: reason.trim(), affected_date: date };
       if (fromTime)   body.from_time       = fromTime;
+      if (toTime)     body.to_time         = toTime;
       if (expiryDays) body.expires_in_days = parseInt(expiryDays, 10);
 
       const result = await api<{ success: boolean; voucher_count: number; batch_id: number }>(
@@ -301,7 +305,7 @@ function CancellationVouchersTab({
         title: `${result.voucher_count} voucher${result.voucher_count !== 1 ? "s" : ""} issued`,
         description: "Each golfer receives a voucher equal to their booking amount via in-app notification.",
       });
-      setDate(""); setFromTime(""); setReason(""); setPreview(null);
+      setDate(""); setFromTime(""); setToTime(""); setReason(""); setPreview(null);
       navigate("/vouchers?tab=cancellation", { replace: true });
       loadBatches();
       onIssued();
@@ -363,10 +367,20 @@ function CancellationVouchersTab({
               <Input
                 type="time" value={fromTime}
                 onChange={e => { setFromTime(e.target.value); setPreview(null); }}
-                placeholder="Leave blank for all tee times"
               />
               <p className="text-xs text-muted-foreground">
-                Only affect bookings at or after this time (e.g. 11:00 if only the afternoon is affected)
+                Only affect bookings at or after this time
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>To Tee Time (optional)</Label>
+              <Input
+                type="time" value={toTime}
+                onChange={e => { setToTime(e.target.value); setPreview(null); }}
+              />
+              <p className="text-xs text-muted-foreground">
+                Only affect bookings up to and including this time (e.g. 12:00 if only the morning is cancelled)
               </p>
             </div>
 
@@ -421,7 +435,7 @@ function CancellationVouchersTab({
             <div className="rounded-lg border bg-muted/40 overflow-hidden">
               {preview!.length === 0 ? (
                 <div className="p-4 text-sm text-muted-foreground text-center">
-                  No confirmed or pending bookings found for {date}{fromTime ? ` from ${fromTime} onwards` : ""}.
+                  No confirmed or pending bookings found for {date}{fromTime ? ` from ${fromTime}` : ""}{toTime ? ` to ${toTime}` : ""}.
                 </div>
               ) : (
                 <>
@@ -430,6 +444,7 @@ function CancellationVouchersTab({
                       <Users className="h-3.5 w-3.5" />
                       {preview!.length} golfer{preview!.length !== 1 ? "s" : ""} will receive a voucher
                       {fromTime && <Badge variant="secondary" className="text-xs">from {fromTime}</Badge>}
+                      {toTime   && <Badge variant="secondary" className="text-xs">to {toTime}</Badge>}
                     </span>
                     <div className="flex items-center gap-2">
                       {totalVoucherValue > 0 && (
@@ -509,6 +524,11 @@ function CancellationVouchersTab({
                         {b.from_time && (
                           <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">
                             from {String(b.from_time).slice(0, 5)}
+                          </Badge>
+                        )}
+                        {b.to_time && (
+                          <Badge variant="outline" className="text-xs text-amber-700 border-amber-300 bg-amber-50">
+                            to {String(b.to_time).slice(0, 5)}
                           </Badge>
                         )}
                       </div>
@@ -601,8 +621,9 @@ export default function Vouchers() {
   const [, navigate] = useLocation();
   const params    = new URLSearchParams(search);
   const tabParam  = params.get("tab");
-  const urlDate   = params.get("date")      ?? "";
+  const urlDate     = params.get("date")      ?? "";
   const urlFromTime = params.get("from_time") ?? "";
+  const urlToTime   = params.get("to_time")   ?? "";
 
   const activeTab = tabParam === "cancellation" ? "cancellation" : "discount";
 
@@ -653,6 +674,7 @@ export default function Vouchers() {
         <CancellationVouchersTab
           urlDate={urlDate}
           urlFromTime={urlFromTime}
+          urlToTime={urlToTime}
           onIssued={() => {}}
         />
       )}

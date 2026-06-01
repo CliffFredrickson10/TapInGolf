@@ -139,6 +139,7 @@ export default function StaffHnaReview() {
     try {
       const data = await api<{ verification: VerificationDetail }>(`/api/admin/hna-verifications/${id}`);
       setDetail(data.verification);
+      setClubName(data.verification.club_name || "");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setDetailLoading(false); }
@@ -265,6 +266,15 @@ export default function StaffHnaReview() {
                 <div><div className="text-muted-foreground text-xs">Email</div><div>{detail.user_email}</div></div>
                 <div><div className="text-muted-foreground text-xs">HNA Number</div><div className="font-mono">{detail.hna_number}</div></div>
                 <div><div className="text-muted-foreground text-xs">Handicap</div><div>{detail.handicap ?? "—"}</div></div>
+                {detail.club_name && (
+                  <div className="col-span-2 pt-1">
+                    <div className="text-muted-foreground text-xs mb-1">Home Club (selected by golfer)</div>
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-[#1a5c38]/25 bg-[#1a5c38]/6">
+                      <span className="text-base">⛳</span>
+                      <span className="font-semibold text-[#1a5c38]">{detail.club_name}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {detail.card_image ? (
@@ -298,8 +308,12 @@ export default function StaffHnaReview() {
               ) : detail.status === "pending" ? (
                 <div className="space-y-3 pt-1 border-t">
                   <div className="space-y-1.5">
-                    <Label className="text-xs">Associated Club (optional)</Label>
-                    <p className="text-xs text-muted-foreground -mt-0.5">Search and link the club that this HNA number belongs to.</p>
+                    <Label className="text-xs">Confirm or override club</Label>
+                    <p className="text-xs text-muted-foreground -mt-0.5">
+                      {detail.club_name
+                        ? "Golfer's selection shown above — update if the card shows a different club."
+                        : "No club was selected — search to link one before approving."}
+                    </p>
                     <ClubSearch value={clubName} onChange={setClubName} />
                   </div>
                   <div className="space-y-1.5">

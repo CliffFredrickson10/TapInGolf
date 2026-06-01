@@ -14,9 +14,55 @@ router.post("/vouchers/validate", async (req, res): Promise<void> => {
     return;
   }
 
+  const codeUpper    = String(code).toUpperCase().trim();
+  const orderAmount  = parseFloat(amount);
+
+  // ── Cancellation vouchers (CV- prefix) ───────────────────────────────────
+  if (codeUpper.startsWith("CV-")) {
+    const cv = await row<any>(
+      `SELECT cv.*, c.name AS club_name
+       FROM cancellation_vouchers cv
+       JOIN clubs c ON c.id = cv.club_id
+       WHERE cv.code = ? AND cv.user_id = ?`,
+      [codeUpper, user.id]
+    );
+    if (!cv) {
+      res.status(404).json({ valid: false, message: "Cancellation voucher not found or not assigned to your account" });
+      return;
+    }
+    if (cv.redeemed_at) {
+      res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+      return;
+    }
+    if (cv.expires_at && new Date(cv.expires_at) < new Date()) {
+      res.status(400).json({ valid: false, message: "This voucher has expired" });
+      return;
+    }
+    if (club_id !== undefined && cv.club_id !== parseInt(club_id)) {
+      res.status(400).json({ valid: false, message: `This voucher is only valid at ${cv.club_name}` });
+      return;
+    }
+    const voucherValue   = cv.value_rands ? parseFloat(cv.value_rands) : 0;
+    const discountAmount = Math.min(voucherValue, orderAmount);
+    const finalAmount    = Math.max(0, orderAmount - discountAmount);
+    res.json({
+      valid:                 true,
+      code:                  cv.code,
+      discount_type:         "fixed",
+      discount_value:        voucherValue,
+      discount_amount:       discountAmount,
+      final_amount:          finalAmount,
+      is_cancellation_voucher: true,
+      club_id:               cv.club_id,
+      club_name:             cv.club_name,
+    });
+    return;
+  }
+
+  // ── Standard discount vouchers ────────────────────────────────────────────
   const voucher = await row<any>(
     "SELECT * FROM vouchers WHERE code = ? AND active = 1",
-    [String(code).toUpperCase().trim()]
+    [codeUpper]
   );
 
   if (!voucher) {
@@ -34,7 +80,6 @@ router.post("/vouchers/validate", async (req, res): Promise<void> => {
     return;
   }
 
-  const orderAmount = parseFloat(amount);
   const minAmount   = parseFloat(voucher.min_amount ?? "0");
   if (minAmount > 0 && orderAmount < minAmount) {
     res.status(400).json({

@@ -544,25 +544,47 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const totalGreens = organizerGreens + invitedGreens.reduce((a, b) => a + b, 0);
 
   // Apply voucher discount if provided
-  let discountAmount  = 0;
+  let discountAmount          = 0;
   let appliedVoucher: string | null = null;
+  let isCancellationVoucher   = false;
+
   if (voucher_code) {
-    const voucher = await row<any>(
-      "SELECT * FROM vouchers WHERE code = ? AND active = 1",
-      [String(voucher_code).toUpperCase().trim()]
-    );
-    const voucherValid =
-      voucher &&
-      (!voucher.expires_at || new Date(voucher.expires_at) > new Date()) &&
-      (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) &&
-      (voucher.club_id === null || voucher.club_id === slot.club_id);
-    if (voucherValid) {
-      if (voucher.discount_type === "percentage") {
-        discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
-      } else {
-        discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
+    const codeUpper = String(voucher_code).toUpperCase().trim();
+
+    if (codeUpper.startsWith("CV-")) {
+      // ── Cancellation voucher ─────────────────────────────────────────────
+      const cv = await row<any>(
+        "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ?",
+        [codeUpper, user.id]
+      );
+      const cvValid = cv &&
+        !cv.redeemed_at &&
+        (!cv.expires_at || new Date(cv.expires_at) > new Date()) &&
+        cv.club_id === slot.club_id;
+      if (cvValid) {
+        discountAmount        = Math.min(parseFloat(cv.value_rands ?? "0"), totalGreens);
+        appliedVoucher        = cv.code;
+        isCancellationVoucher = true;
       }
-      appliedVoucher = voucher.code;
+    } else {
+      // ── Standard discount voucher ─────────────────────────────────────────
+      const voucher = await row<any>(
+        "SELECT * FROM vouchers WHERE code = ? AND active = 1",
+        [codeUpper]
+      );
+      const voucherValid =
+        voucher &&
+        (!voucher.expires_at || new Date(voucher.expires_at) > new Date()) &&
+        (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) &&
+        (voucher.club_id === null || voucher.club_id === slot.club_id);
+      if (voucherValid) {
+        if (voucher.discount_type === "percentage") {
+          discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
+        } else {
+          discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
+        }
+        appliedVoucher = voucher.code;
+      }
     }
   }
 
@@ -649,7 +671,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
-      await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+      if (isCancellationVoucher) {
+        await clientQuery(client, "UPDATE cancellation_vouchers SET redeemed_at = NOW() WHERE code = ?", [appliedVoucher]);
+      } else {
+        await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+      }
     }
     // For prepaid: deduct one round from the member's balance
     if (payment_method === "prepaid") {

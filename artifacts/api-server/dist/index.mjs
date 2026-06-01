@@ -58600,19 +58600,34 @@ router4.post("/bookings", async (req, res) => {
   const totalGreens = organizerGreens + invitedGreens.reduce((a, b) => a + b, 0);
   let discountAmount = 0;
   let appliedVoucher = null;
+  let isCancellationVoucher = false;
   if (voucher_code) {
-    const voucher = await row(
-      "SELECT * FROM vouchers WHERE code = ? AND active = 1",
-      [String(voucher_code).toUpperCase().trim()]
-    );
-    const voucherValid = voucher && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) && (voucher.club_id === null || voucher.club_id === slot.club_id);
-    if (voucherValid) {
-      if (voucher.discount_type === "percentage") {
-        discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
-      } else {
-        discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
+    const codeUpper = String(voucher_code).toUpperCase().trim();
+    if (codeUpper.startsWith("CV-")) {
+      const cv = await row(
+        "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ?",
+        [codeUpper, user.id]
+      );
+      const cvValid = cv && !cv.redeemed_at && (!cv.expires_at || new Date(cv.expires_at) > /* @__PURE__ */ new Date()) && cv.club_id === slot.club_id;
+      if (cvValid) {
+        discountAmount = Math.min(parseFloat(cv.value_rands ?? "0"), totalGreens);
+        appliedVoucher = cv.code;
+        isCancellationVoucher = true;
       }
-      appliedVoucher = voucher.code;
+    } else {
+      const voucher = await row(
+        "SELECT * FROM vouchers WHERE code = ? AND active = 1",
+        [codeUpper]
+      );
+      const voucherValid = voucher && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) && (voucher.club_id === null || voucher.club_id === slot.club_id);
+      if (voucherValid) {
+        if (voucher.discount_type === "percentage") {
+          discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
+        } else {
+          discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
+        }
+        appliedVoucher = voucher.code;
+      }
     }
   }
   const cartAvailable = !!slot.cart_available;
@@ -58695,7 +58710,11 @@ router4.post("/bookings", async (req, res) => {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
-      await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+      if (isCancellationVoucher) {
+        await clientQuery(client, "UPDATE cancellation_vouchers SET redeemed_at = NOW() WHERE code = ?", [appliedVoucher]);
+      } else {
+        await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+      }
     }
     if (payment_method === "prepaid") {
       await clientQuery(
@@ -59799,9 +59818,51 @@ router8.post("/vouchers/validate", async (req, res) => {
     res.status(400).json({ valid: false, message: "Code and amount are required" });
     return;
   }
+  const codeUpper = String(code).toUpperCase().trim();
+  const orderAmount = parseFloat(amount);
+  if (codeUpper.startsWith("CV-")) {
+    const cv = await row(
+      `SELECT cv.*, c.name AS club_name
+       FROM cancellation_vouchers cv
+       JOIN clubs c ON c.id = cv.club_id
+       WHERE cv.code = ? AND cv.user_id = ?`,
+      [codeUpper, user.id]
+    );
+    if (!cv) {
+      res.status(404).json({ valid: false, message: "Cancellation voucher not found or not assigned to your account" });
+      return;
+    }
+    if (cv.redeemed_at) {
+      res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+      return;
+    }
+    if (cv.expires_at && new Date(cv.expires_at) < /* @__PURE__ */ new Date()) {
+      res.status(400).json({ valid: false, message: "This voucher has expired" });
+      return;
+    }
+    if (club_id !== void 0 && cv.club_id !== parseInt(club_id)) {
+      res.status(400).json({ valid: false, message: `This voucher is only valid at ${cv.club_name}` });
+      return;
+    }
+    const voucherValue = cv.value_rands ? parseFloat(cv.value_rands) : 0;
+    const discountAmount2 = Math.min(voucherValue, orderAmount);
+    const finalAmount2 = Math.max(0, orderAmount - discountAmount2);
+    res.json({
+      valid: true,
+      code: cv.code,
+      discount_type: "fixed",
+      discount_value: voucherValue,
+      discount_amount: discountAmount2,
+      final_amount: finalAmount2,
+      is_cancellation_voucher: true,
+      club_id: cv.club_id,
+      club_name: cv.club_name
+    });
+    return;
+  }
   const voucher = await row(
     "SELECT * FROM vouchers WHERE code = ? AND active = 1",
-    [String(code).toUpperCase().trim()]
+    [codeUpper]
   );
   if (!voucher) {
     res.status(404).json({ valid: false, message: "Voucher code not found or inactive" });
@@ -59815,7 +59876,6 @@ router8.post("/vouchers/validate", async (req, res) => {
     res.status(400).json({ valid: false, message: "This voucher has reached its usage limit" });
     return;
   }
-  const orderAmount = parseFloat(amount);
   const minAmount = parseFloat(voucher.min_amount ?? "0");
   if (minAmount > 0 && orderAmount < minAmount) {
     res.status(400).json({

@@ -56544,6 +56544,7 @@ async function isHnaVerified(userId) {
 
 // src/lib/otp.ts
 init_logger();
+init_pg();
 import crypto3 from "crypto";
 import nodemailer from "nodemailer";
 function generateOTP() {
@@ -56670,12 +56671,12 @@ function fmtTier(t) {
   const map = { visitor: "Visitor", hna: "HNA Affiliated", member: "Member" };
   return t ? map[t] ?? t : "Standard";
 }
-function invoiceHtml(booking, clubName) {
+function invoiceHtml(booking, clubName, vatPct) {
   const holes = booking.holes ?? 18;
   const hasCart = Number(booking.cart_fee) > 0;
   const myAmount = Number(booking.my_amount ?? booking.total_amount);
   const greenFee = myAmount - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
-  const vatAmount = Math.round(myAmount * 15 / 115 * 100) / 100;
+  const vatAmount = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
   const exclVat = Math.round((myAmount - vatAmount) * 100) / 100;
   return `<!DOCTYPE html>
 <html lang="en">
@@ -56762,17 +56763,19 @@ function invoiceHtml(booking, clubName) {
 </html>`;
 }
 async function sendInvoiceEmail(booking, clubName) {
-  const html = invoiceHtml(booking, clubName);
+  const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
+  const vatPct = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
+  const html = invoiceHtml(booking, clubName, vatPct);
   const subject = `Your TapIn Golf Invoice \u2014 ${booking.booking_ref}`;
   const _myAmt = Number(booking.my_amount ?? booking.total_amount);
-  const _vat = Math.round(_myAmt * 15 / 115 * 100) / 100;
+  const _vat = Math.round(_myAmt * vatPct / (100 + vatPct) * 100) / 100;
   const _excl = Math.round((_myAmt - _vat) * 100) / 100;
   const text = `Thank you for your booking at ${clubName}.
 
 Booking Reference: ${booking.booking_ref}
 Tee Date: ${booking.tee_date} at ${booking.tee_time}
 Subtotal (excl. VAT): R ${_excl.toFixed(2)}
-VAT (15%): R ${_vat.toFixed(2)}
+VAT (${vatPct}%): R ${_vat.toFixed(2)}
 Total (incl. VAT): R ${_myAmt.toFixed(2)}
 Payment Method: ${fmtMethod(booking.payment_method)}
 
@@ -59551,11 +59554,13 @@ router9.get("/admin/revenue/summary", async (req, res) => {
      WHERE b.status IN ('confirmed','completed') ${scope.where}`,
     scope.params
   );
-  const feeSetting = await row(
-    "SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"
-  );
+  const [feeSetting, vatSetting] = await Promise.all([
+    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
+    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'")
+  ]);
   res.json({
     platform_fee_pct: feeSetting ? parseFloat(feeSetting.setting_value) : 5,
+    vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15,
     total_bookings: parseInt(summary?.total_bookings ?? "0"),
     total_collected: parseFloat(summary?.total_collected ?? "0"),
     total_platform_fee: parseFloat(summary?.total_platform_fee ?? "0"),
@@ -59633,6 +59638,28 @@ router9.get("/admin/revenue/clubs", async (req, res) => {
       club_earnings: parseFloat(c.club_earnings ?? 0)
     }))
   });
+});
+router9.get("/settings", async (_req, res) => {
+  const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
+  res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });
+});
+router9.put("/admin/revenue/vat", async (req, res) => {
+  const user = await getUser(req);
+  if (!isPlatformAdmin(user)) {
+    res.status(403).json({ message: "Only platform admins can change the VAT rate" });
+    return;
+  }
+  const { vat_pct } = req.body ?? {};
+  const pct = parseFloat(String(vat_pct ?? ""));
+  if (isNaN(pct) || pct < 0 || pct > 100) {
+    res.status(400).json({ message: "vat_pct must be a number between 0 and 100" });
+    return;
+  }
+  await exec(
+    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'vat_pct'",
+    [pct.toFixed(2)]
+  );
+  res.json({ success: true, vat_pct: pct });
 });
 router9.put("/admin/revenue/fee", async (req, res) => {
   const user = await getUser(req);
@@ -64089,6 +64116,10 @@ async function seedData() {
   }
   await exec(
     "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_pct', '5') ON CONFLICT (setting_key) DO NOTHING",
+    []
+  );
+  await exec(
+    "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('vat_pct', '15') ON CONFLICT (setting_key) DO NOTHING",
     []
   );
   await exec(

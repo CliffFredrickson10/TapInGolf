@@ -50,8 +50,13 @@ export default function BookingDetailScreen() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [prepaidBalance, setPrepaidBalance] = useState<{ remaining: number } | null>(null);
   const [payError, setPayError]           = useState<string | null>(null);
+  const [vatPct, setVatPct]               = useState(15);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
+
+  useEffect(() => {
+    apiFetch("/settings").then((d) => { if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct)); }).catch(() => {});
+  }, []);
 
   useEffect(() => {
     if (!user) return;
@@ -376,8 +381,8 @@ export default function BookingDetailScreen() {
             <Text style={[styles.detailValue, { color: colors.foreground }]}>R{booking.total_amount.toFixed(2)}</Text>
           </View>
           <View style={styles.detailRow}>
-            <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Incl. VAT (15%)</Text>
-            <Text style={[styles.detailValue, { color: colors.mutedForeground }]}>R{(booking.total_amount * 15 / 115).toFixed(2)}</Text>
+            <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
+            <Text style={[styles.detailValue, { color: colors.mutedForeground }]}>R{(booking.total_amount * vatPct / (100 + vatPct)).toFixed(2)}</Text>
           </View>
           {booking.my_amount != null && booking.my_amount !== booking.total_amount && (
             <View style={styles.detailRow}>

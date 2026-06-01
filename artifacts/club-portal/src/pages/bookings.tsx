@@ -28,8 +28,13 @@ export default function Bookings() {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("all");
+  const [vatPct, setVatPct] = useState(15);
   const [dateFilter, setDateFilter] = useState("");
   const [updating, setUpdating] = useState<number | null>(null);
+
+  useEffect(() => {
+    api<{ vat_pct: number }>("/api/settings").then(d => setVatPct(d.vat_pct ?? 15)).catch(() => {});
+  }, []);
 
   const load = async () => {
     setLoading(true);
@@ -103,7 +108,7 @@ export default function Bookings() {
                         {b.split_bill && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Split Bill</span>}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {b.date} at {String(b.time).slice(0, 5)} · {b.players} player{b.players !== 1 ? "s" : ""} · R{b.total_amount.toFixed(2)} <span className="text-[10px] text-muted-foreground">(incl. VAT R{(b.total_amount * 15 / 115).toFixed(2)})</span>
+                        {b.date} at {String(b.time).slice(0, 5)} · {b.players} player{b.players !== 1 ? "s" : ""} · R{b.total_amount.toFixed(2)} <span className="text-[10px] text-muted-foreground">(incl. VAT R{(b.total_amount * vatPct / (100 + vatPct)).toFixed(2)})</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {b.guest_email}{b.guest_phone ? ` · ${b.guest_phone}` : ""} · {b.payment_method}

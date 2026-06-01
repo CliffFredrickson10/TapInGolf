@@ -93,12 +93,14 @@ router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
     scope.params
   );
 
-  const feeSetting = await row<any>(
-    "SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"
-  );
+  const [feeSetting, vatSetting] = await Promise.all([
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'"),
+  ]);
 
   res.json({
     platform_fee_pct:    feeSetting ? parseFloat(feeSetting.setting_value) : 5,
+    vat_pct:             vatSetting ? parseFloat(vatSetting.setting_value) : 15,
     total_bookings:      parseInt(summary?.total_bookings ?? "0"),
     total_collected:     parseFloat(summary?.total_collected ?? "0"),
     total_platform_fee:  parseFloat(summary?.total_platform_fee ?? "0"),
@@ -185,6 +187,39 @@ router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
       club_earnings:  parseFloat(c.club_earnings ?? 0),
     })),
   });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// GET /api/settings — public endpoint for app-wide display settings
+// ─────────────────────────────────────────────────────────────────────
+router.get("/settings", async (_req, res): Promise<void> => {
+  const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
+  res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// PUT /admin/revenue/vat — platform admin only
+// ─────────────────────────────────────────────────────────────────────
+router.put("/admin/revenue/vat", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isPlatformAdmin(user)) {
+    res.status(403).json({ message: "Only platform admins can change the VAT rate" });
+    return;
+  }
+
+  const { vat_pct } = req.body ?? {};
+  const pct = parseFloat(String(vat_pct ?? ""));
+  if (isNaN(pct) || pct < 0 || pct > 100) {
+    res.status(400).json({ message: "vat_pct must be a number between 0 and 100" });
+    return;
+  }
+
+  await exec(
+    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'vat_pct'",
+    [pct.toFixed(2)]
+  );
+
+  res.json({ success: true, vat_pct: pct });
 });
 
 // ─────────────────────────────────────────────────────────────────────

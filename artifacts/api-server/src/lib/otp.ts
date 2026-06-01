@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import nodemailer from "nodemailer";
 import { logger } from "./logger";
+import { row } from "./pg";
 
 export function generateOTP(): string {
   return String(crypto.randomInt(100_000, 1_000_000));
@@ -216,13 +217,13 @@ function fmtTier(t: string | null | undefined): string {
   return t ? (map[t] ?? t) : "Standard";
 }
 
-function invoiceHtml(booking: any, clubName: string): string {
+function invoiceHtml(booking: any, clubName: string, vatPct: number): string {
   const holes = booking.holes ?? 18;
   const hasCart = Number(booking.cart_fee) > 0;
   // Use my_amount (what this user was charged) as the invoice total.
   const myAmount = Number(booking.my_amount ?? booking.total_amount);
   const greenFee = myAmount - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
-  const vatAmount = Math.round(myAmount * 15 / 115 * 100) / 100;
+  const vatAmount = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
   const exclVat   = Math.round((myAmount - vatAmount) * 100) / 100;
 
   return `<!DOCTYPE html>
@@ -311,12 +312,14 @@ function invoiceHtml(booking: any, clubName: string): string {
 }
 
 export async function sendInvoiceEmail(booking: any, clubName: string): Promise<{ dev?: boolean }> {
-  const html = invoiceHtml(booking, clubName);
+  const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
+  const vatPct  = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
+  const html    = invoiceHtml(booking, clubName, vatPct);
   const subject = `Your TapIn Golf Invoice — ${booking.booking_ref}`;
-  const _myAmt   = Number(booking.my_amount ?? booking.total_amount);
-  const _vat     = Math.round(_myAmt * 15 / 115 * 100) / 100;
-  const _excl    = Math.round((_myAmt - _vat) * 100) / 100;
-  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nSubtotal (excl. VAT): R ${_excl.toFixed(2)}\nVAT (15%): R ${_vat.toFixed(2)}\nTotal (incl. VAT): R ${_myAmt.toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
+  const _myAmt  = Number(booking.my_amount ?? booking.total_amount);
+  const _vat    = Math.round(_myAmt * vatPct / (100 + vatPct) * 100) / 100;
+  const _excl   = Math.round((_myAmt - _vat) * 100) / 100;
+  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nSubtotal (excl. VAT): R ${_excl.toFixed(2)}\nVAT (${vatPct}%): R ${_vat.toFixed(2)}\nTotal (incl. VAT): R ${_myAmt.toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
 
   if (EMAIL_DEV_MODE()) {
     logger.info({ email: booking.user_email, booking_ref: booking.booking_ref }, "[DEV] Invoice email — no SMTP credentials configured");

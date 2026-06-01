@@ -12,6 +12,7 @@ import { format } from "date-fns";
 
 interface Summary {
   platform_fee_pct: number;
+  vat_pct: number;
   total_bookings: number;
   total_collected: number;
   total_platform_fee: number;
@@ -43,6 +44,8 @@ export default function StaffRevenue() {
   const [loading, setLoading] = useState(true);
   const [feeInput, setFeeInput] = useState("");
   const [savingFee, setSavingFee] = useState(false);
+  const [vatInput, setVatInput] = useState("");
+  const [savingVat, setSavingVat] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -56,6 +59,7 @@ export default function StaffRevenue() {
       ]);
       setSummary(s);
       setFeeInput(String(s.platform_fee_pct));
+      setVatInput(String(s.vat_pct ?? 15));
       setClubs(c.clubs);
       setBookings(b.bookings);
       setBroadcasts(n.notifications);
@@ -66,6 +70,24 @@ export default function StaffRevenue() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  const saveVat = async () => {
+    const pct = parseFloat(vatInput);
+    if (isNaN(pct) || pct < 0 || pct > 100) {
+      toast({ title: "Invalid VAT rate", description: "Enter a number between 0 and 100.", variant: "destructive" });
+      return;
+    }
+    setSavingVat(true);
+    try {
+      await api("/api/admin/revenue/vat", { method: "PUT", body: JSON.stringify({ vat_pct: pct }) });
+      toast({ title: "VAT rate updated" });
+      load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSavingVat(false);
+    }
+  };
 
   const saveFee = async () => {
     const pct = parseFloat(feeInput);
@@ -145,26 +167,43 @@ export default function StaffRevenue() {
       {loading ? <Skeleton className="h-28 w-full" /> : summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Total Bookings</div><div className="text-2xl font-bold mt-1">{summary.total_bookings}</div></CardContent></Card>
-          <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Collected (incl. VAT)</div><div className="text-2xl font-bold mt-1">{rand(summary.total_collected)}</div><div className="text-xs text-muted-foreground mt-1">VAT {rand(Math.round(summary.total_collected * 15 / 115 * 100) / 100)}</div></CardContent></Card>
+          <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Collected (incl. VAT)</div><div className="text-2xl font-bold mt-1">{rand(summary.total_collected)}</div><div className="text-xs text-muted-foreground mt-1">VAT ({summary.vat_pct ?? 15}%) {rand(Math.round(summary.total_collected * (summary.vat_pct ?? 15) / (100 + (summary.vat_pct ?? 15)) * 100) / 100)}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Platform Fees</div><div className="text-2xl font-bold mt-1 text-[#1a5c38]">{rand(summary.total_platform_fee)}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Club Payouts</div><div className="text-2xl font-bold mt-1">{rand(summary.total_club_payouts)}</div></CardContent></Card>
         </div>
       )}
 
-      <Card>
-        <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-5 w-5" />Platform Fee</CardTitle></CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-3">
-            <div className="space-y-1.5">
-              <label className="text-sm text-muted-foreground">Fee percentage (%)</label>
-              <Input type="number" className="w-40" value={feeInput} onChange={e => setFeeInput(e.target.value)} step="0.1" min="0" max="50" />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-5 w-5" />Platform Fee</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">Fee percentage (%)</label>
+                <Input type="number" className="w-40" value={feeInput} onChange={e => setFeeInput(e.target.value)} step="0.1" min="0" max="50" />
+              </div>
+              <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={saveFee} disabled={savingFee}>
+                {savingFee ? "Saving…" : "Save fee"}
+              </Button>
             </div>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={saveFee} disabled={savingFee}>
-              {savingFee ? "Saving…" : "Save fee"}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-5 w-5" />VAT Rate</CardTitle></CardHeader>
+          <CardContent>
+            <div className="flex items-end gap-3">
+              <div className="space-y-1.5">
+                <label className="text-sm text-muted-foreground">VAT percentage (%)</label>
+                <Input type="number" className="w-40" value={vatInput} onChange={e => setVatInput(e.target.value)} step="0.1" min="0" max="100" />
+              </div>
+              <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={saveVat} disabled={savingVat}>
+                {savingVat ? "Saving…" : "Save VAT"}
+              </Button>
+            </div>
+            <p className="text-xs text-muted-foreground mt-3">VAT is shown as a breakdown of the existing price. Changing this updates all displayed VAT amounts immediately.</p>
+          </CardContent>
+        </Card>
+      </div>
 
       <Card>
         <CardHeader><CardTitle className="text-lg">By Club</CardTitle></CardHeader>

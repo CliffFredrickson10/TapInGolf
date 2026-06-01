@@ -178,6 +178,7 @@ export default function NewBookingScreen() {
   const [voucherLoading, setVoucherLoading] = useState(false);
   const [voucherError, setVoucherError]     = useState<string | null>(null);
   const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
+  const [vatPct, setVatPct]                 = useState(15);
 
   // Only a CLUB-VERIFIED HNA earns the affiliated-visitor rate. A number the golfer
   // typed themselves (unverified) is treated as a standard visitor.
@@ -196,6 +197,11 @@ export default function NewBookingScreen() {
     if (isPensioner) return hnaVerified ? "Affiliated Pensioner Visitor" : "Non-Affiliated Pensioner Visitor";
     return hnaVerified ? "Affiliated Visitor" : "Non-Affiliated Visitor";
   }, [isMember, isJunior, isStudent, isPensioner, hnaVerified]);
+
+  // ── Fetch VAT rate ───────────────────────────────────────────────────────────
+  useEffect(() => {
+    apiFetch("/settings").then((d) => { if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct)); }).catch(() => {});
+  }, []);
 
   // ── HNA useEffect (after all state declarations) ─────────────────────────────
   useEffect(() => {
@@ -1063,8 +1069,8 @@ export default function NewBookingScreen() {
             </View>
             {!effectiveTierPriced && !(paymentMethod === "prepaid" && isMember) && myAmount > 0 && (
               <View style={[styles.totalLine, { marginTop: 4 }]}>
-                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Incl. VAT (15%)</Text>
-                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{(myAmount * 15 / 115).toFixed(2)}</Text>
+                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
+                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{(myAmount * vatPct / (100 + vatPct)).toFixed(2)}</Text>
               </View>
             )}
           </View>

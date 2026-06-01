@@ -720,6 +720,9 @@ async function createSchema(): Promise<void> {
   // Privacy Policy version the user consented to and when. Set at registration.
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMP");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT");
+  // is_muted: per-member mute flag. When set, the member receives no push or in-app
+  // notifications for new messages in that conversation; messages still load on open.
+  await ddl("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS is_muted SMALLINT NOT NULL DEFAULT 0");
   // blocked_slots: JSON array of slot indices (0–3) the club has individually blocked.
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration

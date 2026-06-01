@@ -51,6 +51,7 @@ router.get("/conversations", async (req, res): Promise<void> => {
   // Single query: conversations + last message + sender + member count
   const convos = await query<any>(
     `SELECT c.id, c.name, c.is_group, c.created_by, c.created_at, c.group_picture,
+       cm.is_muted AS is_muted,
        lm.content  AS last_message,
        lm.created_at AS last_message_at,
        sender.name AS last_sender_name,
@@ -106,6 +107,7 @@ router.get("/conversations", async (req, res): Promise<void> => {
   const deduped: any[] = [];
   for (const c of convos) {
     c.is_group = !!c.is_group;
+    c.is_muted = !!c.is_muted;
     if (!c.is_group) {
       const other = partnerMap.get(c.id);
       c.display_name  = other?.name   ?? "Chat";
@@ -228,6 +230,13 @@ router.get("/conversations/:id", async (req, res): Promise<void> => {
     [id]
   );
 
+  // The requesting member's mute state for this conversation
+  const muteRow = await row<any>(
+    "SELECT is_muted FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+    [id, user.id]
+  );
+  convo.is_muted = !!muteRow?.is_muted;
+
   convo.is_group = !!convo.is_group;
   if (!convo.is_group) {
     const other = members.find((m: any) => m.id !== user.id);
@@ -237,6 +246,29 @@ router.get("/conversations/:id", async (req, res): Promise<void> => {
   }
 
   res.json({ conversation: convo, members });
+});
+
+// PUT /conversations/:id/mute — toggle the requesting member's mute state.
+// Muted members receive no push or in-app notifications for new messages; they can
+// still open the conversation and load messages normally.
+router.put("/conversations/:id/mute", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  if (!await isMember(id, user.id)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  if (typeof req.body?.muted !== "boolean") {
+    res.status(400).json({ message: "muted (boolean) is required" });
+    return;
+  }
+  const muted = req.body.muted ? 1 : 0;
+  await exec(
+    "UPDATE conversation_members SET is_muted = ? WHERE conversation_id = ? AND user_id = ?",
+    [muted, id, user.id]
+  );
+
+  res.json({ success: true, is_muted: muted === 1 });
 });
 
 // PUT /conversations/:id — update group name / picture (admin/creator only)
@@ -416,11 +448,11 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
     [id, user.id, content]
   );
 
-  // Push notify other members (non-blocking)
+  // Push notify other members (non-blocking) — skip anyone who muted this chat
   const others = await query<any>(
     `SELECT u.id, u.push_token FROM users u
      JOIN conversation_members cm ON cm.user_id = u.id
-     WHERE cm.conversation_id = ? AND cm.user_id != ? AND u.push_token IS NOT NULL`,
+     WHERE cm.conversation_id = ? AND cm.user_id != ? AND cm.is_muted = 0 AND u.push_token IS NOT NULL`,
     [id, user.id]
   );
 
@@ -442,11 +474,11 @@ router.post("/conversations/:id/messages", async (req, res): Promise<void> => {
       }))
   );
 
-  // Save in-app notifications for all other members (regardless of push token)
+  // Save in-app notifications for other members — skip anyone who muted this chat
   const allOthers = await query<any>(
     `SELECT u.id FROM users u
      JOIN conversation_members cm ON cm.user_id = u.id
-     WHERE cm.conversation_id = ? AND cm.user_id != ?`,
+     WHERE cm.conversation_id = ? AND cm.user_id != ? AND cm.is_muted = 0`,
     [id, user.id]
   );
   for (const o of allOthers) {

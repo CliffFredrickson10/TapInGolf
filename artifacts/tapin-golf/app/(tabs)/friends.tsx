@@ -27,6 +27,7 @@ type Conversation = {
   id: number;
   display_name: string;
   is_group: boolean;
+  is_muted?: boolean;
   last_message?: string;
   last_message_at?: string;
   last_sender_name?: string;
@@ -481,6 +482,9 @@ export default function FriendsScreen() {
                     <View style={{ flex: 1 }}>
                       <View style={styles.convoNameRow}>
                         <Text style={[styles.convoName, { color: colors.foreground }]} numberOfLines={1}>{item.display_name}</Text>
+                        {item.is_muted && (
+                          <Ionicons name="notifications-off-outline" size={14} color={colors.mutedForeground} style={{ marginLeft: 5 }} />
+                        )}
                         <Text style={[styles.convoTime, { color: colors.mutedForeground }]}>{formatConvoTime(item.last_message_at)}</Text>
                       </View>
                       <Text style={[styles.convoPreview, { color: colors.mutedForeground }]} numberOfLines={1}>

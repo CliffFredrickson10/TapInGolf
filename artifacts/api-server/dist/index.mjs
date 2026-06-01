@@ -58955,6 +58955,7 @@ router7.get("/conversations", async (req, res) => {
   }
   const convos = await query(
     `SELECT c.id, c.name, c.is_group, c.created_by, c.created_at, c.group_picture,
+       cm.is_muted AS is_muted,
        lm.content  AS last_message,
        lm.created_at AS last_message_at,
        sender.name AS last_sender_name,
@@ -59005,6 +59006,7 @@ router7.get("/conversations", async (req, res) => {
   const deduped = [];
   for (const c of convos) {
     c.is_group = !!c.is_group;
+    c.is_muted = !!c.is_muted;
     if (!c.is_group) {
       const other = partnerMap.get(c.id);
       c.display_name = other?.name ?? "Chat";
@@ -59109,6 +59111,11 @@ router7.get("/conversations/:id", async (req, res) => {
      WHERE cm.conversation_id = ?`,
     [id]
   );
+  const muteRow = await row(
+    "SELECT is_muted FROM conversation_members WHERE conversation_id = ? AND user_id = ?",
+    [id, user.id]
+  );
+  convo.is_muted = !!muteRow?.is_muted;
   convo.is_group = !!convo.is_group;
   if (!convo.is_group) {
     const other = members.find((m) => m.id !== user.id);
@@ -59117,6 +59124,28 @@ router7.get("/conversations/:id", async (req, res) => {
     convo.display_name = convo.name ?? "Group Chat";
   }
   res.json({ conversation: convo, members });
+});
+router7.put("/conversations/:id/mute", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!await isMember(id, user.id)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  if (typeof req.body?.muted !== "boolean") {
+    res.status(400).json({ message: "muted (boolean) is required" });
+    return;
+  }
+  const muted = req.body.muted ? 1 : 0;
+  await exec(
+    "UPDATE conversation_members SET is_muted = ? WHERE conversation_id = ? AND user_id = ?",
+    [muted, id, user.id]
+  );
+  res.json({ success: true, is_muted: muted === 1 });
 });
 router7.put("/conversations/:id", async (req, res) => {
   const user = await getUser(req);
@@ -59333,7 +59362,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const others = await query(
     `SELECT u.id, u.push_token FROM users u
      JOIN conversation_members cm ON cm.user_id = u.id
-     WHERE cm.conversation_id = ? AND cm.user_id != ? AND u.push_token IS NOT NULL`,
+     WHERE cm.conversation_id = ? AND cm.user_id != ? AND cm.is_muted = 0 AND u.push_token IS NOT NULL`,
     [id, user.id]
   );
   const convo = await row("SELECT name, is_group FROM conversations WHERE id = ?", [id]);
@@ -59352,7 +59381,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const allOthers = await query(
     `SELECT u.id FROM users u
      JOIN conversation_members cm ON cm.user_id = u.id
-     WHERE cm.conversation_id = ? AND cm.user_id != ?`,
+     WHERE cm.conversation_id = ? AND cm.user_id != ? AND cm.is_muted = 0`,
     [id, user.id]
   );
   for (const o of allOthers) {
@@ -63858,6 +63887,7 @@ async function createSchema() {
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMP");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_policy_version TEXT");
+  await ddl("ALTER TABLE conversation_members ADD COLUMN IF NOT EXISTS is_muted SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
   await query(`
     DO $$ BEGIN

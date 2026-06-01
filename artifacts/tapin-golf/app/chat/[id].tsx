@@ -62,6 +62,7 @@ export default function ChatScreen() {
   const [displayName, setDisplayName] = useState(name ?? "Chat");
   const [createdBy, setCreatedBy]     = useState<number | null>(null);
   const [groupPicture, setGroupPicture] = useState<string | null>(null);
+  const [muted, setMuted]             = useState(false);
   const [text, setText]               = useState("");
   const [sending, setSending]         = useState(false);
   const [gifOpen, setGifOpen]         = useState(false);
@@ -109,6 +110,7 @@ export default function ChatScreen() {
         setIsGroup(data.conversation.is_group);
         setCreatedBy(data.conversation.created_by ?? null);
         setGroupPicture(data.conversation.group_picture ?? null);
+        setMuted(!!data.conversation.is_muted);
         setMembers(data.members ?? []);
       }
     }).catch(() => {});
@@ -181,6 +183,23 @@ export default function ChatScreen() {
         { text: "Block", style: "destructive", onPress: doBlock },
       ]
     );
+  };
+
+  const toggleMute = async () => {
+    setMenuOpen(false);
+    if (!user || !id) return;
+    const next = !muted;
+    setMuted(next); // optimistic
+    try {
+      await apiFetch(`/conversations/${id}/mute`, user.token, {
+        method: "PUT",
+        body: JSON.stringify({ muted: next }),
+      });
+      Haptics.selectionAsync();
+    } catch {
+      setMuted(!next); // revert on failure
+      Alert.alert("Couldn't update", "Please try again.");
+    }
   };
 
   const submitReport = async () => {
@@ -367,17 +386,15 @@ export default function ChatScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Moderation menu — only for DMs, once we know the other member */}
-        {!isGroup && otherMember && (
-          <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => setMenuOpen(true)}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-            accessibilityLabel="Conversation options"
-          >
-            <Ionicons name="ellipsis-vertical" size={22} color={colors.foreground} />
-          </TouchableOpacity>
-        )}
+        {/* Options menu — mute for all chats; report/block for DMs */}
+        <TouchableOpacity
+          style={styles.settingsBtn}
+          onPress={() => setMenuOpen(true)}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          accessibilityLabel="Conversation options"
+        >
+          <Ionicons name="ellipsis-vertical" size={22} color={colors.foreground} />
+        </TouchableOpacity>
       </View>
 
       {/* Messages */}
@@ -463,18 +480,29 @@ export default function ChatScreen() {
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={() => setMenuOpen(false)}>
         <TouchableOpacity style={styles.sheetBackdrop} activeOpacity={1} onPress={() => setMenuOpen(false)}>
           <View style={[styles.sheet, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <TouchableOpacity
-              style={styles.sheetItem}
-              onPress={() => { setMenuOpen(false); setReportReason(null); setReportNote(""); setReportOpen(true); }}
-            >
-              <Ionicons name="flag-outline" size={20} color={colors.foreground} />
-              <Text style={[styles.sheetItemText, { color: colors.foreground }]}>Report {otherMember?.name ?? "user"}</Text>
+            <TouchableOpacity style={styles.sheetItem} onPress={toggleMute}>
+              <Ionicons name={muted ? "notifications-outline" : "notifications-off-outline"} size={20} color={colors.foreground} />
+              <Text style={[styles.sheetItemText, { color: colors.foreground }]}>
+                {muted ? "Unmute notifications" : "Mute notifications"}
+              </Text>
             </TouchableOpacity>
-            <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
-            <TouchableOpacity style={styles.sheetItem} onPress={confirmBlock}>
-              <Ionicons name="ban-outline" size={20} color="#d14343" />
-              <Text style={[styles.sheetItemText, { color: "#d14343" }]}>Block {otherMember?.name ?? "user"}</Text>
-            </TouchableOpacity>
+            {!isGroup && otherMember && (
+              <>
+                <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity
+                  style={styles.sheetItem}
+                  onPress={() => { setMenuOpen(false); setReportReason(null); setReportNote(""); setReportOpen(true); }}
+                >
+                  <Ionicons name="flag-outline" size={20} color={colors.foreground} />
+                  <Text style={[styles.sheetItemText, { color: colors.foreground }]}>Report {otherMember?.name ?? "user"}</Text>
+                </TouchableOpacity>
+                <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
+                <TouchableOpacity style={styles.sheetItem} onPress={confirmBlock}>
+                  <Ionicons name="ban-outline" size={20} color="#d14343" />
+                  <Text style={[styles.sheetItemText, { color: "#d14343" }]}>Block {otherMember?.name ?? "user"}</Text>
+                </TouchableOpacity>
+              </>
+            )}
             <View style={[styles.sheetDivider, { backgroundColor: colors.border }]} />
             <TouchableOpacity style={styles.sheetItem} onPress={() => setMenuOpen(false)}>
               <Ionicons name="close-outline" size={20} color={colors.mutedForeground} />

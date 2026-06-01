@@ -1,17 +1,20 @@
 import { useEffect, useState, useMemo } from "react";
+import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Label } from "@/components/ui/label";
 import {
   CreditCard, Download, Mail, Search, TrendingUp, ReceiptText,
-  CheckCircle2, Clock, X, Users, CalendarDays, Banknote, Filter,
+  CheckCircle2, Clock, X, Users, FileSpreadsheet,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -229,6 +232,51 @@ export default function Payments() {
   const [fromDate, setFrom]         = useState("");
   const [toDate, setTo]             = useState("");
 
+  const [exportOpen, setExportOpen] = useState(false);
+  const ALL_EXPORT_FIELDS = [
+    { key: "booking_ref",     label: "Reference" },
+    { key: "user_name",       label: "Golfer Name" },
+    { key: "user_email",      label: "Golfer Email" },
+    { key: "user_phone",      label: "Golfer Phone" },
+    { key: "tee_date",        label: "Tee Date" },
+    { key: "tee_time",        label: "Tee Time" },
+    { key: "holes",           label: "Holes" },
+    { key: "players",         label: "Players" },
+    { key: "service",         label: "Service" },
+    { key: "payment_method",  label: "Payment Method" },
+    { key: "status",          label: "Status" },
+    { key: "my_amount",       label: "Amount Charged (R)" },
+    { key: "cart_fee",        label: "Cart Fee (R)" },
+    { key: "voucher_code",    label: "Voucher Code" },
+    { key: "paid_on",         label: "Paid On" },
+  ] as const;
+  type ExportFieldKey = typeof ALL_EXPORT_FIELDS[number]["key"];
+  const [exportFields, setExportFields] = useState<Set<ExportFieldKey>>(
+    new Set(["booking_ref","user_name","user_email","tee_date","tee_time","service","payment_method","status","my_amount","paid_on"])
+  );
+  const toggleField = (k: ExportFieldKey) =>
+    setExportFields(prev => { const s = new Set(prev); s.has(k) ? s.delete(k) : s.add(k); return s; });
+
+  const exportToExcel = () => {
+    const ordered = ALL_EXPORT_FIELDS.filter(f => exportFields.has(f.key));
+    const header = ordered.map(f => f.label);
+    const rows = filtered.map(p => ordered.map(f => {
+      if (f.key === "service")         return `${p.holes}H${p.cart_fee > 0 ? " + Cart" : ""}`;
+      if (f.key === "paid_on")         return format(parseISO(p.created_at), "dd MMM yyyy HH:mm");
+      if (f.key === "payment_method")  return fmtMethod(p.payment_method);
+      if (f.key === "my_amount")       return p.my_amount;
+      if (f.key === "cart_fee")        return p.cart_fee;
+      return (p as any)[f.key] ?? "";
+    }));
+    const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Payments");
+    const from = fromDate || "all";
+    const to   = toDate   || "all";
+    XLSX.writeFile(wb, `TapIn_Payments_${from}_to_${to}.xlsx`);
+    setExportOpen(false);
+  };
+
   const load = async () => {
     setLoading(true);
     try {
@@ -263,9 +311,11 @@ export default function Payments() {
 
   const stats = useMemo(() => {
     const paid = payments.filter(p => p.status === "confirmed" || p.status === "completed");
+    // Prepaid rounds are settled directly with the club — exclude from digital revenue
+    const digital = paid.filter(p => p.payment_method !== "prepaid");
     return {
       total:     payments.length,
-      revenue:   paid.reduce((s, p) => s + p.total_amount, 0),
+      revenue:   digital.reduce((s, p) => s + p.my_amount, 0),
       confirmed: paid.length,
       pending:   payments.filter(p => p.status === "pending").length,
     };
@@ -387,6 +437,16 @@ export default function Payments() {
             <X className="h-3.5 w-3.5" /> Clear
           </Button>
         )}
+        <Button
+          variant="outline"
+          size="sm"
+          className="ml-auto gap-2 border-[#1a5c38] text-[#1a5c38] hover:bg-[#1a5c38]/5"
+          onClick={() => setExportOpen(true)}
+          disabled={filtered.length === 0}
+        >
+          <FileSpreadsheet className="h-4 w-4" />
+          Export Report
+        </Button>
       </div>
 
       {/* Table */}
@@ -450,6 +510,47 @@ export default function Payments() {
         </div>
       )}
 
+      {/* Export Dialog */}
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileSpreadsheet className="h-5 w-5 text-[#1a5c38]" />
+              Export Payments Report
+            </DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Select the columns to include in your Excel file.
+            {filtered.length !== payments.length
+              ? ` Exporting ${filtered.length} filtered transaction${filtered.length !== 1 ? "s" : ""}.`
+              : ` Exporting all ${filtered.length} transaction${filtered.length !== 1 ? "s" : ""}.`}
+          </p>
+          <div className="grid grid-cols-2 gap-2 py-2">
+            {ALL_EXPORT_FIELDS.map(f => (
+              <div key={f.key} className="flex items-center gap-2">
+                <Checkbox
+                  id={`ef-${f.key}`}
+                  checked={exportFields.has(f.key)}
+                  onCheckedChange={() => toggleField(f.key)}
+                />
+                <Label htmlFor={`ef-${f.key}`} className="text-sm cursor-pointer">{f.label}</Label>
+              </div>
+            ))}
+          </div>
+          <DialogFooter className="gap-2 flex-row justify-end">
+            <Button variant="outline" onClick={() => setExportOpen(false)}>Cancel</Button>
+            <Button
+              className="gap-2 bg-[#1a5c38] hover:bg-[#154d30]"
+              onClick={exportToExcel}
+              disabled={exportFields.size === 0}
+            >
+              <Download className="h-4 w-4" />
+              Download Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Detail Dialog */}
       <Dialog open={!!selected} onOpenChange={open => { if (!open) setSelected(null); }}>
         {selected && (
@@ -510,22 +611,22 @@ export default function Payments() {
                     <p className="font-semibold mt-0.5">{fmtTier(selected.price_tier)}</p>
                   </div>
                   <div>
-                    <p className="text-muted-foreground text-xs">Split Bill</p>
-                    <p className="font-semibold mt-0.5">{selected.split_bill ? "Yes" : "No"}</p>
+                    <p className="text-muted-foreground text-xs">Paid On</p>
+                    <p className="font-semibold mt-0.5">{format(parseISO(selected.created_at), "dd MMM yyyy, HH:mm")}</p>
                   </div>
                 </div>
               </div>
 
               {/* Financial breakdown */}
               <div className="rounded-lg border p-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Financial Breakdown</p>
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Charges</p>
                 <div className="space-y-2 text-sm">
                   {(() => {
-                    const greenFee = selected.total_amount - selected.cart_fee + selected.discount_amount;
+                    const greenFee = selected.my_amount - selected.cart_fee + selected.discount_amount;
                     return (
                       <>
                         <div className="flex justify-between">
-                          <span className="text-muted-foreground">{selected.holes} Holes Green Fee ({fmtTier(selected.price_tier)})</span>
+                          <span className="text-muted-foreground">{selected.holes} Holes Green Fee</span>
                           <span className="font-medium">{fmtRand(greenFee)}</span>
                         </div>
                         {selected.cart_fee > 0 && (
@@ -536,56 +637,19 @@ export default function Payments() {
                         )}
                         {selected.discount_amount > 0 && (
                           <div className="flex justify-between text-green-700">
-                            <span>Discount{selected.voucher_code ? ` (${selected.voucher_code})` : ""}</span>
+                            <span>Discount{selected.voucher_code ? ` — ${selected.voucher_code}` : ""}</span>
                             <span className="font-medium">−{fmtRand(selected.discount_amount)}</span>
                           </div>
                         )}
-                        {selected.platform_fee > 0 && (
-                          <div className="flex justify-between text-muted-foreground">
-                            <span>Platform Fee</span>
-                            <span>{fmtRand(selected.platform_fee)}</span>
-                          </div>
-                        )}
                         <div className="flex justify-between font-bold text-base pt-2 border-t">
-                          <span>Total</span>
-                          <span className="text-[#1a5c38]">{fmtRand(selected.total_amount)}</span>
+                          <span>Total Charged</span>
+                          <span className="text-[#1a5c38]">{fmtRand(selected.my_amount)}</span>
                         </div>
-                        {selected.club_amount > 0 && (
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Club Revenue (net)</span>
-                            <span>{fmtRand(selected.club_amount)}</span>
-                          </div>
-                        )}
                       </>
                     );
                   })()}
                 </div>
               </div>
-
-              {/* Players list (split bill) */}
-              {selected.split_bill && selected.players_list.length > 0 && (
-                <div className="rounded-lg border p-4">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3 flex items-center gap-1.5">
-                    <Users className="h-3.5 w-3.5" /> Players
-                  </p>
-                  <div className="space-y-2">
-                    {selected.players_list.map((pl, i) => (
-                      <div key={i} className="flex items-center justify-between text-sm">
-                        <div>
-                          <span className="font-medium">{pl.name}</span>
-                          {pl.email && <span className="text-muted-foreground ml-2 text-xs">{pl.email}</span>}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{fmtRand(pl.amount)}</span>
-                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${pl.paid ? "bg-green-100 text-green-700" : "bg-yellow-100 text-yellow-700"}`}>
-                            {pl.paid ? "Paid" : "Pending"}
-                          </span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
 
               {/* Actions */}
               <div className="flex gap-3 pt-2">

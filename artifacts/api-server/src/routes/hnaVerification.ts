@@ -78,10 +78,24 @@ router.post("/hna/verification", async (req, res): Promise<void> => {
   // Only one open (pending) submission at a time — supersede any earlier pending one.
   await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
 
+  // Auto-populate the golfer's home club from their active club membership (if any).
+  const clubRow = await row<any>(
+    `SELECT c.name AS club_name
+       FROM club_members cm
+       JOIN clubs c ON c.id = cm.club_id
+      WHERE cm.user_id = ?
+        AND cm.status = 'active'
+        AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
+      ORDER BY cm.renewal_date DESC NULLS LAST
+      LIMIT 1`,
+    [user.id]
+  ).catch(() => null);
+  const clubName: string | null = clubRow?.club_name ?? null;
+
   const result = await exec(
-    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
-     VALUES (?, ?, ?, 'pending')`,
-    [user.id, num, card_image]
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status, club_name)
+     VALUES (?, ?, ?, 'pending', ?)`,
+    [user.id, num, card_image, clubName]
   );
 
   res.status(201).json({ success: true, id: (result as any).insertId, status: "pending" });
@@ -107,7 +121,7 @@ router.get("/admin/hna-verifications", async (req, res): Promise<void> => {
 
   const rows = await query<any>(
     `SELECT v.id, v.user_id, v.hna_number, v.status, v.review_note,
-            v.valid_until, v.created_at, v.reviewed_at,
+            v.valid_until, v.created_at, v.reviewed_at, v.club_name,
             u.name AS user_name, u.email AS user_email,
             r.name AS reviewer_name
        FROM hna_verifications v
@@ -148,7 +162,7 @@ router.get("/admin/hna-verifications/:id", async (req, res): Promise<void> => {
   const id = parseInt(req.params.id, 10);
   const v = await row<any>(
     `SELECT v.id, v.user_id, v.hna_number, v.card_image, v.status, v.review_note,
-            v.valid_until, v.created_at, v.reviewed_at,
+            v.valid_until, v.created_at, v.reviewed_at, v.club_name,
             u.name AS user_name, u.email AS user_email, u.handicap,
             r.name AS reviewer_name
        FROM hna_verifications v
@@ -169,7 +183,7 @@ router.post("/admin/hna-verifications/:id/approve", async (req, res): Promise<vo
   if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const id = parseInt(req.params.id, 10);
-  const v = await row<any>("SELECT id, user_id, hna_number, status FROM hna_verifications WHERE id = ?", [id]);
+  const v = await row<any>("SELECT id, user_id, hna_number, status, club_name FROM hna_verifications WHERE id = ?", [id]);
   if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
 
   const validUntil = req.body?.valid_until ? String(req.body.valid_until) : null;
@@ -178,12 +192,29 @@ router.post("/admin/hna-verifications/:id/approve", async (req, res): Promise<vo
     return;
   }
 
+  // If club_name wasn't captured at submission time, try to look it up now.
+  let clubName: string | null = v.club_name ?? null;
+  if (!clubName) {
+    const clubRow = await row<any>(
+      `SELECT c.name AS club_name
+         FROM club_members cm
+         JOIN clubs c ON c.id = cm.club_id
+        WHERE cm.user_id = ?
+          AND cm.status = 'active'
+          AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
+        ORDER BY cm.renewal_date DESC NULLS LAST
+        LIMIT 1`,
+      [v.user_id]
+    ).catch(() => null);
+    clubName = clubRow?.club_name ?? null;
+  }
+
   await exec(
     `UPDATE hna_verifications
         SET status = 'approved', review_note = NULL, valid_until = ?,
-            reviewed_by = ?, reviewed_at = NOW()
+            reviewed_by = ?, reviewed_at = NOW(), club_name = ?
       WHERE id = ?`,
-    [validUntil, user.id, id]
+    [validUntil, user.id, clubName, id]
   );
 
   // Lock the approved number onto the golfer's profile so their HNA reads verified.
@@ -244,6 +275,46 @@ router.post("/admin/hna-verifications/:id/reject", async (req, res): Promise<voi
   }
 
   res.json({ success: true, status: "rejected" });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// STAFF (super-user): POST /admin/hna-verifications/:id/reset
+// Revert an approved or rejected verification back to pending so it can be
+// re-reviewed. Clears all review data (note, reviewer, timestamp, valid_until).
+// club_name is preserved so the submission retains its original club context.
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/hna-verifications/:id/reset", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isSuper(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const id = parseInt(req.params.id, 10);
+  const v = await row<any>("SELECT id, user_id, status FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) { res.status(404).json({ message: "Verification not found" }); return; }
+  if (v.status === "pending") {
+    res.status(400).json({ message: "Verification is already pending" });
+    return;
+  }
+
+  await exec(
+    `UPDATE hna_verifications
+        SET status = 'pending', review_note = NULL, valid_until = NULL,
+            reviewed_by = NULL, reviewed_at = NULL
+      WHERE id = ?`,
+    [id]
+  );
+
+  const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to:    target.push_token,
+      sound: "default",
+      title: "HNA Verification Update",
+      body:  "Your HNA card is under review again. You'll be notified once it's finalised.",
+      data:  { type: "hna_verification_update", status: "pending" },
+    }]);
+  }
+
+  res.json({ success: true, status: "pending" });
 });
 
 export default router;

@@ -777,6 +777,10 @@ async function createSchema(): Promise<void> {
       END IF;
     END $$
   `);
+  // club_name on HNA verifications: the golfer's home club at time of submission,
+  // auto-populated from their active club membership. Shown in the staff review UI
+  // and surfaced on the golfer's profile when approved via TapIn staff card.
+  await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
 }
 
 // ── Seed reviews ──────────────────────────────────────────────────────────────

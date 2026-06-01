@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { IdCard, Check, X } from "lucide-react";
+import { IdCard, Check, X, RotateCcw } from "lucide-react";
 import { format } from "date-fns";
 
 interface VerificationRow {
@@ -16,6 +16,7 @@ interface VerificationRow {
   review_note: string | null; valid_until: string | null;
   created_at: string; reviewed_at: string | null;
   user_name: string; user_email: string; reviewer_name: string | null;
+  club_name: string | null;
 }
 interface VerificationDetail extends VerificationRow {
   card_image: string | null; handicap: number | null;
@@ -106,6 +107,20 @@ export default function StaffHnaReview() {
     } finally { setActing(false); }
   };
 
+  const resetToPending = async () => {
+    if (!detail) return;
+    setActing(true);
+    try {
+      await api(`/api/admin/hna-verifications/${detail.id}/reset`, { method: "POST" });
+      toast({ title: "Reset to Pending", description: `${detail.user_name}'s verification is back in the review queue.` });
+      setDetail(null);
+      load();
+      refreshPending();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setActing(false); }
+  };
+
   return (
     <div className="p-8 space-y-6">
       <div>
@@ -136,6 +151,7 @@ export default function StaffHnaReview() {
               <thead><tr className="border-b text-left text-muted-foreground">
                 <th className="py-2.5 px-4 font-medium">Golfer</th>
                 <th className="py-2.5 px-4 font-medium">HNA Number</th>
+                <th className="py-2.5 px-4 font-medium">Club</th>
                 <th className="py-2.5 px-4 font-medium">Status</th>
                 <th className="py-2.5 px-4 font-medium">Submitted</th>
                 <th className="py-2.5 px-4 font-medium"></th>
@@ -145,6 +161,7 @@ export default function StaffHnaReview() {
                   <tr key={r.id} className="border-b last:border-0 hover:bg-muted/50">
                     <td className="py-2.5 px-4"><div className="font-medium">{r.user_name}</div><div className="text-xs text-muted-foreground">{r.user_email}</div></td>
                     <td className="py-2.5 px-4 font-mono text-xs">{r.hna_number}</td>
+                    <td className="py-2.5 px-4 text-xs text-muted-foreground">{r.club_name ?? <span className="italic">—</span>}</td>
                     <td className="py-2.5 px-4"><span className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${statusBadge(r.status)}`}>{r.status}</span></td>
                     <td className="py-2.5 px-4 text-xs text-muted-foreground">{format(new Date(r.created_at), "dd MMM yyyy HH:mm")}</td>
                     <td className="py-2.5 px-4 text-right"><Button variant="outline" size="sm" onClick={() => openDetail(r.id)}>Review</Button></td>
@@ -168,6 +185,10 @@ export default function StaffHnaReview() {
                 <div><div className="text-muted-foreground text-xs">Email</div><div>{detail.user_email}</div></div>
                 <div><div className="text-muted-foreground text-xs">HNA Number</div><div className="font-mono">{detail.hna_number}</div></div>
                 <div><div className="text-muted-foreground text-xs">Handicap</div><div>{detail.handicap ?? "—"}</div></div>
+                <div className="col-span-2">
+                  <div className="text-muted-foreground text-xs">Club</div>
+                  <div className="font-medium">{detail.club_name ?? <span className="text-muted-foreground italic">No club membership found</span>}</div>
+                </div>
               </div>
 
               {detail.card_image ? (
@@ -195,11 +216,23 @@ export default function StaffHnaReview() {
                   </DialogFooter>
                 </div>
               ) : (
-                <div className="text-sm space-y-1 pt-1 border-t">
-                  <div><span className="text-muted-foreground">Status: </span><span className="capitalize font-medium">{detail.status}</span></div>
-                  {detail.valid_until && <div><span className="text-muted-foreground">Valid until: </span>{format(new Date(detail.valid_until), "dd MMM yyyy")}</div>}
-                  {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
-                  {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}
+                <div className="space-y-3 pt-1 border-t">
+                  <div className="text-sm space-y-1">
+                    <div><span className="text-muted-foreground">Status: </span><span className="capitalize font-medium">{detail.status}</span></div>
+                    {detail.valid_until && <div><span className="text-muted-foreground">Valid until: </span>{format(new Date(detail.valid_until), "dd MMM yyyy")}</div>}
+                    {detail.review_note && <div><span className="text-muted-foreground">Note: </span>{detail.review_note}</div>}
+                    {detail.reviewer_name && <div><span className="text-muted-foreground">Reviewed by: </span>{detail.reviewer_name}</div>}
+                  </div>
+                  <DialogFooter>
+                    <Button
+                      variant="outline"
+                      className="gap-1.5 text-amber-700 border-amber-300 hover:bg-amber-50"
+                      onClick={resetToPending}
+                      disabled={acting}
+                    >
+                      <RotateCcw className="h-4 w-4" />Reset to Pending
+                    </Button>
+                  </DialogFooter>
                 </div>
               )}
             </div>

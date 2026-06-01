@@ -56482,7 +56482,7 @@ async function getVerifyingMembership(userId) {
 }
 async function getApprovedStaffCard(userId) {
   const v = await row(
-    `SELECT valid_until, hna_number
+    `SELECT valid_until, hna_number, club_name
        FROM hna_verifications
       WHERE user_id = ?
         AND status = 'approved'
@@ -56492,7 +56492,7 @@ async function getApprovedStaffCard(userId) {
     [userId]
   ).catch(() => null);
   if (!v) return null;
-  return { valid_until: fmtDate(v.valid_until), hna_number: v.hna_number ?? null };
+  return { valid_until: fmtDate(v.valid_until), hna_number: v.hna_number ?? null, club_name: v.club_name ?? null };
 }
 async function getHnaStatus(userId, hnaNumber) {
   const num = normHna(hnaNumber);
@@ -56515,7 +56515,7 @@ async function getHnaStatus(userId, hnaNumber) {
       hna_verified: true,
       hna_verified_source: "tapin",
       hna_verified_club_id: null,
-      hna_verified_club_name: "TapIn",
+      hna_verified_club_name: card.club_name ?? "TapIn",
       hna_valid_until: card.valid_until,
       hna_locked: true
     };
@@ -63335,10 +63335,22 @@ router18.post("/hna/verification", async (req, res) => {
   }
   await exec("UPDATE users SET hna_number = ? WHERE id = ?", [num, user.id]);
   await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
+  const clubRow = await row(
+    `SELECT c.name AS club_name
+       FROM club_members cm
+       JOIN clubs c ON c.id = cm.club_id
+      WHERE cm.user_id = ?
+        AND cm.status = 'active'
+        AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
+      ORDER BY cm.renewal_date DESC NULLS LAST
+      LIMIT 1`,
+    [user.id]
+  ).catch(() => null);
+  const clubName = clubRow?.club_name ?? null;
   const result = await exec(
-    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
-     VALUES (?, ?, ?, 'pending')`,
-    [user.id, num, card_image]
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status, club_name)
+     VALUES (?, ?, ?, 'pending', ?)`,
+    [user.id, num, card_image, clubName]
   );
   res.status(201).json({ success: true, id: result.insertId, status: "pending" });
 });
@@ -63358,7 +63370,7 @@ router18.get("/admin/hna-verifications", async (req, res) => {
   const params = status === "all" ? [] : [status];
   const rows = await query(
     `SELECT v.id, v.user_id, v.hna_number, v.status, v.review_note,
-            v.valid_until, v.created_at, v.reviewed_at,
+            v.valid_until, v.created_at, v.reviewed_at, v.club_name,
             u.name AS user_name, u.email AS user_email,
             r.name AS reviewer_name
        FROM hna_verifications v
@@ -63392,7 +63404,7 @@ router18.get("/admin/hna-verifications/:id", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const v = await row(
     `SELECT v.id, v.user_id, v.hna_number, v.card_image, v.status, v.review_note,
-            v.valid_until, v.created_at, v.reviewed_at,
+            v.valid_until, v.created_at, v.reviewed_at, v.club_name,
             u.name AS user_name, u.email AS user_email, u.handicap,
             r.name AS reviewer_name
        FROM hna_verifications v
@@ -63414,7 +63426,7 @@ router18.post("/admin/hna-verifications/:id/approve", async (req, res) => {
     return;
   }
   const id = parseInt(req.params.id, 10);
-  const v = await row("SELECT id, user_id, hna_number, status FROM hna_verifications WHERE id = ?", [id]);
+  const v = await row("SELECT id, user_id, hna_number, status, club_name FROM hna_verifications WHERE id = ?", [id]);
   if (!v) {
     res.status(404).json({ message: "Verification not found" });
     return;
@@ -63424,12 +63436,27 @@ router18.post("/admin/hna-verifications/:id/approve", async (req, res) => {
     res.status(400).json({ message: "valid_until must be YYYY-MM-DD" });
     return;
   }
+  let clubName = v.club_name ?? null;
+  if (!clubName) {
+    const clubRow = await row(
+      `SELECT c.name AS club_name
+         FROM club_members cm
+         JOIN clubs c ON c.id = cm.club_id
+        WHERE cm.user_id = ?
+          AND cm.status = 'active'
+          AND (cm.renewal_date IS NULL OR cm.renewal_date >= CURRENT_DATE)
+        ORDER BY cm.renewal_date DESC NULLS LAST
+        LIMIT 1`,
+      [v.user_id]
+    ).catch(() => null);
+    clubName = clubRow?.club_name ?? null;
+  }
   await exec(
     `UPDATE hna_verifications
         SET status = 'approved', review_note = NULL, valid_until = ?,
-            reviewed_by = ?, reviewed_at = NOW()
+            reviewed_by = ?, reviewed_at = NOW(), club_name = ?
       WHERE id = ?`,
-    [validUntil, user.id, id]
+    [validUntil, user.id, clubName, id]
   );
   await exec("UPDATE users SET hna_number = ? WHERE id = ?", [v.hna_number, v.user_id]);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
@@ -63479,6 +63506,41 @@ router18.post("/admin/hna-verifications/:id/reject", async (req, res) => {
     }]);
   }
   res.json({ success: true, status: "rejected" });
+});
+router18.post("/admin/hna-verifications/:id/reset", async (req, res) => {
+  const user = await getUser(req);
+  if (!isSuper(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const v = await row("SELECT id, user_id, status FROM hna_verifications WHERE id = ?", [id]);
+  if (!v) {
+    res.status(404).json({ message: "Verification not found" });
+    return;
+  }
+  if (v.status === "pending") {
+    res.status(400).json({ message: "Verification is already pending" });
+    return;
+  }
+  await exec(
+    `UPDATE hna_verifications
+        SET status = 'pending', review_note = NULL, valid_until = NULL,
+            reviewed_by = NULL, reviewed_at = NULL
+      WHERE id = ?`,
+    [id]
+  );
+  const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
+  if (target?.push_token) {
+    sendPushNotifications([{
+      to: target.push_token,
+      sound: "default",
+      title: "HNA Verification Update",
+      body: "Your HNA card is under review again. You'll be notified once it's finalised.",
+      data: { type: "hna_verification_update", status: "pending" }
+    }]);
+  }
+  res.json({ success: true, status: "pending" });
 });
 var hnaVerification_default = router18;
 
@@ -64484,6 +64546,7 @@ async function createSchema() {
       END IF;
     END $$
   `);
+  await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
 }
 var SEED_REVIEWS = [
   {

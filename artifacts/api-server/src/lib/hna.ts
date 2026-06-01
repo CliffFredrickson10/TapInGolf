@@ -63,9 +63,9 @@ export async function getVerifyingMembership(
 // (latest approval), or null if none. valid_until NULL means it never expires.
 export async function getApprovedStaffCard(
   userId: number
-): Promise<{ valid_until: string | null; hna_number: string | null } | null> {
+): Promise<{ valid_until: string | null; hna_number: string | null; club_name: string | null } | null> {
   const v = await row<any>(
-    `SELECT valid_until, hna_number
+    `SELECT valid_until, hna_number, club_name
        FROM hna_verifications
       WHERE user_id = ?
         AND status = 'approved'
@@ -75,7 +75,7 @@ export async function getApprovedStaffCard(
     [userId]
   ).catch(() => null);
   if (!v) return null;
-  return { valid_until: fmtDate(v.valid_until), hna_number: v.hna_number ?? null };
+  return { valid_until: fmtDate(v.valid_until), hna_number: v.hna_number ?? null, club_name: v.club_name ?? null };
 }
 
 // Full HNA status for a user, combining the stored number with derived verification.
@@ -106,7 +106,7 @@ export async function getHnaStatus(
       hna_verified: true,
       hna_verified_source: "tapin",
       hna_verified_club_id: null,
-      hna_verified_club_name: "TapIn",
+      hna_verified_club_name: card.club_name ?? "TapIn",
       hna_valid_until: card.valid_until,
       hna_locked: true,
     };

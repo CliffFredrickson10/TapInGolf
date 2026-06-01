@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
   disabledBar: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: 24,
     paddingTop: 12,
     borderTopWidth: 1,
     gap: 8,

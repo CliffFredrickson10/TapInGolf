@@ -187,7 +187,7 @@ export default function HomeScreen() {
       <View style={styles.searchWrap}>
         <TouchableOpacity
           style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.push("/(tabs)/explore")}
+          onPress={() => router.push({ pathname: "/(tabs)/explore", params: { focus: "1" } })}
           activeOpacity={0.9}
         >
           <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />

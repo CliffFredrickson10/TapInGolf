@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import * as Location from "expo-location";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -41,7 +41,8 @@ export default function ExploreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ q?: string; province?: string }>();
+  const params = useLocalSearchParams<{ q?: string; province?: string; focus?: string }>();
+  const searchInputRef = useRef<TextInput>(null);
 
   const [search, setSearch] = useState(params.q ?? "");
   const [province, setProvince] = useState(params.province || "All");
@@ -55,6 +56,20 @@ export default function ExploreScreen() {
   // userCoords is set whenever we have the user's position
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+
+  // When arriving from the dashboard search box (focus=1), focus the input so
+  // the keyboard opens automatically. Clear the flag afterwards so plain
+  // Explore-tab taps don't re-trigger it.
+  useFocusEffect(
+    useCallback(() => {
+      if (params.focus !== "1") return;
+      const t = setTimeout(() => {
+        searchInputRef.current?.focus();
+        router.setParams({ focus: "" });
+      }, 400);
+      return () => clearTimeout(t);
+    }, [params.focus]),
+  );
 
   // Tracks the active search so stale responses from old queries are ignored
   const searchKey = useRef(0);
@@ -219,6 +234,7 @@ export default function ExploreScreen() {
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: sortedByDistance ? colors.primary : colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
           <TextInput
+            ref={searchInputRef}
             style={[styles.searchInput, { color: colors.foreground }]}
             value={search}
             onChangeText={setSearch}

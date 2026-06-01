@@ -3,6 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
+import * as Clipboard from "expo-clipboard";
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -74,6 +75,34 @@ export default function ProfileScreen() {
   const [saveError, setSaveError] = useState("");
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [uploadingPic, setUploadingPic] = useState(false);
+
+  // Cancellation vouchers
+  const [vouchersOpen, setVouchersOpen]     = useState(false);
+  const [voucherList, setVoucherList]       = useState<any[]>([]);
+  const [loadingVouchers, setLoadingVouchers] = useState(false);
+  const [copiedCode, setCopiedCode]         = useState<string | null>(null);
+
+  const fetchVouchers = React.useCallback(async () => {
+    if (!user?.token) return;
+    setLoadingVouchers(true);
+    try {
+      const data: any = await apiFetch("/profile/cancellation-vouchers", user.token);
+      setVoucherList(data?.vouchers ?? []);
+    } catch {}
+    setLoadingVouchers(false);
+  }, [user?.token]);
+
+  const handleToggleVouchers = () => {
+    if (!vouchersOpen && voucherList.length === 0) fetchVouchers();
+    setVouchersOpen(v => !v);
+  };
+
+  const handleCopyCode = async (code: string) => {
+    await Clipboard.setStringAsync(code);
+    setCopiedCode(code);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setTimeout(() => setCopiedCode(null), 2000);
+  };
 
   // Fetch fresh profile data from server whenever the token changes (e.g. after login).
   // This ensures fields like date_of_birth that are missing from the cached login token
@@ -645,6 +674,79 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
 
+          {/* My Vouchers (cancellation vouchers from clubs) */}
+          <TouchableOpacity
+            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={handleToggleVouchers} activeOpacity={0.8}
+          >
+            <Ionicons name="ticket-outline" size={20} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.foreground }]}>My Vouchers</Text>
+            {loadingVouchers
+              ? <ActivityIndicator size="small" color={colors.primary} />
+              : <Ionicons name={vouchersOpen ? "chevron-down" : "chevron-forward"} size={18} color={colors.mutedForeground} />
+            }
+          </TouchableOpacity>
+          {vouchersOpen && (
+            <View style={[styles.voucherPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {voucherList.length === 0 && !loadingVouchers ? (
+                <Text style={[styles.voucherEmpty, { color: colors.mutedForeground }]}>
+                  No vouchers yet. Vouchers issued by a club after a cancellation will appear here.
+                </Text>
+              ) : (
+                voucherList.map((v) => {
+                  const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
+                  const isRedeemed = !!v.redeemed_at;
+                  const statusColor = isRedeemed ? "#6b7280" : isExpired ? colors.destructive : "#16a34a";
+                  const statusLabel = isRedeemed ? "Redeemed" : isExpired ? "Expired" : "Active";
+                  const expDate = v.expires_at
+                    ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+                    : null;
+                  return (
+                    <View key={v.id} style={[styles.voucherCard, { borderColor: colors.border, opacity: isRedeemed || isExpired ? 0.6 : 1 }]}>
+                      <View style={styles.voucherCardTop}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name}</Text>
+                          {v.reason ? <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{v.reason}</Text> : null}
+                        </View>
+                        <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
+                          <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                        </View>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.voucherCodeRow, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}
+                        onPress={() => handleCopyCode(v.code)}
+                        activeOpacity={0.7}
+                      >
+                        <Text style={[styles.voucherCode, { color: colors.primary }]}>{v.code}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                          {copiedCode === v.code
+                            ? <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
+                            : <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
+                          }
+                          <Text style={[styles.voucherCopyHint, { color: copiedCode === v.code ? "#16a34a" : colors.mutedForeground }]}>
+                            {copiedCode === v.code ? "Copied!" : "Copy"}
+                          </Text>
+                        </View>
+                      </TouchableOpacity>
+                      <View style={styles.voucherCardMeta}>
+                        {v.value_rands != null && (
+                          <Text style={[styles.voucherMeta, { color: colors.foreground }]}>
+                            R{Number(v.value_rands).toFixed(2)} off
+                          </Text>
+                        )}
+                        {expDate && (
+                          <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
+                            {isExpired ? "Expired " : "Expires "}{expDate}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                  );
+                })
+              )}
+            </View>
+          )}
+
           {confirmLogout ? (
             <View style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.destructive, borderWidth: 1.5 }]}>
               <Ionicons name="log-out-outline" size={20} color={colors.destructive} />
@@ -738,4 +840,26 @@ const styles = StyleSheet.create({
     flex: 1, textAlign: "center", color: "#fff",
     fontSize: 17, fontFamily: "Inter_700Bold",
   },
+  voucherPanel: {
+    borderWidth: 1, borderRadius: 14, padding: 12, gap: 10, marginTop: -8,
+  },
+  voucherEmpty: {
+    fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 8, lineHeight: 20,
+  },
+  voucherCard: {
+    borderWidth: 1, borderRadius: 10, padding: 12, gap: 8,
+  },
+  voucherCardTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  voucherClub: { fontSize: 14, fontFamily: "Inter_700Bold" },
+  voucherReason: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2, lineHeight: 16 },
+  voucherStatus: { borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+  voucherStatusText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  voucherCodeRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
+  },
+  voucherCode: { fontSize: 13, fontFamily: "Inter_700Bold", letterSpacing: 1.5 },
+  voucherCopyHint: { fontSize: 11, fontFamily: "Inter_500Medium" },
+  voucherCardMeta: { flexDirection: "row", gap: 12, flexWrap: "wrap" },
+  voucherMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
 });

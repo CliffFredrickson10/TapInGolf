@@ -781,6 +781,42 @@ async function createSchema(): Promise<void> {
   // auto-populated from their active club membership. Shown in the staff review UI
   // and surfaced on the golfer's profile when approved via TapIn staff card.
   await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
+
+  // ── Cancellation vouchers ─────────────────────────────────────────────────
+  // One batch per issuance event (club cancels a day due to flooding etc.)
+  // One voucher row per affected user (unique code, user-specific)
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS cancellation_voucher_batches (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      issued_by     INT NOT NULL REFERENCES users(id),
+      reason        TEXT NOT NULL,
+      affected_date DATE,
+      value_rands   DECIMAL(10,2),
+      expires_at    TIMESTAMP,
+      voucher_count INT NOT NULL DEFAULT 0,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS cancellation_vouchers (
+      id          SERIAL PRIMARY KEY,
+      code        VARCHAR(64) UNIQUE NOT NULL,
+      batch_id    INT NOT NULL REFERENCES cancellation_voucher_batches(id) ON DELETE CASCADE,
+      club_id     INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      booking_id  INT REFERENCES bookings(id) ON DELETE SET NULL,
+      reason      TEXT,
+      value_rands DECIMAL(10,2),
+      redeemed_at TIMESTAMP,
+      expires_at  TIMESTAMP,
+      created_at  TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_user   ON cancellation_vouchers (user_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch  ON cancellation_vouchers (batch_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_club   ON cancellation_vouchers (club_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
 }
 
 // ── Seed reviews ──────────────────────────────────────────────────────────────

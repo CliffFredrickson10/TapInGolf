@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router21;
+    module.exports = Router22;
     module.exports.Route = Route;
-    function Router21(options) {
-      if (!(this instanceof Router21)) {
-        return new Router21(options);
+    function Router22(options) {
+      if (!(this instanceof Router22)) {
+        return new Router22(options);
       }
       const opts = options || {};
-      function router21(req, res, next) {
-        router21.handle(req, res, next);
+      function router22(req, res, next) {
+        router22.handle(req, res, next);
       }
-      Object.setPrototypeOf(router21, this);
-      router21.caseSensitive = opts.caseSensitive;
-      router21.mergeParams = opts.mergeParams;
-      router21.params = {};
-      router21.strict = opts.strict;
-      router21.stack = [];
-      return router21;
+      Object.setPrototypeOf(router22, this);
+      router22.caseSensitive = opts.caseSensitive;
+      router22.mergeParams = opts.mergeParams;
+      router22.params = {};
+      router22.strict = opts.strict;
+      router22.stack = [];
+      return router22;
     }
-    Router21.prototype = function() {
+    Router22.prototype = function() {
     };
-    Router21.prototype.param = function param(name, fn) {
+    Router22.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router21.prototype.handle = function handle(req, res, callback) {
+    Router22.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router21.prototype.use = function use(handler) {
+    Router22.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router21.prototype.route = function route(path3) {
+    Router22.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router21.prototype[method] = function(path3) {
+      Router22.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router21 = require_router();
+    var Router22 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router21 = null;
+      var router22 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router21 === null) {
-            router21 = new Router21({
+          if (router22 === null) {
+            router22 = new Router22({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router21;
+          return router22;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router21 = this.router;
+      var router22 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router21.use(path3, fn2);
+          return router22.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router21.use(path3, function mounted_app(req, res, next) {
+        router22.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router21 = require_router();
+    var Router22 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router21.Route;
-    exports.Router = Router21;
+    exports.Route = Router22.Route;
+    exports.Router = Router22;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -52269,14 +52269,14 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express21 = __toESM(require_express2(), 1);
+var import_express22 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path2 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 
 // src/routes/index.ts
-var import_express20 = __toESM(require_express2(), 1);
+var import_express21 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -59847,10 +59847,291 @@ router8.post("/vouchers/validate", async (req, res) => {
 });
 var vouchers_default = router8;
 
-// src/routes/admin.ts
+// src/routes/cancellationVouchers.ts
 var import_express9 = __toESM(require_express2(), 1);
 init_pg();
 var router9 = (0, import_express9.Router)();
+function generateVoucherCode(clubName, userId) {
+  const slug = clubName.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "X");
+  const uid = String(userId).padStart(4, "0");
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `CV-${slug}-${uid}-${rand}`;
+}
+async function ensureUniqueCode(clubName, userId) {
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = generateVoucherCode(clubName, userId);
+    const existing = await row("SELECT id FROM cancellation_vouchers WHERE code = ?", [code]);
+    if (!existing) return code;
+  }
+  throw new Error("Could not generate unique voucher code");
+}
+router9.get("/admin/cancellation-vouchers/preview", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id);
+  if (!clubId) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const date = req.query.date ? String(req.query.date) : null;
+  if (date && !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ message: "date must be YYYY-MM-DD" });
+    return;
+  }
+  let affected;
+  if (date) {
+    affected = await query(
+      `SELECT DISTINCT u.id, u.name, u.email, b.id as booking_id,
+              pts.tee_time as time
+       FROM bookings b
+       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       JOIN users u ON u.id = b.user_id
+       WHERE pts.club_id = ?
+         AND pts.date = ?
+         AND b.status IN ('confirmed','pending')
+       ORDER BY pts.tee_time, u.name`,
+      [clubId, date]
+    );
+  } else {
+    affected = [];
+  }
+  res.json({ count: affected.length, users: affected });
+});
+router9.post("/admin/cancellation-vouchers/issue", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isStaff(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(caller, req.body?.club_id);
+  if (!clubId) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const { affected_date, reason, value_rands, expires_in_days, booking_ids } = req.body ?? {};
+  if (!reason || !String(reason).trim()) {
+    res.status(400).json({ message: "reason is required" });
+    return;
+  }
+  const club = await row("SELECT id, name FROM clubs WHERE id = ?", [clubId]);
+  if (!club) {
+    res.status(404).json({ message: "Club not found" });
+    return;
+  }
+  const expiresAt = expires_in_days ? new Date(Date.now() + Number(expires_in_days) * 864e5).toISOString() : null;
+  const dateParam = affected_date || null;
+  let recipients;
+  if (Array.isArray(booking_ids) && booking_ids.length > 0) {
+    recipients = await query(
+      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
+       FROM bookings b
+       JOIN users u ON u.id = b.user_id
+       WHERE b.id = ANY(?::int[])
+         AND b.status IN ('confirmed','pending')`,
+      [booking_ids]
+    );
+  } else if (dateParam) {
+    recipients = await query(
+      `SELECT DISTINCT u.id, u.name, u.email, u.push_token, b.id as booking_id
+       FROM bookings b
+       LEFT JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       JOIN users u ON u.id = b.user_id
+       WHERE pts.club_id = ?
+         AND pts.date = ?
+         AND b.status IN ('confirmed','pending')`,
+      [clubId, dateParam]
+    );
+  } else {
+    res.status(400).json({ message: "Either affected_date or booking_ids is required" });
+    return;
+  }
+  if (recipients.length === 0) {
+    res.status(400).json({ message: "No affected bookings found for the given criteria" });
+    return;
+  }
+  const seen = /* @__PURE__ */ new Set();
+  const uniqueRecipients = recipients.filter((r) => {
+    if (seen.has(r.id)) return false;
+    seen.add(r.id);
+    return true;
+  });
+  const batchRow = await row(
+    `INSERT INTO cancellation_voucher_batches
+       (club_id, issued_by, reason, affected_date, value_rands, expires_at, voucher_count)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     RETURNING id`,
+    [clubId, caller.id, String(reason).trim(), dateParam, value_rands ?? null, expiresAt, uniqueRecipients.length]
+  );
+  const batchId = batchRow.id;
+  const issued = [];
+  for (const recipient of uniqueRecipients) {
+    const code = await ensureUniqueCode(club.name, recipient.id);
+    const bookingForUser = recipients.find((r) => r.id === recipient.id);
+    await exec(
+      `INSERT INTO cancellation_vouchers
+         (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [
+        code,
+        batchId,
+        clubId,
+        recipient.id,
+        bookingForUser?.booking_id ?? null,
+        String(reason).trim(),
+        value_rands ?? null,
+        expiresAt
+      ]
+    );
+    issued.push({ userId: recipient.id, name: recipient.name, code });
+    const notifTitle = `Voucher from ${club.name}`;
+    const valueStr = value_rands ? ` worth R${Number(value_rands).toFixed(2)}` : "";
+    const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
+    const notifBody = `You've received a cancellation voucher${valueStr}${expiryStr}. Your code: ${code}`;
+    saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+      code,
+      club_id: clubId,
+      batch_id: batchId,
+      value_rands: value_rands ?? null
+    });
+    if (recipient.push_token?.startsWith("ExponentPushToken[")) {
+      sendPushNotifications([{
+        to: recipient.push_token,
+        sound: "default",
+        title: notifTitle,
+        body: notifBody,
+        data: { type: "cancellation_voucher", code, club_id: clubId }
+      }]);
+    }
+  }
+  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued });
+});
+router9.get("/admin/cancellation-vouchers/batches", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id);
+  if (!clubId) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const limit = Math.min(parseInt(String(req.query.limit ?? "30"), 10), 100);
+  const offset = parseInt(String(req.query.offset ?? "0"), 10);
+  const batches = await query(
+    `SELECT b.id, b.reason, b.affected_date, b.value_rands, b.expires_at,
+            b.voucher_count, b.created_at,
+            u.name as issued_by_name,
+            COUNT(cv.id) FILTER (WHERE cv.redeemed_at IS NOT NULL) as redeemed_count
+     FROM cancellation_voucher_batches b
+     JOIN users u ON u.id = b.issued_by
+     LEFT JOIN cancellation_vouchers cv ON cv.batch_id = b.id
+     WHERE b.club_id = ?
+     GROUP BY b.id, u.name
+     ORDER BY b.created_at DESC
+     LIMIT ${limit} OFFSET ${offset}`,
+    [clubId]
+  );
+  res.json({ batches });
+});
+router9.get("/admin/cancellation-vouchers/batches/:batchId", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id);
+  if (!clubId) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const batchId = parseInt(req.params.batchId, 10);
+  const batch = await row(
+    "SELECT * FROM cancellation_voucher_batches WHERE id = ? AND club_id = ?",
+    [batchId, clubId]
+  );
+  if (!batch) {
+    res.status(404).json({ message: "Batch not found" });
+    return;
+  }
+  const vouchers = await query(
+    `SELECT cv.id, cv.code, cv.value_rands, cv.redeemed_at, cv.expires_at, cv.created_at,
+            u.name as user_name, u.email as user_email
+     FROM cancellation_vouchers cv
+     JOIN users u ON u.id = cv.user_id
+     WHERE cv.batch_id = ?
+     ORDER BY u.name`,
+    [batchId]
+  );
+  res.json({ batch, vouchers });
+});
+router9.get("/profile/cancellation-vouchers", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const vouchers = await query(
+    `SELECT cv.id, cv.code, cv.value_rands, cv.redeemed_at, cv.expires_at, cv.created_at,
+            c.name as club_name, c.location as club_location,
+            cvb.reason, cvb.affected_date
+     FROM cancellation_vouchers cv
+     JOIN clubs c ON c.id = cv.club_id
+     JOIN cancellation_voucher_batches cvb ON cvb.id = cv.batch_id
+     WHERE cv.user_id = ?
+     ORDER BY cv.created_at DESC`,
+    [user.id]
+  );
+  res.json({ vouchers });
+});
+router9.post("/cancellation-vouchers/validate", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const { code } = req.body ?? {};
+  if (!code) {
+    res.status(400).json({ valid: false, message: "code is required" });
+    return;
+  }
+  const voucher = await row(
+    `SELECT cv.*, c.name as club_name
+     FROM cancellation_vouchers cv
+     JOIN clubs c ON c.id = cv.club_id
+     WHERE cv.code = ? AND cv.user_id = ?`,
+    [String(code).toUpperCase().trim(), user.id]
+  );
+  if (!voucher) {
+    res.status(404).json({ valid: false, message: "Voucher not found or not assigned to your account" });
+    return;
+  }
+  if (voucher.redeemed_at) {
+    res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+    return;
+  }
+  if (voucher.expires_at && new Date(voucher.expires_at) < /* @__PURE__ */ new Date()) {
+    res.status(400).json({ valid: false, message: "This voucher has expired" });
+    return;
+  }
+  res.json({
+    valid: true,
+    code: voucher.code,
+    value_rands: voucher.value_rands ? parseFloat(voucher.value_rands) : null,
+    club_name: voucher.club_name,
+    club_id: voucher.club_id,
+    expires_at: voucher.expires_at
+  });
+});
+var cancellationVouchers_default = router9;
+
+// src/routes/admin.ts
+var import_express10 = __toESM(require_express2(), 1);
+init_pg();
+var router10 = (0, import_express10.Router)();
 function isPlatformAdmin(user) {
   return isPlatform(user);
 }
@@ -59860,7 +60141,7 @@ function clubScope(user) {
   }
   return { where: "", params: [] };
 }
-router9.post("/admin/users/:id/assign-club", async (req, res) => {
+router10.post("/admin/users/:id/assign-club", async (req, res) => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) {
     res.status(403).json({ message: "Only platform admins can assign clubs" });
@@ -59889,7 +60170,7 @@ router9.post("/admin/users/:id/assign-club", async (req, res) => {
   );
   res.json({ user: updated });
 });
-router9.get("/admin/users", async (req, res) => {
+router10.get("/admin/users", async (req, res) => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) {
     res.status(403).json({ message: "Forbidden" });
@@ -59903,7 +60184,7 @@ router9.get("/admin/users", async (req, res) => {
   );
   res.json({ users });
 });
-router9.get("/admin/revenue/summary", async (req, res) => {
+router10.get("/admin/revenue/summary", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -59935,7 +60216,7 @@ router9.get("/admin/revenue/summary", async (req, res) => {
     total_club_payouts: parseFloat(summary?.total_club_payouts ?? "0")
   });
 });
-router9.get("/admin/revenue/bookings", async (req, res) => {
+router10.get("/admin/revenue/bookings", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -59976,7 +60257,7 @@ router9.get("/admin/revenue/bookings", async (req, res) => {
     total: parseInt(total?.cnt ?? "0")
   });
 });
-router9.get("/admin/revenue/clubs", async (req, res) => {
+router10.get("/admin/revenue/clubs", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60007,11 +60288,11 @@ router9.get("/admin/revenue/clubs", async (req, res) => {
     }))
   });
 });
-router9.get("/settings", async (_req, res) => {
+router10.get("/settings", async (_req, res) => {
   const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
   res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });
 });
-router9.put("/admin/revenue/vat", async (req, res) => {
+router10.put("/admin/revenue/vat", async (req, res) => {
   const user = await getUser(req);
   if (!isPlatformAdmin(user)) {
     res.status(403).json({ message: "Only platform admins can change the VAT rate" });
@@ -60029,7 +60310,7 @@ router9.put("/admin/revenue/vat", async (req, res) => {
   );
   res.json({ success: true, vat_pct: pct });
 });
-router9.put("/admin/revenue/fee", async (req, res) => {
+router10.put("/admin/revenue/fee", async (req, res) => {
   const user = await getUser(req);
   if (!isPlatformAdmin(user)) {
     res.status(403).json({ message: "Only platform admins can change the platform fee" });
@@ -60047,13 +60328,13 @@ router9.put("/admin/revenue/fee", async (req, res) => {
   );
   res.json({ success: true, platform_fee_pct: pct });
 });
-var admin_default = router9;
+var admin_default = router10;
 
 // src/routes/geofencing.ts
-var import_express10 = __toESM(require_express2(), 1);
+var import_express11 = __toESM(require_express2(), 1);
 init_pg();
-var router10 = (0, import_express10.Router)();
-router10.get("/clubs/geofences", async (req, res) => {
+var router11 = (0, import_express11.Router)();
+router11.get("/clubs/geofences", async (req, res) => {
   const clubs = await query(
     `SELECT id, name, latitude, longitude,
             geofence_radius_m, ninth_tee_lat, ninth_tee_lng, ninth_tee_radius_m
@@ -60062,7 +60343,7 @@ router10.get("/clubs/geofences", async (req, res) => {
   );
   res.json({ clubs });
 });
-router10.get("/admin/clubs", async (req, res) => {
+router11.get("/admin/clubs", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60088,7 +60369,7 @@ router10.get("/admin/clubs", async (req, res) => {
     }))
   });
 });
-router10.patch("/admin/clubs/:id/geofence", async (req, res) => {
+router11.patch("/admin/clubs/:id/geofence", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60144,12 +60425,12 @@ router10.patch("/admin/clubs/:id/geofence", async (req, res) => {
     }
   });
 });
-var geofencing_default = router10;
+var geofencing_default = router11;
 
 // src/routes/notifications.ts
-var import_express11 = __toESM(require_express2(), 1);
+var import_express12 = __toESM(require_express2(), 1);
 init_pg();
-var router11 = (0, import_express11.Router)();
+var router12 = (0, import_express12.Router)();
 var VALID_TYPES = ["course_closed", "lightning", "course_open", "tee_shift", "general"];
 async function getBookedUsersForClub(clubId, affectedDate) {
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
@@ -60187,7 +60468,7 @@ async function getBookedUsersForClub(clubId, affectedDate) {
     [clubId, today]
   );
 }
-router11.get("/admin/notifications/preview", async (req, res) => {
+router12.get("/admin/notifications/preview", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60228,7 +60509,7 @@ router11.get("/admin/notifications/preview", async (req, res) => {
   }
   res.json({ count: parseInt(countRow?.cnt ?? "0") });
 });
-router11.post("/admin/notifications/broadcast", async (req, res) => {
+router12.post("/admin/notifications/broadcast", async (req, res) => {
   const caller = await getUser(req);
   if (!isStaff(caller)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60303,7 +60584,7 @@ router11.post("/admin/notifications/broadcast", async (req, res) => {
   }
   res.json({ success: true, recipient_count: withTokens.length, total_booked: recipients.length });
 });
-router11.get("/admin/notifications", async (req, res) => {
+router12.get("/admin/notifications", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60329,7 +60610,7 @@ router11.get("/admin/notifications", async (req, res) => {
   );
   res.json({ notifications });
 });
-router11.get("/admin/notifications/recent", async (req, res) => {
+router12.get("/admin/notifications/recent", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60356,7 +60637,7 @@ router11.get("/admin/notifications/recent", async (req, res) => {
   );
   res.json({ notifications });
 });
-router11.get("/notifications", async (req, res) => {
+router12.get("/notifications", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -60379,7 +60660,7 @@ router11.get("/notifications", async (req, res) => {
   }));
   res.json({ notifications });
 });
-router11.get("/notifications/unread-count", async (req, res) => {
+router12.get("/notifications/unread-count", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -60391,7 +60672,7 @@ router11.get("/notifications/unread-count", async (req, res) => {
   );
   res.json({ count: parseInt(r?.cnt ?? "0") });
 });
-router11.patch("/notifications/read-all", async (req, res) => {
+router12.patch("/notifications/read-all", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -60400,7 +60681,7 @@ router11.patch("/notifications/read-all", async (req, res) => {
   await exec("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", [user.id]);
   res.json({ success: true });
 });
-router11.patch("/notifications/:id/read", async (req, res) => {
+router12.patch("/notifications/:id/read", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -60413,16 +60694,16 @@ router11.patch("/notifications/:id/read", async (req, res) => {
   );
   res.json({ success: true });
 });
-var notifications_default = router11;
+var notifications_default = router12;
 
 // src/routes/events.ts
-var import_express12 = __toESM(require_express2(), 1);
+var import_express13 = __toESM(require_express2(), 1);
 init_pg();
-var router12 = (0, import_express12.Router)();
+var router13 = (0, import_express13.Router)();
 var VALID_TYPES2 = ["open_day", "competition", "corporate", "social", "other"];
 var VALID_RESTRICTIONS = ["open", "members_only", "invitation_only"];
 var VALID_MEMBERSHIP_TYPES = ["standard", "premium", "honorary"];
-router12.get("/clubs/:id/events", async (req, res) => {
+router13.get("/clubs/:id/events", async (req, res) => {
   const clubId = parseInt(req.params.id, 10);
   const caller = await getUser(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
@@ -60466,7 +60747,7 @@ router12.get("/clubs/:id/events", async (req, res) => {
   }));
   res.json({ events: enriched });
 });
-router12.post("/events/:id/register", async (req, res) => {
+router13.post("/events/:id/register", async (req, res) => {
   const caller = await getUser(req);
   if (!caller) {
     res.status(401).json({ message: "Unauthorized" });
@@ -60496,7 +60777,7 @@ router12.post("/events/:id/register", async (req, res) => {
   );
   res.status(201).json({ success: true, status: "pending" });
 });
-router12.get("/admin/events", async (req, res) => {
+router13.get("/admin/events", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60530,7 +60811,7 @@ router12.get("/admin/events", async (req, res) => {
     }))
   });
 });
-router12.post("/admin/events", async (req, res) => {
+router13.post("/admin/events", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60578,7 +60859,7 @@ router12.post("/admin/events", async (req, res) => {
   );
   res.status(201).json({ event_id: result.insertId });
 });
-router12.put("/admin/events/:id", async (req, res) => {
+router13.put("/admin/events/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60646,7 +60927,7 @@ router12.put("/admin/events/:id", async (req, res) => {
   await exec(`UPDATE golf_events SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
   res.json({ success: true });
 });
-router12.delete("/admin/events/:id", async (req, res) => {
+router13.delete("/admin/events/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60664,7 +60945,7 @@ router12.delete("/admin/events/:id", async (req, res) => {
   );
   res.json({ success: true });
 });
-router12.get("/admin/events/:id/registrations", async (req, res) => {
+router13.get("/admin/events/:id/registrations", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60692,7 +60973,7 @@ router12.get("/admin/events/:id/registrations", async (req, res) => {
   );
   res.json({ registrations: regs });
 });
-router12.put("/admin/events/:id/registrations/:userId", async (req, res) => {
+router13.put("/admin/events/:id/registrations/:userId", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60734,7 +61015,7 @@ router12.put("/admin/events/:id/registrations/:userId", async (req, res) => {
   }
   res.json({ success: true });
 });
-router12.get("/admin/members", async (req, res) => {
+router13.get("/admin/members", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60756,7 +61037,7 @@ router12.get("/admin/members", async (req, res) => {
   );
   res.json({ members });
 });
-router12.get("/admin/members/search", async (req, res) => {
+router13.get("/admin/members/search", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60783,7 +61064,7 @@ router12.get("/admin/members/search", async (req, res) => {
   );
   res.json({ users: users.map((u) => ({ ...u, already_member: !!u.already_member })) });
 });
-router12.post("/admin/members", async (req, res) => {
+router13.post("/admin/members", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60834,7 +61115,7 @@ router12.post("/admin/members", async (req, res) => {
   }
   res.status(201).json({ success: true });
 });
-router12.put("/admin/members/:userId", async (req, res) => {
+router13.put("/admin/members/:userId", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60865,7 +61146,7 @@ router12.put("/admin/members/:userId", async (req, res) => {
   await exec(`UPDATE club_members SET ${updates.join(", ")} WHERE club_id = ? AND user_id = ?`, vals);
   res.json({ success: true });
 });
-router12.delete("/admin/members/:userId", async (req, res) => {
+router13.delete("/admin/members/:userId", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -60883,10 +61164,10 @@ router12.delete("/admin/members/:userId", async (req, res) => {
   );
   res.json({ success: true });
 });
-var events_default = router12;
+var events_default = router13;
 
 // src/routes/portal.ts
-var import_express13 = __toESM(require_express2(), 1);
+var import_express14 = __toESM(require_express2(), 1);
 init_bcryptjs();
 var import_multer = __toESM(require_multer(), 1);
 init_pg();
@@ -61185,7 +61466,7 @@ var upload = (0, import_multer.default)({
     else cb(new Error("Only image files are allowed"));
   }
 });
-var router13 = (0, import_express13.Router)();
+var router14 = (0, import_express14.Router)();
 var SECRET = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
 function generateClubToken(clubId) {
   const payload = Buffer.from(
@@ -61230,7 +61511,7 @@ async function requireClubAuth(req, res, next) {
 function getClub(req) {
   return req.club;
 }
-router13.post("/portal/auth/login", async (req, res) => {
+router14.post("/portal/auth/login", async (req, res) => {
   const { username, password } = req.body ?? {};
   if (!username || !password) {
     res.status(400).json({ message: "Username and password required" });
@@ -61249,7 +61530,7 @@ router13.post("/portal/auth/login", async (req, res) => {
   const token = generateClubToken(club.id);
   res.json({ token, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
 });
-router13.post("/portal/auth/forgot-password", async (req, res) => {
+router14.post("/portal/auth/forgot-password", async (req, res) => {
   const rawEmail = String(req.body?.email ?? "").trim().toLowerCase();
   if (!rawEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(rawEmail)) {
     res.status(400).json({ message: "Valid email address is required" });
@@ -61288,7 +61569,7 @@ router13.post("/portal/auth/forgot-password", async (req, res) => {
   if (devOtp) response.dev_otp = devOtp;
   res.json(response);
 });
-router13.post("/portal/auth/verify-otp", async (req, res) => {
+router14.post("/portal/auth/verify-otp", async (req, res) => {
   const rawEmail = String(req.body?.email ?? "").trim().toLowerCase();
   const rawOtp = String(req.body?.otp ?? "").trim();
   if (!rawEmail || !rawOtp) {
@@ -61316,7 +61597,7 @@ router13.post("/portal/auth/verify-otp", async (req, res) => {
   await exec("UPDATE club_password_reset_otps SET reset_token = ? WHERE id = ?", [resetToken, record.id]);
   res.json({ success: true, reset_token: resetToken });
 });
-router13.post("/portal/auth/reset-password", async (req, res) => {
+router14.post("/portal/auth/reset-password", async (req, res) => {
   const resetToken = String(req.body?.reset_token ?? "").trim();
   const newPassword = String(req.body?.new_password ?? "").trim();
   if (!resetToken || !newPassword) {
@@ -61348,7 +61629,7 @@ router13.post("/portal/auth/reset-password", async (req, res) => {
   await exec("UPDATE club_password_reset_otps SET used_at = NOW() WHERE id = ?", [record.id]);
   res.json({ success: true, message: "Password has been reset successfully." });
 });
-router13.get("/portal/auth/me", requireClubAuth, async (req, res) => {
+router14.get("/portal/auth/me", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json({
     id: club.id,
@@ -61376,7 +61657,7 @@ router13.get("/portal/auth/me", requireClubAuth, async (req, res) => {
     username: club.username
   });
 });
-router13.get("/portal/me", requireClubAuth, async (req, res) => {
+router14.get("/portal/me", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json({
     id: club.id,
@@ -61403,7 +61684,7 @@ router13.get("/portal/me", requireClubAuth, async (req, res) => {
     geofence_radius_m: club.geofence_radius_m
   });
 });
-router13.put("/portal/me", requireClubAuth, async (req, res) => {
+router14.put("/portal/me", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const {
     name,
@@ -61463,7 +61744,7 @@ router13.put("/portal/me", requireClubAuth, async (req, res) => {
   const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
 });
-router13.get("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
+router14.get("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const [data, feeSetting] = await Promise.all([
     row(
@@ -61492,7 +61773,7 @@ router13.get("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
     min_fee_pct: minFeePct
   });
 });
-router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
+router14.put("/portal/cancellation-policy", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const {
     preset,
@@ -61554,7 +61835,7 @@ router13.put("/portal/cancellation-policy", requireClubAuth, async (req, res) =>
   );
   res.json({ success: true });
 });
-router13.get("/portal/dashboard", requireClubAuth, async (req, res) => {
+router14.get("/portal/dashboard", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const [teeTimes, bookings, reviews, members, events] = await Promise.all([
@@ -61587,7 +61868,7 @@ router13.get("/portal/dashboard", requireClubAuth, async (req, res) => {
     recent_bookings: recentBookings.map((b) => ({ ...b, time: String(b.time).slice(0, 5) }))
   });
 });
-router13.get("/portal/tee-times", requireClubAuth, async (req, res) => {
+router14.get("/portal/tee-times", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { date, from, to } = req.query;
   let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ?";
@@ -61614,7 +61895,7 @@ router13.get("/portal/tee-times", requireClubAuth, async (req, res) => {
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]")
   })));
 });
-router13.post("/portal/tee-times", requireClubAuth, async (req, res) => {
+router14.post("/portal/tee-times", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes } = req.body ?? {};
   if (!date || !time) {
@@ -61629,7 +61910,7 @@ router13.post("/portal/tee-times", requireClubAuth, async (req, res) => {
   const inserted = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId]);
   res.json({ ...inserted, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!inserted.active });
 });
-router13.delete("/portal/tee-times/clear", requireClubAuth, async (req, res) => {
+router14.delete("/portal/tee-times/clear", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { from, to } = req.query;
   if (!from || !to) {
@@ -61639,7 +61920,7 @@ router13.delete("/portal/tee-times/clear", requireClubAuth, async (req, res) => 
   const deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ?", [club.id, from, to]);
   res.json({ message: "Cleared", deleted });
 });
-router13.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const ttId = Number(req.params.id);
   const existing = await row("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
@@ -61675,7 +61956,7 @@ router13.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   const updated = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE id = ?", [ttId]);
   res.json({ ...updated, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!updated.active, blocked_slots: JSON.parse(updated.blocked_slots ?? "[]") });
 });
-router13.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const ttId = Number(req.params.id);
   const existing = await row("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
@@ -61686,7 +61967,7 @@ router13.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   res.json({ message: "Deleted" });
 });
-router13.get("/portal/bookings", requireClubAuth, async (req, res) => {
+router14.get("/portal/bookings", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { status, date, from, to, limit = 50, offset = 0 } = req.query;
   let sql = `SELECT b.id, b.portal_slot_id, b.portal_slot_id AS tee_time_id,
@@ -61728,7 +62009,7 @@ router13.get("/portal/bookings", requireClubAuth, async (req, res) => {
   const rows = await query(sql, params);
   res.json(rows.map((r) => ({ ...r, time: String(r.time).slice(0, 5), total_amount: Number(r.total_amount), tee_price: Number(r.tee_price) })));
 });
-router13.put("/portal/bookings/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/bookings/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const bId = Number(req.params.id);
   const { status } = req.body ?? {};
@@ -61744,7 +62025,7 @@ router13.put("/portal/bookings/:id", requireClubAuth, async (req, res) => {
   await exec("UPDATE bookings SET status = ? WHERE id = ?", [status, bId]);
   res.json({ message: "Updated", status });
 });
-router13.get("/portal/reviews", requireClubAuth, async (req, res) => {
+router14.get("/portal/reviews", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const rows = await query(
     `SELECT r.id, r.rating, r.comment, r.created_at, u.name AS guest_name, u.email AS guest_email
@@ -61754,11 +62035,11 @@ router13.get("/portal/reviews", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router13.get("/portal/ads", requireClubAuth, async (req, res) => {
+router14.get("/portal/ads", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query("SELECT id, title, subtitle, image_url, cta_text, link_url, placement, priority, active, created_at FROM ads WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
 });
-router13.post("/portal/ads", requireClubAuth, async (req, res) => {
+router14.post("/portal/ads", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { title, subtitle, image_url, cta_text, link_url, placement = "home", priority = 0, active = 1 } = req.body ?? {};
   if (!title) {
@@ -61772,7 +62053,7 @@ router13.post("/portal/ads", requireClubAuth, async (req, res) => {
   const inserted = await row("SELECT * FROM ads WHERE id = ?", [result.insertId]);
   res.json(inserted);
 });
-router13.put("/portal/ads/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/ads/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const adId = Number(req.params.id);
   const existing = await row("SELECT id FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
@@ -61800,7 +62081,7 @@ router13.put("/portal/ads/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM ads WHERE id = ?", [adId]));
 });
-router13.delete("/portal/ads/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/ads/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const adId = Number(req.params.id);
   const existing = await row("SELECT id FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
@@ -61811,11 +62092,11 @@ router13.delete("/portal/ads/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
   res.json({ message: "Deleted" });
 });
-router13.get("/portal/events", requireClubAuth, async (req, res) => {
+router14.get("/portal/events", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query("SELECT id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_at FROM golf_events WHERE club_id = ? ORDER BY event_date DESC LIMIT 200", [club.id]));
 });
-router13.post("/portal/events", requireClubAuth, async (req, res) => {
+router14.post("/portal/events", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const {
     name,
@@ -61839,7 +62120,7 @@ router13.post("/portal/events", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [result.insertId]));
 });
-router13.put("/portal/events/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/events/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const evId = Number(req.params.id);
   const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
@@ -61869,7 +62150,7 @@ router13.put("/portal/events/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
-router13.delete("/portal/events/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/events/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const evId = Number(req.params.id);
   const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
@@ -61880,7 +62161,7 @@ router13.delete("/portal/events/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   res.json({ message: "Deleted" });
 });
-router13.get("/portal/members", requireClubAuth, async (req, res) => {
+router14.get("/portal/members", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const rows = await query(
     `SELECT cm.id, cm.membership_type, cm.status, cm.created_at,
@@ -61893,7 +62174,7 @@ router13.get("/portal/members", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router13.post("/portal/members", requireClubAuth, async (req, res) => {
+router14.post("/portal/members", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { email, membership_type = "standard", start_date, renewal_date, benefits, prepaid_rounds = 0, hna_number, student_number } = req.body ?? {};
   if (!email) {
@@ -61971,7 +62252,7 @@ router13.post("/portal/members", requireClubAuth, async (req, res) => {
   );
   res.json({ message: "Member added" });
 });
-router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
+router14.post("/portal/members/import", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { rows } = req.body ?? {};
   if (!Array.isArray(rows) || rows.length === 0) {
@@ -62058,7 +62339,7 @@ router13.post("/portal/members/import", requireClubAuth, async (req, res) => {
   }
   res.json({ added, renewed, pending, errors });
 });
-router13.put("/portal/members/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/members/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const mId = Number(req.params.id);
   const { membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, hna_number } = req.body ?? {};
@@ -62100,7 +62381,7 @@ router13.put("/portal/members/:id", requireClubAuth, async (req, res) => {
   }
   res.json({ message: "Updated" });
 });
-router13.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) => {
+router14.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { ids, renewal_date } = req.body ?? {};
   if (!Array.isArray(ids) || ids.length === 0) {
@@ -62124,7 +62405,7 @@ router13.post("/portal/members/bulk-renew", requireClubAuth, async (req, res) =>
   );
   res.json({ message: "Renewed", renewed: memberIds.length });
 });
-router13.get("/portal/pending-members", requireClubAuth, async (req, res) => {
+router14.get("/portal/pending-members", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const rows = await query(
     `SELECT id, email, hna_number, membership_type, status, start_date, renewal_date,
@@ -62134,7 +62415,7 @@ router13.get("/portal/pending-members", requireClubAuth, async (req, res) => {
   );
   res.json(rows);
 });
-router13.delete("/portal/pending-members/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/pending-members/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const pId = Number(req.params.id);
   const existing = await row("SELECT id FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
@@ -62145,7 +62426,7 @@ router13.delete("/portal/pending-members/:id", requireClubAuth, async (req, res)
   await exec("DELETE FROM pending_memberships WHERE id = ? AND club_id = ?", [pId, club.id]);
   res.json({ message: "Removed" });
 });
-router13.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const mId = Number(req.params.id);
   const existing = await row("SELECT id FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
@@ -62156,11 +62437,11 @@ router13.delete("/portal/members/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM club_members WHERE id = ? AND club_id = ?", [mId, club.id]);
   res.json({ message: "Removed" });
 });
-router13.get("/portal/vouchers", requireClubAuth, async (req, res) => {
+router14.get("/portal/vouchers", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query("SELECT id, code, discount_type, discount_value, min_amount, max_uses, uses_count, active, expires_at, created_at FROM vouchers WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
 });
-router13.post("/portal/vouchers", requireClubAuth, async (req, res) => {
+router14.post("/portal/vouchers", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { code, discount_type, discount_value, min_amount, max_uses, expires_at } = req.body ?? {};
   if (!code || !discount_type || discount_value == null) {
@@ -62178,7 +62459,7 @@ router13.post("/portal/vouchers", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM vouchers WHERE id = ?", [result.insertId]));
 });
-router13.put("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const vId = Number(req.params.id);
   const existing = await row("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
@@ -62193,7 +62474,7 @@ router13.put("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM vouchers WHERE id = ?", [vId]));
 });
-router13.delete("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const vId = Number(req.params.id);
   const existing = await row("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
@@ -62204,36 +62485,36 @@ router13.delete("/portal/vouchers/:id", requireClubAuth, async (req, res) => {
   await exec("DELETE FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   res.json({ message: "Deleted" });
 });
-router13.get("/portal/inbox", requireClubAuth, async (req, res) => {
+router14.get("/portal/inbox", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query(
     "SELECT id, type, title, body, meta, read_at, created_at FROM club_inbox_notifications WHERE club_id = ? ORDER BY created_at DESC LIMIT 50",
     [club.id]
   ));
 });
-router13.get("/portal/inbox/unread-count", requireClubAuth, async (req, res) => {
+router14.get("/portal/inbox/unread-count", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const r = await row("SELECT COUNT(*) AS cnt FROM club_inbox_notifications WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ count: Number(r?.cnt ?? 0) });
 });
-router13.put("/portal/inbox/:id/read", requireClubAuth, async (req, res) => {
+router14.put("/portal/inbox/:id/read", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const nid = parseInt(req.params.id, 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
-router13.put("/portal/inbox/read-all", requireClubAuth, async (req, res) => {
+router14.put("/portal/inbox/read-all", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ ok: true });
 });
-router13.put("/portal/inbox/:id/unread", requireClubAuth, async (req, res) => {
+router14.put("/portal/inbox/:id/unread", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const nid = parseInt(req.params.id, 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
-router13.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, res) => {
+router14.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const nid = parseInt(req.params.id, 10);
   await exec(
@@ -62242,11 +62523,11 @@ router13.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, 
   );
   res.json({ ok: true });
 });
-router13.get("/portal/notifications", requireClubAuth, async (req, res) => {
+router14.get("/portal/notifications", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   res.json(await query("SELECT id, type, title, body, tee_shift_minutes, affected_date, recipient_count, sent_at FROM club_notifications WHERE club_id = ? ORDER BY sent_at DESC LIMIT 100", [club.id]));
 });
-router13.post("/portal/notifications", requireClubAuth, async (req, res) => {
+router14.post("/portal/notifications", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { type = "general", title, body, tee_shift_minutes, affected_date } = req.body ?? {};
   if (!title || !body) {
@@ -62261,7 +62542,7 @@ router13.post("/portal/notifications", requireClubAuth, async (req, res) => {
   );
   res.json(await row("SELECT * FROM club_notifications WHERE id = ?", [result.insertId]));
 });
-router13.post(
+router14.post(
   "/portal/logo/upload",
   requireClubAuth,
   upload.single("logo"),
@@ -62293,7 +62574,7 @@ router13.post(
     res.json({ logo_url: logoUrl });
   }
 );
-router13.post(
+router14.post(
   "/portal/images/upload",
   requireClubAuth,
   upload.single("photo"),
@@ -62330,7 +62611,7 @@ router13.post(
     res.status(201).json({ image, url });
   }
 );
-router13.get("/portal/images", requireClubAuth, async (req, res) => {
+router14.get("/portal/images", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const images = await query(
     "SELECT id, url, caption, display_order, created_at FROM club_images WHERE club_id = ? ORDER BY display_order ASC, id ASC",
@@ -62338,7 +62619,7 @@ router13.get("/portal/images", requireClubAuth, async (req, res) => {
   );
   res.json({ images });
 });
-router13.post("/portal/images", requireClubAuth, async (req, res) => {
+router14.post("/portal/images", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { url, caption, display_order = 0 } = req.body ?? {};
   if (!url || typeof url !== "string" || !url.startsWith("http")) {
@@ -62352,7 +62633,7 @@ router13.post("/portal/images", requireClubAuth, async (req, res) => {
   const image = await row("SELECT * FROM club_images WHERE id = ?", [result.insertId]);
   res.status(201).json({ image });
 });
-router13.put("/portal/images/:imageId", requireClubAuth, async (req, res) => {
+router14.put("/portal/images/:imageId", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const imageId = parseInt(req.params.imageId, 10);
   const { caption, display_order } = req.body ?? {};
@@ -62367,7 +62648,7 @@ router13.put("/portal/images/:imageId", requireClubAuth, async (req, res) => {
   }
   res.json({ image });
 });
-router13.delete("/portal/images/:imageId", requireClubAuth, async (req, res) => {
+router14.delete("/portal/images/:imageId", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const imageId = parseInt(req.params.imageId, 10);
   await exec("DELETE FROM club_images WHERE id = ? AND club_id = ?", [imageId, club.id]);
@@ -62390,7 +62671,7 @@ var PRICING_TIERS = [
   "student_visitor",
   "junior_visitor"
 ];
-router13.get("/portal/schedule-configs", requireClubAuth, async (req, res) => {
+router14.get("/portal/schedule-configs", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const rows = await query(
     "SELECT id, name, config_type, config_data, created_at, updated_at FROM tee_time_schedule_configs WHERE club_id = ? ORDER BY created_at ASC",
@@ -62398,7 +62679,7 @@ router13.get("/portal/schedule-configs", requireClubAuth, async (req, res) => {
   );
   res.json(rows.map((r) => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
 });
-router13.post("/portal/schedule-configs", requireClubAuth, async (req, res) => {
+router14.post("/portal/schedule-configs", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { name, config_type, config_data } = req.body ?? {};
   if (!name || !config_type || !config_data) {
@@ -62411,7 +62692,7 @@ router13.post("/portal/schedule-configs", requireClubAuth, async (req, res) => {
   );
   res.status(201).json({ id, name, config_type, config_data });
 });
-router13.put("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
+router14.put("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const cfgId = Number(req.params.id);
   const existing = await row("SELECT id FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
@@ -62436,13 +62717,13 @@ router13.put("/portal/schedule-configs/:id", requireClubAuth, async (req, res) =
   );
   res.json({ message: "Updated" });
 });
-router13.delete("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
+router14.delete("/portal/schedule-configs/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const cfgId = Number(req.params.id);
   await run("DELETE FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
   res.json({ message: "Deleted" });
 });
-router13.get("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
+router14.get("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   let rows;
   try {
@@ -62461,7 +62742,7 @@ router13.get("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   for (const r of rows) map[r.tier_type] = { price_18h: r.price_18h != null ? parseFloat(r.price_18h) : null, price_9h: r.price_9h != null ? parseFloat(r.price_9h) : null, hidden: !!r.hidden };
   res.json(map);
 });
-router13.put("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
+router14.put("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { tiers } = req.body ?? {};
   if (!tiers || typeof tiers !== "object") {
@@ -62482,7 +62763,7 @@ router13.put("/portal/pricing-tiers", requireClubAuth, async (req, res) => {
   }
   res.json({ message: "Pricing tiers saved" });
 });
-router13.get("/portal/payments", requireClubAuth, async (req, res) => {
+router14.get("/portal/payments", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { status, from, to, search, limit = 200, offset = 0 } = req.query;
   let sql = `
@@ -62542,7 +62823,7 @@ router13.get("/portal/payments", requireClubAuth, async (req, res) => {
     players_list: typeof r.players_list === "string" ? JSON.parse(r.players_list) : r.players_list ?? []
   })));
 });
-router13.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req, res) => {
+router14.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const bId = Number(req.params.id);
   const b = await row(
@@ -62593,14 +62874,14 @@ router13.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req
     res.status(500).json({ message: "Failed to send invoice email" });
   }
 });
-var portal_default = router13;
+var portal_default = router14;
 
 // src/routes/storage.ts
-var import_express14 = __toESM(require_express2(), 1);
+var import_express15 = __toESM(require_express2(), 1);
 import { Readable as Readable2 } from "stream";
-var router14 = (0, import_express14.Router)();
+var router15 = (0, import_express15.Router)();
 var objectStorageService = new ObjectStorageService();
-router14.get("/storage/public-objects/*filePath", async (req, res) => {
+router15.get("/storage/public-objects/*filePath", async (req, res) => {
   try {
     const raw = req.params.filePath;
     const filePath = Array.isArray(raw) ? raw.join("/") : raw;
@@ -62623,7 +62904,7 @@ router14.get("/storage/public-objects/*filePath", async (req, res) => {
     res.status(500).json({ error: "Failed to serve public object" });
   }
 });
-router14.get("/storage/objects/*filePath", async (req, res) => {
+router15.get("/storage/objects/*filePath", async (req, res) => {
   try {
     const raw = req.params.filePath;
     const filePath = Array.isArray(raw) ? raw.join("/") : raw;
@@ -62646,12 +62927,12 @@ router14.get("/storage/objects/*filePath", async (req, res) => {
     res.status(500).json({ error: "Failed to serve object" });
   }
 });
-var storage_default = router14;
+var storage_default = router15;
 
 // src/routes/payments.ts
-var import_express15 = __toESM(require_express2(), 1);
+var import_express16 = __toESM(require_express2(), 1);
 init_pg();
-var router15 = (0, import_express15.Router)();
+var router16 = (0, import_express16.Router)();
 async function ensureWallet(userId) {
   const wallet = await row("SELECT balance FROM wallets WHERE user_id = ?", [userId]);
   if (!wallet) {
@@ -62660,7 +62941,7 @@ async function ensureWallet(userId) {
   }
   return parseFloat(wallet.balance);
 }
-router15.get("/payments/methods", async (req, res) => {
+router16.get("/payments/methods", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62673,7 +62954,7 @@ router15.get("/payments/methods", async (req, res) => {
   );
   res.json({ wallet: { balance }, methods });
 });
-router15.post("/payments/methods", async (req, res) => {
+router16.post("/payments/methods", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62697,7 +62978,7 @@ router15.post("/payments/methods", async (req, res) => {
   );
   res.status(201).json({ id, success: true });
 });
-router15.delete("/payments/methods/:id", async (req, res) => {
+router16.delete("/payments/methods/:id", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62706,7 +62987,7 @@ router15.delete("/payments/methods/:id", async (req, res) => {
   await exec("DELETE FROM payment_methods WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
   res.json({ success: true });
 });
-router15.put("/payments/methods/:id/default", async (req, res) => {
+router16.put("/payments/methods/:id/default", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62716,7 +62997,7 @@ router15.put("/payments/methods/:id/default", async (req, res) => {
   await exec("UPDATE payment_methods SET is_default = 1 WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
   res.json({ success: true });
 });
-router15.post("/payments/wallet/topup-url", async (req, res) => {
+router16.post("/payments/wallet/topup-url", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62741,7 +63022,7 @@ router15.post("/payments/wallet/topup-url", async (req, res) => {
   });
   res.json({ payment_url: pr.url, topup_id: topupId });
 });
-router15.post("/payments/wallet/redeem-voucher", async (req, res) => {
+router16.post("/payments/wallet/redeem-voucher", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62779,7 +63060,7 @@ router15.post("/payments/wallet/redeem-voucher", async (req, res) => {
   const updated = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
   res.json({ success: true, credit_amount: creditAmount, new_balance: parseFloat(updated.balance) });
 });
-router15.get("/payments/wallet/topup-status/:id", async (req, res) => {
+router16.get("/payments/wallet/topup-status/:id", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62795,7 +63076,7 @@ router15.get("/payments/wallet/topup-status/:id", async (req, res) => {
   }
   res.json({ status: topup.status });
 });
-router15.post("/payments/wallet/topup", async (req, res) => {
+router16.post("/payments/wallet/topup", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62815,7 +63096,7 @@ router15.post("/payments/wallet/topup", async (req, res) => {
   const updated = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
   res.json({ success: true, balance: parseFloat(updated.balance) });
 });
-router15.get("/payments/transactions", async (req, res) => {
+router16.get("/payments/transactions", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62838,7 +63119,7 @@ router15.get("/payments/transactions", async (req, res) => {
   );
   res.json({ transactions });
 });
-router15.get("/payments/memberships", async (req, res) => {
+router16.get("/payments/memberships", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62856,10 +63137,10 @@ router15.get("/payments/memberships", async (req, res) => {
   );
   res.json({ memberships });
 });
-var payments_default = router15;
+var payments_default = router16;
 
 // src/routes/settings.ts
-var import_express16 = __toESM(require_express2(), 1);
+var import_express17 = __toESM(require_express2(), 1);
 init_pg();
 import crypto6 from "crypto";
 function buildAdRemovalPayFastUrl(purchaseId, amount, host) {
@@ -62886,8 +63167,8 @@ function buildAdRemovalPayFastUrl(purchaseId, amount, host) {
   const qs = Object.entries(data).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&");
   return `${pfUrl}?${qs}`;
 }
-var router16 = (0, import_express16.Router)();
-router16.get("/settings/privacy", async (req, res) => {
+var router17 = (0, import_express17.Router)();
+router17.get("/settings/privacy", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62902,7 +63183,7 @@ router16.get("/settings/privacy", async (req, res) => {
     analytics_consent: (fresh?.analytics_consent ?? 1) === 1
   });
 });
-router16.put("/settings/privacy", async (req, res) => {
+router17.put("/settings/privacy", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62924,7 +63205,7 @@ router16.put("/settings/privacy", async (req, res) => {
   }
   res.json({ success: true });
 });
-router16.get("/settings/blocked", async (req, res) => {
+router17.get("/settings/blocked", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62941,7 +63222,7 @@ router16.get("/settings/blocked", async (req, res) => {
   );
   res.json({ blocked });
 });
-router16.post("/settings/block", async (req, res) => {
+router17.post("/settings/block", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62967,7 +63248,7 @@ router16.post("/settings/block", async (req, res) => {
     res.status(409).json({ message: "Already blocked" });
   }
 });
-router16.delete("/settings/block/:id", async (req, res) => {
+router17.delete("/settings/block/:id", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -62979,7 +63260,7 @@ router16.delete("/settings/block/:id", async (req, res) => {
   );
   res.json({ success: true });
 });
-router16.get("/settings/notifications", async (req, res) => {
+router17.get("/settings/notifications", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63004,7 +63285,7 @@ router16.get("/settings/notifications", async (req, res) => {
     promotions: (prefs?.notif_promotions ?? 0) === 1
   });
 });
-router16.put("/settings/notifications", async (req, res) => {
+router17.put("/settings/notifications", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63044,7 +63325,7 @@ router16.put("/settings/notifications", async (req, res) => {
   }
   res.json({ success: true });
 });
-router16.get("/super/settings", async (req, res) => {
+router17.get("/super/settings", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63059,7 +63340,7 @@ router16.get("/super/settings", async (req, res) => {
   for (const r of rows) settings[r.key] = r.value;
   res.json({ settings });
 });
-router16.put("/super/settings", async (req, res) => {
+router17.put("/super/settings", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63101,7 +63382,7 @@ router16.put("/super/settings", async (req, res) => {
   }
   res.json({ success: true });
 });
-router16.delete("/settings/account", async (req, res) => {
+router17.delete("/settings/account", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63110,7 +63391,7 @@ router16.delete("/settings/account", async (req, res) => {
   await exec("DELETE FROM users WHERE id = ?", [user.id]);
   res.json({ success: true, message: "Account permanently deleted." });
 });
-router16.get("/settings/ad-removal", async (req, res) => {
+router17.get("/settings/ad-removal", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63135,7 +63416,7 @@ router16.get("/settings/ad-removal", async (req, res) => {
     subscription: sub ? { active: true, expires_at: String(sub.expires_at) } : null
   });
 });
-router16.post("/settings/ad-removal/purchase", async (req, res) => {
+router17.post("/settings/ad-removal/purchase", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63155,7 +63436,7 @@ router16.post("/settings/ad-removal/purchase", async (req, res) => {
   const paymentUrl = buildAdRemovalPayFastUrl(purchaseId, price, host);
   res.status(201).json({ purchase_id: purchaseId, payment_url: paymentUrl });
 });
-router16.post("/settings/ad-removal/confirm/:id", async (req, res) => {
+router17.post("/settings/ad-removal/confirm/:id", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63180,7 +63461,7 @@ router16.post("/settings/ad-removal/confirm/:id", async (req, res) => {
   );
   res.json({ success: true, expires_at: String(purchase.expires_at) });
 });
-router16.post("/payfast/ad-removal/notify", async (req, res) => {
+router17.post("/payfast/ad-removal/notify", async (req, res) => {
   const data = req.body;
   if (data["payment_status"] === "COMPLETE") {
     const paymentId = data["m_payment_id"] ?? "";
@@ -63195,19 +63476,19 @@ router16.post("/payfast/ad-removal/notify", async (req, res) => {
   }
   res.status(200).send("OK");
 });
-var settings_default = router16;
+var settings_default = router17;
 
 // src/routes/map.ts
-var import_express17 = __toESM(require_express2(), 1);
+var import_express18 = __toESM(require_express2(), 1);
 init_pg();
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
-var router17 = (0, import_express17.Router)();
+var router18 = (0, import_express18.Router)();
 var __dir = dirname(fileURLToPath(import.meta.url));
 var LEAFLET_CSS = readFileSync(join(__dir, "../lib/leaflet.css"), "utf8");
 var LEAFLET_JS = readFileSync(join(__dir, "../lib/leaflet.js"), "utf8");
-router17.get("/map-embed", async (req, res) => {
+router18.get("/map-embed", async (req, res) => {
   const userLat = req.query.lat ? parseFloat(String(req.query.lat)) : null;
   const userLng = req.query.lng ? parseFloat(String(req.query.lng)) : null;
   const hasUser = userLat !== null && userLng !== null && !isNaN(userLat) && !isNaN(userLng);
@@ -63274,14 +63555,14 @@ router17.get("/map-embed", async (req, res) => {
   res.setHeader("Cache-Control", "public, max-age=300");
   res.send(html);
 });
-var map_default = router17;
+var map_default = router18;
 
 // src/routes/hnaVerification.ts
-var import_express18 = __toESM(require_express2(), 1);
+var import_express19 = __toESM(require_express2(), 1);
 init_pg();
-var router18 = (0, import_express18.Router)();
+var router19 = (0, import_express19.Router)();
 var cleanHna = (v) => String(v ?? "").trim().replace(/\D/g, "");
-router18.get("/hna/verification", async (req, res) => {
+router19.get("/hna/verification", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63312,7 +63593,7 @@ router18.get("/hna/verification", async (req, res) => {
     rejected_count: Number(rejectedRow?.cnt ?? 0)
   });
 });
-router18.post("/hna/verification", async (req, res) => {
+router19.post("/hna/verification", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63362,7 +63643,7 @@ router18.post("/hna/verification", async (req, res) => {
   );
   res.status(201).json({ success: true, id: result.insertId, status: "pending" });
 });
-router18.get("/admin/hna-verifications", async (req, res) => {
+router19.get("/admin/hna-verifications", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63392,7 +63673,7 @@ router18.get("/admin/hna-verifications", async (req, res) => {
   );
   res.json({ verifications: rows });
 });
-router18.get("/admin/hna-verifications/count", async (req, res) => {
+router19.get("/admin/hna-verifications/count", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63403,7 +63684,7 @@ router18.get("/admin/hna-verifications/count", async (req, res) => {
   );
   res.json({ pending: Number(result?.pending ?? 0) });
 });
-router18.get("/admin/hna-verifications/:id", async (req, res) => {
+router19.get("/admin/hna-verifications/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63427,7 +63708,7 @@ router18.get("/admin/hna-verifications/:id", async (req, res) => {
   }
   res.json({ verification: v });
 });
-router18.post("/admin/hna-verifications/:id/approve", async (req, res) => {
+router19.post("/admin/hna-verifications/:id/approve", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63463,7 +63744,7 @@ router18.post("/admin/hna-verifications/:id/approve", async (req, res) => {
   }
   res.json({ success: true, status: "approved" });
 });
-router18.post("/admin/hna-verifications/:id/reject", async (req, res) => {
+router19.post("/admin/hna-verifications/:id/reject", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63497,7 +63778,7 @@ router18.post("/admin/hna-verifications/:id/reject", async (req, res) => {
   }
   res.json({ success: true, status: "rejected" });
 });
-router18.post("/admin/hna-verifications/:id/reset", async (req, res) => {
+router19.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63530,7 +63811,7 @@ router18.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   }
   res.json({ success: true, status: "pending" });
 });
-router18.delete("/admin/hna-verifications/:id", async (req, res) => {
+router19.delete("/admin/hna-verifications/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63554,12 +63835,12 @@ router18.delete("/admin/hna-verifications/:id", async (req, res) => {
   }
   res.json({ success: true, deleted: true });
 });
-var hnaVerification_default = router18;
+var hnaVerification_default = router19;
 
 // src/routes/moderation.ts
-var import_express19 = __toESM(require_express2(), 1);
+var import_express20 = __toESM(require_express2(), 1);
 init_pg();
-var router19 = (0, import_express19.Router)();
+var router20 = (0, import_express20.Router)();
 var REASONS = [
   "spam",
   "harassment",
@@ -63569,7 +63850,7 @@ var REASONS = [
   "impersonation",
   "other"
 ];
-router19.post("/reports", async (req, res) => {
+router20.post("/reports", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
@@ -63649,7 +63930,7 @@ router19.post("/reports", async (req, res) => {
   );
   res.status(201).json({ success: true, id, status: "pending" });
 });
-router19.get("/admin/reports", async (req, res) => {
+router20.get("/admin/reports", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63682,7 +63963,7 @@ router19.get("/admin/reports", async (req, res) => {
   );
   res.json({ reports: rows });
 });
-router19.get("/admin/reports/count", async (req, res) => {
+router20.get("/admin/reports/count", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63693,7 +63974,7 @@ router19.get("/admin/reports/count", async (req, res) => {
   );
   res.json({ pending: Number(result?.pending ?? 0) });
 });
-router19.get("/admin/reports/:id", async (req, res) => {
+router20.get("/admin/reports/:id", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63733,7 +64014,7 @@ router19.get("/admin/reports/:id", async (req, res) => {
   }
   res.json({ report, context });
 });
-router19.post("/admin/reports/:id/resolve", async (req, res) => {
+router20.post("/admin/reports/:id/resolve", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63774,7 +64055,7 @@ router19.post("/admin/reports/:id/resolve", async (req, res) => {
   }
   res.json({ success: true, status: newStatus, blocked });
 });
-router19.post("/admin/reports/:id/restore", async (req, res) => {
+router20.post("/admin/reports/:id/restore", async (req, res) => {
   const user = await getUser(req);
   if (!isSuper(user)) {
     res.status(403).json({ message: "Forbidden" });
@@ -63796,35 +64077,36 @@ router19.post("/admin/reports/:id/restore", async (req, res) => {
   );
   res.json({ success: true, restored: true });
 });
-var moderation_default = router19;
+var moderation_default = router20;
 
 // src/routes/index.ts
-var router20 = (0, import_express20.Router)();
-router20.use(health_default);
-router20.use(auth_default);
-router20.use(geofencing_default);
-router20.use(clubs_default);
-router20.use(bookings_default);
-router20.use(friends_default);
-router20.use(ads_default);
-router20.use(messages_default);
-router20.use(vouchers_default);
-router20.use(admin_default);
-router20.use(notifications_default);
-router20.use(events_default);
-router20.use(portal_default);
-router20.use(storage_default);
-router20.use(payments_default);
-router20.use(settings_default);
-router20.use(map_default);
-router20.use(hnaVerification_default);
-router20.use(moderation_default);
-var routes_default = router20;
+var router21 = (0, import_express21.Router)();
+router21.use(health_default);
+router21.use(auth_default);
+router21.use(geofencing_default);
+router21.use(clubs_default);
+router21.use(bookings_default);
+router21.use(friends_default);
+router21.use(ads_default);
+router21.use(messages_default);
+router21.use(vouchers_default);
+router21.use(cancellationVouchers_default);
+router21.use(admin_default);
+router21.use(notifications_default);
+router21.use(events_default);
+router21.use(portal_default);
+router21.use(storage_default);
+router21.use(payments_default);
+router21.use(settings_default);
+router21.use(map_default);
+router21.use(hnaVerification_default);
+router21.use(moderation_default);
+var routes_default = router21;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
-var app = (0, import_express21.default)();
+var app = (0, import_express22.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -63845,18 +64127,18 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express21.default.raw({ type: "*/*" }));
-app.use(import_express21.default.json());
-app.use(import_express21.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express22.default.raw({ type: "*/*" }));
+app.use(import_express22.default.json());
+app.use(import_express22.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express21.default.static(logosDir));
+app.use("/api/logos", import_express22.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express21.default.static(clientDir));
+  app.use(import_express22.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path2.join(clientDir, "index.html"));
   });
@@ -64559,6 +64841,38 @@ async function createSchema() {
     END $$
   `);
   await ddl("ALTER TABLE hna_verifications ADD COLUMN IF NOT EXISTS club_name VARCHAR(255)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS cancellation_voucher_batches (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      issued_by     INT NOT NULL REFERENCES users(id),
+      reason        TEXT NOT NULL,
+      affected_date DATE,
+      value_rands   DECIMAL(10,2),
+      expires_at    TIMESTAMP,
+      voucher_count INT NOT NULL DEFAULT 0,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS cancellation_vouchers (
+      id          SERIAL PRIMARY KEY,
+      code        VARCHAR(64) UNIQUE NOT NULL,
+      batch_id    INT NOT NULL REFERENCES cancellation_voucher_batches(id) ON DELETE CASCADE,
+      club_id     INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id     INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      booking_id  INT REFERENCES bookings(id) ON DELETE SET NULL,
+      reason      TEXT,
+      value_rands DECIMAL(10,2),
+      redeemed_at TIMESTAMP,
+      expires_at  TIMESTAMP,
+      created_at  TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_user   ON cancellation_vouchers (user_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch  ON cancellation_vouchers (batch_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_club   ON cancellation_vouchers (club_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
 }
 var SEED_REVIEWS = [
   {

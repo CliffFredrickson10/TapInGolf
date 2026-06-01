@@ -17,6 +17,7 @@ import {
   CircleDollarSign,
   CreditCard,
   FileX2,
+  TicketX,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign },
   { href: "/vouchers", label: "Vouchers", icon: Ticket },
   { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2 },
+  { href: "/cancellation-vouchers", label: "Cancellation Vouchers", icon: TicketX },
   { href: "/notifications", label: "Notifications", icon: Bell, inbox: true },
 ];
 

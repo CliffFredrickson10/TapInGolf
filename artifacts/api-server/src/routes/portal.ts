@@ -857,7 +857,36 @@ router.delete("/portal/vouchers/:id", requireClubAuth, async (req: Request, res:
   res.json({ message: "Deleted" });
 });
 
-// ─── NOTIFICATIONS ───────────────────────────────────────────────────────────
+// ─── INBOX (system → club) ────────────────────────────────────────────────────
+
+router.get("/portal/inbox", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  res.json(await query<any>(
+    "SELECT id, type, title, body, meta, read_at, created_at FROM club_inbox_notifications WHERE club_id = ? ORDER BY created_at DESC LIMIT 50",
+    [club.id]
+  ));
+});
+
+router.get("/portal/inbox/unread-count", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const r = await row<any>("SELECT COUNT(*) AS cnt FROM club_inbox_notifications WHERE club_id = ? AND read_at IS NULL", [club.id]);
+  res.json({ count: Number(r?.cnt ?? 0) });
+});
+
+router.put("/portal/inbox/:id/read", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const nid = parseInt(req.params.id, 10);
+  await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE id = ? AND club_id = ?", [nid, club.id]);
+  res.json({ ok: true });
+});
+
+router.put("/portal/inbox/read-all", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE club_id = ? AND read_at IS NULL", [club.id]);
+  res.json({ ok: true });
+});
+
+// ─── NOTIFICATIONS (club → golfers) ──────────────────────────────────────────
 
 router.get("/portal/notifications", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);

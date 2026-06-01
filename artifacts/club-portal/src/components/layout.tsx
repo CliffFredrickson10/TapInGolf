@@ -1,5 +1,7 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
+import { useEffect, useState } from "react";
+import { api } from "@/lib/api";
 import {
   LayoutDashboard,
   Building2,
@@ -30,12 +32,24 @@ const navItems = [
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign },
   { href: "/vouchers", label: "Vouchers", icon: Ticket },
   { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2 },
-  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/notifications", label: "Notifications", icon: Bell, inbox: true },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { club, logout } = useAuth();
+  const [unread, setUnread] = useState(0);
+
+  useEffect(() => {
+    if (!club) return;
+    const fetch = () =>
+      api<{ count: number }>("/api/portal/inbox/unread-count")
+        .then(r => setUnread(r.count))
+        .catch(() => {});
+    fetch();
+    const timer = setInterval(fetch, 30_000);
+    return () => clearInterval(timer);
+  }, [club]);
 
   return (
     <div className="flex h-screen overflow-hidden bg-muted/40">
@@ -57,7 +71,12 @@ export function Layout({ children }: { children: React.ReactNode }) {
                     : "text-white/70 hover:bg-white/10 hover:text-white"
                 }`}>
                   <Icon className="h-4 w-4 flex-shrink-0" />
-                  {item.label}
+                  <span className="flex-1">{item.label}</span>
+                  {item.inbox && unread > 0 && (
+                    <span className="bg-red-500 text-white text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
                 </div>
               </Link>
             );

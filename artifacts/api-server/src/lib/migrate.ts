@@ -748,6 +748,20 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
   // cancel_fee_pct: cancellation fee % always withheld (must be >= platform_fee_pct, default 5).
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_fee_pct INT NOT NULL DEFAULT 5");
+  // club_inbox_notifications: system → club portal event feed (new bookings, cancellations, etc.)
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_inbox_notifications (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL,
+      type       VARCHAR(50) NOT NULL DEFAULT 'info',
+      title      VARCHAR(255) NOT NULL,
+      body       TEXT NOT NULL,
+      meta       TEXT,
+      read_at    TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_inbox_club ON club_inbox_notifications (club_id, created_at DESC)");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

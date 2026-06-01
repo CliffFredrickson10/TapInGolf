@@ -6,7 +6,6 @@ import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment } from "../lib/stitch";
-import { sendCancellationNotificationEmail } from "../lib/otp";
 
 const router: IRouter = Router();
 
@@ -828,10 +827,10 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
     }
   });
 
-  // Fetch club details for the response + email notification
+  // Fetch club details for the response + portal inbox notification
   const club = booking.portal_slot_id
     ? await row<any>(
-        `SELECT c.name AS club_name, c.email AS club_email,
+        `SELECT c.id AS club_id, c.name AS club_name,
                 c.cancel_contact_email, c.cancel_contact_phone, c.cancel_fee_pct,
                 pts.date AS tee_date, pts.tee_time
          FROM portal_tee_slots pts
@@ -841,23 +840,29 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
       )
     : null;
 
-  // Fire cancellation email to the club — non-blocking, never delays the response
-  if (club?.club_email) {
-    sendCancellationNotificationEmail(club.club_email, {
-      booking_ref:   booking.booking_ref,
-      golfer_name:   booking.golfer_name,
-      golfer_email:  booking.golfer_email,
-      golfer_phone:  booking.golfer_phone ?? null,
-      club_name:     club.club_name,
-      tee_date:      club.tee_date ?? "—",
-      tee_time:      club.tee_time ?? "—",
-      players:       parseInt(booking.players, 10) || 1,
-      total_amount:  parseFloat(booking.total_amount ?? 0),
-      cancel_fee_pct: parseInt(club.cancel_fee_pct ?? 5, 10),
-      cancelled_at:  cancelledAt,
-    }).catch((err: unknown) => {
-      // Log but never surface email errors to the golfer
-      console.error("[cancel] Failed to send club notification email:", err);
+  // Write a portal inbox notification for the club — non-blocking
+  if (club?.club_id) {
+    const players = parseInt(booking.players, 10) || 1;
+    const feePct  = parseInt(club.cancel_fee_pct ?? 5, 10);
+    const total   = parseFloat(booking.total_amount ?? 0);
+    const refund  = +(total * (1 - feePct / 100)).toFixed(2);
+    const title   = `Booking Cancelled — ${booking.booking_ref}`;
+    const body    = [
+      `${booking.golfer_name} (${booking.golfer_email}) cancelled their booking.`,
+      `Tee time: ${club.tee_date ?? "—"} at ${club.tee_time ?? "—"} · ${players} player${players !== 1 ? "s" : ""}.`,
+      `Cancellation fee: ${feePct}% · Refund owed: R${refund.toFixed(2)}.`,
+    ].join("\n");
+    exec(
+      "INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, ?, ?, ?, ?)",
+      [
+        club.club_id,
+        "cancellation",
+        title,
+        body,
+        JSON.stringify({ booking_ref: booking.booking_ref, golfer_name: booking.golfer_name, golfer_email: booking.golfer_email, golfer_phone: booking.golfer_phone ?? null, tee_date: club.tee_date, tee_time: club.tee_time, players, total_amount: total, cancel_fee_pct: feePct, refund_amount: refund }),
+      ]
+    ).catch((err: unknown) => {
+      console.error("[cancel] Failed to write portal inbox notification:", err);
     });
   }
 

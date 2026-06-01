@@ -354,6 +354,12 @@ export default function BookingDetailScreen() {
                 <Ionicons name="open-outline" size={16} color={colors.mutedForeground} />
               </TouchableOpacity>
             )}
+            {(booking.club_latitude || booking.club_address) && (
+              <Text style={[styles.directionsDisclaimer, { color: colors.mutedForeground }]}>
+                Coordinates may be inaccurate. TapIn Golf is not responsible for incorrect navigation — always confirm
+                you're heading to the correct location.
+              </Text>
+            )}
             {booking.club_phone && (
               <TouchableOpacity
                 style={[styles.contactRow, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "33" }]}
@@ -520,4 +526,5 @@ const styles = StyleSheet.create({
   contactIcon: { width: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center" },
   contactLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   contactSub: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 1 },
+  directionsDisclaimer: { fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16, marginTop: 8, marginBottom: 2 },
 });

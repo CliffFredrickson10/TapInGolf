@@ -74,12 +74,19 @@ export default function TermsScreen() {
           booking details and for any applicable club cancellation policies.
         </Section>
 
-        <Section title="6. Account Termination" colors={colors}>
+        <Section title="6. Directions & Navigation" colors={colors}>
+          The "Get Directions" feature and any map coordinates, addresses, or routes shown in the app are provided for
+          convenience only and may be inaccurate, outdated, or incomplete. TapIn Golf cannot be held responsible for
+          incorrect coordinates or navigation. You are always responsible for confirming that your navigation is taking
+          you to the correct location, and for travelling safely and lawfully.
+        </Section>
+
+        <Section title="7. Account Termination" colors={colors}>
           We reserve the right to suspend or terminate any account that violates these Terms or the Community Guidelines,
           including the zero-tolerance policy above.
         </Section>
 
-        <Section title="7. Contact" colors={colors}>
+        <Section title="8. Contact" colors={colors}>
           Questions about these Terms? Contact us at support@tapingolf.co.za.
         </Section>
 

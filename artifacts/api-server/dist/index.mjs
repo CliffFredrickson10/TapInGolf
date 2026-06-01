@@ -58717,8 +58717,8 @@ router4.post("/bookings", async (req, res) => {
     if (payment_method !== "stitch") {
       await clientQuery(
         client,
-        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
-        [bookingId, user.id]
+        "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
+        [payment_method, bookingId, user.id]
       );
     }
     await clientQuery(
@@ -58858,7 +58858,7 @@ router4.post("/bookings/:id/pay", async (req, res) => {
        WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
       [membership.id]
     );
-    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
     res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
     return;
   }
@@ -58870,7 +58870,7 @@ router4.post("/bookings/:id/pay", async (req, res) => {
       return;
     }
     await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [amount, user.id]);
-    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    await exec("UPDATE booking_players SET paid = 1, payment_method = 'wallet' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
     res.json({ success: true, method: "wallet", amount, booking_id: id });
     return;
   }
@@ -59046,14 +59046,14 @@ router4.post("/stitch/webhook", async (req, res) => {
       const userId = parseInt(externalRef.split("-player-")[1] ?? "0", 10);
       if (userId) {
         await run(
-          "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
+          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
           [bookingId, userId]
         );
       }
     } else {
       await run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
       await run(
-        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+        "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
         [bookingId, bookingId]
       );
       fireInvoiceEmail(bookingId).catch(() => {
@@ -59925,6 +59925,7 @@ async function fetchAffectedPlayers(clubId, date, fromTime) {
        u.id, u.name, u.email, u.push_token,
        b.id AS booking_id,
        b.total_amount, b.my_amount, b.split_bill,
+       b.payment_method AS booking_payment_method,
        pts.tee_time AS time,
        (SELECT bp.amount FROM booking_players bp
          WHERE bp.booking_id = b.id AND bp.user_id = u.id LIMIT 1) AS bp_amount
@@ -59933,7 +59934,7 @@ async function fetchAffectedPlayers(clubId, date, fromTime) {
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      WHERE pts.club_id = ?
        AND pts.date = ?
-       AND b.status IN ('confirmed','pending')
+       AND b.status = 'confirmed'
        ${timeFilter}
      ORDER BY pts.tee_time, u.name`,
     creatorsParams
@@ -59945,40 +59946,51 @@ async function fetchAffectedPlayers(clubId, date, fromTime) {
        u.id, u.name, u.email, u.push_token,
        b.id AS booking_id,
        bp.amount AS voucher_value,
+       bp.payment_method AS co_payment_method,
        pts.tee_time AS time
      FROM bookings b
      JOIN booking_players bp
        ON bp.booking_id = b.id
        AND bp.user_id IS NOT NULL
        AND bp.user_id != b.user_id
+       AND bp.paid = 1
      JOIN users u ON u.id = bp.user_id
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      WHERE pts.club_id = ?
        AND pts.date = ?
        AND b.split_bill = 1
-       AND b.status IN ('confirmed','pending')
+       AND b.status = 'confirmed'
        ${timeFilter}
      ORDER BY pts.tee_time, u.name`,
     coParams
   );
-  const creatorRows = creators.map((r) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    push_token: r.push_token ?? null,
-    booking_id: r.booking_id,
-    time: String(r.time).slice(0, 5),
-    voucher_value: r.bp_amount != null ? parseFloat(r.bp_amount) : r.split_bill ? parseFloat(r.my_amount ?? 0) : parseFloat(r.total_amount ?? 0)
-  }));
-  const coPlayerRows = coPlayers.map((r) => ({
-    id: r.id,
-    name: r.name,
-    email: r.email,
-    push_token: r.push_token ?? null,
-    booking_id: r.booking_id,
-    time: String(r.time).slice(0, 5),
-    voucher_value: r.voucher_value != null ? parseFloat(r.voucher_value) : null
-  }));
+  const creatorRows = creators.map((r) => {
+    const isPrepaid = r.booking_payment_method === "prepaid";
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      push_token: r.push_token ?? null,
+      booking_id: r.booking_id,
+      time: String(r.time).slice(0, 5),
+      payment_method: r.booking_payment_method ?? null,
+      // Prepaid: no monetary value (round is the compensation); others: actual amount paid
+      voucher_value: isPrepaid ? null : r.bp_amount != null ? parseFloat(r.bp_amount) : r.split_bill ? parseFloat(r.my_amount ?? 0) : parseFloat(r.total_amount ?? 0)
+    };
+  });
+  const coPlayerRows = coPlayers.map((r) => {
+    const isPrepaid = r.co_payment_method === "prepaid";
+    return {
+      id: r.id,
+      name: r.name,
+      email: r.email,
+      push_token: r.push_token ?? null,
+      booking_id: r.booking_id,
+      time: String(r.time).slice(0, 5),
+      payment_method: r.co_payment_method ?? null,
+      voucher_value: isPrepaid ? null : r.voucher_value != null ? parseFloat(r.voucher_value) : null
+    };
+  });
   const all = [...creatorRows, ...coPlayerRows];
   const seen = /* @__PURE__ */ new Map();
   for (const p of all) {
@@ -60034,44 +60046,103 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
   const batchId = batchRow.id;
   const issued = [];
   for (const recipient of recipients) {
-    const code = await ensureUniqueCode(club.name, recipient.id);
-    await exec(
-      `INSERT INTO cancellation_vouchers
-         (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    const isPrepaid = recipient.payment_method === "prepaid";
+    if (isPrepaid) {
+      await exec(
+        `UPDATE club_members
+           SET prepaid_rounds_used = GREATEST(0, prepaid_rounds_used - 1)
+         WHERE club_id = ? AND user_id = ? AND status = 'active'`,
+        [clubId, recipient.id]
+      );
+      await exec(
+        `INSERT INTO cancellation_vouchers
+           (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+        [
+          `PR-${club.name.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "X")}-${recipient.id}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          batchId,
+          clubId,
+          recipient.id,
+          recipient.booking_id ?? null,
+          String(reason).trim()
+        ]
+      );
+      issued.push({ userId: recipient.id, name: recipient.name, code: null, voucher_value: null, prepaid_rollback: true });
+      const notifTitle = `Prepaid round returned \u2014 ${club.name}`;
+      const notifBody = `Your tee time on ${dateParam} was cancelled. Your prepaid round has been returned to your membership balance.`;
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+        code: null,
+        club_id: clubId,
+        batch_id: batchId,
+        value_rands: null
+      });
+      if (recipient.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{
+          to: recipient.push_token,
+          sound: "default",
+          title: notifTitle,
+          body: notifBody,
+          data: { type: "prepaid_rollback", club_id: clubId }
+        }]);
+      }
+    } else {
+      const code = await ensureUniqueCode(club.name, recipient.id);
+      await exec(
+        `INSERT INTO cancellation_vouchers
+           (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          code,
+          batchId,
+          clubId,
+          recipient.id,
+          recipient.booking_id ?? null,
+          String(reason).trim(),
+          recipient.voucher_value ?? null,
+          expiresAt
+        ]
+      );
+      issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value, prepaid_rollback: false });
+      const notifTitle = `Voucher from ${club.name}`;
+      const valueStr = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
+      const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
+      const notifBody = `Your tee time was cancelled${valueStr ? ` \u2014 here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code,
-        batchId,
-        clubId,
-        recipient.id,
-        recipient.booking_id ?? null,
-        String(reason).trim(),
-        recipient.voucher_value ?? null,
-        expiresAt
-      ]
-    );
-    issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value });
-    const notifTitle = `Voucher from ${club.name}`;
-    const valueStr = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
-    const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
-    const notifBody = `Your tee time was cancelled${valueStr ? ` \u2014 here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
-    saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
-      code,
-      club_id: clubId,
-      batch_id: batchId,
-      value_rands: recipient.voucher_value ?? null
-    });
-    if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-      sendPushNotifications([{
-        to: recipient.push_token,
-        sound: "default",
-        title: notifTitle,
-        body: notifBody,
-        data: { type: "cancellation_voucher", code, club_id: clubId }
-      }]);
+        club_id: clubId,
+        batch_id: batchId,
+        value_rands: recipient.voucher_value ?? null
+      });
+      if (recipient.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{
+          to: recipient.push_token,
+          sound: "default",
+          title: notifTitle,
+          body: notifBody,
+          data: { type: "cancellation_voucher", code, club_id: clubId }
+        }]);
+      }
     }
   }
-  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued });
+  const voucherCount = issued.filter((i) => !i.prepaid_rollback).length;
+  const rollbackCount = issued.filter((i) => i.prepaid_rollback).length;
+  const slotTimeFilter = fromTime ? "AND tee_time >= ?" : "";
+  const slotParams = fromTime ? [clubId, dateParam, fromTime] : [clubId, dateParam];
+  await exec(
+    `UPDATE portal_tee_slots SET is_active = 0
+     WHERE club_id = ? AND date = ? ${slotTimeFilter}`,
+    slotParams
+  );
+  await exec(
+    `UPDATE bookings SET status = 'cancelled'
+     WHERE status = 'pending'
+       AND portal_slot_id IN (
+         SELECT id FROM portal_tee_slots
+         WHERE club_id = ? AND date = ? ${slotTimeFilter}
+       )`,
+    slotParams
+  );
+  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount, slots_closed: true });
 });
 router9.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -64924,6 +64995,7 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_canc_voucher_batch_club ON cancellation_voucher_batches (club_id, created_at DESC)");
   await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS from_time TIME");
   await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
+  await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
 }
 var SEED_REVIEWS = [
   {

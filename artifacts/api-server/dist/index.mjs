@@ -56762,6 +56762,110 @@ function invoiceHtml(booking, clubName, vatPct) {
 </body>
 </html>`;
 }
+async function sendCancellationNotificationEmail(clubEmail, booking) {
+  const feePct = booking.cancel_fee_pct ?? 5;
+  const feeAmount = Math.round(booking.total_amount * feePct / 100 * 100) / 100;
+  const netRefund = Math.round((booking.total_amount - feeAmount) * 100) / 100;
+  const subject = `Booking Cancelled \u2014 ${booking.booking_ref} | ${booking.club_name}`;
+  const text = [
+    `A booking at ${booking.club_name} has been cancelled.`,
+    ``,
+    `Booking Reference : ${booking.booking_ref}`,
+    `Golfer            : ${booking.golfer_name} <${booking.golfer_email}>`,
+    booking.golfer_phone ? `Phone             : ${booking.golfer_phone}` : null,
+    `Tee Date          : ${booking.tee_date}`,
+    `Tee Time          : ${booking.tee_time}`,
+    `Players           : ${booking.players}`,
+    `Booking Total     : R ${booking.total_amount.toFixed(2)}`,
+    `Cancellation Fee  : ${feePct}% (R ${feeAmount.toFixed(2)})`,
+    `Golfer Refund     : R ${netRefund.toFixed(2)}`,
+    ``,
+    `Cancelled at      : ${new Date(booking.cancelled_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}`,
+    ``,
+    `Please process the golfer's refund according to your cancellation policy.`,
+    `TapIn Golf \u2014 tapingolf.co.za`
+  ].filter((l) => l !== null).join("\n");
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Booking Cancelled \u2014 ${booking.booking_ref}</title></head>
+<body style="margin:0;padding:40px 24px;font-family:Arial,sans-serif;color:#111827;background:#f9fafb">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+    <div style="background:#991b1b;color:#fff;padding:28px 36px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1.5px;opacity:0.8;margin-bottom:4px">TapIn Golf</div>
+        <div style="font-size:22px;font-weight:800">Booking Cancelled</div>
+      </div>
+      <div style="background:#fff;color:#991b1b;padding:6px 16px;border-radius:20px;font-weight:700;font-size:14px;font-family:monospace">
+        ${booking.booking_ref}
+      </div>
+    </div>
+
+    <div style="padding:32px 36px">
+      <p style="margin:0 0 24px;color:#6b7280;font-size:14px;line-height:1.6">
+        A booking at <strong style="color:#111827">${booking.club_name}</strong> has been cancelled by the golfer.
+        Please process the applicable refund according to your cancellation policy.
+      </p>
+
+      <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:10px;padding:20px 24px;margin-bottom:24px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#991b1b;margin-bottom:14px">Golfer Details</div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:14px">
+          <span style="color:#6b7280">Name</span>
+          <span style="font-weight:600">${booking.golfer_name}</span>
+          <span style="color:#6b7280">Email</span>
+          <span><a href="mailto:${booking.golfer_email}" style="color:#1a5c38">${booking.golfer_email}</a></span>
+          ${booking.golfer_phone ? `<span style="color:#6b7280">Phone</span><span>${booking.golfer_phone}</span>` : ""}
+        </div>
+      </div>
+
+      <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:20px 24px;margin-bottom:24px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:14px">Booking Details</div>
+        <div style="display:grid;grid-template-columns:140px 1fr;gap:6px 12px;font-size:14px">
+          <span style="color:#6b7280">Date</span>        <span style="font-weight:600">${booking.tee_date}</span>
+          <span style="color:#6b7280">Tee Time</span>    <span style="font-weight:600">${booking.tee_time}</span>
+          <span style="color:#6b7280">Players</span>     <span style="font-weight:600">${booking.players}</span>
+          <span style="color:#6b7280">Cancelled At</span><span>${new Date(booking.cancelled_at).toLocaleString("en-ZA", { timeZone: "Africa/Johannesburg", day: "2-digit", month: "long", year: "numeric", hour: "2-digit", minute: "2-digit" })}</span>
+        </div>
+      </div>
+
+      <div style="border:2px solid #e5e7eb;border-radius:10px;overflow:hidden">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;padding:12px 20px;background:#f9fafb;border-bottom:1px solid #e5e7eb">
+          Cancellation Financials
+        </div>
+        <div style="padding:16px 20px;display:grid;grid-template-columns:1fr auto;gap:6px 16px;font-size:14px">
+          <span style="color:#6b7280">Booking Total</span>
+          <span style="text-align:right;font-weight:600">R ${booking.total_amount.toFixed(2)}</span>
+          <span style="color:#6b7280">Cancellation Fee (${feePct}%)</span>
+          <span style="text-align:right;color:#991b1b;font-weight:600">\u2212 R ${feeAmount.toFixed(2)}</span>
+        </div>
+        <div style="padding:12px 20px;background:#f0fdf4;border-top:2px solid #bbf7d0;display:grid;grid-template-columns:1fr auto">
+          <span style="font-weight:700;font-size:15px;color:#166534">Refund to Golfer</span>
+          <span style="font-weight:800;font-size:16px;color:#166534;text-align:right">R ${netRefund.toFixed(2)}</span>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:20px 36px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:12px">
+      TapIn Golf \xB7 tapingolf.co.za \xB7 This notification was sent automatically when the golfer cancelled their booking.
+    </div>
+  </div>
+</body>
+</html>`;
+  if (EMAIL_DEV_MODE()) {
+    logger.info(
+      { clubEmail, booking_ref: booking.booking_ref, golfer: booking.golfer_email },
+      "[DEV] Cancellation notification \u2014 no SMTP credentials configured"
+    );
+    return { dev: true };
+  }
+  const transporter = nodemailer.createTransport({
+    host: SMTP_HOST(),
+    port: SMTP_PORT(),
+    secure: SMTP_PORT() === 465,
+    auth: { user: SMTP_USER(), pass: SMTP_PASS() }
+  });
+  await transporter.sendMail({ from: SMTP_FROM(), to: clubEmail, subject, text, html });
+  return {};
+}
 async function sendInvoiceEmail(booking, clubName) {
   const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
   const vatPct = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
@@ -58638,13 +58742,18 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
   const booking = await row(
-    "SELECT id, players, portal_slot_id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
+    `SELECT b.id, b.booking_ref, b.players, b.portal_slot_id, b.total_amount,
+            u.name AS golfer_name, u.email AS golfer_email, u.phone AS golfer_phone
+     FROM bookings b
+     JOIN users u ON u.id = b.user_id
+     WHERE b.id = ? AND b.user_id = ? AND b.status = 'confirmed'`,
     [id, user.id]
   );
   if (!booking) {
     res.status(404).json({ message: "Booking not found or cannot be cancelled" });
     return;
   }
+  const cancelledAt = (/* @__PURE__ */ new Date()).toISOString();
   await withTransaction(async (client) => {
     await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
     if (booking.portal_slot_id) {
@@ -58656,12 +58765,31 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
     }
   });
   const club = booking.portal_slot_id ? await row(
-    `SELECT c.cancel_contact_email, c.cancel_contact_phone
+    `SELECT c.name AS club_name, c.email AS club_email,
+                c.cancel_contact_email, c.cancel_contact_phone, c.cancel_fee_pct,
+                pts.date AS tee_date, pts.tee_time
          FROM portal_tee_slots pts
          JOIN clubs c ON c.id = pts.club_id
          WHERE pts.id = ?`,
     [booking.portal_slot_id]
   ) : null;
+  if (club?.club_email) {
+    sendCancellationNotificationEmail(club.club_email, {
+      booking_ref: booking.booking_ref,
+      golfer_name: booking.golfer_name,
+      golfer_email: booking.golfer_email,
+      golfer_phone: booking.golfer_phone ?? null,
+      club_name: club.club_name,
+      tee_date: club.tee_date ?? "\u2014",
+      tee_time: club.tee_time ?? "\u2014",
+      players: parseInt(booking.players, 10) || 1,
+      total_amount: parseFloat(booking.total_amount ?? 0),
+      cancel_fee_pct: parseInt(club.cancel_fee_pct ?? 5, 10),
+      cancelled_at: cancelledAt
+    }).catch((err) => {
+      console.error("[cancel] Failed to send club notification email:", err);
+    });
+  }
   res.json({
     success: true,
     contact_email: club?.cancel_contact_email ?? null,

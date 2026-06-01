@@ -6,6 +6,7 @@ import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment } from "../lib/stitch";
+import { sendCancellationNotificationEmail } from "../lib/otp";
 
 const router: IRouter = Router();
 
@@ -801,7 +802,11 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
   const id = parseInt(rawId, 10);
 
   const booking = await row<any>(
-    "SELECT id, players, portal_slot_id FROM bookings WHERE id = ? AND user_id = ? AND status = 'confirmed'",
+    `SELECT b.id, b.booking_ref, b.players, b.portal_slot_id, b.total_amount,
+            u.name AS golfer_name, u.email AS golfer_email, u.phone AS golfer_phone
+     FROM bookings b
+     JOIN users u ON u.id = b.user_id
+     WHERE b.id = ? AND b.user_id = ? AND b.status = 'confirmed'`,
     [id, user.id]
   );
 
@@ -809,6 +814,8 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
     res.status(404).json({ message: "Booking not found or cannot be cancelled" });
     return;
   }
+
+  const cancelledAt = new Date().toISOString();
 
   await withTransaction(async (client) => {
     await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
@@ -820,16 +827,40 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
       );
     }
   });
-  // Return club contact details so the golfer knows where to send refund requests.
+
+  // Fetch club details for the response + email notification
   const club = booking.portal_slot_id
     ? await row<any>(
-        `SELECT c.cancel_contact_email, c.cancel_contact_phone
+        `SELECT c.name AS club_name, c.email AS club_email,
+                c.cancel_contact_email, c.cancel_contact_phone, c.cancel_fee_pct,
+                pts.date AS tee_date, pts.tee_time
          FROM portal_tee_slots pts
          JOIN clubs c ON c.id = pts.club_id
          WHERE pts.id = ?`,
         [booking.portal_slot_id]
       )
     : null;
+
+  // Fire cancellation email to the club — non-blocking, never delays the response
+  if (club?.club_email) {
+    sendCancellationNotificationEmail(club.club_email, {
+      booking_ref:   booking.booking_ref,
+      golfer_name:   booking.golfer_name,
+      golfer_email:  booking.golfer_email,
+      golfer_phone:  booking.golfer_phone ?? null,
+      club_name:     club.club_name,
+      tee_date:      club.tee_date ?? "—",
+      tee_time:      club.tee_time ?? "—",
+      players:       parseInt(booking.players, 10) || 1,
+      total_amount:  parseFloat(booking.total_amount ?? 0),
+      cancel_fee_pct: parseInt(club.cancel_fee_pct ?? 5, 10),
+      cancelled_at:  cancelledAt,
+    }).catch((err: unknown) => {
+      // Log but never surface email errors to the golfer
+      console.error("[cancel] Failed to send club notification email:", err);
+    });
+  }
+
   res.json({
     success: true,
     contact_email: club?.cancel_contact_email ?? null,

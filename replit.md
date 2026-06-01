@@ -35,32 +35,39 @@ A full-featured golf booking platform for Android and iOS — book tee times, ma
   - `src/lib/pg.ts` — PostgreSQL adapter
   - `src/lib/auth.ts` — Token generation/verification
   - `src/lib/migrate.ts` — Schema migrations (37 tables) + seed data
-  - `src/lib/stitch.ts` — Stitch Money API client (OAuth token + GraphQL payment initiation)
+  - `src/lib/stitch.ts` — Stitch Express API client (REST: `POST /api/v1/token`, `POST /api/v1/payment-links`, `GET /api/v1/payment/{id}`, `POST /api/v1/webhook`)
 
 ## Stitch Payment Integration
 
-Stitch replaces PayFast/Google Pay/Apple Pay. Flow:
+Uses the **Stitch Express API** (https://express.stitch.money/api-docs) — a REST payment-gateway API, NOT the older OAuth/GraphQL Payins API. The credentials in Secrets are Express credentials. Stitch replaces PayFast/Google Pay/Apple Pay. Flow:
 1. User selects "Stitch" at checkout → app calls `POST /bookings` or `POST /payments/wallet/topup-url`
-2. API calls Stitch GraphQL → gets a hosted payment URL
-3. App opens URL in WebView; user pays via Instant EFT or card
+2. API gets a 15-min Bearer token (`POST /api/v1/token`), then creates a hosted payment link (`POST /api/v1/payment-links`) and appends `?redirect_url=`
+3. App opens the link in WebView; user pays via Instant EFT or card
 4. Stitch redirects to `https://{host}/booking/success` → WebView catches it
-5. Stitch POSTs webhook to `POST /api/stitch/webhook` → server confirms payment
+5. Stitch POSTs a Svix-signed `payment.paid` webhook to `POST /api/stitch/webhook` → server verifies the signature, fetches the payment by id to resolve our `merchantReference`, and confirms the booking/top-up
+
+**Amounts are in South African cents** at the Express API boundary (R50.00 = 5000, minimum 100 = R1.00). The app/DB still work in Rand; `createStitchPayment` converts Rand → cents internally.
+
+`merchantReference` scheme: `<bookingId>` | `wallet-<topupId>` | `<bookingId>-player-<userId>`.
 
 ### Required env vars (set in Secrets)
 
 | Secret | Description |
 |---|---|
-| `STITCH_CLIENT_ID` | From Stitch dashboard (sandbox or live) |
-| `STITCH_CLIENT_SECRET` | From Stitch dashboard |
-| `STITCH_BENEFICIARY_ACCOUNT` | Bank account number to receive funds |
-| `STITCH_BENEFICIARY_BANK_ID` | e.g. `fnb`, `standard_bank`, `absa`, `nedbank`, `capitec` |
-| `STITCH_BENEFICIARY_NAME` | Name on the receiving bank account |
-| `STITCH_BENEFICIARY_ACCOUNT_TYPE` | `current` or `savings` (default: `current`) |
+| `STITCH_CLIENT_ID` | Stitch Express client id (test or live) |
+| `STITCH_CLIENT_SECRET` | Stitch Express client secret |
+| `STITCH_WEBHOOK_SECRET` | Svix signing secret returned when the webhook is registered. Optional but recommended — when set, inbound webhook signatures are verified; when unset, webhooks are processed unsigned. |
 
-### Stitch webhook URL (register in Stitch dashboard)
+> Beneficiary secrets (`STITCH_BENEFICIARY_*`) are **no longer used** by the Express integration — Express pays out to the account configured on the Stitch Express dashboard.
+
+### Webhook registration (per environment, one-time)
+
+Webhooks are registered via the API (`POST /api/v1/webhook`), not the dashboard. Registration returns the Svix signing secret **once** — store it as `STITCH_WEBHOOK_SECRET` for that environment. Each endpoint URL gets its own secret, so register the dev URL for on-device dev testing and the production URL after deploying:
 ```
-https://{your-domain}/api/stitch/webhook
+dev:  https://{REPLIT_DEV_DOMAIN}/api/stitch/webhook
+prod: https://{your-domain}/api/stitch/webhook   (e.g. tapingolf.replit.app)
 ```
+The mobile app points at the dev API (`EXPO_PUBLIC_DOMAIN=$REPLIT_DEV_DOMAIN`); the dev domain rotates on Repl restart, so re-register if it changes.
 
 ## MySQL — IMPORTANT
 

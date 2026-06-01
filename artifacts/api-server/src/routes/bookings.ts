@@ -5,10 +5,44 @@ import { getUser } from "../lib/auth";
 import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
-import { createStitchPayment } from "../lib/stitch";
+import { createStitchPayment, getStitchPayment } from "../lib/stitch";
 import { sendInvoiceEmail } from "../lib/otp";
 
 const router: IRouter = Router();
+
+/**
+ * Verify a Svix webhook signature (used by Stitch Express) without the svix SDK.
+ * Signed content is `{id}.{timestamp}.{rawBody}`, HMAC-SHA256'd with the
+ * base64-decoded secret (the part after the `whsec_` prefix). The svix-signature
+ * header is a space-separated list of `v1,<base64sig>` entries.
+ */
+function verifySvixSignature(
+  secret: string,
+  svixId: string,
+  svixTimestamp: string,
+  svixSignature: string,
+  rawBody: string,
+): boolean {
+  if (!svixId || !svixTimestamp || !svixSignature) return false;
+
+  // Reject deliveries older than 5 minutes to limit replay attacks.
+  const ts = parseInt(svixTimestamp, 10);
+  if (Number.isNaN(ts) || Math.abs(Date.now() / 1000 - ts) > 300) return false;
+
+  const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const expected = crypto
+    .createHmac("sha256", key)
+    .update(`${svixId}.${svixTimestamp}.${rawBody}`)
+    .digest("base64");
+  const expectedBuf = Buffer.from(expected);
+
+  return svixSignature.split(" ").some((part) => {
+    const [version, sig] = part.split(",");
+    if (version !== "v1" || !sig) return false;
+    const sigBuf = Buffer.from(sig);
+    return sigBuf.length === expectedBuf.length && crypto.timingSafeEqual(sigBuf, expectedBuf);
+  });
+}
 
 async function fireInvoiceEmail(bookingId: number): Promise<void> {
   try {
@@ -658,11 +692,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({
-        amount:               splitAmount,
-        payerReference:       `TapIn-${ref}`.slice(0, 20),
-        beneficiaryReference: ref.slice(0, 20),
-        externalReference:    String(bookingId),
-        redirectUrl:          `https://${host}/booking/success`,
+        amount:            splitAmount,
+        payerName:         user.name,
+        payerEmail:        user.email,
+        merchantReference: String(bookingId),
+        redirectUrl:       `https://${host}/booking/success`,
       });
       paymentUrl = pr.url;
     } catch (stitchErr: any) {
@@ -680,7 +714,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
       const isConfig = (stitchErr.message ?? "").includes("not configured");
       res.status(isConfig ? 503 : 502).json({
         message: isConfig
-          ? "Payment gateway not configured. Set STITCH_CLIENT_ID, STITCH_CLIENT_SECRET and beneficiary secrets."
+          ? "Payment gateway not configured. Set STITCH_CLIENT_ID and STITCH_CLIENT_SECRET."
           : "Failed to initiate payment. Please try again.",
       });
       return;
@@ -816,10 +850,10 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
   const host = req.get("host") ?? "";
   const pr = await createStitchPayment({
     amount,
-    payerReference:       `TapIn-${booking.booking_ref}`.slice(0, 20),
-    beneficiaryReference: booking.booking_ref.slice(0, 20),
-    externalReference:    `${id}-player-${user.id}`,
-    redirectUrl:          `https://${host}/booking/success`,
+    payerName:         user.name,
+    payerEmail:        user.email,
+    merchantReference: `${id}-player-${user.id}`,
+    redirectUrl:       `https://${host}/booking/success`,
   });
 
   res.json({ payment_url: pr.url, amount, booking_id: id });
@@ -921,21 +955,63 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
   });
 });
 
-// Stitch webhook — server-to-server payment status notification
+// Stitch Express webhook — server-to-server payment notification (via Svix).
+// Payload: { amount, id (payment id), status:"PAID", type, linkId, ... }. The
+// merchantReference (our identifier) is NOT in the payload, so we fetch the
+// payment by its id to resolve it. The raw-body parser for this route is mounted
+// in app.ts so Svix signature verification works.
 router.post("/stitch/webhook", async (req, res): Promise<void> => {
-  // Stitch sends JSON; the externalReference identifies what was paid
-  const body = req.body as Record<string, unknown>;
+  const raw: string = Buffer.isBuffer(req.body)
+    ? req.body.toString("utf8")
+    : JSON.stringify(req.body ?? {});
 
-  // Support both flat and nested payload shapes Stitch may send
-  const status: string =
+  const secret = process.env["STITCH_WEBHOOK_SECRET"];
+
+  if (secret) {
+    // Verify the Svix signature over the raw body before trusting the payload.
+    const ok = verifySvixSignature(
+      secret,
+      req.header("svix-id") ?? "",
+      req.header("svix-timestamp") ?? "",
+      req.header("svix-signature") ?? "",
+      raw,
+    );
+    if (!ok) {
+      res.status(400).send("Invalid signature");
+      return;
+    }
+  }
+
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(raw); } catch { body = {}; }
+
+  // Status: Express sends "PAID"; tolerate the legacy "completed" too.
+  const status: string = String(
     (body["status"] as string) ??
-    ((body["paymentInitiationRequest"] as any)?.status ?? "");
-  const externalRef: string =
+    ((body["paymentInitiationRequest"] as any)?.status ?? ""),
+  ).toUpperCase();
+
+  if (status !== "PAID" && status !== "COMPLETED") {
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  // Resolve our merchantReference. Express omits it from the event, so look it
+  // up by the payment id; fall back to any inline reference for safety.
+  let externalRef: string =
+    (body["merchantReference"] as string) ??
     (body["externalReference"] as string) ??
     ((body["paymentInitiationRequest"] as any)?.externalReference ?? "");
 
-  // Only act on completed payments
-  if ((status ?? "").toLowerCase() !== "completed") {
+  const paymentId = body["id"] as string | undefined;
+  if (!externalRef && paymentId) {
+    try {
+      const detail = await getStitchPayment(String(paymentId));
+      externalRef = detail?.merchantReference ?? "";
+    } catch { /* ignore — handled by the empty-ref guard below */ }
+  }
+
+  if (!externalRef) {
     res.status(200).json({ received: true });
     return;
   }
@@ -945,16 +1021,23 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     const topupId = parseInt(externalRef.split("-")[1] ?? "", 10);
     if (!isNaN(topupId)) {
       const topup = await row<any>(
-        "SELECT id, user_id, amount FROM wallet_topups WHERE id = ? AND status = 'pending'",
+        "SELECT id, user_id, amount FROM wallet_topups WHERE id = ?",
         [topupId]
       );
       if (topup) {
-        await run("UPDATE wallet_topups SET status = 'completed' WHERE id = ?", [topupId]);
-        const existing = await row<any>("SELECT id FROM wallets WHERE user_id = ?", [topup.user_id]);
-        if (existing) {
-          await run("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [topup.amount, topup.user_id]);
-        } else {
-          await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
+        // Idempotent: only the delivery that actually flips pending→completed
+        // credits the wallet, so duplicate/retried webhooks can't double-credit.
+        const claimed = await run(
+          "UPDATE wallet_topups SET status = 'completed' WHERE id = ? AND status = 'pending'",
+          [topupId]
+        );
+        if (claimed === 1) {
+          const existing = await row<any>("SELECT id FROM wallets WHERE user_id = ?", [topup.user_id]);
+          if (existing) {
+            await run("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [topup.amount, topup.user_id]);
+          } else {
+            await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
+          }
         }
       }
     }

@@ -80,19 +80,19 @@ router.post("/payments/wallet/topup-url", async (req, res): Promise<void> => {
     res.status(400).json({ message: "Amount must be between R1 and R10,000" }); return;
   }
 
-  const result = await exec(
+  // exec() returns the new row's id directly (it appends RETURNING * internally).
+  const topupId = await exec(
     "INSERT INTO wallet_topups (user_id, amount, status) VALUES (?, ?, 'pending')",
     [user.id, amount]
   );
-  const topupId = (result[0] as any).insertId as number;
   const host = req.get("host") ?? "";
 
   const pr = await createStitchPayment({
     amount,
-    payerReference:       "TapIn Wallet".slice(0, 20),
-    beneficiaryReference: `Wallet-${topupId}`.slice(0, 20),
-    externalReference:    `wallet-${topupId}`,
-    redirectUrl:          `https://${host}/booking/success`,
+    payerName:         user.name,
+    payerEmail:        user.email,
+    merchantReference: `wallet-${topupId}`,
+    redirectUrl:       `https://${host}/booking/success`,
   });
 
   res.json({ payment_url: pr.url, topup_id: topupId });

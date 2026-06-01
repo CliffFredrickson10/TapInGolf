@@ -58051,8 +58051,7 @@ async function saveUserNotification(userId, type, title, body, data = {}) {
 }
 
 // src/lib/stitch.ts
-var TOKEN_URL = "https://secure.stitch.money/connect/token";
-var GRAPH_URL = "https://api.stitch.money/graphql";
+var EXPRESS_BASE = "https://express.stitch.money";
 var _cachedToken = null;
 var _tokenExpiry = 0;
 async function getAccessToken() {
@@ -58062,92 +58061,107 @@ async function getAccessToken() {
   if (!clientId || !clientSecret) {
     throw new Error("Stitch credentials not configured (STITCH_CLIENT_ID / STITCH_CLIENT_SECRET)");
   }
-  const body = new URLSearchParams({
-    grant_type: "client_credentials",
-    client_id: clientId,
-    client_secret: clientSecret,
-    scope: "client_paymentrequest",
-    audience: "https://secure.stitch.money/connect/token"
-  });
-  const res = await fetch(TOKEN_URL, {
+  const res = await fetch(`${EXPRESS_BASE}/api/v1/token`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: body.toString()
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId, clientSecret, scope: "client_paymentrequest" })
   });
   if (!res.ok) {
     const text = await res.text();
     throw new Error(`Stitch token error ${res.status}: ${text}`);
   }
   const json = await res.json();
-  _cachedToken = json.access_token;
-  _tokenExpiry = Date.now() + json.expires_in * 1e3;
+  if (!json.success || !json.data?.accessToken) {
+    throw new Error(`Stitch token error: ${JSON.stringify(json)}`);
+  }
+  _cachedToken = json.data.accessToken;
+  _tokenExpiry = Date.now() + 15 * 60 * 1e3;
   return _cachedToken;
 }
-async function gql(query2, variables) {
+async function authedFetch(path3, init = {}) {
   const token = await getAccessToken();
-  const res = await fetch(GRAPH_URL, {
+  return fetch(`${EXPRESS_BASE}${path3}`, {
+    ...init,
+    headers: { ...init.headers ?? {}, Authorization: `Bearer ${token}` }
+  });
+}
+var _registeredRedirects = /* @__PURE__ */ new Set();
+async function ensureRedirectUrl(url) {
+  if (!url || _registeredRedirects.has(url)) return;
+  try {
+    const r = await authedFetch("/api/v1/redirect-urls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ redirectUrl: url })
+    });
+    if (r.ok || r.status >= 400 && r.status < 500) {
+      _registeredRedirects.add(url);
+    }
+  } catch {
+  }
+}
+async function createStitchPayment(params) {
+  const amountCents = Math.round(params.amount * 100);
+  if (amountCents < 100) {
+    throw new Error("Stitch minimum payment is R1.00 (100 cents)");
+  }
+  await ensureRedirectUrl(params.redirectUrl);
+  const payload = {
+    amount: amountCents,
+    payerName: params.payerName?.trim() || "TapIn Golfer",
+    merchantReference: params.merchantReference
+  };
+  if (params.payerEmail) payload["payerEmailAddress"] = params.payerEmail;
+  const res = await authedFetch("/api/v1/payment-links", {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
-    },
-    body: JSON.stringify({ query: query2, variables })
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
   });
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`Stitch GraphQL HTTP error ${res.status}: ${text}`);
+    throw new Error(`Stitch payment-link error ${res.status}: ${text}`);
   }
   const json = await res.json();
-  if (json.errors?.length) {
-    throw new Error(`Stitch GraphQL error: ${json.errors[0]?.message ?? JSON.stringify(json.errors)}`);
+  const payment = json.data?.payment;
+  if (!json.success || !payment?.link) {
+    throw new Error(`Stitch payment-link error: ${JSON.stringify(json)}`);
   }
-  return json.data;
+  const url = params.redirectUrl ? `${payment.link}?redirect_url=${encodeURIComponent(params.redirectUrl)}` : payment.link;
+  return { id: payment.id, url };
 }
-var CREATE_PAYMENT = `
-  mutation CreatePaymentRequest($input: ClientPaymentInitiationRequestInput!) {
-    clientPaymentInitiationRequestCreate(input: $input) {
-      paymentInitiationRequest {
-        id
-        url
-      }
-    }
+async function getStitchPayment(paymentId) {
+  const res = await authedFetch(`/api/v1/payment/${encodeURIComponent(paymentId)}`, { method: "GET" });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Stitch get-payment error ${res.status}: ${text}`);
   }
-`;
-async function createStitchPayment(params) {
-  const accountNumber = process.env["STITCH_BENEFICIARY_ACCOUNT"] ?? "";
-  const bankId = process.env["STITCH_BENEFICIARY_BANK_ID"] ?? "";
-  const name = process.env["STITCH_BENEFICIARY_NAME"] ?? "TapIn Golf";
-  const accountType = process.env["STITCH_BENEFICIARY_ACCOUNT_TYPE"] ?? "current";
-  if (!accountNumber || !bankId) {
-    throw new Error("Stitch beneficiary details not configured (STITCH_BENEFICIARY_ACCOUNT / STITCH_BENEFICIARY_BANK_ID)");
-  }
-  const data = await gql(CREATE_PAYMENT, {
-    input: {
-      amount: {
-        quantity: params.amount.toFixed(2),
-        currency: "ZAR"
-      },
-      payerReference: params.payerReference.slice(0, 20),
-      beneficiaryReference: params.beneficiaryReference.slice(0, 20),
-      externalReference: params.externalReference,
-      beneficiary: {
-        bankAccount: {
-          name,
-          bankId,
-          accountNumber,
-          accountType,
-          beneficiaryType: "private"
-        }
-      },
-      redirectUrl: params.redirectUrl
-    }
-  });
-  const pr = data.clientPaymentInitiationRequestCreate.paymentInitiationRequest;
-  return { id: pr.id, url: pr.url };
+  const json = await res.json();
+  const p = json?.data?.payment ?? json?.data ?? json ?? {};
+  return {
+    id: p.id,
+    status: p.status,
+    merchantReference: p.merchantReference ?? null,
+    amount: typeof p.amount === "number" ? p.amount : null
+  };
 }
 
 // src/routes/bookings.ts
 var router4 = (0, import_express4.Router)();
+function verifySvixSignature(secret, svixId, svixTimestamp, svixSignature, rawBody) {
+  if (!svixId || !svixTimestamp || !svixSignature) return false;
+  const ts = parseInt(svixTimestamp, 10);
+  if (Number.isNaN(ts) || Math.abs(Date.now() / 1e3 - ts) > 300) return false;
+  const key = Buffer.from(secret.replace(/^whsec_/, ""), "base64");
+  const expected = crypto4.createHmac("sha256", key).update(`${svixId}.${svixTimestamp}.${rawBody}`).digest("base64");
+  const expectedBuf = Buffer.from(expected);
+  return svixSignature.split(" ").some((part) => {
+    const [version, sig] = part.split(",");
+    if (version !== "v1" || !sig) return false;
+    const sigBuf = Buffer.from(sig);
+    return sigBuf.length === expectedBuf.length && crypto4.timingSafeEqual(sigBuf, expectedBuf);
+  });
+}
 async function fireInvoiceEmail(bookingId) {
   try {
     const b = await row(`
@@ -58723,9 +58737,9 @@ router4.post("/bookings", async (req, res) => {
     try {
       const pr = await createStitchPayment({
         amount: splitAmount,
-        payerReference: `TapIn-${ref}`.slice(0, 20),
-        beneficiaryReference: ref.slice(0, 20),
-        externalReference: String(bookingId),
+        payerName: user.name,
+        payerEmail: user.email,
+        merchantReference: String(bookingId),
         redirectUrl: `https://${host}/booking/success`
       });
       paymentUrl = pr.url;
@@ -58743,7 +58757,7 @@ router4.post("/bookings", async (req, res) => {
       }
       const isConfig = (stitchErr.message ?? "").includes("not configured");
       res.status(isConfig ? 503 : 502).json({
-        message: isConfig ? "Payment gateway not configured. Set STITCH_CLIENT_ID, STITCH_CLIENT_SECRET and beneficiary secrets." : "Failed to initiate payment. Please try again."
+        message: isConfig ? "Payment gateway not configured. Set STITCH_CLIENT_ID and STITCH_CLIENT_SECRET." : "Failed to initiate payment. Please try again."
       });
       return;
     }
@@ -58863,9 +58877,9 @@ router4.post("/bookings/:id/pay", async (req, res) => {
   const host = req.get("host") ?? "";
   const pr = await createStitchPayment({
     amount,
-    payerReference: `TapIn-${booking.booking_ref}`.slice(0, 20),
-    beneficiaryReference: booking.booking_ref.slice(0, 20),
-    externalReference: `${id}-player-${user.id}`,
+    payerName: user.name,
+    payerEmail: user.email,
+    merchantReference: `${id}-player-${user.id}`,
     redirectUrl: `https://${host}/booking/success`
   });
   res.json({ payment_url: pr.url, amount, booking_id: id });
@@ -58959,10 +58973,44 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
   });
 });
 router4.post("/stitch/webhook", async (req, res) => {
-  const body = req.body;
-  const status = body["status"] ?? (body["paymentInitiationRequest"]?.status ?? "");
-  const externalRef = body["externalReference"] ?? (body["paymentInitiationRequest"]?.externalReference ?? "");
-  if ((status ?? "").toLowerCase() !== "completed") {
+  const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : JSON.stringify(req.body ?? {});
+  const secret = process.env["STITCH_WEBHOOK_SECRET"];
+  if (secret) {
+    const ok = verifySvixSignature(
+      secret,
+      req.header("svix-id") ?? "",
+      req.header("svix-timestamp") ?? "",
+      req.header("svix-signature") ?? "",
+      raw
+    );
+    if (!ok) {
+      res.status(400).send("Invalid signature");
+      return;
+    }
+  }
+  let body;
+  try {
+    body = JSON.parse(raw);
+  } catch {
+    body = {};
+  }
+  const status = String(
+    body["status"] ?? (body["paymentInitiationRequest"]?.status ?? "")
+  ).toUpperCase();
+  if (status !== "PAID" && status !== "COMPLETED") {
+    res.status(200).json({ received: true });
+    return;
+  }
+  let externalRef = body["merchantReference"] ?? body["externalReference"] ?? (body["paymentInitiationRequest"]?.externalReference ?? "");
+  const paymentId = body["id"];
+  if (!externalRef && paymentId) {
+    try {
+      const detail = await getStitchPayment(String(paymentId));
+      externalRef = detail?.merchantReference ?? "";
+    } catch {
+    }
+  }
+  if (!externalRef) {
     res.status(200).json({ received: true });
     return;
   }
@@ -58970,16 +59018,21 @@ router4.post("/stitch/webhook", async (req, res) => {
     const topupId = parseInt(externalRef.split("-")[1] ?? "", 10);
     if (!isNaN(topupId)) {
       const topup = await row(
-        "SELECT id, user_id, amount FROM wallet_topups WHERE id = ? AND status = 'pending'",
+        "SELECT id, user_id, amount FROM wallet_topups WHERE id = ?",
         [topupId]
       );
       if (topup) {
-        await run("UPDATE wallet_topups SET status = 'completed' WHERE id = ?", [topupId]);
-        const existing = await row("SELECT id FROM wallets WHERE user_id = ?", [topup.user_id]);
-        if (existing) {
-          await run("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [topup.amount, topup.user_id]);
-        } else {
-          await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
+        const claimed = await run(
+          "UPDATE wallet_topups SET status = 'completed' WHERE id = ? AND status = 'pending'",
+          [topupId]
+        );
+        if (claimed === 1) {
+          const existing = await row("SELECT id FROM wallets WHERE user_id = ?", [topup.user_id]);
+          if (existing) {
+            await run("UPDATE wallets SET balance = balance + ? WHERE user_id = ?", [topup.amount, topup.user_id]);
+          } else {
+            await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
+          }
         }
       }
     }
@@ -62674,17 +62727,16 @@ router15.post("/payments/wallet/topup-url", async (req, res) => {
     res.status(400).json({ message: "Amount must be between R1 and R10,000" });
     return;
   }
-  const result = await exec(
+  const topupId = await exec(
     "INSERT INTO wallet_topups (user_id, amount, status) VALUES (?, ?, 'pending')",
     [user.id, amount]
   );
-  const topupId = result[0].insertId;
   const host = req.get("host") ?? "";
   const pr = await createStitchPayment({
     amount,
-    payerReference: "TapIn Wallet".slice(0, 20),
-    beneficiaryReference: `Wallet-${topupId}`.slice(0, 20),
-    externalReference: `wallet-${topupId}`,
+    payerName: user.name,
+    payerEmail: user.email,
+    merchantReference: `wallet-${topupId}`,
     redirectUrl: `https://${host}/booking/success`
   });
   res.json({ payment_url: pr.url, topup_id: topupId });
@@ -63719,6 +63771,7 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
+app.use("/api/stitch/webhook", import_express21.default.raw({ type: "*/*" }));
 app.use(import_express21.default.json());
 app.use(import_express21.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");

@@ -30,6 +30,10 @@ app.use(
   }),
 );
 app.use(cors());
+// Stitch Express webhooks are Svix-signed — the signature is computed over the
+// raw request bytes, so this route must receive the unparsed body. Mount the raw
+// parser BEFORE express.json() so the global JSON parser doesn't consume it.
+app.use("/api/stitch/webhook", express.raw({ type: "*/*" }));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 

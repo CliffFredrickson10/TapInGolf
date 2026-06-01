@@ -1251,7 +1251,7 @@ export default function Schedule() {
           )}
           {bookedSlots > 0 && (
             <button
-              onClick={() => navigate(`/cancellation-vouchers?date=${selectedDate}`)}
+              onClick={() => navigate(`/vouchers?tab=cancellation&date=${selectedDate}`)}
               className="shrink-0 flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 rounded-md px-3 py-1.5 transition-colors"
               title="Cancel bookings and issue vouchers for this day"
             >

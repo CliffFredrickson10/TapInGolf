@@ -1358,8 +1358,8 @@ export default function Schedule() {
                       {slot.kind === "blocked" && <span className="font-medium text-orange-500">Blocked</span>}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
                       {slot.kind === "booked" && (
-                        <span className="font-medium truncate leading-tight flex items-center gap-1 flex-wrap">
-                          <span className={`truncate ${slot.playerIndex > 0 ? "opacity-70 italic text-[11px]" : ""}`}>
+                        <span className="flex items-center justify-between w-full gap-1 min-w-0">
+                          <span className={`truncate leading-tight font-medium ${slot.playerIndex > 0 ? "opacity-70 italic text-[11px]" : ""}`}>
                             {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
                           </span>
                           <span className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.effectiveStatus] ?? ""}`}>

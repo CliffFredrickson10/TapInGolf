@@ -33,3 +33,17 @@ Note: env-var scoping (development/shared) does NOT strip global secret injectio
 tested by deleting a development env var and restarting; user secrets stayed absent
 until re-added as secrets. So adding a development-scoped env var is not what breaks
 global secret availability.
+
+## Stitch "Payment gateway not configured" keeps recurring
+Root cause (confirmed via viewEnvVars): STITCH_CLIENT_ID / STITCH_CLIENT_SECRET
+were NOT in the secrets store at all — `viewEnvVars({keys:[...]})` returned
+`false` for both — even though the session-start `<available_secrets>` block
+listed them (the snapshot is unreliable). STITCH_WEBHOOK_SECRET existed only as a
+**development-scoped env var**, not a global secret. Durable fix: store the two
+client creds as **Secrets** (global, persist across dev+prod) via
+`requestEnvVar({requestType:"secret", keys:["STITCH_CLIENT_ID","STITCH_CLIENT_SECRET"]})`,
+then restart api-server and verify via `/proc/<pid>/environ`. Heads-up for
+deploys: STITCH_WEBHOOK_SECRET being development-scoped means it won't reach the
+production deployment — re-register the prod webhook and store its secret too.
+**Why:** env vars (esp. development-scoped) are more fragile than secrets and the
+available-secrets snapshot can falsely show creds as present.

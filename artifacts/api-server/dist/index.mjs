@@ -61026,7 +61026,7 @@ router13.get("/portal/dashboard", requireClubAuth, async (req, res) => {
 router13.get("/portal/tee-times", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const { date, from, to } = req.query;
-  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code FROM portal_tee_slots WHERE club_id = ?";
+  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ?";
   const params = [club.id];
   if (date) {
     sql += " AND date = ?";
@@ -61046,7 +61046,8 @@ router13.get("/portal/tee-times", requireClubAuth, async (req, res) => {
     promotional_price: null,
     tee_start_type: r.tee_start_type ?? "1st Tee",
     crossover_enabled: false,
-    active: !!r.active
+    active: !!r.active,
+    blocked_slots: JSON.parse(r.blocked_slots ?? "[]")
   })));
 });
 router13.post("/portal/tee-times", requireClubAuth, async (req, res) => {
@@ -61082,15 +61083,17 @@ router13.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
     res.status(404).json({ message: "Tee time not found" });
     return;
   }
-  const { date, time, total_slots, active, session_type, tee_start_type, notes } = req.body ?? {};
+  const { date, time, total_slots, active, session_type, tee_start_type, notes, blocked_slots } = req.body ?? {};
   const normStart = tee_start_type != null ? normTeeStart(tee_start_type) : null;
+  const blockedJson = blocked_slots !== void 0 ? JSON.stringify(blocked_slots) : null;
   await exec(
     `UPDATE portal_tee_slots SET
       date = COALESCE(?, date), tee_time = COALESCE(?, tee_time),
       max_players = COALESCE(?, max_players), is_active = COALESCE(?, is_active),
       session_type = COALESCE(?, session_type),
       tee_start_type = COALESCE(?, tee_start_type),
-      notes = COALESCE(?, notes)
+      notes = COALESCE(?, notes),
+      blocked_slots = COALESCE(?, blocked_slots)
      WHERE id = ? AND club_id = ?`,
     [
       date ?? null,
@@ -61100,12 +61103,13 @@ router13.put("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
       session_type ?? null,
       normStart,
       notes ?? null,
+      blockedJson,
       ttId,
       club.id
     ]
   );
-  const updated = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [ttId]);
-  res.json({ ...updated, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!updated.active });
+  const updated = await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE id = ?", [ttId]);
+  res.json({ ...updated, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!updated.active, blocked_slots: JSON.parse(updated.blocked_slots ?? "[]") });
 });
 router13.delete("/portal/tee-times/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -63818,6 +63822,7 @@ async function createSchema() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS portal_slot_id INT REFERENCES portal_tee_slots(id)");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS chat_disabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP");
+  await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS blocked_slots TEXT DEFAULT '[]'");
   await query(`
     DO $$ BEGIN
       IF EXISTS (

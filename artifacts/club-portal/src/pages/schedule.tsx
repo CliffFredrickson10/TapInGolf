@@ -27,6 +27,7 @@ interface TeeTime {
   promotional_price: number | null;
   tee_start_type: "first_tee" | "two_tee" | "tenth_tee";
   crossover_enabled: boolean;
+  blocked_slots: number[];
 }
 
 interface Booking {
@@ -55,6 +56,7 @@ type SlotKind =
   | { kind: "open"; price: number }
   | { kind: "unavailable" }
   | { kind: "na" }
+  | { kind: "blocked"; slotIndex: number }
   // effectiveStatus: booking status for non-split bookings; per-player
   // "confirmed" / "pending" for split-bill bookings.
   | { kind: "booked"; booking: Booking; playerIndex: number; effectiveStatus: string };
@@ -101,12 +103,21 @@ function datesInRange(from: string, to: string): string[] {
 
 function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
   const COLS = 4;
+  const blocked = new Set(tt.blocked_slots ?? []);
   if (!tt.active) return Array.from({ length: COLS }, (_, i) => i < tt.total_slots ? { kind: "unavailable" } : { kind: "na" });
-  const slots: SlotKind[] = Array.from({ length: COLS }, (_, i) => i < tt.total_slots ? { kind: "open", price: tt.price } : { kind: "na" });
-  let idx = 0;
+  // Initialise: na past total_slots, individually blocked, otherwise open.
+  const slots: SlotKind[] = Array.from({ length: COLS }, (_, i) => {
+    if (i >= tt.total_slots) return { kind: "na" };
+    if (blocked.has(i)) return { kind: "blocked", slotIndex: i };
+    return { kind: "open", price: tt.price };
+  });
+  // Fill bookings into non-blocked open slots left-to-right.
+  let fillIdx = 0;
   for (const b of bookings) {
     if (b.status === "cancelled") continue;
-    for (let p = 0; p < b.players && idx < tt.total_slots; p++, idx++) {
+    for (let p = 0; p < b.players; p++) {
+      while (fillIdx < COLS && slots[fillIdx].kind !== "open") fillIdx++;
+      if (fillIdx >= COLS) break;
       // For split-bill bookings colour each slot by that player's individual paid flag.
       // For non-split bookings the whole booking status applies to every slot.
       let effectiveStatus = b.status;
@@ -115,7 +126,8 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
           ? "confirmed"
           : "pending";
       }
-      slots[idx] = { kind: "booked", booking: b, playerIndex: p, effectiveStatus };
+      slots[fillIdx] = { kind: "booked", booking: b, playerIndex: p, effectiveStatus };
+      fillIdx++;
     }
   }
   return slots;
@@ -136,6 +148,7 @@ const STATUS_LABEL: Record<string, string> = {
 const CELL_BG: Record<string, string> = {
   open: "bg-green-50 text-green-700",
   unavailable: "bg-red-50 text-red-500",
+  blocked: "bg-orange-50 text-orange-600 ring-1 ring-inset ring-orange-200",
   na: "bg-gray-50 text-gray-300",
   confirmed: "bg-green-100 text-green-800",
   pending: "bg-yellow-50 text-yellow-900 ring-1 ring-inset ring-yellow-300",
@@ -145,6 +158,7 @@ const CELL_BG: Record<string, string> = {
 function slotBg(s: SlotKind) {
   if (s.kind === "open") return CELL_BG.open;
   if (s.kind === "unavailable") return CELL_BG.unavailable;
+  if (s.kind === "blocked") return CELL_BG.blocked;
   if (s.kind === "na") return CELL_BG.na;
   return CELL_BG[s.effectiveStatus] ?? CELL_BG.pending;
 }
@@ -1135,6 +1149,21 @@ export default function Schedule() {
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
+  const handleBlockSlot = async (tt: TeeTime, slotIndex: number) => {
+    const current = tt.blocked_slots ?? [];
+    const isBlocked = current.includes(slotIndex);
+    const newBlocked = isBlocked ? current.filter(i => i !== slotIndex) : [...current, slotIndex];
+    // Optimistic update first so the UI feels instant.
+    setTeeTimes(p => p.map(t => t.id === tt.id ? { ...t, blocked_slots: newBlocked } : t));
+    try {
+      await api(`/api/portal/tee-times/${tt.id}`, { method: "PUT", body: JSON.stringify({ blocked_slots: newBlocked }) });
+    } catch (e: any) {
+      // Roll back on failure.
+      setTeeTimes(p => p.map(t => t.id === tt.id ? { ...t, blocked_slots: current } : t));
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
   // ── Booking actions ────────────────────────────────────────────────────────
 
   const updateBookingStatus = async (id: number, status: string) => {
@@ -1226,7 +1255,8 @@ export default function Schedule() {
         {[
           { color: "bg-green-100 border-green-200", label: "Confirmed" },
           { color: "bg-yellow-50 border-yellow-300 ring-1 ring-yellow-300", label: "Pending Payment" },
-          { color: "bg-green-50 border-green-200",  label: "Open" },
+          { color: "bg-green-50 border-green-200",    label: "Open" },
+          { color: "bg-orange-50 border-orange-200", label: "Blocked slot" },
           { color: "bg-red-50 border-red-200",       label: "Unavailable" },
           { color: "bg-gray-100 border-gray-200",    label: "N/A" },
         ].map(({ color, label }) => (
@@ -1300,9 +1330,22 @@ export default function Schedule() {
                   {/* Player cells */}
                   {slots.map((slot, i) => (
                     <div key={i}
-                      className={`px-3 py-2 border-l border-gray-100 text-xs flex items-center ${slotBg(slot)} ${slot.kind === "booked" ? "cursor-pointer hover:brightness-95 transition-all" : ""}`}
-                      onClick={() => slot.kind === "booked" && slot.playerIndex === 0 && (setSelBooking(slot.booking), setBookingOpen(true))}
-                      title={slot.kind === "booked" ? `Manage: ${slot.booking.booking_ref}` : undefined}
+                      className={`px-3 py-2 border-l border-gray-100 text-xs flex items-center transition-all
+                        ${slotBg(slot)}
+                        ${slot.kind === "booked" ? "cursor-pointer hover:brightness-95" : ""}
+                        ${slot.kind === "open" ? "cursor-pointer hover:brightness-95" : ""}
+                        ${slot.kind === "blocked" ? "cursor-pointer hover:brightness-95" : ""}`}
+                      onClick={() => {
+                        if (slot.kind === "booked" && slot.playerIndex === 0) { setSelBooking(slot.booking); setBookingOpen(true); }
+                        else if (slot.kind === "open") handleBlockSlot(tt, i);
+                        else if (slot.kind === "blocked") handleBlockSlot(tt, i);
+                      }}
+                      title={
+                        slot.kind === "booked" ? `Manage: ${slot.booking.booking_ref}` :
+                        slot.kind === "open" ? "Click to block this slot" :
+                        slot.kind === "blocked" ? "Click to unblock this slot" :
+                        undefined
+                      }
                     >
                       {slot.kind === "open" && (
                         <span className="font-medium">
@@ -1312,6 +1355,7 @@ export default function Schedule() {
                         </span>
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
+                      {slot.kind === "blocked" && <span className="font-medium text-orange-500">Blocked</span>}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
                       {slot.kind === "booked" && (
                         <span className="font-medium truncate leading-tight flex items-center gap-1 flex-wrap">

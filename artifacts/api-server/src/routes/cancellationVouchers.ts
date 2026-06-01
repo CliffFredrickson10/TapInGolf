@@ -63,13 +63,14 @@ async function fetchAffectedPlayers(
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      WHERE pts.club_id = ?
        AND pts.date = ?
-       AND b.status IN ('confirmed','pending')
+       AND b.status = 'confirmed'
        ${timeFilter}
      ORDER BY pts.tee_time, u.name`,
     creatorsParams
   );
 
   // 2. Split-bill co-players (registered users who are NOT the booking creator)
+  //    Only include co-players who have actually paid their share (bp.paid = 1).
   const coParams: any[] = [clubId, date];
   if (timeParam) coParams.push(timeParam);
 
@@ -84,12 +85,13 @@ async function fetchAffectedPlayers(
        ON bp.booking_id = b.id
        AND bp.user_id IS NOT NULL
        AND bp.user_id != b.user_id
+       AND bp.paid = 1
      JOIN users u ON u.id = bp.user_id
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      WHERE pts.club_id = ?
        AND pts.date = ?
        AND b.split_bill = 1
-       AND b.status IN ('confirmed','pending')
+       AND b.status = 'confirmed'
        ${timeFilter}
      ORDER BY pts.tee_time, u.name`,
     coParams

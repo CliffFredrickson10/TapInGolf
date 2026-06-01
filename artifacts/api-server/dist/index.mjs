@@ -58780,6 +58780,16 @@ router4.post("/bookings", async (req, res) => {
             "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - ?) WHERE id = ?",
             [numPlayers, parseInt(tee_time_id)]
           );
+          if (isCancellationVoucher && appliedVoucher && discountAmount > 0) {
+            await clientQuery(
+              client,
+              `UPDATE cancellation_vouchers
+                 SET value_remaining = LEAST(value_rands, COALESCE(value_remaining, value_rands) + ?),
+                     redeemed_at     = NULL
+               WHERE code = ?`,
+              [discountAmount, appliedVoucher]
+            );
+          }
         });
       } catch {
       }

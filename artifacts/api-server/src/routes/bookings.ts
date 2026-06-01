@@ -739,8 +739,8 @@ router.post("/bookings", async (req, res): Promise<void> => {
       });
       paymentUrl = pr.url;
     } catch (stitchErr: any) {
-      // Stitch call failed — cancel the booking and release the reserved seats
-      // so the slot doesn't stay permanently locked.
+      // Stitch call failed — cancel the booking, release the reserved seats,
+      // and restore any voucher value that was deducted in the booking transaction.
       try {
         await withTransaction(async (client) => {
           await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [bookingId]);
@@ -748,6 +748,15 @@ router.post("/bookings", async (req, res): Promise<void> => {
             "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - ?) WHERE id = ?",
             [numPlayers, parseInt(tee_time_id)]
           );
+          if (isCancellationVoucher && appliedVoucher && discountAmount > 0) {
+            await clientQuery(client,
+              `UPDATE cancellation_vouchers
+                 SET value_remaining = LEAST(value_rands, COALESCE(value_remaining, value_rands) + ?),
+                     redeemed_at     = NULL
+               WHERE code = ?`,
+              [discountAmount, appliedVoucher]
+            );
+          }
         });
       } catch { /* best-effort rollback */ }
       const isConfig = (stitchErr.message ?? "").includes("not configured");

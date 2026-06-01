@@ -217,7 +217,63 @@ function fmtTier(t: string | null | undefined): string {
   return t ? (map[t] ?? t) : "Standard";
 }
 
-function invoiceHtml(booking: any, clubName: string, vatPct: number): string {
+export interface CancelPolicy {
+  windowMinutes: number | null;
+  feePct: number;
+  refundTiers: Array<{ label: string; refund_pct: number }>;
+  contactEmail: string | null;
+  contactPhone: string | null;
+  otherPolicies: string | null;
+}
+
+function fmtWindow(minutes: number | null): string {
+  if (!minutes) return "See club policy";
+  if (minutes < 60) return `${minutes} minutes`;
+  const h = Math.round(minutes / 60);
+  return `${h} hour${h !== 1 ? "s" : ""}`;
+}
+
+function cancelPolicyHtml(policy: CancelPolicy, clubName: string): string {
+  const tiers = Array.isArray(policy.refundTiers) && policy.refundTiers.length > 0
+    ? `<table style="width:100%;border-collapse:collapse;margin-top:8px">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:6px 8px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Notice Period</th>
+            <th style="padding:6px 8px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Refund</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${policy.refundTiers.map((t, i) =>
+            `<tr style="${i % 2 === 0 ? "background:#fff" : "background:#f9fafb"}">
+              <td style="padding:6px 8px;font-size:13px;border-bottom:1px solid #f3f4f6">${t.label}</td>
+              <td style="padding:6px 8px;font-size:13px;font-weight:600;text-align:right;border-bottom:1px solid #f3f4f6;color:${t.refund_pct === 100 ? "#166534" : t.refund_pct === 0 ? "#991b1b" : "#92400e"}">${t.refund_pct}%</td>
+            </tr>`
+          ).join("")}
+        </tbody>
+      </table>`
+    : "";
+
+  const contactLine = [
+    policy.contactEmail ? `<a href="mailto:${policy.contactEmail}" style="color:#1a5c38">${policy.contactEmail}</a>` : null,
+    policy.contactPhone ? policy.contactPhone : null,
+  ].filter(Boolean).join(" · ");
+
+  return `
+  <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:20px 24px;margin-top:20px">
+    <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;margin-bottom:12px">Cancellation Policy — ${clubName}</div>
+    <div style="display:grid;grid-template-columns:160px 1fr;gap:6px 12px;font-size:13px;margin-bottom:${tiers ? "12px" : "0"}">
+      <span style="color:#6b7280">Cancellation Window</span>
+      <span style="font-weight:600">${fmtWindow(policy.windowMinutes)}</span>
+      <span style="color:#6b7280">Cancellation Fee</span>
+      <span style="font-weight:600">${policy.feePct}% of booking total</span>
+      ${contactLine ? `<span style="color:#6b7280">Refund Contact</span><span>${contactLine}</span>` : ""}
+    </div>
+    ${tiers}
+    ${policy.otherPolicies ? `<div style="margin-top:12px;padding-top:10px;border-top:1px solid #bbf7d0;font-size:12px;color:#374151;white-space:pre-line">${policy.otherPolicies}</div>` : ""}
+  </div>`;
+}
+
+function invoiceHtml(booking: any, clubName: string, vatPct: number, cancelPolicy?: CancelPolicy | null): string {
   const holes = booking.holes ?? 18;
   const hasCart = Number(booking.cart_fee) > 0;
   // Use my_amount (what this user was charged) as the invoice total.
@@ -302,6 +358,7 @@ function invoiceHtml(booking: any, clubName: string, vatPct: number): string {
         <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#6b7280">Payment Method</span><span style="font-weight:600">${fmtMethod(booking.payment_method)}</span></div>
         <div style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span style="color:#6b7280">Reference</span><span style="font-family:monospace;font-weight:600">${booking.booking_ref}</span></div>
       </div>
+      ${cancelPolicy ? cancelPolicyHtml(cancelPolicy, clubName) : ""}
     </div>
     <div style="padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:12px">
       TapIn Golf · tapingolf.co.za · This is your official booking receipt. Please retain for your records.
@@ -438,10 +495,10 @@ export async function sendCancellationNotificationEmail(
   return {};
 }
 
-export async function sendInvoiceEmail(booking: any, clubName: string): Promise<{ dev?: boolean }> {
+export async function sendInvoiceEmail(booking: any, clubName: string, cancelPolicy?: CancelPolicy | null): Promise<{ dev?: boolean }> {
   const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
   const vatPct  = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
-  const html    = invoiceHtml(booking, clubName, vatPct);
+  const html    = invoiceHtml(booking, clubName, vatPct, cancelPolicy);
   const subject = `Your TapIn Golf Invoice — ${booking.booking_ref}`;
   const _myAmt  = Number(booking.my_amount ?? booking.total_amount);
   const _vat    = Math.round(_myAmt * vatPct / (100 + vatPct) * 100) / 100;

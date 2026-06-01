@@ -6,8 +6,50 @@ import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment } from "../lib/stitch";
+import { sendInvoiceEmail } from "../lib/otp";
 
 const router: IRouter = Router();
+
+async function fireInvoiceEmail(bookingId: number): Promise<void> {
+  try {
+    const b = await row<any>(`
+      SELECT b.booking_ref, b.players, b.total_amount, b.my_amount, b.cart_fee,
+             b.platform_fee, b.discount_amount, b.voucher_code, b.created_at,
+             b.holes, b.payment_method, b.status, b.price_tier,
+             u.name  AS user_name,  u.email AS user_email, u.phone AS user_phone,
+             pts.date     AS tee_date,  pts.tee_time,
+             c.name AS club_name,
+             c.cancel_payment_minutes, c.cancel_fee_pct,
+             c.cancel_refund_tiers,   c.cancel_contact_email,
+             c.cancel_contact_phone,  c.cancel_other_policies
+      FROM bookings b
+      JOIN users            u   ON u.id  = b.user_id
+      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+      JOIN clubs            c   ON c.id  = pts.club_id
+      WHERE b.id = ?`, [bookingId]);
+    if (!b?.user_email) return;
+
+    let refundTiers: Array<{ label: string; refund_pct: number }> = [];
+    try { refundTiers = b.cancel_refund_tiers ? JSON.parse(b.cancel_refund_tiers) : []; } catch { /* ignore */ }
+
+    const cancelPolicy = {
+      windowMinutes:  b.cancel_payment_minutes ?? null,
+      feePct:         Number(b.cancel_fee_pct ?? 5),
+      refundTiers,
+      contactEmail:   b.cancel_contact_email   ?? null,
+      contactPhone:   b.cancel_contact_phone   ?? null,
+      otherPolicies:  b.cancel_other_policies  ?? null,
+    };
+
+    await sendInvoiceEmail({
+      ...b,
+      tee_date: String(b.tee_date).slice(0, 10),
+      tee_time: String(b.tee_time).slice(0, 5),
+    }, b.club_name, cancelPolicy);
+  } catch (err) {
+    console.error("[invoice] auto-send failed for booking", bookingId, err);
+  }
+}
 
 function generateRef(): string {
   return "TG" + crypto.randomBytes(4).toString("hex").toUpperCase();
@@ -605,6 +647,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
     );
   });
 
+  // Auto-send invoice for payments confirmed immediately (prepaid / wallet)
+  if (payment_method !== "stitch") {
+    fireInvoiceEmail(bookingId).catch(() => {});
+  }
+
   let paymentUrl: string | null = null;
   if (payment_method === "stitch") {
     const host = req.get("host") ?? "";
@@ -932,6 +979,8 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
         [bookingId, bookingId]
       );
+      // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
+      fireInvoiceEmail(bookingId).catch(() => {});
     }
   }
 

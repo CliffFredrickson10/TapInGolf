@@ -1212,11 +1212,15 @@ router.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req: 
     SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
            b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
            b.discount_amount, b.voucher_code, b.created_at, b.holes,
-           u.name AS user_name, u.email AS user_email,
-           pts.date AS tee_date, pts.tee_time AS tee_time
+           u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
+           pts.date AS tee_date, pts.tee_time AS tee_time,
+           c.cancel_payment_minutes, c.cancel_fee_pct,
+           c.cancel_refund_tiers,   c.cancel_contact_email,
+           c.cancel_contact_phone,  c.cancel_other_policies
     FROM bookings b
     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
     JOIN users u ON b.user_id = u.id
+    JOIN clubs c ON c.id = pts.club_id
     WHERE b.id = ? AND pts.club_id = ?`,
     [bId, club.id]
   );
@@ -1228,8 +1232,19 @@ router.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req: 
     [bId]
   );
 
+  let refundTiers: Array<{ label: string; refund_pct: number }> = [];
+  try { refundTiers = b.cancel_refund_tiers ? JSON.parse(b.cancel_refund_tiers) : []; } catch { /* ignore */ }
+  const cancelPolicy = {
+    windowMinutes: b.cancel_payment_minutes ?? null,
+    feePct:        Number(b.cancel_fee_pct ?? 5),
+    refundTiers,
+    contactEmail:  b.cancel_contact_email  ?? null,
+    contactPhone:  b.cancel_contact_phone  ?? null,
+    otherPolicies: b.cancel_other_policies ?? null,
+  };
+
   try {
-    await sendInvoiceEmail({ ...b, tee_date: String(b.tee_date).slice(0, 10), tee_time: String(b.tee_time).slice(0, 5), players_list: players }, club.name);
+    await sendInvoiceEmail({ ...b, tee_date: String(b.tee_date).slice(0, 10), tee_time: String(b.tee_time).slice(0, 5), players_list: players }, club.name, cancelPolicy);
     res.json({ message: "Invoice sent to " + b.user_email });
   } catch (err) {
     logger.error({ err }, "Failed to send invoice email");

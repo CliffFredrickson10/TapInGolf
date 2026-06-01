@@ -103,7 +103,7 @@ export default function Bookings() {
                         {b.split_bill && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full">Split Bill</span>}
                       </div>
                       <p className="text-sm text-muted-foreground">
-                        {b.date} at {String(b.time).slice(0, 5)} · {b.players} player{b.players !== 1 ? "s" : ""} · R{b.total_amount.toFixed(0)}
+                        {b.date} at {String(b.time).slice(0, 5)} · {b.players} player{b.players !== 1 ? "s" : ""} · R{b.total_amount.toFixed(2)} <span className="text-[10px] text-muted-foreground">(incl. VAT R{(b.total_amount * 15 / 115).toFixed(2)})</span>
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {b.guest_email}{b.guest_phone ? ` · ${b.guest_phone}` : ""} · {b.payment_method}

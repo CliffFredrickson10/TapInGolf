@@ -222,6 +222,8 @@ function invoiceHtml(booking: any, clubName: string): string {
   // Use my_amount (what this user was charged) as the invoice total.
   const myAmount = Number(booking.my_amount ?? booking.total_amount);
   const greenFee = myAmount - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
+  const vatAmount = Math.round(myAmount * 15 / 115 * 100) / 100;
+  const exclVat   = Math.round((myAmount - vatAmount) * 100) / 100;
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -279,8 +281,16 @@ function invoiceHtml(booking: any, clubName: string): string {
           ${Number(booking.discount_amount) > 0 ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;color:#16a34a">Discount${booking.voucher_code ? ` (${booking.voucher_code})` : ""}</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;color:#16a34a">−R ${Number(booking.discount_amount).toFixed(2)}</td></tr>` : ""}
         </tbody>
         <tfoot>
+          <tr>
+            <td style="padding:8px 8px 2px;color:#6b7280;font-size:13px">Subtotal (excl. VAT)</td>
+            <td style="padding:8px 8px 2px;text-align:right;color:#6b7280;font-size:13px">R ${exclVat.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 8px 10px;color:#6b7280;font-size:13px">VAT (15%)</td>
+            <td style="padding:2px 8px 10px;text-align:right;color:#6b7280;font-size:13px">R ${vatAmount.toFixed(2)}</td>
+          </tr>
           <tr style="background:#f9fafb">
-            <td style="padding:14px 8px;font-weight:700;font-size:16px">Total Charged</td>
+            <td style="padding:14px 8px;font-weight:700;font-size:16px">Total (incl. VAT)</td>
             <td style="padding:14px 8px;font-weight:700;font-size:18px;text-align:right;color:#1a5c38">R ${myAmount.toFixed(2)}</td>
           </tr>
         </tfoot>
@@ -303,7 +313,10 @@ function invoiceHtml(booking: any, clubName: string): string {
 export async function sendInvoiceEmail(booking: any, clubName: string): Promise<{ dev?: boolean }> {
   const html = invoiceHtml(booking, clubName);
   const subject = `Your TapIn Golf Invoice — ${booking.booking_ref}`;
-  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nTotal Amount: R ${Number(booking.total_amount).toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
+  const _myAmt   = Number(booking.my_amount ?? booking.total_amount);
+  const _vat     = Math.round(_myAmt * 15 / 115 * 100) / 100;
+  const _excl    = Math.round((_myAmt - _vat) * 100) / 100;
+  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nSubtotal (excl. VAT): R ${_excl.toFixed(2)}\nVAT (15%): R ${_vat.toFixed(2)}\nTotal (incl. VAT): R ${_myAmt.toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
 
   if (EMAIL_DEV_MODE()) {
     logger.info({ email: booking.user_email, booking_ref: booking.booking_ref }, "[DEV] Invoice email — no SMTP credentials configured");

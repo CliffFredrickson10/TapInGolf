@@ -3,3 +3,4 @@
 - [Chat-ban gating](chat-disabled-gating.md) — chat_disabled must return on login+register+profile AND every client chat entry point (friends Messages, chat/[id], chat/new) must gate, not just the tab.
 - [POPIA consent versioning](popia-consent-versioning.md) — keep PRIVACY_POLICY_VERSION (auth.ts) in sync with privacy.tsx EFFECTIVE_DATE; phones normalized to E.164 via lib/otp normalizePhone.
 - [Chat mute & notification fan-out](chat-mute-notifications.md) — conversation_members.is_muted; every message-notification path (push + in-app) must filter cm.is_muted=0; messages still load when muted.
+- [VAT-inclusive display](vat-inclusive.md) — 15% VAT shown as breakdown of existing price (total unchanged); formula: vatAmount = total × 15/115.

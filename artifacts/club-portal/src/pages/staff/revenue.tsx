@@ -145,7 +145,7 @@ export default function StaffRevenue() {
       {loading ? <Skeleton className="h-28 w-full" /> : summary && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Total Bookings</div><div className="text-2xl font-bold mt-1">{summary.total_bookings}</div></CardContent></Card>
-          <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Collected</div><div className="text-2xl font-bold mt-1">{rand(summary.total_collected)}</div></CardContent></Card>
+          <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Collected (incl. VAT)</div><div className="text-2xl font-bold mt-1">{rand(summary.total_collected)}</div><div className="text-xs text-muted-foreground mt-1">VAT {rand(Math.round(summary.total_collected * 15 / 115 * 100) / 100)}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Platform Fees</div><div className="text-2xl font-bold mt-1 text-[#1a5c38]">{rand(summary.total_platform_fee)}</div></CardContent></Card>
           <Card><CardContent className="p-5"><div className="text-sm text-muted-foreground">Club Payouts</div><div className="text-2xl font-bold mt-1">{rand(summary.total_club_payouts)}</div></CardContent></Card>
         </div>
@@ -211,7 +211,7 @@ export default function StaffRevenue() {
                   <th className="py-2 px-4 font-medium">Golfer</th>
                   <th className="py-2 px-4 font-medium">Club</th>
                   <th className="py-2 px-4 font-medium">Tee</th>
-                  <th className="py-2 px-4 font-medium text-right">Amount</th>
+                  <th className="py-2 px-4 font-medium text-right">Amount (incl. VAT)</th>
                   <th className="py-2 pl-4 font-medium text-right">Fee</th>
                 </tr></thead>
                 <tbody>

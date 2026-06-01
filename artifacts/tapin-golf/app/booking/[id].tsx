@@ -375,6 +375,10 @@ export default function BookingDetailScreen() {
             <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Total amount</Text>
             <Text style={[styles.detailValue, { color: colors.foreground }]}>R{booking.total_amount.toFixed(2)}</Text>
           </View>
+          <View style={styles.detailRow}>
+            <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Incl. VAT (15%)</Text>
+            <Text style={[styles.detailValue, { color: colors.mutedForeground }]}>R{(booking.total_amount * 15 / 115).toFixed(2)}</Text>
+          </View>
           {booking.my_amount != null && booking.my_amount !== booking.total_amount && (
             <View style={styles.detailRow}>
               <Text style={[styles.detailLabel, { color: colors.mutedForeground }]}>Your share</Text>

@@ -1061,6 +1061,12 @@ export default function NewBookingScreen() {
                 <Text style={[styles.totalAmount, { color: colors.primary }]}>R{myAmount.toFixed(2)}</Text>
               )}
             </View>
+            {!effectiveTierPriced && !(paymentMethod === "prepaid" && isMember) && myAmount > 0 && (
+              <View style={[styles.totalLine, { marginTop: 4 }]}>
+                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Incl. VAT (15%)</Text>
+                <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{(myAmount * 15 / 115).toFixed(2)}</Text>
+              </View>
+            )}
           </View>
 
           {/* Book error */}

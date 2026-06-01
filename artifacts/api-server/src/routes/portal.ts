@@ -1212,6 +1212,7 @@ router.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req: 
     SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
            b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
            b.discount_amount, b.voucher_code, b.created_at, b.holes,
+           b.invoice_sent_at, b.invoice_resend_count,
            u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
            pts.date AS tee_date, pts.tee_time AS tee_time,
            c.cancel_payment_minutes, c.cancel_fee_pct,

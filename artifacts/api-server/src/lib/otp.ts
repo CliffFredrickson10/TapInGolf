@@ -1,8 +1,7 @@
 import crypto from "crypto";
 import nodemailer from "nodemailer";
-import PDFDocument from "pdfkit";
 import { logger } from "./logger";
-import { row } from "./pg";
+import { row, exec } from "./pg";
 
 export function generateOTP(): string {
   return String(crypto.randomInt(100_000, 1_000_000));
@@ -496,248 +495,173 @@ export async function sendCancellationNotificationEmail(
   return {};
 }
 
-// ─── PDF invoice generator ───────────────────────────────────────────────────
+// ─── HTML invoice generator ─────────────────────────────────────────────────
 
-function generateInvoicePdf(booking: any, clubName: string, vatPct: number, cancelPolicy?: CancelPolicy | null): Promise<Buffer> {
-  return new Promise((resolve, reject) => {
-    const chunks: Buffer[] = [];
-    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `Invoice ${booking.booking_ref}`, Author: "TapIn Golf" } });
-    doc.on("data", (c: Buffer) => chunks.push(c));
-    doc.on("end",  () => resolve(Buffer.concat(chunks)));
-    doc.on("error", reject);
+function generateInvoiceHtml(
+  booking: any,
+  clubName: string,
+  vatPct: number,
+  isCopy: boolean,
+  cancelPolicy?: CancelPolicy | null,
+): string {
+  const hasCart   = Number(booking.cart_fee ?? 0) > 0;
+  const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+  const cartFee   = Number(booking.cart_fee ?? 0);
+  const discount  = Number(booking.discount_amount ?? 0);
+  const greenFee  = myAmount - cartFee + discount;
+  const vatAmount = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
+  const exclVat   = Math.round((myAmount - vatAmount) * 100) / 100;
 
-    const L      = 50;                           // left margin
-    const R      = doc.page.width - 50;          // right margin
-    const W      = R - L;                        // content width
-    const GREEN  = "#1a5c38";
-    const LGREEN = "#f0fdf4";
-    const BGREEN = "#bbf7d0";
-    const GRAY   = "#6b7280";
-    const LGRAY  = "#f9fafb";
-    const DGRAY  = "#f3f4f6";
-    const BLACK  = "#111827";
-    const DKGR   = "#166534";
-    const RED    = "#991b1b";
-    const AMB    = "#92400e";
+  const status    = String(booking.status ?? "confirmed");
+  const statusBg  = (status === "confirmed" || status === "completed")
+    ? "background:#dcfce7;color:#166534"
+    : status === "pending"
+    ? "background:#fef9c3;color:#854d0e"
+    : "background:#fee2e2;color:#991b1b";
 
-    // ── Helper: draw a subtle border rect ────────────────────────────────────
-    const borderBox = (x: number, y: number, w: number, h: number, fill: string) => {
-      doc.rect(x, y, w, h).fillAndStroke(fill, "#e5e7eb");
-    };
-
-    // ── HEADER ────────────────────────────────────────────────────────────────
-    doc.rect(0, 0, doc.page.width, 100).fill(GREEN);
-
-    // Left: TapIn Golf + club name
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(24)
-       .text("TapIn Golf", L, 24, { lineBreak: false });
-    doc.fillColor("rgba(255,255,255,0.72)").font("Helvetica").fontSize(12)
-       .text(clubName, L, 52, { lineBreak: false });
-
-    // Right: Invoice label + ref + date
-    const paidDate = new Date(booking.created_at).toLocaleString("en-ZA", {
-      timeZone: "Africa/Johannesburg", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
-    });
-    doc.fillColor("rgba(255,255,255,0.55)").font("Helvetica").fontSize(9)
-       .text("Invoice", L, 24, { width: W, align: "right", lineBreak: false });
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(20)
-       .text(booking.booking_ref, L, 38, { width: W, align: "right", lineBreak: false });
-    doc.fillColor("rgba(255,255,255,0.65)").font("Helvetica").fontSize(10)
-       .text(paidDate, L, 62, { width: W, align: "right", lineBreak: false });
-
-    // ── BILL TO / PAYMENT STATUS ───────────────────────────────────────────────
-    let y = 118;
-    // Left: Bill To
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Bill To", L, y, { lineBreak: false });
-    // Right: Payment Status
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Payment Status", L, y, { width: W, align: "right", lineBreak: false });
-
-    y += 14;
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(14)
-       .text(booking.user_name ?? "", L, y, { lineBreak: false });
-
-    // Status badge
-    const status = String(booking.status ?? "confirmed");
-    const badgeBg  = (status === "confirmed" || status === "completed") ? "#dcfce7"
-                   : status === "pending" ? "#fef9c3" : "#fee2e2";
-    const badgeCol = (status === "confirmed" || status === "completed") ? DKGR
-                   : status === "pending" ? "#854d0e" : RED;
-    const badgeLabel = status.toUpperCase();
-    const badgeW = 80, badgeH = 18;
-    doc.rect(R - badgeW, y + 2, badgeW, badgeH).fill(badgeBg);
-    doc.fillColor(badgeCol).font("Helvetica-Bold").fontSize(9)
-       .text(badgeLabel, R - badgeW, y + 6, { width: badgeW, align: "center", lineBreak: false });
-
-    y += 18;
-    doc.fillColor(GRAY).font("Helvetica").fontSize(11)
-       .text(booking.user_email ?? "", L, y, { lineBreak: false });
-    if (booking.user_phone) {
-      y += 15;
-      doc.fillColor(GRAY).font("Helvetica").fontSize(11)
-         .text(booking.user_phone, L, y, { lineBreak: false });
-    }
-
-    // Right: Payment Method label + value
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Payment Method", L, y - (booking.user_phone ? 15 : 0) + 2, { width: W, align: "right", lineBreak: false });
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(12)
-       .text(fmtMethod(booking.payment_method), L, y - (booking.user_phone ? 15 : 0) + 16, { width: W, align: "right", lineBreak: false });
-
-    y += 28;
-
-    // ── BOOKING DETAILS ───────────────────────────────────────────────────────
-    const hasCart = Number(booking.cart_fee) > 0;
-    const boxH = 84;
-    borderBox(L, y, W, boxH, LGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Booking Details", L + 14, y + 12, { lineBreak: false });
-
-    const detailCols = [
-      ["Tee Date",     booking.tee_date],
-      ["Tee Time",     booking.tee_time],
-      ["Players",      `${booking.players} player${booking.players !== 1 ? "s" : ""}`],
-      ["Service",      `${booking.holes ?? 18} Holes${hasCart ? " + Golf Cart" : ""}`],
-      ["Pricing Tier", fmtTier(booking.price_tier)],
-      ["Paid On",      paidDate],
-    ];
-    const colW3 = W / 3;
-    detailCols.forEach(([label, val], i) => {
-      const cx = L + 14 + (i % 3) * colW3;
-      const cy = y + 28 + Math.floor(i / 3) * 28;
-      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, cx, cy, { lineBreak: false });
-      doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(11).text(val, cx, cy + 12, { lineBreak: false });
-    });
-    y += boxH + 20;
-
-    // ── LINE ITEMS ────────────────────────────────────────────────────────────
-    const myAmount  = Number(booking.my_amount ?? booking.total_amount);
-    const cartFee   = Number(booking.cart_fee ?? 0);
-    const discount  = Number(booking.discount_amount ?? 0);
-    const greenFee  = myAmount - cartFee + discount;
-    const vatAmount = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
-    const exclVat   = Math.round((myAmount - vatAmount) * 100) / 100;
-
-    // Table header
-    doc.rect(L, y, W, 22).fill(DGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Description", L + 10, y + 7, { lineBreak: false });
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Amount", L, y + 7, { width: W - 10, align: "right", lineBreak: false });
-    y += 22;
-
-    const lineRow = (desc: string, amt: string, color = BLACK) => {
-      doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
-      doc.fillColor(color).font("Helvetica").fontSize(11)
-         .text(desc, L + 10, y + 8, { lineBreak: false });
-      doc.fillColor(color).font("Helvetica").fontSize(11)
-         .text(amt, L, y + 8, { width: W - 10, align: "right", lineBreak: false });
-      y += 28;
-    };
-
-    const greenFeeLabel = `${booking.holes ?? 18} Holes — Green Fee`;
-    const tierLabel = ` (${fmtTier(booking.price_tier)})`;
-    // Draw main line item with tier in gray
-    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
-    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(greenFeeLabel, L + 10, y + 8, { lineBreak: false });
-    const glw = doc.widthOfString(greenFeeLabel);
-    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(tierLabel, L + 10 + glw, y + 9, { lineBreak: false });
-    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(`R ${greenFee.toFixed(2)}`, L, y + 8, { width: W - 10, align: "right", lineBreak: false });
-    y += 28;
-
-    if (cartFee > 0) lineRow("Golf Cart Hire", `R ${cartFee.toFixed(2)}`);
-    if (discount > 0) lineRow(`Discount${booking.voucher_code ? ` — Voucher ${booking.voucher_code}` : ""}`, `−R ${discount.toFixed(2)}`, "#16a34a");
-
-    // Subtotals
-    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
-    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text("Subtotal (excl. VAT)", L + 10, y + 6, { lineBreak: false });
-    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`R ${exclVat.toFixed(2)}`, L, y + 6, { width: W - 10, align: "right", lineBreak: false });
-    y += 22;
-    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
-    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`VAT (${vatPct}%)`, L + 10, y + 6, { lineBreak: false });
-    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`R ${vatAmount.toFixed(2)}`, L, y + 6, { width: W - 10, align: "right", lineBreak: false });
-    y += 22;
-
-    // Total row — green background + top border
-    doc.rect(L, y, W, 36).fill(LGREEN);
-    doc.moveTo(L, y).lineTo(R, y).lineWidth(2).stroke(BGREEN);
-    doc.lineWidth(1);
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(14).text("Total (incl. VAT)", L + 10, y + 10, { lineBreak: false });
-    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(18).text(`R ${myAmount.toFixed(2)}`, L, y + 9, { width: W - 10, align: "right", lineBreak: false });
-    y += 46;
-
-    // ── PAYMENT REFERENCE ────────────────────────────────────────────────────
-    y += 6;
-    borderBox(L, y, W, 58, LGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-       .text("Payment Reference", L + 14, y + 12, { lineBreak: false });
-    doc.fillColor(GREEN).font("Courier-Bold").fontSize(18)
-       .text(booking.booking_ref, L + 14, y + 26, { lineBreak: false });
-    doc.fillColor(GRAY).font("Helvetica").fontSize(9)
-       .text("Use this reference for any payment queries", L + 14, y + 46, { lineBreak: false });
-    y += 68;
-
-    // ── CANCELLATION POLICY ───────────────────────────────────────────────────
-    if (cancelPolicy) {
-      y += 6;
-      // Section header bar
-      doc.rect(L, y, W, 22).fill(GREEN);
-      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9)
-         .text(`Cancellation Policy — ${clubName}`, L + 14, y + 7, { lineBreak: false });
-      y += 22;
-
-      const pRows: [string, string][] = [
-        ["Cancellation Window", fmtWindow(cancelPolicy.windowMinutes)],
-        ["Cancellation Fee",    `${cancelPolicy.feePct}% of booking total`],
-      ];
-      if (cancelPolicy.contactEmail) pRows.push(["Refund Contact (Email)", cancelPolicy.contactEmail]);
-      if (cancelPolicy.contactPhone) pRows.push(["Refund Contact (Phone)", cancelPolicy.contactPhone]);
-
-      pRows.forEach(([label, val], i) => {
-        doc.rect(L, y, W, 22).fill(i % 2 === 0 ? LGREEN : "#fff");
-        doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(label, L + 14, y + 7, { lineBreak: false });
-        doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(val, L + 180, y + 7, { lineBreak: false });
-        y += 22;
-      });
-
-      if (cancelPolicy.refundTiers.length > 0) {
-        y += 8;
-        // Tier table header
-        doc.rect(L, y, W / 2 - 4, 20).fill(DGRAY);
-        doc.rect(L + W / 2 + 4, y, W / 2 - 4, 20).fill(DGRAY);
-        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8)
-           .text("Notice Period", L + 8, y + 6, { lineBreak: false });
-        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8)
-           .text("Refund", L + W / 2 + 8, y + 6, { lineBreak: false });
-        y += 20;
-        cancelPolicy.refundTiers.forEach((t, i) => {
-          const bg = i % 2 === 0 ? "#fff" : LGRAY;
-          doc.rect(L, y, W, 20).fill(bg);
-          doc.fillColor(BLACK).font("Helvetica").fontSize(10).text(t.label, L + 8, y + 6, { lineBreak: false });
-          const col = t.refund_pct === 100 ? DKGR : t.refund_pct === 0 ? RED : AMB;
-          doc.fillColor(col).font("Helvetica-Bold").fontSize(10)
-             .text(`${t.refund_pct}%`, L, y + 6, { width: W - 8, align: "right", lineBreak: false });
-          y += 20;
-        });
-      }
-
-      if (cancelPolicy.otherPolicies) {
-        y += 8;
-        doc.fillColor(GRAY).font("Helvetica").fontSize(9)
-           .text(cancelPolicy.otherPolicies, L + 14, y, { width: W - 28 });
-        y += doc.heightOfString(cancelPolicy.otherPolicies, { width: W - 28 }) + 8;
-      }
-    }
-
-    // ── FOOTER ────────────────────────────────────────────────────────────────
-    const footerY = doc.page.height - 44;
-    doc.moveTo(L, footerY - 10).lineTo(R, footerY - 10).stroke("#e5e7eb");
-    doc.fillColor(GRAY).font("Helvetica").fontSize(9)
-       .text("TapIn Golf  ·  tapingolf.co.za  ·  This is your official booking receipt. Please retain for your records.", L, footerY, { width: W, align: "center", lineBreak: false });
-
-    doc.end();
+  const paidDate  = new Date(booking.created_at).toLocaleString("en-ZA", {
+    timeZone: "Africa/Johannesburg", day: "2-digit", month: "short",
+    year: "numeric", hour: "2-digit", minute: "2-digit",
   });
+  const teeDate   = String(booking.tee_date ?? "").slice(0, 10);
+  const invoiceLabel = isCopy ? "Copy Tax Invoice" : "Tax Invoice";
+
+  // ── Cancellation policy section ────────────────────────────────────────────
+  const policyRows: string[] = [
+    `<div style="display:grid;grid-template-columns:200px 1fr;padding:10px 20px;background:#f0fdf4;font-size:13px;border-bottom:1px solid #e5e7eb"><span style="color:#6b7280">Cancellation Window</span><span style="font-weight:600;color:#111827">${fmtWindow(cancelPolicy?.windowMinutes ?? null)}</span></div>`,
+    `<div style="display:grid;grid-template-columns:200px 1fr;padding:10px 20px;background:#fff;font-size:13px;border-bottom:1px solid #e5e7eb"><span style="color:#6b7280">Cancellation Fee</span><span style="font-weight:600;color:#111827">${cancelPolicy?.feePct ?? 0}% of booking total</span></div>`,
+  ];
+  if (cancelPolicy?.contactEmail) policyRows.push(`<div style="display:grid;grid-template-columns:200px 1fr;padding:10px 20px;background:#f0fdf4;font-size:13px;border-bottom:1px solid #e5e7eb"><span style="color:#6b7280">Refund Contact (Email)</span><span style="font-weight:600;color:#111827">${cancelPolicy.contactEmail}</span></div>`);
+  if (cancelPolicy?.contactPhone) policyRows.push(`<div style="display:grid;grid-template-columns:200px 1fr;padding:10px 20px;background:#fff;font-size:13px;border-bottom:1px solid #e5e7eb"><span style="color:#6b7280">Refund Contact (Phone)</span><span style="font-weight:600;color:#111827">${cancelPolicy.contactPhone}</span></div>`);
+
+  const tierRows = (cancelPolicy?.refundTiers ?? []).map((t: any, i: number) => `
+    <div style="display:grid;grid-template-columns:1fr auto;padding:9px 20px;background:${i % 2 === 0 ? "#fff" : "#f9fafb"};font-size:13px;border-top:1px solid #f3f4f6">
+      <span style="color:#111827">${t.label}</span>
+      <span style="font-weight:700;color:${t.refund_pct === 100 ? "#166534" : t.refund_pct === 0 ? "#991b1b" : "#92400e"}">${t.refund_pct}%</span>
+    </div>`).join("");
+
+  const cancelPolicySection = cancelPolicy ? `
+      <div style="margin-top:28px;border-radius:10px;overflow:hidden;border:1px solid #e5e7eb">
+        <div style="background:#1a5c38;color:#fff;padding:12px 20px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px">
+          Cancellation Policy — ${clubName}
+        </div>
+        <div>${policyRows.join("")}
+          ${(cancelPolicy.refundTiers ?? []).length > 0 ? `<div style="display:grid;grid-template-columns:1fr auto;background:#f3f4f6;padding:8px 20px;border-top:1px solid #e5e7eb"><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Notice Period</span><span style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Refund</span></div>${tierRows}` : ""}
+          ${cancelPolicy.otherPolicies ? `<div style="padding:12px 20px;background:#fff;font-size:12px;color:#6b7280;border-top:1px solid #e5e7eb">${cancelPolicy.otherPolicies}</div>` : ""}
+        </div>
+      </div>` : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${invoiceLabel} ${booking.booking_ref}</title>
+  <style>
+    @media print {
+      body { margin: 0; padding: 0; background: #fff; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body style="margin:0;padding:40px 24px;font-family:Arial,Helvetica,sans-serif;color:#111827;background:#f9fafb">
+  <div class="no-print" style="text-align:center;margin-bottom:24px">
+    <button onclick="window.print()" style="background:#1a5c38;color:#fff;border:none;padding:10px 28px;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer">Print / Save as PDF</button>
+  </div>
+  <div style="max-width:660px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb;box-shadow:0 4px 24px rgba(0,0,0,0.06)">
+    <!-- Header -->
+    <div style="background:#1a5c38;color:#fff;padding:32px 40px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px">TapIn Golf</div>
+          <div style="font-size:13px;opacity:0.75;margin-top:3px">${clubName}</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;opacity:0.6;text-transform:uppercase;letter-spacing:1.5px">${invoiceLabel}</div>
+          <div style="font-size:22px;font-weight:700;letter-spacing:2px;margin-top:2px">${booking.booking_ref}</div>
+          <div style="font-size:12px;opacity:0.7;margin-top:4px">${paidDate}</div>
+        </div>
+      </div>
+    </div>
+
+    <div style="padding:36px 40px">
+      <!-- Bill To / Status -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:32px;gap:24px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:8px">Bill To</div>
+          <div style="font-size:16px;font-weight:600">${booking.user_name ?? ""}</div>
+          <div style="color:#6b7280;font-size:13px;margin-top:2px">${booking.user_email ?? ""}</div>
+          ${booking.user_phone ? `<div style="color:#6b7280;font-size:13px;margin-top:2px">${booking.user_phone}</div>` : ""}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:8px">Payment Status</div>
+          <div style="display:inline-block;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;letter-spacing:0.5px;${statusBg}">${status.toUpperCase()}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:14px;margin-bottom:8px">Payment Method</div>
+          <div style="font-size:13px;font-weight:600">${fmtMethod(booking.payment_method)}</div>
+        </div>
+      </div>
+
+      <!-- Booking Details -->
+      <div style="background:#f9fafb;border-radius:10px;padding:20px 24px;margin-bottom:28px;border:1px solid #e5e7eb">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:14px">Booking Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px">
+          <div><div style="color:#6b7280;font-size:12px">Tee Date</div><div style="font-weight:600;font-size:14px;margin-top:3px">${teeDate}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Tee Time</div><div style="font-weight:600;font-size:14px;margin-top:3px">${booking.tee_time}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Players</div><div style="font-weight:600;font-size:14px;margin-top:3px">${booking.players} player${booking.players !== 1 ? "s" : ""}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Service</div><div style="font-weight:600;font-size:14px;margin-top:3px">${booking.holes ?? 18} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Pricing Tier</div><div style="font-weight:600;font-size:14px;margin-top:3px">${fmtTier(booking.price_tier)}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Paid On</div><div style="font-weight:600;font-size:14px;margin-top:3px">${paidDate}</div></div>
+        </div>
+      </div>
+
+      <!-- Line Items -->
+      <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:10px;text-align:left;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;border-radius:4px 0 0 4px">Description</th>
+            <th style="padding:10px;text-align:right;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280;border-radius:0 4px 4px 0">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6">${booking.holes ?? 18} Holes — Green Fee <span style="color:#6b7280;font-size:12px">(${fmtTier(booking.price_tier)})</span></td>
+            <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${greenFee.toFixed(2)}</td>
+          </tr>
+          ${hasCart ? `<tr><td style="padding:12px 10px;border-bottom:1px solid #f3f4f6">Golf Cart Hire</td><td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${cartFee.toFixed(2)}</td></tr>` : ""}
+          ${discount > 0 ? `<tr><td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;color:#16a34a">Discount${booking.voucher_code ? ` — Voucher <strong>${booking.voucher_code}</strong>` : ""}</td><td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right;color:#16a34a">−R ${discount.toFixed(2)}</td></tr>` : ""}
+        </tbody>
+        <tfoot>
+          <tr>
+            <td style="padding:8px 10px 2px;color:#6b7280;font-size:13px">Subtotal (excl. VAT)</td>
+            <td style="padding:8px 10px 2px;text-align:right;color:#6b7280;font-size:13px">R ${exclVat.toFixed(2)}</td>
+          </tr>
+          <tr>
+            <td style="padding:2px 10px 10px;color:#6b7280;font-size:13px">VAT (${vatPct}%)</td>
+            <td style="padding:2px 10px 10px;text-align:right;color:#6b7280;font-size:13px">R ${vatAmount.toFixed(2)}</td>
+          </tr>
+          <tr style="background:#f0fdf4">
+            <td style="padding:14px 10px;font-weight:700;font-size:16px;border-top:2px solid #bbf7d0">Total (incl. VAT)</td>
+            <td style="padding:14px 10px;font-weight:800;font-size:20px;text-align:right;color:#1a5c38;border-top:2px solid #bbf7d0">R ${myAmount.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <!-- Payment Reference -->
+      <div style="background:#f9fafb;border-radius:10px;padding:16px 24px;border:1px solid #e5e7eb">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Payment Reference</div>
+        <div style="font-family:monospace;font-size:18px;font-weight:700;color:#1a5c38;letter-spacing:2px">${booking.booking_ref}</div>
+        <div style="font-size:12px;color:#9ca3af;margin-top:4px">Use this reference for any payment queries</div>
+      </div>
+
+      ${cancelPolicySection}
+    </div>
+
+    <!-- Footer -->
+    <div style="padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:12px">
+      TapIn Golf &nbsp;·&nbsp; tapingolf.co.za &nbsp;·&nbsp; This is your official booking receipt. Please retain for your records.
+    </div>
+  </div>
+</body>
+</html>`;
 }
 
 // ─── Confirmation email body ─────────────────────────────────────────────────
@@ -765,7 +689,7 @@ function confirmationEmailHtml(booking: any, clubName: string, vatPct: number): 
     <div style="padding:36px 40px">
       <p style="font-size:15px;margin:0 0 24px;line-height:1.6">
         Hi <strong>${firstName}</strong>,<br><br>
-        Your tee time is confirmed! Please find your full tax invoice attached to this email as a PDF. Retain it for your records.
+        Your tee time is confirmed! Your tax invoice is attached to this email — open it in your browser to print or save as PDF.
       </p>
 
       <div style="background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:28px">
@@ -809,7 +733,7 @@ function confirmationEmailText(booking: any, clubName: string): string {
     `Hi ${firstName},`,
     ``,
     `Your tee time at ${clubName} is confirmed!`,
-    `Your full tax invoice is attached to this email as a PDF — please retain it for your records.`,
+    `Your tax invoice is attached to this email (HTML file — open in browser to print/save). Please retain for your records.`,
     ``,
     `BOOKING SUMMARY`,
     `─────────────────────────────────`,
@@ -833,20 +757,93 @@ function confirmationEmailText(booking: any, clubName: string): string {
   ].join("\n");
 }
 
-export async function sendInvoiceEmail(booking: any, clubName: string, cancelPolicy?: CancelPolicy | null): Promise<{ dev?: boolean }> {
+// ─── Resend invoice email body (copy) ────────────────────────────────────────
+
+function resendEmailHtml(booking: any, clubName: string): string {
+  const firstName = (booking.user_name ?? "").split(" ")[0] || "Golfer";
+  const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Invoice Copy — ${booking.booking_ref}</title></head>
+<body style="margin:0;padding:40px 24px;font-family:Arial,sans-serif;color:#111827;background:#f9fafb">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+    <div style="background:#1a5c38;color:#fff;padding:32px 40px">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">TapIn Golf</div>
+      <div style="font-size:13px;opacity:0.7;margin-top:2px">${clubName}</div>
+      <div style="margin-top:20px;font-size:20px;font-weight:700">Invoice Copy</div>
+    </div>
+    <div style="padding:36px 40px">
+      <p style="font-size:15px;margin:0 0 24px;line-height:1.6">
+        Hi <strong>${firstName}</strong>,<br><br>
+        As requested, your <strong>Copy Tax Invoice</strong> for your booking at <strong>${clubName}</strong> is attached. Open the HTML file in your browser to print or save as PDF.
+      </p>
+      <div style="background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:24px">
+        <div style="padding:10px 16px;background:#f3f4f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280">Booking Summary</div>
+        <table style="width:100%;border-collapse:collapse">
+          <tr><td style="padding:8px 16px;color:#6b7280;font-size:13px;width:160px">Club</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${clubName}</td></tr>
+          <tr><td style="padding:8px 16px;color:#6b7280;font-size:13px">Date</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${booking.tee_date}</td></tr>
+          <tr><td style="padding:8px 16px;color:#6b7280;font-size:13px">Tee Time</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${booking.tee_time}</td></tr>
+          <tr><td style="padding:8px 16px;color:#6b7280;font-size:13px">Reference</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827;font-family:monospace">${booking.booking_ref}</td></tr>
+          <tr style="background:#f0fdf4"><td style="padding:10px 16px;color:#166534;font-weight:700;font-size:13px">Total Paid</td><td style="padding:10px 16px;font-weight:800;font-size:15px;color:#1a5c38">R ${myAmount.toFixed(2)}</td></tr>
+        </table>
+      </div>
+      <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.6">
+        See you on the fairway!<br><strong style="color:#1a5c38">— The TapIn Golf Team</strong>
+      </p>
+    </div>
+    <div style="padding:16px 40px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px">
+      TapIn Golf · <a href="https://tapingolf.co.za" style="color:#1a5c38">tapingolf.co.za</a> · This is an automated message. Please do not reply.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function resendEmailText(booking: any, clubName: string): string {
+  const firstName = (booking.user_name ?? "").split(" ")[0] || "Golfer";
+  const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+  return [
+    `Hi ${firstName},`,
+    ``,
+    `As requested, your Copy Tax Invoice for your booking at ${clubName} is attached.`,
+    `Open the HTML file in your browser to print or save as PDF.`,
+    ``,
+    `Club      : ${clubName}`,
+    `Date      : ${booking.tee_date}`,
+    `Tee Time  : ${booking.tee_time}`,
+    `Reference : ${booking.booking_ref}`,
+    `Total     : R ${myAmount.toFixed(2)}`,
+    ``,
+    `See you on the fairway!`,
+    `— The TapIn Golf Team`,
+    ``,
+    `tapingolf.co.za`,
+  ].join("\n");
+}
+
+export async function sendInvoiceEmail(
+  booking: any,
+  clubName: string,
+  cancelPolicy?: CancelPolicy | null,
+): Promise<{ dev?: boolean }> {
   const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
   const vatPct = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
 
-  const subject  = `Booking Confirmed — ${booking.booking_ref} | ${clubName}`;
-  const bodyHtml = confirmationEmailHtml(booking, clubName, vatPct);
-  const bodyText = confirmationEmailText(booking, clubName);
+  // Determine first send vs copy — one invoice per transaction rule
+  const isCopy  = Boolean(booking.invoice_sent_at);
+  const subject = isCopy
+    ? `Invoice Copy — ${booking.booking_ref} | ${clubName}`
+    : `Booking Confirmed — ${booking.booking_ref} | ${clubName}`;
+
+  const bodyHtml = isCopy ? resendEmailHtml(booking, clubName) : confirmationEmailHtml(booking, clubName, vatPct);
+  const bodyText = isCopy ? resendEmailText(booking, clubName) : confirmationEmailText(booking, clubName);
 
   if (EMAIL_DEV_MODE()) {
-    logger.info({ email: booking.user_email, booking_ref: booking.booking_ref }, "[DEV] Invoice email — no SMTP credentials configured");
+    logger.info({ email: booking.user_email, booking_ref: booking.booking_ref, isCopy }, "[DEV] Invoice email — no SMTP credentials configured");
     return { dev: true };
   }
 
-  const pdfBuffer = await generateInvoicePdf(booking, clubName, vatPct, cancelPolicy);
+  const invoiceHtml = generateInvoiceHtml(booking, clubName, vatPct, isCopy, cancelPolicy);
 
   const transporter = nodemailer.createTransport({
     host:   SMTP_HOST(),
@@ -862,11 +859,20 @@ export async function sendInvoiceEmail(booking: any, clubName: string, cancelPol
     text:    bodyText,
     html:    bodyHtml,
     attachments: [{
-      filename:    `TapIn-Invoice-${booking.booking_ref}.pdf`,
-      content:     pdfBuffer,
-      contentType: "application/pdf",
+      filename:    `TapIn-Invoice-${booking.booking_ref}.html`,
+      content:     Buffer.from(invoiceHtml, "utf8"),
+      contentType: "text/html",
     }],
   });
+
+  // Track invoice — enforce one-invoice-per-transaction rule
+  if (booking.id) {
+    if (isCopy) {
+      await exec("UPDATE bookings SET invoice_resend_count = COALESCE(invoice_resend_count, 0) + 1 WHERE id = $1", [booking.id]);
+    } else {
+      await exec("UPDATE bookings SET invoice_sent_at = NOW(), invoice_resend_count = 0 WHERE id = $1", [booking.id]);
+    }
+  }
 
   return {};
 }

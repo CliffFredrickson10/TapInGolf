@@ -13,9 +13,10 @@ const router: IRouter = Router();
 async function fireInvoiceEmail(bookingId: number): Promise<void> {
   try {
     const b = await row<any>(`
-      SELECT b.booking_ref, b.players, b.total_amount, b.my_amount, b.cart_fee,
+      SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.cart_fee,
              b.platform_fee, b.discount_amount, b.voucher_code, b.created_at,
              b.holes, b.payment_method, b.status, b.price_tier,
+             b.invoice_sent_at, b.invoice_resend_count,
              u.name  AS user_name,  u.email AS user_email, u.phone AS user_phone,
              pts.date     AS tee_date,  pts.tee_time,
              c.name AS club_name,

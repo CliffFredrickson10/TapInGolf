@@ -763,6 +763,9 @@ async function createSchema(): Promise<void> {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_inbox_club ON club_inbox_notifications (club_id, created_at DESC)");
   await ddl("ALTER TABLE club_inbox_notifications ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP");
+  // Invoice tracking — one invoice per booking, first send vs copy
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_sent_at TIMESTAMP");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_resend_count INT NOT NULL DEFAULT 0");
   // Keep tee_time_id nullable for backward compat with bookings made before this migration
   await query(`
     DO $$ BEGIN

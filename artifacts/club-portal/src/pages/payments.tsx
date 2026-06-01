@@ -499,7 +499,7 @@ export default function Payments() {
                 <span className="block">{format(parseISO(p.created_at), "dd MMM yyyy")}</span>
                 <span className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "HH:mm")}</span>
               </div>
-              <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(p.total_amount)}</div>
+              <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(p.my_amount)}</div>
               <div className="px-4 py-3 text-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
                   {p.status}

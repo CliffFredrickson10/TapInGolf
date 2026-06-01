@@ -169,6 +169,9 @@ importers:
       '@google-cloud/storage':
         specifier: ^7.19.0
         version: 7.19.0
+      '@swc/helpers':
+        specifier: ^0.5.23
+        version: 0.5.23
       '@types/bcryptjs':
         specifier: ^3.0.0
         version: 3.0.0
@@ -229,6 +232,9 @@ importers:
       pino-http:
         specifier: ^10.5.0
         version: 10.5.0
+      playwright-core:
+        specifier: ^1.60.0
+        version: 1.60.0
     devDependencies:
       '@types/cookie-parser':
         specifier: ^1.4.10
@@ -5555,6 +5561,11 @@ packages:
   pirates@4.0.7:
     resolution: {integrity: sha512-TfySrs/5nm8fQJDcBDuUng3VOUKsd7S+zqvbOTiGXHfxX4wK31ard+hoNuvkicM/2YFzlpDgABOevKSsB4G/FA==}
     engines: {node: '>= 6'}
+
+  playwright-core@1.60.0:
+    resolution: {integrity: sha512-9bW6zvX/m0lEbgTKJ6YppOKx8H3VOPBMOCFh2irXFOT4BbHgrx5hPjwJYLT40Lu+4qtD36qKc/Hn56StUW57IA==}
+    engines: {node: '>=18'}
+    hasBin: true
 
   plist@3.1.1:
     resolution: {integrity: sha512-ZIfcLJC+7E7FBFnDxm9MPmt7D+DidyQ26lewieO75AdhA2ayMtsJSES0iWzqJQbcVRSrTufQoy0DR94xHue0oA==}
@@ -12766,6 +12777,8 @@ snapshots:
       thread-stream: 3.1.0
 
   pirates@4.0.7: {}
+
+  playwright-core@1.60.0: {}
 
   plist@3.1.1:
     dependencies:

@@ -501,163 +501,240 @@ export async function sendCancellationNotificationEmail(
 function generateInvoicePdf(booking: any, clubName: string, vatPct: number, cancelPolicy?: CancelPolicy | null): Promise<Buffer> {
   return new Promise((resolve, reject) => {
     const chunks: Buffer[] = [];
-    const doc = new PDFDocument({ size: "A4", margin: 50, info: { Title: `Invoice ${booking.booking_ref}`, Author: "TapIn Golf" } });
+    const doc = new PDFDocument({ size: "A4", margin: 0, info: { Title: `Invoice ${booking.booking_ref}`, Author: "TapIn Golf" } });
     doc.on("data", (c: Buffer) => chunks.push(c));
-    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("end",  () => resolve(Buffer.concat(chunks)));
     doc.on("error", reject);
 
+    const L      = 50;                           // left margin
+    const R      = doc.page.width - 50;          // right margin
+    const W      = R - L;                        // content width
     const GREEN  = "#1a5c38";
-    const GOLD   = "#c8a84b";
+    const LGREEN = "#f0fdf4";
+    const BGREEN = "#bbf7d0";
     const GRAY   = "#6b7280";
+    const LGRAY  = "#f9fafb";
+    const DGRAY  = "#f3f4f6";
     const BLACK  = "#111827";
-    const LGRAY  = "#f3f4f6";
-    const W      = doc.page.width - 100; // usable width (50px margin each side)
+    const DKGR   = "#166534";
+    const RED    = "#991b1b";
+    const AMB    = "#92400e";
 
-    // ── Header bar ────────────────────────────────────────────────────────────
-    doc.rect(0, 0, doc.page.width, 90).fill(GREEN);
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(22).text("TapIn Golf", 50, 22);
-    doc.font("Helvetica").fontSize(11).fillColor("rgba(255,255,255,0.75)").text(clubName, 50, 48);
-    doc.fillColor("rgba(255,255,255,0.6)").fontSize(9).text("TAX INVOICE", doc.page.width - 160, 22, { width: 110, align: "right" });
-    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(18).text(booking.booking_ref, doc.page.width - 160, 36, { width: 110, align: "right" });
-    doc.moveDown(0);
-
-    // ── Bill To / Issue Date row ───────────────────────────────────────────────
-    let y = 110;
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("BILL TO", 50, y);
-    doc.fillColor(GRAY).text("ISSUE DATE", 350, y, { width: 200, align: "right" });
-    y += 14;
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(12).text(booking.user_name ?? "", 50, y);
-    const issueDate = new Date(booking.created_at).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
-    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(issueDate, 350, y, { width: 200, align: "right" });
-    y += 16;
-    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(booking.user_email ?? "", 50, y);
-    if (booking.user_phone) { y += 13; doc.text(booking.user_phone, 50, y); }
-    y += 30;
-
-    // ── Booking details box ────────────────────────────────────────────────────
-    doc.rect(50, y, W, 80).fill(LGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("BOOKING DETAILS", 62, y + 10);
-    y += 24;
-    const cols = [
-      ["Date",         booking.tee_date],
-      ["Tee Time",     booking.tee_time],
-      ["Players",      String(booking.players)],
-      ["Service",      `${booking.holes ?? 18} Holes${Number(booking.cart_fee) > 0 ? " + Cart" : ""}`],
-      ["Pricing Tier", fmtTier(booking.price_tier)],
-      ["Status",       String(booking.status ?? "confirmed").toUpperCase()],
-    ];
-    const colW = W / 3;
-    cols.forEach(([label, val], i) => {
-      const cx = 62 + (i % 3) * colW;
-      const cy = y + Math.floor(i / 3) * 26;
-      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, cx, cy);
-      doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(val, cx, cy + 11);
-    });
-    y += 72;
-
-    // ── Line items table ───────────────────────────────────────────────────────
-    y += 18;
-    const myAmount   = Number(booking.my_amount ?? booking.total_amount);
-    const cartFee    = Number(booking.cart_fee ?? 0);
-    const discount   = Number(booking.discount_amount ?? 0);
-    const greenFee   = myAmount - cartFee + discount;
-    const vatAmount  = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
-    const exclVat    = Math.round((myAmount - vatAmount) * 100) / 100;
-
-    // Header row
-    doc.rect(50, y, W, 20).fill(LGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
-      .text("DESCRIPTION", 60, y + 6)
-      .text("AMOUNT", 50 + W - 10, y + 6, { width: 60, align: "right" });
-    y += 20;
-
-    const lineRow = (label: string, amount: string, strike = false) => {
-      doc.rect(50, y, W, 22).fill("#fff").stroke("#f3f4f6");
-      doc.fillColor(strike ? GOLD : BLACK).font("Helvetica").fontSize(10).text(label, 60, y + 6);
-      doc.fillColor(strike ? GOLD : BLACK).text(amount, 50 + W - 10, y + 6, { width: 60, align: "right" });
-      y += 22;
+    // ── Helper: draw a subtle border rect ────────────────────────────────────
+    const borderBox = (x: number, y: number, w: number, h: number, fill: string) => {
+      doc.rect(x, y, w, h).fillAndStroke(fill, "#e5e7eb");
     };
 
-    lineRow(`${booking.holes ?? 18} Holes Green Fee (${fmtTier(booking.price_tier)})`, `R ${greenFee.toFixed(2)}`);
+    // ── HEADER ────────────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 100).fill(GREEN);
+
+    // Left: TapIn Golf + club name
+    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(24)
+       .text("TapIn Golf", L, 24, { lineBreak: false });
+    doc.fillColor("rgba(255,255,255,0.72)").font("Helvetica").fontSize(12)
+       .text(clubName, L, 52, { lineBreak: false });
+
+    // Right: Invoice label + ref + date
+    const paidDate = new Date(booking.created_at).toLocaleString("en-ZA", {
+      timeZone: "Africa/Johannesburg", day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+    });
+    doc.fillColor("rgba(255,255,255,0.55)").font("Helvetica").fontSize(9)
+       .text("Invoice", L, 24, { width: W, align: "right", lineBreak: false });
+    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(20)
+       .text(booking.booking_ref, L, 38, { width: W, align: "right", lineBreak: false });
+    doc.fillColor("rgba(255,255,255,0.65)").font("Helvetica").fontSize(10)
+       .text(paidDate, L, 62, { width: W, align: "right", lineBreak: false });
+
+    // ── BILL TO / PAYMENT STATUS ───────────────────────────────────────────────
+    let y = 118;
+    // Left: Bill To
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Bill To", L, y, { lineBreak: false });
+    // Right: Payment Status
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Payment Status", L, y, { width: W, align: "right", lineBreak: false });
+
+    y += 14;
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(14)
+       .text(booking.user_name ?? "", L, y, { lineBreak: false });
+
+    // Status badge
+    const status = String(booking.status ?? "confirmed");
+    const badgeBg  = (status === "confirmed" || status === "completed") ? "#dcfce7"
+                   : status === "pending" ? "#fef9c3" : "#fee2e2";
+    const badgeCol = (status === "confirmed" || status === "completed") ? DKGR
+                   : status === "pending" ? "#854d0e" : RED;
+    const badgeLabel = status.toUpperCase();
+    const badgeW = 80, badgeH = 18;
+    doc.rect(R - badgeW, y + 2, badgeW, badgeH).fill(badgeBg);
+    doc.fillColor(badgeCol).font("Helvetica-Bold").fontSize(9)
+       .text(badgeLabel, R - badgeW, y + 6, { width: badgeW, align: "center", lineBreak: false });
+
+    y += 18;
+    doc.fillColor(GRAY).font("Helvetica").fontSize(11)
+       .text(booking.user_email ?? "", L, y, { lineBreak: false });
+    if (booking.user_phone) {
+      y += 15;
+      doc.fillColor(GRAY).font("Helvetica").fontSize(11)
+         .text(booking.user_phone, L, y, { lineBreak: false });
+    }
+
+    // Right: Payment Method label + value
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Payment Method", L, y - (booking.user_phone ? 15 : 0) + 2, { width: W, align: "right", lineBreak: false });
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(12)
+       .text(fmtMethod(booking.payment_method), L, y - (booking.user_phone ? 15 : 0) + 16, { width: W, align: "right", lineBreak: false });
+
+    y += 28;
+
+    // ── BOOKING DETAILS ───────────────────────────────────────────────────────
+    const hasCart = Number(booking.cart_fee) > 0;
+    const boxH = 84;
+    borderBox(L, y, W, boxH, LGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Booking Details", L + 14, y + 12, { lineBreak: false });
+
+    const detailCols = [
+      ["Tee Date",     booking.tee_date],
+      ["Tee Time",     booking.tee_time],
+      ["Players",      `${booking.players} player${booking.players !== 1 ? "s" : ""}`],
+      ["Service",      `${booking.holes ?? 18} Holes${hasCart ? " + Golf Cart" : ""}`],
+      ["Pricing Tier", fmtTier(booking.price_tier)],
+      ["Paid On",      paidDate],
+    ];
+    const colW3 = W / 3;
+    detailCols.forEach(([label, val], i) => {
+      const cx = L + 14 + (i % 3) * colW3;
+      const cy = y + 28 + Math.floor(i / 3) * 28;
+      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, cx, cy, { lineBreak: false });
+      doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(11).text(val, cx, cy + 12, { lineBreak: false });
+    });
+    y += boxH + 20;
+
+    // ── LINE ITEMS ────────────────────────────────────────────────────────────
+    const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+    const cartFee   = Number(booking.cart_fee ?? 0);
+    const discount  = Number(booking.discount_amount ?? 0);
+    const greenFee  = myAmount - cartFee + discount;
+    const vatAmount = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
+    const exclVat   = Math.round((myAmount - vatAmount) * 100) / 100;
+
+    // Table header
+    doc.rect(L, y, W, 22).fill(DGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Description", L + 10, y + 7, { lineBreak: false });
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Amount", L, y + 7, { width: W - 10, align: "right", lineBreak: false });
+    y += 22;
+
+    const lineRow = (desc: string, amt: string, color = BLACK) => {
+      doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
+      doc.fillColor(color).font("Helvetica").fontSize(11)
+         .text(desc, L + 10, y + 8, { lineBreak: false });
+      doc.fillColor(color).font("Helvetica").fontSize(11)
+         .text(amt, L, y + 8, { width: W - 10, align: "right", lineBreak: false });
+      y += 28;
+    };
+
+    const greenFeeLabel = `${booking.holes ?? 18} Holes — Green Fee`;
+    const tierLabel = ` (${fmtTier(booking.price_tier)})`;
+    // Draw main line item with tier in gray
+    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
+    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(greenFeeLabel, L + 10, y + 8, { lineBreak: false });
+    const glw = doc.widthOfString(greenFeeLabel);
+    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(tierLabel, L + 10 + glw, y + 9, { lineBreak: false });
+    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(`R ${greenFee.toFixed(2)}`, L, y + 8, { width: W - 10, align: "right", lineBreak: false });
+    y += 28;
+
     if (cartFee > 0) lineRow("Golf Cart Hire", `R ${cartFee.toFixed(2)}`);
-    if (discount > 0) lineRow(`Discount${booking.voucher_code ? ` (${booking.voucher_code})` : ""}`, `− R ${discount.toFixed(2)}`, true);
+    if (discount > 0) lineRow(`Discount${booking.voucher_code ? ` — Voucher ${booking.voucher_code}` : ""}`, `−R ${discount.toFixed(2)}`, "#16a34a");
 
     // Subtotals
-    const subRow = (label: string, val: string) => {
-      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, 60, y + 5);
-      doc.fillColor(GRAY).text(val, 50 + W - 10, y + 5, { width: 60, align: "right" });
-      y += 18;
-    };
-    y += 4;
-    subRow(`Subtotal (excl. VAT)`, `R ${exclVat.toFixed(2)}`);
-    subRow(`VAT (${vatPct}%)`, `R ${vatAmount.toFixed(2)}`);
+    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
+    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text("Subtotal (excl. VAT)", L + 10, y + 6, { lineBreak: false });
+    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`R ${exclVat.toFixed(2)}`, L, y + 6, { width: W - 10, align: "right", lineBreak: false });
+    y += 22;
+    doc.moveTo(L, y).lineTo(R, y).stroke("#f3f4f6");
+    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`VAT (${vatPct}%)`, L + 10, y + 6, { lineBreak: false });
+    doc.fillColor(GRAY).font("Helvetica").fontSize(11).text(`R ${vatAmount.toFixed(2)}`, L, y + 6, { width: W - 10, align: "right", lineBreak: false });
+    y += 22;
 
-    // Total row
-    doc.rect(50, y, W, 30).fill(LGRAY);
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(13).text("Total (incl. VAT)", 60, y + 9);
-    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(15).text(`R ${myAmount.toFixed(2)}`, 50 + W - 10, y + 8, { width: 60, align: "right" });
-    y += 40;
+    // Total row — green background + top border
+    doc.rect(L, y, W, 36).fill(LGREEN);
+    doc.moveTo(L, y).lineTo(R, y).lineWidth(2).stroke(BGREEN);
+    doc.lineWidth(1);
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(14).text("Total (incl. VAT)", L + 10, y + 10, { lineBreak: false });
+    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(18).text(`R ${myAmount.toFixed(2)}`, L, y + 9, { width: W - 10, align: "right", lineBreak: false });
+    y += 46;
 
-    // ── Payment info ───────────────────────────────────────────────────────────
-    y += 10;
-    doc.rect(50, y, W, 52).fill(LGRAY);
-    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("PAYMENT INFORMATION", 62, y + 10);
-    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text("Payment Method", 62, y + 24);
-    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(fmtMethod(booking.payment_method), 200, y + 24);
-    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text("Reference", 62, y + 38);
-    doc.font("Courier").fontSize(10).text(booking.booking_ref, 200, y + 38);
-    y += 62;
+    // ── PAYMENT REFERENCE ────────────────────────────────────────────────────
+    y += 6;
+    borderBox(L, y, W, 58, LGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+       .text("Payment Reference", L + 14, y + 12, { lineBreak: false });
+    doc.fillColor(GREEN).font("Courier-Bold").fontSize(18)
+       .text(booking.booking_ref, L + 14, y + 26, { lineBreak: false });
+    doc.fillColor(GRAY).font("Helvetica").fontSize(9)
+       .text("Use this reference for any payment queries", L + 14, y + 46, { lineBreak: false });
+    y += 68;
 
-    // ── Cancellation policy ────────────────────────────────────────────────────
+    // ── CANCELLATION POLICY ───────────────────────────────────────────────────
     if (cancelPolicy) {
-      y += 10;
-      doc.rect(50, y, W, 16).fill(GREEN);
-      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(8).text(`CANCELLATION POLICY — ${clubName.toUpperCase()}`, 62, y + 5);
-      y += 16;
+      y += 6;
+      // Section header bar
+      doc.rect(L, y, W, 22).fill(GREEN);
+      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(9)
+         .text(`Cancellation Policy — ${clubName}`, L + 14, y + 7, { lineBreak: false });
+      y += 22;
 
-      const policyRows: [string, string][] = [
+      const pRows: [string, string][] = [
         ["Cancellation Window", fmtWindow(cancelPolicy.windowMinutes)],
         ["Cancellation Fee",    `${cancelPolicy.feePct}% of booking total`],
       ];
-      if (cancelPolicy.contactEmail) policyRows.push(["Refund Contact (Email)", cancelPolicy.contactEmail]);
-      if (cancelPolicy.contactPhone) policyRows.push(["Refund Contact (Phone)", cancelPolicy.contactPhone]);
+      if (cancelPolicy.contactEmail) pRows.push(["Refund Contact (Email)", cancelPolicy.contactEmail]);
+      if (cancelPolicy.contactPhone) pRows.push(["Refund Contact (Phone)", cancelPolicy.contactPhone]);
 
-      policyRows.forEach(([label, val], i) => {
-        doc.rect(50, y, W, 20).fill(i % 2 === 0 ? "#f0fdf4" : "#fff");
-        doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, 62, y + 6);
-        doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(9).text(val, 250, y + 6);
-        y += 20;
+      pRows.forEach(([label, val], i) => {
+        doc.rect(L, y, W, 22).fill(i % 2 === 0 ? LGREEN : "#fff");
+        doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(label, L + 14, y + 7, { lineBreak: false });
+        doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(val, L + 180, y + 7, { lineBreak: false });
+        y += 22;
       });
 
       if (cancelPolicy.refundTiers.length > 0) {
-        y += 6;
-        doc.rect(50, y, W / 2 - 5, 18).fill(LGRAY);
-        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("NOTICE PERIOD", 62, y + 6);
-        doc.rect(50 + W / 2 + 5, y, W / 2 - 5, 18).fill(LGRAY);
-        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("REFUND", 60 + W / 2 + 5, y + 6);
-        y += 18;
+        y += 8;
+        // Tier table header
+        doc.rect(L, y, W / 2 - 4, 20).fill(DGRAY);
+        doc.rect(L + W / 2 + 4, y, W / 2 - 4, 20).fill(DGRAY);
+        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8)
+           .text("Notice Period", L + 8, y + 6, { lineBreak: false });
+        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8)
+           .text("Refund", L + W / 2 + 8, y + 6, { lineBreak: false });
+        y += 20;
         cancelPolicy.refundTiers.forEach((t, i) => {
-          const bg = i % 2 === 0 ? "#fff" : "#f9fafb";
-          doc.rect(50, y, W, 18).fill(bg);
-          doc.fillColor(BLACK).font("Helvetica").fontSize(9).text(t.label, 62, y + 5);
-          const col = t.refund_pct === 100 ? GREEN : t.refund_pct === 0 ? "#991b1b" : "#92400e";
-          doc.fillColor(col).font("Helvetica-Bold").fontSize(9).text(`${t.refund_pct}%`, 60 + W - 10, y + 5, { width: 60, align: "right" });
-          y += 18;
+          const bg = i % 2 === 0 ? "#fff" : LGRAY;
+          doc.rect(L, y, W, 20).fill(bg);
+          doc.fillColor(BLACK).font("Helvetica").fontSize(10).text(t.label, L + 8, y + 6, { lineBreak: false });
+          const col = t.refund_pct === 100 ? DKGR : t.refund_pct === 0 ? RED : AMB;
+          doc.fillColor(col).font("Helvetica-Bold").fontSize(10)
+             .text(`${t.refund_pct}%`, L, y + 6, { width: W - 8, align: "right", lineBreak: false });
+          y += 20;
         });
       }
 
       if (cancelPolicy.otherPolicies) {
         y += 8;
-        doc.fillColor(GRAY).font("Helvetica").fontSize(8).text(cancelPolicy.otherPolicies, 62, y, { width: W - 24 });
-        y += doc.heightOfString(cancelPolicy.otherPolicies, { width: W - 24 }) + 8;
+        doc.fillColor(GRAY).font("Helvetica").fontSize(9)
+           .text(cancelPolicy.otherPolicies, L + 14, y, { width: W - 28 });
+        y += doc.heightOfString(cancelPolicy.otherPolicies, { width: W - 28 }) + 8;
       }
     }
 
-    // ── Footer ─────────────────────────────────────────────────────────────────
-    const footerY = doc.page.height - 40;
-    doc.rect(0, footerY - 10, doc.page.width, 50).fill(LGRAY);
-    doc.fillColor(GRAY).font("Helvetica").fontSize(8)
-      .text("TapIn Golf · tapingolf.co.za · This is your official tax invoice. Please retain for your records.", 50, footerY, { width: W, align: "center" });
+    // ── FOOTER ────────────────────────────────────────────────────────────────
+    const footerY = doc.page.height - 44;
+    doc.moveTo(L, footerY - 10).lineTo(R, footerY - 10).stroke("#e5e7eb");
+    doc.fillColor(GRAY).font("Helvetica").fontSize(9)
+       .text("TapIn Golf  ·  tapingolf.co.za  ·  This is your official booking receipt. Please retain for your records.", L, footerY, { width: W, align: "center", lineBreak: false });
 
     doc.end();
   });

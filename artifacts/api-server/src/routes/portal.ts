@@ -886,6 +886,13 @@ router.put("/portal/inbox/read-all", requireClubAuth, async (req: Request, res: 
   res.json({ ok: true });
 });
 
+router.put("/portal/inbox/:id/unread", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const nid = parseInt(req.params.id, 10);
+  await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
+  res.json({ ok: true });
+});
+
 router.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const nid = parseInt(req.params.id, 10);

@@ -72,6 +72,11 @@ export default function Notifications() {
     setInbox(prev => prev.map(n => ({ ...n, read_at: n.read_at ?? new Date().toISOString() })));
   };
 
+  const markUnread = async (id: number) => {
+    await api(`/api/portal/inbox/${id}/unread`, { method: "PUT" }).catch(() => {});
+    setInbox(prev => prev.map(n => n.id === id ? { ...n, read_at: null } : n));
+  };
+
   const markRefundProcessed = async (id: number) => {
     await api(`/api/portal/inbox/${id}/refund-processed`, { method: "PUT" }).catch(() => {});
     const now = new Date().toISOString();
@@ -176,7 +181,7 @@ export default function Notifications() {
                             <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line leading-relaxed">{n.body}</p>
                           </div>
                           <div className="flex flex-col items-end gap-1.5 shrink-0">
-                            {isUnread && (
+                            {isUnread ? (
                               <Button
                                 variant="ghost"
                                 size="sm"
@@ -184,6 +189,15 @@ export default function Notifications() {
                                 onClick={() => markRead(n.id)}
                               >
                                 Dismiss
+                              </Button>
+                            ) : (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs text-muted-foreground h-7 px-2"
+                                onClick={() => markUnread(n.id)}
+                              >
+                                Mark unread
                               </Button>
                             )}
                           </div>

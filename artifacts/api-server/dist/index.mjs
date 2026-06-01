@@ -61913,6 +61913,12 @@ router13.put("/portal/inbox/read-all", requireClubAuth, async (req, res) => {
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE club_id = ? AND read_at IS NULL", [club.id]);
   res.json({ ok: true });
 });
+router13.put("/portal/inbox/:id/unread", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const nid = parseInt(req.params.id, 10);
+  await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
+  res.json({ ok: true });
+});
 router13.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const nid = parseInt(req.params.id, 10);

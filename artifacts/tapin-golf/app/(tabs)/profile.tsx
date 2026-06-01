@@ -731,7 +731,9 @@ export default function ProfileScreen() {
                       <View style={styles.voucherCardMeta}>
                         {v.value_rands != null && (
                           <Text style={[styles.voucherMeta, { color: colors.foreground }]}>
-                            R{Number(v.value_rands).toFixed(2)} off
+                            {v.value_remaining != null && Number(v.value_remaining) < Number(v.value_rands)
+                              ? `R${Number(v.value_remaining).toFixed(2)} remaining (of R${Number(v.value_rands).toFixed(2)})`
+                              : `R${Number(v.value_rands).toFixed(2)} off`}
                           </Text>
                         )}
                         {expDate && (

@@ -58608,9 +58608,10 @@ router4.post("/bookings", async (req, res) => {
         "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ?",
         [codeUpper, user.id]
       );
-      const cvValid = cv && !cv.redeemed_at && (!cv.expires_at || new Date(cv.expires_at) > /* @__PURE__ */ new Date()) && cv.club_id === slot.club_id;
+      const cvRemaining = cv ? cv.value_remaining != null ? parseFloat(cv.value_remaining) : cv.value_rands ? parseFloat(cv.value_rands) : 0 : 0;
+      const cvValid = cv && !cv.redeemed_at && cvRemaining > 0 && (!cv.expires_at || new Date(cv.expires_at) > /* @__PURE__ */ new Date()) && cv.club_id === slot.club_id;
       if (cvValid) {
-        discountAmount = Math.min(parseFloat(cv.value_rands ?? "0"), totalGreens);
+        discountAmount = Math.min(cvRemaining, totalGreens);
         appliedVoucher = cv.code;
         isCancellationVoucher = true;
       }
@@ -58711,7 +58712,14 @@ router4.post("/bookings", async (req, res) => {
     }
     if (appliedVoucher) {
       if (isCancellationVoucher) {
-        await clientQuery(client, "UPDATE cancellation_vouchers SET redeemed_at = NOW() WHERE code = ?", [appliedVoucher]);
+        await clientQuery(
+          client,
+          `UPDATE cancellation_vouchers
+             SET value_remaining = GREATEST(0, COALESCE(value_remaining, value_rands) - ?),
+                 redeemed_at     = CASE WHEN GREATEST(0, COALESCE(value_remaining, value_rands) - ?) = 0 THEN NOW() ELSE redeemed_at END
+           WHERE code = ?`,
+          [discountAmount, discountAmount, appliedVoucher]
+        );
       } else {
         await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
       }
@@ -59832,8 +59840,9 @@ router8.post("/vouchers/validate", async (req, res) => {
       res.status(404).json({ valid: false, message: "Cancellation voucher not found or not assigned to your account" });
       return;
     }
-    if (cv.redeemed_at) {
-      res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+    const remaining = cv.value_remaining != null ? parseFloat(cv.value_remaining) : cv.value_rands ? parseFloat(cv.value_rands) : 0;
+    if (cv.redeemed_at || remaining <= 0) {
+      res.status(400).json({ valid: false, message: "This voucher has already been fully redeemed" });
       return;
     }
     if (cv.expires_at && new Date(cv.expires_at) < /* @__PURE__ */ new Date()) {
@@ -59844,16 +59853,16 @@ router8.post("/vouchers/validate", async (req, res) => {
       res.status(400).json({ valid: false, message: `This voucher is only valid at ${cv.club_name}` });
       return;
     }
-    const voucherValue = cv.value_rands ? parseFloat(cv.value_rands) : 0;
-    const discountAmount2 = Math.min(voucherValue, orderAmount);
+    const discountAmount2 = Math.min(remaining, orderAmount);
     const finalAmount2 = Math.max(0, orderAmount - discountAmount2);
     res.json({
       valid: true,
       code: cv.code,
       discount_type: "fixed",
-      discount_value: voucherValue,
+      discount_value: remaining,
       discount_amount: discountAmount2,
       final_amount: finalAmount2,
+      value_remaining: remaining,
       is_cancellation_voucher: true,
       club_id: cv.club_id,
       club_name: cv.club_name
@@ -60307,8 +60316,9 @@ router9.post("/cancellation-vouchers/validate", async (req, res) => {
     res.status(404).json({ valid: false, message: "Voucher not found or not assigned to your account" });
     return;
   }
-  if (voucher.redeemed_at) {
-    res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+  const remaining = voucher.value_remaining != null ? parseFloat(voucher.value_remaining) : voucher.value_rands ? parseFloat(voucher.value_rands) : 0;
+  if (voucher.redeemed_at || remaining <= 0) {
+    res.status(400).json({ valid: false, message: "This voucher has already been fully redeemed" });
     return;
   }
   if (voucher.expires_at && new Date(voucher.expires_at) < /* @__PURE__ */ new Date()) {
@@ -60319,6 +60329,7 @@ router9.post("/cancellation-vouchers/validate", async (req, res) => {
     valid: true,
     code: voucher.code,
     value_rands: voucher.value_rands ? parseFloat(voucher.value_rands) : null,
+    value_remaining: remaining,
     club_name: voucher.club_name,
     club_id: voucher.club_id,
     expires_at: voucher.expires_at
@@ -65075,6 +65086,8 @@ async function createSchema() {
   await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS to_time TIME");
   await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
+  await ddl("ALTER TABLE cancellation_vouchers ADD COLUMN IF NOT EXISTS value_remaining NUMERIC(10,2)");
+  await ddl("UPDATE cancellation_vouchers SET value_remaining = value_rands WHERE value_remaining IS NULL AND value_rands IS NOT NULL");
 }
 var SEED_REVIEWS = [
   {

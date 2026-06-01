@@ -30,8 +30,10 @@ router.post("/vouchers/validate", async (req, res): Promise<void> => {
       res.status(404).json({ valid: false, message: "Cancellation voucher not found or not assigned to your account" });
       return;
     }
-    if (cv.redeemed_at) {
-      res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+    // Fully redeemed when value_remaining = 0 (or redeemed_at set as fallback)
+    const remaining = cv.value_remaining != null ? parseFloat(cv.value_remaining) : (cv.value_rands ? parseFloat(cv.value_rands) : 0);
+    if (cv.redeemed_at || remaining <= 0) {
+      res.status(400).json({ valid: false, message: "This voucher has already been fully redeemed" });
       return;
     }
     if (cv.expires_at && new Date(cv.expires_at) < new Date()) {
@@ -42,19 +44,19 @@ router.post("/vouchers/validate", async (req, res): Promise<void> => {
       res.status(400).json({ valid: false, message: `This voucher is only valid at ${cv.club_name}` });
       return;
     }
-    const voucherValue   = cv.value_rands ? parseFloat(cv.value_rands) : 0;
-    const discountAmount = Math.min(voucherValue, orderAmount);
+    const discountAmount = Math.min(remaining, orderAmount);
     const finalAmount    = Math.max(0, orderAmount - discountAmount);
     res.json({
-      valid:                 true,
-      code:                  cv.code,
-      discount_type:         "fixed",
-      discount_value:        voucherValue,
-      discount_amount:       discountAmount,
-      final_amount:          finalAmount,
+      valid:                   true,
+      code:                    cv.code,
+      discount_type:           "fixed",
+      discount_value:          remaining,
+      discount_amount:         discountAmount,
+      final_amount:            finalAmount,
+      value_remaining:         remaining,
       is_cancellation_voucher: true,
-      club_id:               cv.club_id,
-      club_name:             cv.club_name,
+      club_id:                 cv.club_id,
+      club_name:               cv.club_name,
     });
     return;
   }

@@ -557,12 +557,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
         "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ?",
         [codeUpper, user.id]
       );
+      const cvRemaining = cv ? (cv.value_remaining != null ? parseFloat(cv.value_remaining) : (cv.value_rands ? parseFloat(cv.value_rands) : 0)) : 0;
       const cvValid = cv &&
         !cv.redeemed_at &&
+        cvRemaining > 0 &&
         (!cv.expires_at || new Date(cv.expires_at) > new Date()) &&
         cv.club_id === slot.club_id;
       if (cvValid) {
-        discountAmount        = Math.min(parseFloat(cv.value_rands ?? "0"), totalGreens);
+        discountAmount        = Math.min(cvRemaining, totalGreens);
         appliedVoucher        = cv.code;
         isCancellationVoucher = true;
       }
@@ -672,7 +674,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
     }
     if (appliedVoucher) {
       if (isCancellationVoucher) {
-        await clientQuery(client, "UPDATE cancellation_vouchers SET redeemed_at = NOW() WHERE code = ?", [appliedVoucher]);
+        // Deduct the used portion from value_remaining; mark fully redeemed only when exhausted
+        await clientQuery(client,
+          `UPDATE cancellation_vouchers
+             SET value_remaining = GREATEST(0, COALESCE(value_remaining, value_rands) - ?),
+                 redeemed_at     = CASE WHEN GREATEST(0, COALESCE(value_remaining, value_rands) - ?) = 0 THEN NOW() ELSE redeemed_at END
+           WHERE code = ?`,
+          [discountAmount, discountAmount, appliedVoucher]
+        );
       } else {
         await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
       }

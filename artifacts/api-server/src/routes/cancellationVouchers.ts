@@ -437,8 +437,11 @@ router.post("/cancellation-vouchers/validate", async (req, res): Promise<void> =
     res.status(404).json({ valid: false, message: "Voucher not found or not assigned to your account" });
     return;
   }
-  if (voucher.redeemed_at) {
-    res.status(400).json({ valid: false, message: "This voucher has already been redeemed" });
+  const remaining = voucher.value_remaining != null
+    ? parseFloat(voucher.value_remaining)
+    : (voucher.value_rands ? parseFloat(voucher.value_rands) : 0);
+  if (voucher.redeemed_at || remaining <= 0) {
+    res.status(400).json({ valid: false, message: "This voucher has already been fully redeemed" });
     return;
   }
   if (voucher.expires_at && new Date(voucher.expires_at) < new Date()) {
@@ -447,12 +450,13 @@ router.post("/cancellation-vouchers/validate", async (req, res): Promise<void> =
   }
 
   res.json({
-    valid:       true,
-    code:        voucher.code,
-    value_rands: voucher.value_rands ? parseFloat(voucher.value_rands) : null,
-    club_name:   voucher.club_name,
-    club_id:     voucher.club_id,
-    expires_at:  voucher.expires_at,
+    valid:           true,
+    code:            voucher.code,
+    value_rands:     voucher.value_rands     ? parseFloat(voucher.value_rands)     : null,
+    value_remaining: remaining,
+    club_name:       voucher.club_name,
+    club_id:         voucher.club_id,
+    expires_at:      voucher.expires_at,
   });
 });
 

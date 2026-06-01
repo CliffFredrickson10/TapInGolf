@@ -821,6 +821,8 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE cancellation_voucher_batches ADD COLUMN IF NOT EXISTS to_time TIME");
   await ddl("ALTER TABLE cancellation_voucher_batches ALTER COLUMN issued_by DROP NOT NULL");
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
+  await ddl("ALTER TABLE cancellation_vouchers ADD COLUMN IF NOT EXISTS value_remaining NUMERIC(10,2)");
+  await ddl("UPDATE cancellation_vouchers SET value_remaining = value_rands WHERE value_remaining IS NULL AND value_rands IS NOT NULL");
 }
 
 // ── Seed reviews ──────────────────────────────────────────────────────────────

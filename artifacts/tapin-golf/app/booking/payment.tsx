@@ -8,6 +8,25 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 
+// Matches ONLY the navigation target's path — never the `redirect_url` query
+// param embedded in the Stitch payment URL. react-native-webview often reports
+// request.url with the query string decoded, so a naive substring check on the
+// initial page load would match the `redirect_url=.../booking/success` param and
+// instantly bounce the user out before the Stitch page ever renders.
+function matchRedirect(rawUrl: string): "success" | "cancel" | null {
+  if (!rawUrl) return null;
+  let path = rawUrl;
+  try {
+    path = new URL(rawUrl).pathname;
+  } catch {
+    // Fallback: strip query/fragment manually if URL() is unavailable
+    path = rawUrl.split("?")[0].split("#")[0];
+  }
+  if (path.endsWith("/booking/success")) return "success";
+  if (path.endsWith("/booking/cancel")) return "cancel";
+  return null;
+}
+
 export default function PaymentScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -185,20 +204,16 @@ export default function PaymentScreen() {
         style={{ flex: 1 }}
         // Layer 1: intercept before the page loads (works for most GET redirects)
         onShouldStartLoadWithRequest={(request) => {
-          if (request.url.includes("/booking/success")) {
-            handleSuccess();
-            return false;
-          }
-          if (request.url.includes("/booking/cancel")) {
-            handleCancel();
-            return false;
-          }
+          const result = matchRedirect(request.url);
+          if (result === "success") { handleSuccess(); return false; }
+          if (result === "cancel")  { handleCancel();  return false; }
           return true;
         }}
         // Layer 2: fallback for server-side 302 redirects that bypass layer 1
         onNavigationStateChange={(nav) => {
-          if (nav.url.includes("/booking/success")) handleSuccess();
-          if (nav.url.includes("/booking/cancel")) handleCancel();
+          const result = matchRedirect(nav.url);
+          if (result === "success") handleSuccess();
+          if (result === "cancel")  handleCancel();
         }}
       />
 

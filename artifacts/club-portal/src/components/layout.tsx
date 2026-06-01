@@ -13,6 +13,7 @@ import {
   LogOut,
   Images,
   CircleDollarSign,
+  CreditCard,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -26,6 +27,7 @@ const navItems = [
   { href: "/members", label: "Members", icon: Users },
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign },
   { href: "/vouchers", label: "Vouchers", icon: Ticket },
+  { href: "/payments", label: "Payments", icon: CreditCard },
   { href: "/notifications", label: "Notifications", icon: Bell },
 ];
 

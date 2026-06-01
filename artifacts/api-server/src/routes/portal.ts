@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import multer from "multer";
 import { query, row, exec, run } from "../lib/pg";
 import { objectStorageClient } from "../lib/objectStorage";
-import { generateOTP, hashOTP, generateResetToken, sendOTPEmail } from "../lib/otp";
+import { generateOTP, hashOTP, generateResetToken, sendOTPEmail, sendInvoiceEmail } from "../lib/otp";
 import { logger } from "../lib/logger";
 
 // Normalize tee_start_type: the portal sends snake_case, the DB constraint requires display format
@@ -1010,6 +1010,96 @@ router.put("/portal/pricing-tiers", requireClubAuth, async (req: Request, res: R
     );
   }
   res.json({ message: "Pricing tiers saved" });
+});
+
+// ─── PAYMENTS ────────────────────────────────────────────────────────────────
+
+router.get("/portal/payments", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { status, from, to, search, limit = 200, offset = 0 } = req.query as any;
+
+  let sql = `
+    SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
+           b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
+           b.discount_amount, b.voucher_code, b.created_at, b.holes,
+           u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
+           pts.date AS tee_date, pts.tee_time AS tee_time,
+           COALESCE(
+             (SELECT json_agg(json_build_object(
+                'name',  COALESCE(pu.name, bp.guest_name, 'Guest'),
+                'email', pu.email,
+                'amount', COALESCE(bp.amount, 0),
+                'paid', CASE WHEN bp.paid = 1 OR bp.paid IS TRUE THEN true ELSE false END
+             ) ORDER BY bp.id)
+              FROM booking_players bp
+              LEFT JOIN users pu ON bp.user_id = pu.id
+             WHERE bp.booking_id = b.id),
+             '[]'::json
+           ) AS players_list
+    FROM bookings b
+    JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+    JOIN users u ON b.user_id = u.id
+    WHERE pts.club_id = ?`;
+  const params: any[] = [club.id];
+
+  if (status && status !== "all") { sql += " AND b.status = ?"; params.push(status); }
+  if (from) { sql += " AND pts.date >= ?"; params.push(from); }
+  if (to) { sql += " AND pts.date <= ?"; params.push(to); }
+  if (search) {
+    sql += " AND (u.name ILIKE ? OR u.email ILIKE ? OR b.booking_ref ILIKE ?)";
+    params.push(`%${search}%`, `%${search}%`, `%${search}%`);
+  }
+  sql += ` ORDER BY b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+
+  const rows = await query<any>(sql, params);
+  res.json(rows.map((r: any) => ({
+    ...r,
+    tee_date: String(r.tee_date).slice(0, 10),
+    tee_time: String(r.tee_time).slice(0, 5),
+    total_amount:    Number(r.total_amount ?? 0),
+    my_amount:       Number(r.my_amount ?? 0),
+    club_amount:     Number(r.club_amount ?? 0),
+    cart_fee:        Number(r.cart_fee ?? 0),
+    platform_fee:    Number(r.platform_fee ?? 0),
+    discount_amount: Number(r.discount_amount ?? 0),
+    holes:           r.holes ? Number(r.holes) : 18,
+    price_tier:      null,
+    split_bill:      !!r.split_bill,
+    players_list:    typeof r.players_list === "string" ? JSON.parse(r.players_list) : (r.players_list ?? []),
+  })));
+});
+
+router.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const bId = Number(req.params.id);
+
+  const b = await row<any>(`
+    SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
+           b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
+           b.discount_amount, b.voucher_code, b.created_at, b.holes,
+           u.name AS user_name, u.email AS user_email,
+           pts.date AS tee_date, pts.tee_time AS tee_time
+    FROM bookings b
+    JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+    JOIN users u ON b.user_id = u.id
+    WHERE b.id = ? AND pts.club_id = ?`,
+    [bId, club.id]
+  );
+  if (!b) { res.status(404).json({ message: "Booking not found" }); return; }
+
+  const players = await query<any>(
+    `SELECT COALESCE(u.name, bp.guest_name, 'Guest') AS name, u.email, bp.amount, bp.paid
+     FROM booking_players bp LEFT JOIN users u ON bp.user_id = u.id WHERE bp.booking_id = ? ORDER BY bp.id`,
+    [bId]
+  );
+
+  try {
+    await sendInvoiceEmail({ ...b, tee_date: String(b.tee_date).slice(0, 10), tee_time: String(b.tee_time).slice(0, 5), players_list: players }, club.name);
+    res.json({ message: "Invoice sent to " + b.user_email });
+  } catch (err) {
+    logger.error({ err }, "Failed to send invoice email");
+    res.status(500).json({ message: "Failed to send invoice email" });
+  }
 });
 
 export default router;

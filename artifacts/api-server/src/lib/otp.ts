@@ -203,3 +203,138 @@ async function sendWhatsApp(phone: string, message: string): Promise<boolean> {
     return false;
   }
 }
+
+// ─── Invoice email ──────────────────────────────────────────────────────────
+
+function fmtMethod(m: string): string {
+  const map: Record<string, string> = { stitch: "Stitch (Instant EFT / Card)", wallet: "TapIn Wallet", prepaid: "Prepaid Rounds", card: "Card" };
+  return map[m] ?? m;
+}
+
+function fmtTier(t: string | null | undefined): string {
+  const map: Record<string, string> = { visitor: "Visitor", hna: "HNA Affiliated", member: "Member" };
+  return t ? (map[t] ?? t) : "Standard";
+}
+
+function invoiceHtml(booking: any, clubName: string): string {
+  const holes = booking.holes ?? 18;
+  const hasCart = Number(booking.cart_fee) > 0;
+  const greenFee = Number(booking.total_amount) - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
+  const playerRows = (booking.players_list ?? []).map((p: any) =>
+    `<tr><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6">${p.name}${p.email ? ` <span style="color:#9ca3af;font-size:12px">&lt;${p.email}&gt;</span>` : ""}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(p.amount).toFixed(2)}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:center">${p.paid ? "✓ Paid" : "Pending"}</td></tr>`
+  ).join("");
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Invoice ${booking.booking_ref}</title></head>
+<body style="margin:0;padding:40px 24px;font-family:Arial,sans-serif;color:#111827;background:#f9fafb">
+  <div style="max-width:640px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+    <div style="background:#1a5c38;color:#fff;padding:32px 40px;display:flex;justify-content:space-between;align-items:center">
+      <div>
+        <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">TapIn Golf</div>
+        <div style="font-size:13px;opacity:0.75;margin-top:2px">${clubName}</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:13px;opacity:0.7;text-transform:uppercase;letter-spacing:1px">Invoice</div>
+        <div style="font-size:22px;font-weight:700;letter-spacing:1px">${booking.booking_ref}</div>
+      </div>
+    </div>
+    <div style="padding:36px 40px">
+      <div style="display:flex;justify-content:space-between;margin-bottom:32px;gap:24px">
+        <div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:6px">Bill To</div>
+          <div style="font-size:15px;font-weight:600">${booking.user_name}</div>
+          <div style="color:#6b7280;font-size:13px">${booking.user_email}</div>
+          ${booking.user_phone ? `<div style="color:#6b7280;font-size:13px">${booking.user_phone}</div>` : ""}
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:6px">Issue Date</div>
+          <div style="font-size:14px">${new Date(booking.created_at).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" })}</div>
+          <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-top:12px;margin-bottom:6px">Status</div>
+          <div style="display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;font-weight:600;background:${booking.status === "confirmed" || booking.status === "completed" ? "#dcfce7;color:#166534" : booking.status === "pending" ? "#fef9c3;color:#854d0e" : "#fee2e2;color:#991b1b"}">${String(booking.status).toUpperCase()}</div>
+        </div>
+      </div>
+
+      <div style="background:#f9fafb;border-radius:8px;padding:16px 20px;margin-bottom:28px;border:1px solid #e5e7eb">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Booking Details</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><span style="color:#6b7280;font-size:13px">Date</span><div style="font-weight:600;font-size:14px">${booking.tee_date}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Tee Time</span><div style="font-weight:600;font-size:14px">${booking.tee_time}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Players</span><div style="font-weight:600;font-size:14px">${booking.players}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Service</span><div style="font-weight:600;font-size:14px">${holes} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Pricing Tier</span><div style="font-weight:600;font-size:14px">${fmtTier(booking.price_tier)}</div></div>
+          <div><span style="color:#6b7280;font-size:13px">Split Bill</span><div style="font-weight:600;font-size:14px">${booking.split_bill ? "Yes" : "No"}</div></div>
+        </div>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:28px">
+        <thead>
+          <tr style="background:#f3f4f6">
+            <th style="padding:10px 8px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Description</th>
+            <th style="padding:10px 8px;text-align:right;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:0.5px;color:#6b7280">Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6">${holes} Holes Green Fee (${fmtTier(booking.price_tier)})</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${greenFee.toFixed(2)}</td></tr>
+          ${hasCart ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6">Golf Cart Hire</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(booking.cart_fee).toFixed(2)}</td></tr>` : ""}
+          ${Number(booking.discount_amount) > 0 ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;color:#16a34a">Discount${booking.voucher_code ? ` (${booking.voucher_code})` : ""}</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;color:#16a34a">−R ${Number(booking.discount_amount).toFixed(2)}</td></tr>` : ""}
+          ${Number(booking.platform_fee) > 0 ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;color:#6b7280">Platform Fee</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;color:#6b7280">R ${Number(booking.platform_fee).toFixed(2)}</td></tr>` : ""}
+        </tbody>
+        <tfoot>
+          <tr style="background:#f9fafb">
+            <td style="padding:14px 8px;font-weight:700;font-size:16px">Total</td>
+            <td style="padding:14px 8px;font-weight:700;font-size:18px;text-align:right;color:#1a5c38">R ${Number(booking.total_amount).toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      ${booking.split_bill && playerRows ? `
+      <div style="margin-bottom:28px">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Split Bill Breakdown</div>
+        <table style="width:100%;border-collapse:collapse">
+          <thead><tr style="background:#f3f4f6"><th style="padding:8px;text-align:left;font-size:12px;color:#6b7280">Player</th><th style="padding:8px;text-align:right;font-size:12px;color:#6b7280">Amount</th><th style="padding:8px;text-align:center;font-size:12px;color:#6b7280">Payment</th></tr></thead>
+          <tbody>${playerRows}</tbody>
+        </table>
+      </div>` : ""}
+
+      <div style="background:#f9fafb;border-radius:8px;padding:16px 20px;border:1px solid #e5e7eb">
+        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Payment Information</div>
+        <div style="display:flex;justify-content:space-between;font-size:14px"><span style="color:#6b7280">Payment Method</span><span style="font-weight:600">${fmtMethod(booking.payment_method)}</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:14px;margin-top:6px"><span style="color:#6b7280">Reference</span><span style="font-family:monospace;font-weight:600">${booking.booking_ref}</span></div>
+      </div>
+    </div>
+    <div style="padding:20px 40px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:12px">
+      TapIn Golf · tapingolf.co.za · This is your official booking receipt. Please retain for your records.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+export async function sendInvoiceEmail(booking: any, clubName: string): Promise<{ dev?: boolean }> {
+  const html = invoiceHtml(booking, clubName);
+  const subject = `Your TapIn Golf Invoice — ${booking.booking_ref}`;
+  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nTotal Amount: R ${Number(booking.total_amount).toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
+
+  if (EMAIL_DEV_MODE()) {
+    logger.info({ email: booking.user_email, booking_ref: booking.booking_ref }, "[DEV] Invoice email — no SMTP credentials configured");
+    return { dev: true };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host:   SMTP_HOST(),
+    port:   SMTP_PORT(),
+    secure: SMTP_PORT() === 465,
+    auth: { user: SMTP_USER(), pass: SMTP_PASS() },
+  });
+
+  await transporter.sendMail({
+    from:    SMTP_FROM(),
+    to:      booking.user_email,
+    subject,
+    text,
+    html,
+  });
+
+  return {};
+}

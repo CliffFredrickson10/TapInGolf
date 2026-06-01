@@ -24,6 +24,7 @@ import StaffGeofence from "@/pages/staff/geofence";
 import StaffEventsMembers from "@/pages/staff/events-members";
 import StaffHnaReview from "@/pages/staff/hna-review";
 import StaffModeration from "@/pages/staff/moderation";
+import Payments from "@/pages/payments";
 
 function Router() {
   const { club, staff, loading } = useAuth();
@@ -74,6 +75,7 @@ function Router() {
         <Route path="/members" component={Members} />
         <Route path="/vouchers" component={Vouchers} />
         <Route path="/pricing" component={Pricing} />
+        <Route path="/payments" component={Payments} />
         <Route path="/notifications" component={Notifications} />
         <Route>
           <div className="p-8">

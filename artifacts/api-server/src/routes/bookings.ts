@@ -607,6 +607,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
     ? organizerGreens + cartShare
     : totalAmount;
 
+  // If a voucher covers the full amount no gateway is needed — override to "voucher"
+  // so the booking is auto-confirmed without trying to send R0 to Stitch.
+  const effectivePaymentMethod = splitAmount <= 0 ? "voucher" : payment_method;
+
   // Each invited player's payment: their individual tier price + cart share (split) or R0 (organizer pays all)
   const friendAmounts = invitedGreens.map(g => split_bill ? g + cartShare : 0);
 
@@ -619,7 +623,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
 
   // Pre-flight wallet balance check (outside transaction for a clear error response)
-  if (payment_method === "wallet") {
+  if (effectivePaymentMethod === "wallet") {
     const walletRow = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
     const available = walletRow ? parseFloat(walletRow.balance) : 0;
     if (available < splitAmount) {
@@ -641,7 +645,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
        numPlayers, split_bill ? 1 : 0, totalAmount, splitAmount,
-       ref, payment_method, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles]
+       ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles]
     );
     bookingId = insertResult.rows[0].id;
 
@@ -666,10 +670,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
       }
     }
 
-    // Confirm immediately only for payments settled at creation (prepaid, wallet).
+    // Confirm immediately only for payments settled at creation (prepaid, wallet, voucher).
     // Stitch bookings stay 'pending' until the payment webhook confirms them, so
     // an abandoned checkout never permanently holds the slot.
-    if (payment_method !== "stitch") {
+    if (effectivePaymentMethod !== "stitch") {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -703,11 +707,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    // For non-Stitch payments (prepaid, wallet) the organizer is paid immediately
-    if (payment_method !== "stitch") {
+    // For non-Stitch payments (prepaid, wallet, voucher) the organizer is paid immediately
+    if (effectivePaymentMethod !== "stitch") {
       await clientQuery(client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
-        [payment_method, bookingId, user.id]
+        [effectivePaymentMethod, bookingId, user.id]
       );
     }
     // Track booked players in the portal slot
@@ -717,13 +721,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
     );
   });
 
-  // Auto-send invoice for payments confirmed immediately (prepaid / wallet)
-  if (payment_method !== "stitch") {
+  // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
+  if (effectivePaymentMethod !== "stitch") {
     fireInvoiceEmail(bookingId).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
-  if (payment_method === "stitch") {
+  if (effectivePaymentMethod === "stitch") {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({

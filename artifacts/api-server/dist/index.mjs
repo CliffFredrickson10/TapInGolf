@@ -58641,13 +58641,14 @@ router4.post("/bookings", async (req, res) => {
   const greensAfterDiscount = Math.max(0, totalGreens - discountAmount);
   const totalAmount = greensAfterDiscount + cartFee;
   const splitAmount = split_bill && numPlayers > 1 ? organizerGreens + cartShare : totalAmount;
+  const effectivePaymentMethod = splitAmount <= 0 ? "voucher" : payment_method;
   const friendAmounts = invitedGreens.map((g) => split_bill ? g + cartShare : 0);
   const ref = generateRef();
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
   const feePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
   const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
   const clubAmount = Math.round((totalAmount - platformFee) * 100) / 100;
-  if (payment_method === "wallet") {
+  if (effectivePaymentMethod === "wallet") {
     const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
     const available = walletRow ? parseFloat(walletRow.balance) : 0;
     if (available < splitAmount) {
@@ -58675,7 +58676,7 @@ router4.post("/bookings", async (req, res) => {
         totalAmount,
         splitAmount,
         ref,
-        payment_method,
+        effectivePaymentMethod,
         appliedVoucher,
         discountAmount,
         cartFee,
@@ -58707,7 +58708,7 @@ router4.post("/bookings", async (req, res) => {
         );
       }
     }
-    if (payment_method !== "stitch") {
+    if (effectivePaymentMethod !== "stitch") {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -58741,11 +58742,11 @@ router4.post("/bookings", async (req, res) => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    if (payment_method !== "stitch") {
+    if (effectivePaymentMethod !== "stitch") {
       await clientQuery(
         client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
-        [payment_method, bookingId, user.id]
+        [effectivePaymentMethod, bookingId, user.id]
       );
     }
     await clientQuery(
@@ -58754,12 +58755,12 @@ router4.post("/bookings", async (req, res) => {
       [numPlayers, parseInt(tee_time_id)]
     );
   });
-  if (payment_method !== "stitch") {
+  if (effectivePaymentMethod !== "stitch") {
     fireInvoiceEmail(bookingId).catch(() => {
     });
   }
   let paymentUrl = null;
-  if (payment_method === "stitch") {
+  if (effectivePaymentMethod === "stitch") {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({

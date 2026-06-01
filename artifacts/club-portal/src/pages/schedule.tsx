@@ -146,11 +146,11 @@ const STATUS_LABEL: Record<string, string> = {
   completed: "Completed",
 };
 const CELL_BG: Record<string, string> = {
-  open: "bg-green-50 text-green-700",
+  open: "text-gray-400",
   unavailable: "bg-red-50 text-red-500",
   blocked: "bg-orange-50 text-orange-600 ring-1 ring-inset ring-orange-200",
-  na: "bg-gray-50 text-gray-300",
-  confirmed: "bg-green-100 text-green-800",
+  na: "text-gray-300",
+  confirmed: "bg-[#1a5c38] text-white",
   pending: "bg-yellow-50 text-yellow-900 ring-1 ring-inset ring-yellow-300",
   cancelled: "bg-red-50 text-red-400 line-through",
   completed: "bg-blue-50 text-blue-700",
@@ -1253,9 +1253,9 @@ export default function Schedule() {
       {/* Legend */}
       <div className="px-8 pb-3 flex items-center gap-4 text-xs text-muted-foreground flex-shrink-0">
         {[
-          { color: "bg-green-100 border-green-200", label: "Confirmed" },
+          { color: "bg-[#1a5c38] border-[#1a5c38]", label: "Confirmed" },
           { color: "bg-yellow-50 border-yellow-300 ring-1 ring-yellow-300", label: "Pending Payment" },
-          { color: "bg-green-50 border-green-200",    label: "Open" },
+          { color: "bg-white border-gray-300",        label: "Open" },
           { color: "bg-orange-50 border-orange-200", label: "Blocked slot" },
           { color: "bg-red-50 border-red-200",       label: "Unavailable" },
           { color: "bg-gray-100 border-gray-200",    label: "N/A" },
@@ -1350,8 +1350,8 @@ export default function Schedule() {
                       {slot.kind === "open" && (
                         <span className="font-medium">
                           {tt.promotional_price
-                            ? <span>R{tt.promotional_price}</span>
-                            : <span className="text-green-600 italic text-[11px]">Click to block slot</span>}
+                            ? <span className="text-gray-500">R{tt.promotional_price}</span>
+                            : <span className="text-gray-300 italic text-[11px]">Open</span>}
                         </span>
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}

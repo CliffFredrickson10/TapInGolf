@@ -63297,6 +63297,10 @@ router18.get("/hna/verification", async (req, res) => {
       LIMIT 1`,
     [user.id]
   );
+  const rejectedRow = await row(
+    "SELECT COUNT(*) AS cnt FROM hna_verifications WHERE user_id = ? AND status = 'rejected'",
+    [user.id]
+  );
   res.json({
     hna_number: status.hna_number,
     hna_verified: status.hna_verified,
@@ -63304,7 +63308,8 @@ router18.get("/hna/verification", async (req, res) => {
     hna_verified_club_name: status.hna_verified_club_name,
     hna_valid_until: status.hna_valid_until,
     hna_locked: status.hna_locked,
-    submission: submission ?? null
+    submission: submission ?? null,
+    rejected_count: Number(rejectedRow?.cnt ?? 0)
   });
 });
 router18.post("/hna/verification", async (req, res) => {
@@ -63313,10 +63318,14 @@ router18.post("/hna/verification", async (req, res) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
-  const { hna_number, card_image } = req.body ?? {};
+  const { hna_number, card_image, home_club } = req.body ?? {};
   const num = cleanHna(hna_number);
   if (num.length !== 10) {
     res.status(400).json({ message: "HNA number must be exactly 10 digits" });
+    return;
+  }
+  if (!home_club || typeof home_club !== "string" || !home_club.trim()) {
+    res.status(400).json({ message: "Please select your home club" });
     return;
   }
   if (!card_image || typeof card_image !== "string" || !card_image.startsWith("data:image/")) {
@@ -63324,7 +63333,7 @@ router18.post("/hna/verification", async (req, res) => {
     return;
   }
   if (card_image.length > 28e5) {
-    res.status(413).json({ message: "Image too large (max ~2MB)" });
+    res.status(413).json({ message: "Image too large (max ~2 MB)" });
     return;
   }
   const fresh = await row("SELECT hna_number FROM users WHERE id = ?", [user.id]);
@@ -63333,12 +63342,23 @@ router18.post("/hna/verification", async (req, res) => {
     res.status(400).json({ message: "Your HNA is already verified" });
     return;
   }
+  const rejectedRow = await row(
+    "SELECT COUNT(*) AS cnt FROM hna_verifications WHERE user_id = ? AND status = 'rejected'",
+    [user.id]
+  );
+  if (Number(rejectedRow?.cnt ?? 0) >= 2) {
+    res.status(403).json({
+      message: "Maximum verification attempts reached. Please email support@tapingolf.co.za for assistance."
+    });
+    return;
+  }
   await exec("UPDATE users SET hna_number = ? WHERE id = ?", [num, user.id]);
   await exec("DELETE FROM hna_verifications WHERE user_id = ? AND status = 'pending'", [user.id]);
+  const clubNameVal = String(home_club).trim().slice(0, 255);
   const result = await exec(
-    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status)
-     VALUES (?, ?, ?, 'pending')`,
-    [user.id, num, card_image]
+    `INSERT INTO hna_verifications (user_id, hna_number, card_image, status, club_name)
+     VALUES (?, ?, ?, 'pending', ?)`,
+    [user.id, num, card_image, clubNameVal]
   );
   res.status(201).json({ success: true, id: result.insertId, status: "pending" });
 });

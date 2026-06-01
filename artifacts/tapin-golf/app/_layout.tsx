@@ -80,6 +80,9 @@ function RootLayoutNav() {
             router.push({ pathname: "/club/[id]", params: { id: data.club_id } });
           }
           break;
+        case "hna_verification_update":
+          router.push("/(tabs)/profile");
+          break;
         default:
           break;
       }

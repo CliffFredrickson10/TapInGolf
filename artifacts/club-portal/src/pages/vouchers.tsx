@@ -27,7 +27,7 @@ interface DiscountVoucher {
 
 interface PreviewUser {
   id: number; name: string; email: string;
-  booking_id: number; voucher_value: number | null; time: string;
+  booking_id: number; voucher_value: number | null; payment_method: string | null; time: string;
 }
 
 interface Batch {
@@ -334,7 +334,8 @@ function CancellationVouchersTab({
       ).sort(([a], [b]) => a.localeCompare(b))
     : null;
 
-  const totalVoucherValue = preview?.reduce((s, u) => s + (u.voucher_value ?? 0), 0) ?? 0;
+  const totalVoucherValue = preview?.reduce((s, u) => s + (u.payment_method !== "prepaid" ? (u.voucher_value ?? 0) : 0), 0) ?? 0;
+  const prepaidCount      = preview?.filter(u => u.payment_method === "prepaid").length ?? 0;
 
   return (
     <div className="space-y-8">
@@ -430,9 +431,14 @@ function CancellationVouchersTab({
                       {preview!.length} golfer{preview!.length !== 1 ? "s" : ""} will receive a voucher
                       {fromTime && <Badge variant="secondary" className="text-xs">from {fromTime}</Badge>}
                     </span>
-                    {totalVoucherValue > 0 && (
-                      <span className="text-xs font-semibold text-[#1a5c38]">Total: R{totalVoucherValue.toFixed(2)}</span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {totalVoucherValue > 0 && (
+                        <span className="text-xs font-semibold text-[#1a5c38]">R{totalVoucherValue.toFixed(2)} in vouchers</span>
+                      )}
+                      {prepaidCount > 0 && (
+                        <span className="text-xs font-medium text-amber-700">{prepaidCount} round{prepaidCount !== 1 ? "s" : ""} returned</span>
+                      )}
+                    </div>
                   </div>
                   <div className="divide-y max-h-72 overflow-y-auto">
                     {previewByTime.map(([time, users]) => (
@@ -446,9 +452,15 @@ function CancellationVouchersTab({
                               <span className="font-medium">{u.name}</span>
                               <span className="text-muted-foreground ml-2 text-xs">{u.email}</span>
                             </div>
-                            <span className="font-semibold text-[#1a5c38] text-sm">
-                              {u.voucher_value != null ? `R${u.voucher_value.toFixed(2)}` : "—"}
-                            </span>
+                            {u.payment_method === "prepaid" ? (
+                              <span className="text-xs font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-2 py-0.5">
+                                Round returned
+                              </span>
+                            ) : (
+                              <span className="font-semibold text-[#1a5c38] text-sm">
+                                {u.voucher_value != null ? `R${u.voucher_value.toFixed(2)}` : "—"}
+                              </span>
+                            )}
                           </div>
                         ))}
                       </div>

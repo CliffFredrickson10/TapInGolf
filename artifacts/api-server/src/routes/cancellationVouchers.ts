@@ -42,11 +42,12 @@ async function fetchAffectedPlayers(
   booking_id: number;
   voucher_value: number | null;
   time: string;
+  payment_method: string | null;
 }>> {
   const timeFilter   = fromTime ? "AND pts.tee_time >= ?" : "";
   const timeParam    = fromTime ?? null;
 
-  // 1. Booking creators
+  // 1. Booking creators — only confirmed bookings (pending = Stitch payment not yet received)
   const creatorsParams: any[] = [clubId, date];
   if (timeParam) creatorsParams.push(timeParam);
 
@@ -55,6 +56,7 @@ async function fetchAffectedPlayers(
        u.id, u.name, u.email, u.push_token,
        b.id AS booking_id,
        b.total_amount, b.my_amount, b.split_bill,
+       b.payment_method AS booking_payment_method,
        pts.tee_time AS time,
        (SELECT bp.amount FROM booking_players bp
          WHERE bp.booking_id = b.id AND bp.user_id = u.id LIMIT 1) AS bp_amount
@@ -71,6 +73,7 @@ async function fetchAffectedPlayers(
 
   // 2. Split-bill co-players (registered users who are NOT the booking creator)
   //    Only include co-players who have actually paid their share (bp.paid = 1).
+  //    bp.payment_method tracks how they paid (stitch/wallet/prepaid/null for legacy).
   const coParams: any[] = [clubId, date];
   if (timeParam) coParams.push(timeParam);
 
@@ -79,6 +82,7 @@ async function fetchAffectedPlayers(
        u.id, u.name, u.email, u.push_token,
        b.id AS booking_id,
        bp.amount AS voucher_value,
+       bp.payment_method AS co_payment_method,
        pts.tee_time AS time
      FROM bookings b
      JOIN booking_players bp
@@ -97,30 +101,41 @@ async function fetchAffectedPlayers(
     coParams
   );
 
-  // Map creators → compute voucher_value
-  const creatorRows = creators.map((r: any) => ({
-    id:           r.id,
-    name:         r.name,
-    email:        r.email,
-    push_token:   r.push_token ?? null,
-    booking_id:   r.booking_id,
-    time:         String(r.time).slice(0, 5),
-    voucher_value: r.bp_amount != null
-      ? parseFloat(r.bp_amount)
-      : r.split_bill
-        ? parseFloat(r.my_amount ?? 0)
-        : parseFloat(r.total_amount ?? 0),
-  }));
+  // Map creators → compute voucher_value; prepaid organizers have value=0 (round was the payment)
+  const creatorRows = creators.map((r: any) => {
+    const isPrepaid = r.booking_payment_method === "prepaid";
+    return {
+      id:             r.id,
+      name:           r.name,
+      email:          r.email,
+      push_token:     r.push_token ?? null,
+      booking_id:     r.booking_id,
+      time:           String(r.time).slice(0, 5),
+      payment_method: r.booking_payment_method ?? null,
+      // Prepaid: no monetary value (round is the compensation); others: actual amount paid
+      voucher_value:  isPrepaid
+        ? null
+        : r.bp_amount != null
+          ? parseFloat(r.bp_amount)
+          : r.split_bill
+            ? parseFloat(r.my_amount ?? 0)
+            : parseFloat(r.total_amount ?? 0),
+    };
+  });
 
-  const coPlayerRows = coPlayers.map((r: any) => ({
-    id:           r.id,
-    name:         r.name,
-    email:        r.email,
-    push_token:   r.push_token ?? null,
-    booking_id:   r.booking_id,
-    time:         String(r.time).slice(0, 5),
-    voucher_value: r.voucher_value != null ? parseFloat(r.voucher_value) : null,
-  }));
+  const coPlayerRows = coPlayers.map((r: any) => {
+    const isPrepaid = r.co_payment_method === "prepaid";
+    return {
+      id:             r.id,
+      name:           r.name,
+      email:          r.email,
+      push_token:     r.push_token ?? null,
+      booking_id:     r.booking_id,
+      time:           String(r.time).slice(0, 5),
+      payment_method: r.co_payment_method ?? null,
+      voucher_value:  isPrepaid ? null : (r.voucher_value != null ? parseFloat(r.voucher_value) : null),
+    };
+  });
 
   // Merge: booking creators first, then co-players; de-dup by user_id
   const all = [...creatorRows, ...coPlayerRows];
@@ -197,55 +212,108 @@ router.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req: R
   );
   const batchId = batchRow.id;
 
-  const issued: { userId: number; name: string; code: string; voucher_value: number | null }[] = [];
+  const issued: { userId: number; name: string; code: string | null; voucher_value: number | null; prepaid_rollback: boolean }[] = [];
 
   for (const recipient of recipients) {
-    const code = await ensureUniqueCode(club.name, recipient.id);
+    const isPrepaid = recipient.payment_method === "prepaid";
 
-    await exec(
-      `INSERT INTO cancellation_vouchers
-         (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [
+    if (isPrepaid) {
+      // ── Prepaid round: return the round to the player's membership balance ──
+      await exec(
+        `UPDATE club_members
+           SET prepaid_rounds_used = GREATEST(0, prepaid_rounds_used - 1)
+         WHERE club_id = ? AND user_id = ? AND status = 'active'`,
+        [clubId, recipient.id]
+      );
+
+      // Track the rollback in the batch (null code = prepaid rollback, not a redeemable voucher)
+      await exec(
+        `INSERT INTO cancellation_vouchers
+           (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, NULL, NULL)`,
+        [
+          `PR-${club.name.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "X")}-${recipient.id}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
+          batchId,
+          clubId,
+          recipient.id,
+          recipient.booking_id ?? null,
+          String(reason).trim(),
+        ]
+      );
+
+      issued.push({ userId: recipient.id, name: recipient.name, code: null, voucher_value: null, prepaid_rollback: true });
+
+      const notifTitle = `Prepaid round returned — ${club.name}`;
+      const notifBody  = `Your tee time on ${dateParam} was cancelled. Your prepaid round has been returned to your membership balance.`;
+
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+        code:        null,
+        club_id:     clubId,
+        batch_id:    batchId,
+        value_rands: null,
+      });
+
+      if (recipient.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{
+          to:    recipient.push_token,
+          sound: "default",
+          title: notifTitle,
+          body:  notifBody,
+          data:  { type: "prepaid_rollback", club_id: clubId },
+        }]);
+      }
+    } else {
+      // ── Monetary payment: issue a cancellation voucher ──────────────────────
+      const code = await ensureUniqueCode(club.name, recipient.id);
+
+      await exec(
+        `INSERT INTO cancellation_vouchers
+           (code, batch_id, club_id, user_id, booking_id, reason, value_rands, expires_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          code,
+          batchId,
+          clubId,
+          recipient.id,
+          recipient.booking_id ?? null,
+          String(reason).trim(),
+          recipient.voucher_value ?? null,
+          expiresAt,
+        ]
+      );
+
+      issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value, prepaid_rollback: false });
+
+      const notifTitle = `Voucher from ${club.name}`;
+      const valueStr   = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
+      const expiryStr  = expiresAt
+        ? ` — valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
+        : "";
+      const notifBody  = `Your tee time was cancelled${valueStr ? ` — here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
+
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code,
-        batchId,
-        clubId,
-        recipient.id,
-        recipient.booking_id ?? null,
-        String(reason).trim(),
-        recipient.voucher_value ?? null,
-        expiresAt,
-      ]
-    );
+        club_id:      clubId,
+        batch_id:     batchId,
+        value_rands:  recipient.voucher_value ?? null,
+      });
 
-    issued.push({ userId: recipient.id, name: recipient.name, code, voucher_value: recipient.voucher_value });
-
-    const notifTitle = `Voucher from ${club.name}`;
-    const valueStr   = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
-    const expiryStr  = expiresAt
-      ? ` — valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
-      : "";
-    const notifBody  = `Your tee time was cancelled${valueStr ? ` — here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
-
-    saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
-      code,
-      club_id:      clubId,
-      batch_id:     batchId,
-      value_rands:  recipient.voucher_value ?? null,
-    });
-
-    if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-      sendPushNotifications([{
-        to:    recipient.push_token,
-        sound: "default",
-        title: notifTitle,
-        body:  notifBody,
-        data:  { type: "cancellation_voucher", code, club_id: clubId },
-      }]);
+      if (recipient.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{
+          to:    recipient.push_token,
+          sound: "default",
+          title: notifTitle,
+          body:  notifBody,
+          data:  { type: "cancellation_voucher", code, club_id: clubId },
+        }]);
+      }
     }
   }
 
-  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued });
+  const voucherCount   = issued.filter(i => !i.prepaid_rollback).length;
+  const rollbackCount  = issued.filter(i =>  i.prepaid_rollback).length;
+
+  res.json({ success: true, batch_id: batchId, voucher_count: issued.length, vouchers: issued, prepaid_rollbacks: rollbackCount, monetary_vouchers: voucherCount });
 });
 
 // ── GET /admin/cancellation-vouchers/batches ──────────────────────────────────

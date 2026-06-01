@@ -671,8 +671,8 @@ router.post("/bookings", async (req, res): Promise<void> => {
     // For non-Stitch payments (prepaid, wallet) the organizer is paid immediately
     if (payment_method !== "stitch") {
       await clientQuery(client,
-        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
-        [bookingId, user.id]
+        "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
+        [payment_method, bookingId, user.id]
       );
     }
     // Track booked players in the portal slot
@@ -827,7 +827,7 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
        WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
       [membership.id]
     );
-    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
     res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
     return;
   }
@@ -841,7 +841,7 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
       return;
     }
     await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [amount, user.id]);
-    await exec("UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    await exec("UPDATE booking_players SET paid = 1, payment_method = 'wallet' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
     res.json({ success: true, method: "wallet", amount, booking_id: id });
     return;
   }
@@ -1053,14 +1053,14 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
       const userId = parseInt(externalRef.split("-player-")[1] ?? "0", 10);
       if (userId) {
         await run(
-          "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = ?",
+          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
           [bookingId, userId]
         );
       }
     } else {
       await run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
       await run(
-        "UPDATE booking_players SET paid = 1 WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+        "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
         [bookingId, bookingId]
       );
       // Auto-send invoice after Stitch payment confirmation (fire-and-forget)

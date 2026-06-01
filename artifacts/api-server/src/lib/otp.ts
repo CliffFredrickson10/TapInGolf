@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import nodemailer from "nodemailer";
+import PDFDocument from "pdfkit";
 import { logger } from "./logger";
 import { row } from "./pg";
 
@@ -495,20 +496,280 @@ export async function sendCancellationNotificationEmail(
   return {};
 }
 
+// ─── PDF invoice generator ───────────────────────────────────────────────────
+
+function generateInvoicePdf(booking: any, clubName: string, vatPct: number, cancelPolicy?: CancelPolicy | null): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const doc = new PDFDocument({ size: "A4", margin: 50, info: { Title: `Invoice ${booking.booking_ref}`, Author: "TapIn Golf" } });
+    doc.on("data", (c: Buffer) => chunks.push(c));
+    doc.on("end", () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+
+    const GREEN  = "#1a5c38";
+    const GOLD   = "#c8a84b";
+    const GRAY   = "#6b7280";
+    const BLACK  = "#111827";
+    const LGRAY  = "#f3f4f6";
+    const W      = doc.page.width - 100; // usable width (50px margin each side)
+
+    // ── Header bar ────────────────────────────────────────────────────────────
+    doc.rect(0, 0, doc.page.width, 90).fill(GREEN);
+    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(22).text("TapIn Golf", 50, 22);
+    doc.font("Helvetica").fontSize(11).fillColor("rgba(255,255,255,0.75)").text(clubName, 50, 48);
+    doc.fillColor("rgba(255,255,255,0.6)").fontSize(9).text("TAX INVOICE", doc.page.width - 160, 22, { width: 110, align: "right" });
+    doc.fillColor("#fff").font("Helvetica-Bold").fontSize(18).text(booking.booking_ref, doc.page.width - 160, 36, { width: 110, align: "right" });
+    doc.moveDown(0);
+
+    // ── Bill To / Issue Date row ───────────────────────────────────────────────
+    let y = 110;
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("BILL TO", 50, y);
+    doc.fillColor(GRAY).text("ISSUE DATE", 350, y, { width: 200, align: "right" });
+    y += 14;
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(12).text(booking.user_name ?? "", 50, y);
+    const issueDate = new Date(booking.created_at).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
+    doc.fillColor(BLACK).font("Helvetica").fontSize(11).text(issueDate, 350, y, { width: 200, align: "right" });
+    y += 16;
+    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text(booking.user_email ?? "", 50, y);
+    if (booking.user_phone) { y += 13; doc.text(booking.user_phone, 50, y); }
+    y += 30;
+
+    // ── Booking details box ────────────────────────────────────────────────────
+    doc.rect(50, y, W, 80).fill(LGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("BOOKING DETAILS", 62, y + 10);
+    y += 24;
+    const cols = [
+      ["Date",         booking.tee_date],
+      ["Tee Time",     booking.tee_time],
+      ["Players",      String(booking.players)],
+      ["Service",      `${booking.holes ?? 18} Holes${Number(booking.cart_fee) > 0 ? " + Cart" : ""}`],
+      ["Pricing Tier", fmtTier(booking.price_tier)],
+      ["Status",       String(booking.status ?? "confirmed").toUpperCase()],
+    ];
+    const colW = W / 3;
+    cols.forEach(([label, val], i) => {
+      const cx = 62 + (i % 3) * colW;
+      const cy = y + Math.floor(i / 3) * 26;
+      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, cx, cy);
+      doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(val, cx, cy + 11);
+    });
+    y += 72;
+
+    // ── Line items table ───────────────────────────────────────────────────────
+    y += 18;
+    const myAmount   = Number(booking.my_amount ?? booking.total_amount);
+    const cartFee    = Number(booking.cart_fee ?? 0);
+    const discount   = Number(booking.discount_amount ?? 0);
+    const greenFee   = myAmount - cartFee + discount;
+    const vatAmount  = Math.round(myAmount * vatPct / (100 + vatPct) * 100) / 100;
+    const exclVat    = Math.round((myAmount - vatAmount) * 100) / 100;
+
+    // Header row
+    doc.rect(50, y, W, 20).fill(LGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(9)
+      .text("DESCRIPTION", 60, y + 6)
+      .text("AMOUNT", 50 + W - 10, y + 6, { width: 60, align: "right" });
+    y += 20;
+
+    const lineRow = (label: string, amount: string, strike = false) => {
+      doc.rect(50, y, W, 22).fill("#fff").stroke("#f3f4f6");
+      doc.fillColor(strike ? GOLD : BLACK).font("Helvetica").fontSize(10).text(label, 60, y + 6);
+      doc.fillColor(strike ? GOLD : BLACK).text(amount, 50 + W - 10, y + 6, { width: 60, align: "right" });
+      y += 22;
+    };
+
+    lineRow(`${booking.holes ?? 18} Holes Green Fee (${fmtTier(booking.price_tier)})`, `R ${greenFee.toFixed(2)}`);
+    if (cartFee > 0) lineRow("Golf Cart Hire", `R ${cartFee.toFixed(2)}`);
+    if (discount > 0) lineRow(`Discount${booking.voucher_code ? ` (${booking.voucher_code})` : ""}`, `− R ${discount.toFixed(2)}`, true);
+
+    // Subtotals
+    const subRow = (label: string, val: string) => {
+      doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, 60, y + 5);
+      doc.fillColor(GRAY).text(val, 50 + W - 10, y + 5, { width: 60, align: "right" });
+      y += 18;
+    };
+    y += 4;
+    subRow(`Subtotal (excl. VAT)`, `R ${exclVat.toFixed(2)}`);
+    subRow(`VAT (${vatPct}%)`, `R ${vatAmount.toFixed(2)}`);
+
+    // Total row
+    doc.rect(50, y, W, 30).fill(LGRAY);
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(13).text("Total (incl. VAT)", 60, y + 9);
+    doc.fillColor(GREEN).font("Helvetica-Bold").fontSize(15).text(`R ${myAmount.toFixed(2)}`, 50 + W - 10, y + 8, { width: 60, align: "right" });
+    y += 40;
+
+    // ── Payment info ───────────────────────────────────────────────────────────
+    y += 10;
+    doc.rect(50, y, W, 52).fill(LGRAY);
+    doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("PAYMENT INFORMATION", 62, y + 10);
+    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text("Payment Method", 62, y + 24);
+    doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(10).text(fmtMethod(booking.payment_method), 200, y + 24);
+    doc.fillColor(GRAY).font("Helvetica").fontSize(10).text("Reference", 62, y + 38);
+    doc.font("Courier").fontSize(10).text(booking.booking_ref, 200, y + 38);
+    y += 62;
+
+    // ── Cancellation policy ────────────────────────────────────────────────────
+    if (cancelPolicy) {
+      y += 10;
+      doc.rect(50, y, W, 16).fill(GREEN);
+      doc.fillColor("#fff").font("Helvetica-Bold").fontSize(8).text(`CANCELLATION POLICY — ${clubName.toUpperCase()}`, 62, y + 5);
+      y += 16;
+
+      const policyRows: [string, string][] = [
+        ["Cancellation Window", fmtWindow(cancelPolicy.windowMinutes)],
+        ["Cancellation Fee",    `${cancelPolicy.feePct}% of booking total`],
+      ];
+      if (cancelPolicy.contactEmail) policyRows.push(["Refund Contact (Email)", cancelPolicy.contactEmail]);
+      if (cancelPolicy.contactPhone) policyRows.push(["Refund Contact (Phone)", cancelPolicy.contactPhone]);
+
+      policyRows.forEach(([label, val], i) => {
+        doc.rect(50, y, W, 20).fill(i % 2 === 0 ? "#f0fdf4" : "#fff");
+        doc.fillColor(GRAY).font("Helvetica").fontSize(9).text(label, 62, y + 6);
+        doc.fillColor(BLACK).font("Helvetica-Bold").fontSize(9).text(val, 250, y + 6);
+        y += 20;
+      });
+
+      if (cancelPolicy.refundTiers.length > 0) {
+        y += 6;
+        doc.rect(50, y, W / 2 - 5, 18).fill(LGRAY);
+        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("NOTICE PERIOD", 62, y + 6);
+        doc.rect(50 + W / 2 + 5, y, W / 2 - 5, 18).fill(LGRAY);
+        doc.fillColor(GRAY).font("Helvetica-Bold").fontSize(8).text("REFUND", 60 + W / 2 + 5, y + 6);
+        y += 18;
+        cancelPolicy.refundTiers.forEach((t, i) => {
+          const bg = i % 2 === 0 ? "#fff" : "#f9fafb";
+          doc.rect(50, y, W, 18).fill(bg);
+          doc.fillColor(BLACK).font("Helvetica").fontSize(9).text(t.label, 62, y + 5);
+          const col = t.refund_pct === 100 ? GREEN : t.refund_pct === 0 ? "#991b1b" : "#92400e";
+          doc.fillColor(col).font("Helvetica-Bold").fontSize(9).text(`${t.refund_pct}%`, 60 + W - 10, y + 5, { width: 60, align: "right" });
+          y += 18;
+        });
+      }
+
+      if (cancelPolicy.otherPolicies) {
+        y += 8;
+        doc.fillColor(GRAY).font("Helvetica").fontSize(8).text(cancelPolicy.otherPolicies, 62, y, { width: W - 24 });
+        y += doc.heightOfString(cancelPolicy.otherPolicies, { width: W - 24 }) + 8;
+      }
+    }
+
+    // ── Footer ─────────────────────────────────────────────────────────────────
+    const footerY = doc.page.height - 40;
+    doc.rect(0, footerY - 10, doc.page.width, 50).fill(LGRAY);
+    doc.fillColor(GRAY).font("Helvetica").fontSize(8)
+      .text("TapIn Golf · tapingolf.co.za · This is your official tax invoice. Please retain for your records.", 50, footerY, { width: W, align: "center" });
+
+    doc.end();
+  });
+}
+
+// ─── Confirmation email body ─────────────────────────────────────────────────
+
+function confirmationEmailHtml(booking: any, clubName: string, vatPct: number): string {
+  const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+  const firstName = (booking.user_name ?? "").split(" ")[0] || "Golfer";
+  const dateStr   = new Date(`${booking.tee_date}T12:00:00`).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
+
+  const row2 = (label: string, val: string) =>
+    `<tr><td style="padding:8px 16px;color:#6b7280;font-size:13px;width:160px">${label}</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${val}</td></tr>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>Booking Confirmed — ${booking.booking_ref}</title></head>
+<body style="margin:0;padding:40px 24px;font-family:Arial,sans-serif;color:#111827;background:#f9fafb">
+  <div style="max-width:600px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;border:1px solid #e5e7eb">
+
+    <div style="background:#1a5c38;color:#fff;padding:32px 40px">
+      <div style="font-size:22px;font-weight:800;letter-spacing:-0.5px">TapIn Golf</div>
+      <div style="font-size:13px;opacity:0.7;margin-top:2px">${clubName}</div>
+      <div style="margin-top:20px;font-size:20px;font-weight:700">Booking Confirmed ⛳</div>
+    </div>
+
+    <div style="padding:36px 40px">
+      <p style="font-size:15px;margin:0 0 24px;line-height:1.6">
+        Hi <strong>${firstName}</strong>,<br><br>
+        Your tee time is confirmed! Please find your full tax invoice attached to this email as a PDF. Retain it for your records.
+      </p>
+
+      <div style="background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:28px">
+        <div style="padding:10px 16px;background:#f3f4f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280">Booking Summary</div>
+        <table style="width:100%;border-collapse:collapse">
+          ${row2("Club", clubName)}
+          ${row2("Date", dateStr)}
+          ${row2("Tee Time", booking.tee_time)}
+          ${row2("Players", String(booking.players))}
+          ${row2("Payment Method", fmtMethod(booking.payment_method))}
+          ${row2("Reference", booking.booking_ref)}
+          <tr style="background:#f0fdf4"><td style="padding:10px 16px;color:#166534;font-weight:700;font-size:13px">Total Paid</td><td style="padding:10px 16px;font-weight:800;font-size:15px;color:#1a5c38">R ${myAmount.toFixed(2)}</td></tr>
+        </table>
+      </div>
+
+      <div style="background:#f0fdf4;border:1px solid #bbf7d0;border-radius:8px;padding:16px 20px;margin-bottom:24px">
+        <div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#166534;margin-bottom:6px">Cancellation Policy</div>
+        <p style="margin:0;font-size:13px;color:#374151;line-height:1.6">
+          ${clubName}'s cancellation terms are detailed in your attached invoice. To cancel or request a change, contact the club using the details provided on your invoice.
+        </p>
+      </div>
+
+      <p style="font-size:13px;color:#6b7280;margin:0;line-height:1.6">
+        See you on the fairway!<br>
+        <strong style="color:#1a5c38">— The TapIn Golf Team</strong>
+      </p>
+    </div>
+
+    <div style="padding:16px 40px;border-top:1px solid #e5e7eb;text-align:center;color:#9ca3af;font-size:11px">
+      TapIn Golf · <a href="https://tapingolf.co.za" style="color:#1a5c38">tapingolf.co.za</a> · This is an automated confirmation. Please do not reply to this email.
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function confirmationEmailText(booking: any, clubName: string): string {
+  const myAmount  = Number(booking.my_amount ?? booking.total_amount);
+  const firstName = (booking.user_name ?? "").split(" ")[0] || "Golfer";
+  return [
+    `Hi ${firstName},`,
+    ``,
+    `Your tee time at ${clubName} is confirmed!`,
+    `Your full tax invoice is attached to this email as a PDF — please retain it for your records.`,
+    ``,
+    `BOOKING SUMMARY`,
+    `─────────────────────────────────`,
+    `Club           : ${clubName}`,
+    `Date           : ${booking.tee_date}`,
+    `Tee Time       : ${booking.tee_time}`,
+    `Players        : ${booking.players}`,
+    `Payment Method : ${fmtMethod(booking.payment_method)}`,
+    `Reference      : ${booking.booking_ref}`,
+    `Total Paid     : R ${myAmount.toFixed(2)}`,
+    `─────────────────────────────────`,
+    ``,
+    `CANCELLATION POLICY`,
+    `${clubName}'s cancellation terms are detailed in your attached invoice.`,
+    `To cancel or request a change, contact the club using the details on your invoice.`,
+    ``,
+    `See you on the fairway!`,
+    `— The TapIn Golf Team`,
+    ``,
+    `tapingolf.co.za`,
+  ].join("\n");
+}
+
 export async function sendInvoiceEmail(booking: any, clubName: string, cancelPolicy?: CancelPolicy | null): Promise<{ dev?: boolean }> {
   const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
-  const vatPct  = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
-  const html    = invoiceHtml(booking, clubName, vatPct, cancelPolicy);
-  const subject = `Your TapIn Golf Invoice — ${booking.booking_ref}`;
-  const _myAmt  = Number(booking.my_amount ?? booking.total_amount);
-  const _vat    = Math.round(_myAmt * vatPct / (100 + vatPct) * 100) / 100;
-  const _excl   = Math.round((_myAmt - _vat) * 100) / 100;
-  const text = `Thank you for your booking at ${clubName}.\n\nBooking Reference: ${booking.booking_ref}\nTee Date: ${booking.tee_date} at ${booking.tee_time}\nSubtotal (excl. VAT): R ${_excl.toFixed(2)}\nVAT (${vatPct}%): R ${_vat.toFixed(2)}\nTotal (incl. VAT): R ${_myAmt.toFixed(2)}\nPayment Method: ${fmtMethod(booking.payment_method)}\n\nPlease find your invoice details in the HTML version of this email.\n\nTapIn Golf — tapingolf.co.za`;
+  const vatPct = vatSetting ? parseFloat(vatSetting.setting_value) : 15;
+
+  const subject  = `Booking Confirmed — ${booking.booking_ref} | ${clubName}`;
+  const bodyHtml = confirmationEmailHtml(booking, clubName, vatPct);
+  const bodyText = confirmationEmailText(booking, clubName);
 
   if (EMAIL_DEV_MODE()) {
     logger.info({ email: booking.user_email, booking_ref: booking.booking_ref }, "[DEV] Invoice email — no SMTP credentials configured");
     return { dev: true };
   }
+
+  const pdfBuffer = await generateInvoicePdf(booking, clubName, vatPct, cancelPolicy);
 
   const transporter = nodemailer.createTransport({
     host:   SMTP_HOST(),
@@ -521,8 +782,13 @@ export async function sendInvoiceEmail(booking: any, clubName: string, cancelPol
     from:    SMTP_FROM(),
     to:      booking.user_email,
     subject,
-    text,
-    html,
+    text:    bodyText,
+    html:    bodyHtml,
+    attachments: [{
+      filename:    `TapIn-Invoice-${booking.booking_ref}.pdf`,
+      content:     pdfBuffer,
+      contentType: "application/pdf",
+    }],
   });
 
   return {};

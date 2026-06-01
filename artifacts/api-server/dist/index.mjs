@@ -56656,10 +56656,8 @@ function fmtTier(t) {
 function invoiceHtml(booking, clubName) {
   const holes = booking.holes ?? 18;
   const hasCart = Number(booking.cart_fee) > 0;
-  const greenFee = Number(booking.total_amount) - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
-  const playerRows = (booking.players_list ?? []).map(
-    (p) => `<tr><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6">${p.name}${p.email ? ` <span style="color:#9ca3af;font-size:12px">&lt;${p.email}&gt;</span>` : ""}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(p.amount).toFixed(2)}</td><td style="padding:6px 8px;border-bottom:1px solid #f3f4f6;text-align:center">${p.paid ? "\u2713 Paid" : "Pending"}</td></tr>`
-  ).join("");
+  const myAmount = Number(booking.my_amount ?? booking.total_amount);
+  const greenFee = myAmount - Number(booking.cart_fee ?? 0) + Number(booking.discount_amount ?? 0);
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Invoice ${booking.booking_ref}</title></head>
@@ -56699,7 +56697,6 @@ function invoiceHtml(booking, clubName) {
           <div><span style="color:#6b7280;font-size:13px">Players</span><div style="font-weight:600;font-size:14px">${booking.players}</div></div>
           <div><span style="color:#6b7280;font-size:13px">Service</span><div style="font-weight:600;font-size:14px">${holes} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
           <div><span style="color:#6b7280;font-size:13px">Pricing Tier</span><div style="font-weight:600;font-size:14px">${fmtTier(booking.price_tier)}</div></div>
-          <div><span style="color:#6b7280;font-size:13px">Split Bill</span><div style="font-weight:600;font-size:14px">${booking.split_bill ? "Yes" : "No"}</div></div>
         </div>
       </div>
 
@@ -56714,24 +56711,14 @@ function invoiceHtml(booking, clubName) {
           <tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6">${holes} Holes Green Fee (${fmtTier(booking.price_tier)})</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${greenFee.toFixed(2)}</td></tr>
           ${hasCart ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6">Golf Cart Hire</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(booking.cart_fee).toFixed(2)}</td></tr>` : ""}
           ${Number(booking.discount_amount) > 0 ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;color:#16a34a">Discount${booking.voucher_code ? ` (${booking.voucher_code})` : ""}</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;color:#16a34a">\u2212R ${Number(booking.discount_amount).toFixed(2)}</td></tr>` : ""}
-          ${Number(booking.platform_fee) > 0 ? `<tr><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;color:#6b7280">Platform Fee</td><td style="padding:10px 8px;border-bottom:1px solid #f3f4f6;text-align:right;color:#6b7280">R ${Number(booking.platform_fee).toFixed(2)}</td></tr>` : ""}
         </tbody>
         <tfoot>
           <tr style="background:#f9fafb">
-            <td style="padding:14px 8px;font-weight:700;font-size:16px">Total</td>
-            <td style="padding:14px 8px;font-weight:700;font-size:18px;text-align:right;color:#1a5c38">R ${Number(booking.total_amount).toFixed(2)}</td>
+            <td style="padding:14px 8px;font-weight:700;font-size:16px">Total Charged</td>
+            <td style="padding:14px 8px;font-weight:700;font-size:18px;text-align:right;color:#1a5c38">R ${myAmount.toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
-
-      ${booking.split_bill && playerRows ? `
-      <div style="margin-bottom:28px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Split Bill Breakdown</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr style="background:#f3f4f6"><th style="padding:8px;text-align:left;font-size:12px;color:#6b7280">Player</th><th style="padding:8px;text-align:right;font-size:12px;color:#6b7280">Amount</th><th style="padding:8px;text-align:center;font-size:12px;color:#6b7280">Payment</th></tr></thead>
-          <tbody>${playerRows}</tbody>
-        </table>
-      </div>` : ""}
 
       <div style="background:#f9fafb;border-radius:8px;padding:16px 20px;border:1px solid #e5e7eb">
         <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:10px">Payment Information</div>

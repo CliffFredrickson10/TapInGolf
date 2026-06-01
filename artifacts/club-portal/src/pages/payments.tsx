@@ -81,14 +81,9 @@ function fmtTier(t: string | null | undefined) {
 
 function generateInvoiceHTML(b: Payment, clubName: string): string {
   const hasCart = b.cart_fee > 0;
-  const greenFee = b.total_amount - b.cart_fee + b.discount_amount;
-
-  const playerRows = b.players_list.map(p => `
-    <tr>
-      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6">${p.name}${p.email ? ` <span style="color:#9ca3af;font-size:12px">&lt;${p.email}&gt;</span>` : ""}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(p.amount).toFixed(2)}</td>
-      <td style="padding:8px 10px;border-bottom:1px solid #f3f4f6;text-align:center;color:${p.paid ? "#16a34a" : "#d97706"}">${p.paid ? "✓ Paid" : "Pending"}</td>
-    </tr>`).join("");
+  // Use my_amount (what this user was charged) as the invoice total.
+  // Derive green fee: my_amount minus cart hire plus any discount already applied.
+  const greenFee = b.my_amount - b.cart_fee + b.discount_amount;
 
   const statusBg = b.status === "confirmed" || b.status === "completed"
     ? "background:#dcfce7;color:#166534"
@@ -156,7 +151,6 @@ function generateInvoiceHTML(b: Payment, clubName: string): string {
           <div><div style="color:#6b7280;font-size:12px">Players</div><div style="font-weight:600;font-size:14px;margin-top:3px">${b.players} player${b.players !== 1 ? "s" : ""}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Service</div><div style="font-weight:600;font-size:14px;margin-top:3px">${b.holes} Holes${hasCart ? " + Golf Cart" : ""}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Pricing Tier</div><div style="font-weight:600;font-size:14px;margin-top:3px">${fmtTier(b.price_tier)}</div></div>
-          <div><div style="color:#6b7280;font-size:12px">Split Bill</div><div style="font-weight:600;font-size:14px;margin-top:3px">${b.split_bill ? "Yes" : "No"}</div></div>
         </div>
       </div>
 
@@ -183,34 +177,14 @@ function generateInvoiceHTML(b: Payment, clubName: string): string {
             <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;color:#16a34a">Discount${b.voucher_code ? ` — Voucher <strong>${b.voucher_code}</strong>` : ""}</td>
             <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right;color:#16a34a">−R ${b.discount_amount.toFixed(2)}</td>
           </tr>` : ""}
-          ${b.platform_fee > 0 ? `
-          <tr>
-            <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;color:#6b7280">Platform Fee</td>
-            <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right;color:#6b7280">R ${b.platform_fee.toFixed(2)}</td>
-          </tr>` : ""}
         </tbody>
         <tfoot>
           <tr style="background:#f0fdf4">
-            <td style="padding:14px 10px;font-weight:700;font-size:16px;border-top:2px solid #bbf7d0">Total</td>
-            <td style="padding:14px 10px;font-weight:800;font-size:20px;text-align:right;color:#1a5c38;border-top:2px solid #bbf7d0">R ${b.total_amount.toFixed(2)}</td>
+            <td style="padding:14px 10px;font-weight:700;font-size:16px;border-top:2px solid #bbf7d0">Total Charged</td>
+            <td style="padding:14px 10px;font-weight:800;font-size:20px;text-align:right;color:#1a5c38;border-top:2px solid #bbf7d0">R ${b.my_amount.toFixed(2)}</td>
           </tr>
         </tfoot>
       </table>
-
-      ${b.split_bill && b.players_list.length > 0 ? `
-      <div style="margin-bottom:28px">
-        <div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280;margin-bottom:12px">Split Bill Breakdown</div>
-        <table style="width:100%;border-collapse:collapse">
-          <thead>
-            <tr style="background:#f3f4f6">
-              <th style="padding:8px 10px;text-align:left;font-size:11px;color:#6b7280">Player</th>
-              <th style="padding:8px 10px;text-align:right;font-size:11px;color:#6b7280">Amount</th>
-              <th style="padding:8px 10px;text-align:center;font-size:11px;color:#6b7280">Status</th>
-            </tr>
-          </thead>
-          <tbody>${playerRows}</tbody>
-        </table>
-      </div>` : ""}
 
       <!-- Payment Reference -->
       <div style="background:#f9fafb;border-radius:10px;padding:16px 24px;border:1px solid #e5e7eb">

@@ -2,6 +2,7 @@ import { useEffect, useState, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -324,6 +325,7 @@ function GenerateDialog({
   open, onOpenChange, onComplete,
 }: { open: boolean; onOpenChange: (v: boolean) => void; onComplete: (dateFrom: string) => void }) {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [tab, setTab] = useState<"A" | "B">("A");
   const [dateFrom, setDateFrom] = useState(today());
   const [dateTo, setDateTo]   = useState(today());
@@ -846,7 +848,7 @@ function GenerateDialog({
 
             <Button
               className="w-full bg-[#1a5c38] hover:bg-[#164d30]"
-              disabled={preview.perDay === 0}
+              disabled={preview.perDay === 0 || readOnly}
               onClick={handleGenerate}
             >
               Generate {preview.total} Tee Time{preview.total !== 1 ? "s" : ""}
@@ -940,7 +942,7 @@ function EditTeeTimeDialog({
               </>
             )}
           </div>
-          <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={onSave} disabled={saving}>
+          <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={onSave} disabled={saving || readOnly}>
             {saving ? "Saving…" : editId ? "Update Tee Time" : "Add Tee Time"}
           </Button>
         </div>
@@ -955,6 +957,7 @@ function DeleteTeeTimesDialog({
   open, onOpenChange, defaultDate, onDeleted,
 }: { open: boolean; onOpenChange: (v: boolean) => void; defaultDate: string; onDeleted: (from: string, to: string) => void }) {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [mode, setMode] = useState<"day" | "range">("day");
   const [from, setFrom] = useState(defaultDate);
   const [to, setTo]     = useState(defaultDate);
@@ -1024,7 +1027,7 @@ function DeleteTeeTimesDialog({
             </div>
           )}
 
-          <Button onClick={handleDelete} disabled={deleting}
+          <Button onClick={handleDelete} disabled={deleting || readOnly}
             className="w-full bg-red-600 hover:bg-red-700 gap-2">
             {deleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Confirm Delete</>}
           </Button>
@@ -1038,6 +1041,7 @@ function DeleteTeeTimesDialog({
 
 export default function Schedule() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [, navigate] = useLocation();
   const stripRef = useRef<HTMLDivElement>(null);
 

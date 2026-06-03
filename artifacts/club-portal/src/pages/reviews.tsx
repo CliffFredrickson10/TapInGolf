@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
@@ -39,6 +40,7 @@ function Stars({ rating }: { rating: number }) {
 
 export default function Reviews() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -226,12 +228,12 @@ export default function Reviews() {
               </div>
               <DialogFooter className="gap-2">
                 {respondTo.response && (
-                  <Button variant="outline" onClick={() => saveResponse(true)} disabled={savingResponse} className="mr-auto text-red-600 hover:text-red-700">
+                  <Button variant="outline" onClick={() => saveResponse(true)} disabled={savingResponse || readOnly} className="mr-auto text-red-600 hover:text-red-700">
                     Remove response
                   </Button>
                 )}
                 <Button variant="outline" onClick={() => setRespondTo(null)} disabled={savingResponse}>Cancel</Button>
-                <Button className="bg-[#1a5c38] hover:bg-[#16492d]" onClick={() => saveResponse(false)} disabled={savingResponse || !responseText.trim()}>
+                <Button className="bg-[#1a5c38] hover:bg-[#16492d]" onClick={() => saveResponse(false)} disabled={savingResponse || !responseText.trim() || readOnly}>
                   {savingResponse ? "Saving…" : "Publish response"}
                 </Button>
               </DialogFooter>
@@ -269,7 +271,7 @@ export default function Reviews() {
               </div>
               <DialogFooter className="gap-2">
                 <Button variant="outline" onClick={() => setReportFor(null)} disabled={submittingReport}>Cancel</Button>
-                <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={submitReport} disabled={submittingReport || !reportReason}>
+                <Button className="bg-red-600 hover:bg-red-700 gap-1.5" onClick={submitReport} disabled={submittingReport || !reportReason || readOnly}>
                   <Flag className="h-4 w-4" />{submittingReport ? "Reporting…" : "Submit report"}
                 </Button>
               </DialogFooter>

@@ -2,6 +2,7 @@ import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
+import { ReadOnlyProvider, ReadOnlyBanner } from "@/context/ReadOnlyContext";
 import { HnaPendingProvider } from "@/context/HnaPendingContext";
 import { ReportsPendingProvider } from "@/context/ReportsPendingContext";
 import { ReviewReportsPendingProvider } from "@/context/ReviewReportsPendingContext";
@@ -36,7 +37,7 @@ import CancellationPolicy from "@/pages/cancellation-policy";
 import PortalUsers from "@/pages/portal-users";
 
 function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
-  const { canView } = useAuth();
+  const { canView, canEdit } = useAuth();
   if (!canView(section)) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -47,7 +48,13 @@ function SectionGuard({ section, children }: { section: string; children: React.
       </div>
     );
   }
-  return <>{children}</>;
+  const readOnly = !canEdit(section);
+  return (
+    <ReadOnlyProvider readOnly={readOnly}>
+      <ReadOnlyBanner />
+      {children}
+    </ReadOnlyProvider>
+  );
 }
 
 function Router() {

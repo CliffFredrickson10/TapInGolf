@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -140,6 +141,7 @@ function TierSection({
 
 export default function Pricing() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [tiers, setTiers] = useState<TierMap>(emptyTierMap());
@@ -208,7 +210,7 @@ export default function Pricing() {
         <Button
           className="bg-[#1a5c38] hover:bg-[#164d30] gap-2 flex-shrink-0"
           onClick={handleSave}
-          disabled={saving || !dirty}
+          disabled={saving || !dirty || readOnly}
         >
           <Save className="h-4 w-4" />
           {saving ? "Saving…" : dirty ? "Save Changes" : "Saved"}
@@ -248,7 +250,7 @@ export default function Pricing() {
         <div className="sticky bottom-4">
           <div className="flex items-center justify-between gap-4 rounded-xl border border-[#1a5c38]/30 bg-white shadow-lg px-5 py-3">
             <p className="text-sm font-medium text-[#1a5c38]">You have unsaved pricing changes.</p>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2 h-8 text-sm" onClick={handleSave} disabled={saving}>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2 h-8 text-sm" onClick={handleSave} disabled={saving || readOnly}>
               <Save className="h-3.5 w-3.5" />
               {saving ? "Saving…" : "Save Now"}
             </Button>

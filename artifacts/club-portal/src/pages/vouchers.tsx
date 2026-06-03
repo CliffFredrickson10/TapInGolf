@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useSearch, useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -56,6 +57,7 @@ function generateCode() {
 
 function DiscountVouchersTab() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [vouchers, setVouchers] = useState<DiscountVoucher[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -173,7 +175,7 @@ function DiscountVouchersTab() {
                   <Input type="date" value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))} />
                 </div>
               </div>
-              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving}>
+              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
                 {saving ? "Saving…" : editId ? "Update" : "Create"}
               </Button>
             </div>
@@ -235,6 +237,7 @@ function CancellationVouchersTab({
   urlDate, urlFromTime, urlToTime, onIssued,
 }: { urlDate: string; urlFromTime: string; urlToTime: string; onIssued: () => void }) {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [, navigate] = useLocation();
 
   const [date, setDate]           = useState(urlDate);
@@ -416,14 +419,14 @@ function CancellationVouchersTab({
           </div>
 
           <div className="flex flex-wrap gap-3 items-start">
-            <Button variant="outline" onClick={handlePreview} disabled={!date || previewing} className="gap-2">
+            <Button variant="outline" onClick={handlePreview} disabled={!date || previewing || readOnly} className="gap-2">
               <Users className="h-4 w-4" />
               {previewing ? "Loading…" : "Preview Affected Golfers"}
             </Button>
             {preview !== null && (
               <Button
                 className="bg-[#1a5c38] hover:bg-[#164d30] gap-2"
-                onClick={handleIssue} disabled={issuing || preview.length === 0}
+                onClick={handleIssue} disabled={issuing || preview.length === 0 || readOnly}
               >
                 <TicketX className="h-4 w-4" />
                 {issuing ? "Issuing…" : preview.length === 0 ? "No affected golfers" : `Issue ${preview.length} Voucher${preview.length !== 1 ? "s" : ""}`}

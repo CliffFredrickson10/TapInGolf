@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -22,6 +23,7 @@ const EMPTY = { title: "", subtitle: "", image_url: "", cta_text: "", link_url: 
 
 export default function Ads() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState(EMPTY);
@@ -71,7 +73,7 @@ export default function Ads() {
         </div>
         <Dialog open={open} onOpenChange={setOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd}><Plus className="h-4 w-4" />New Ad</Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}><Plus className="h-4 w-4" />New Ad</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg">
             <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Advertisement</DialogTitle></DialogHeader>
@@ -99,7 +101,7 @@ export default function Ads() {
                 <Switch checked={form.active} onCheckedChange={v => setForm(f => ({ ...f, active: v }))} />
                 <Label>Active</Label>
               </div>
-              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving}>{saving ? "Saving…" : editId ? "Update" : "Create"}</Button>
+              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>{saving ? "Saving…" : editId ? "Update" : "Create"}</Button>
             </div>
           </DialogContent>
         </Dialog>

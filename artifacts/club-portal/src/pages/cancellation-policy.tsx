@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { AlertTriangle, CheckCircle2, Clock, CloudRain, FileText, Mail, Phone, Save, ShieldAlert } from "lucide-react";
 
 interface CancelPolicy {
@@ -82,6 +83,7 @@ function fmtMinutes(m: number): string {
 
 export default function CancellationPolicy() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving]   = useState(false);
   const [policy, setPolicy]   = useState<CancelPolicy>({
@@ -162,7 +164,7 @@ export default function CancellationPolicy() {
             Shown to golfers during booking and at the point of cancellation.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#1a5c38] hover:bg-[#154d30] gap-2">
+        <Button onClick={handleSave} disabled={saving || readOnly} className="bg-[#1a5c38] hover:bg-[#154d30] gap-2">
           <Save className="h-4 w-4" />
           {saving ? "Saving…" : "Save"}
         </Button>

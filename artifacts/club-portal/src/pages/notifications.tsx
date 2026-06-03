@@ -1,6 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -47,6 +48,7 @@ function inboxStyle(type: string) {
 
 export default function Notifications() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
 
   // ── Inbox state ──────────────────────────────────────────────────────────
   const [inbox, setInbox] = useState<InboxItem[]>([]);
@@ -281,7 +283,7 @@ export default function Notifications() {
                 placeholder="Write your message to members…"
               />
             </div>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={handleSend} disabled={sending}>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={handleSend} disabled={sending || readOnly}>
               <Send className="h-4 w-4" />{sending ? "Sending…" : "Send to All Active Members"}
             </Button>
           </CardContent>

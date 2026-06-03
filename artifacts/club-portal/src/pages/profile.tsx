@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { api, getToken } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -34,6 +35,7 @@ type ClubImage = {
 type AddMode = "file" | "url";
 
 export default function Profile() {
+  const readOnly = useReadOnly();
   const { club: authClub } = useAuth();
   const { toast } = useToast();
   const [profile, setProfile] = useState<ClubProfile | null>(null);
@@ -233,7 +235,7 @@ export default function Profile() {
           <h1 className="text-3xl font-bold tracking-tight">Club Profile</h1>
           <p className="text-muted-foreground mt-1">Manage your club's public-facing information.</p>
         </div>
-        <Button onClick={handleSave} disabled={saving} className="bg-[#1a5c38] hover:bg-[#164d30] gap-2">
+        <Button onClick={handleSave} disabled={saving || readOnly} className="bg-[#1a5c38] hover:bg-[#164d30] gap-2">
           <Save className="h-4 w-4" />{saving ? "Saving…" : "Save Changes"}
         </Button>
       </div>
@@ -504,7 +506,7 @@ export default function Profile() {
                         </div>
                         <div className="flex gap-2">
                           <Button type="button" variant="outline" onClick={resetAdd} disabled={uploading} className="flex-1">Cancel</Button>
-                          <Button onClick={handleUploadAndSave} disabled={uploading} className="flex-1 gap-2">
+                          <Button onClick={handleUploadAndSave} disabled={uploading || readOnly} className="flex-1 gap-2">
                             {uploading ? (
                               <><div className="h-4 w-4 border-2 border-primary-foreground/40 border-t-primary-foreground rounded-full animate-spin" />Uploading…</>
                             ) : (
@@ -653,7 +655,7 @@ export default function Profile() {
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleSave} disabled={saving} className="bg-[#1a5c38] hover:bg-[#164d30] gap-2">
+        <Button onClick={handleSave} disabled={saving || readOnly} className="bg-[#1a5c38] hover:bg-[#164d30] gap-2">
           <Save className="h-4 w-4" />{saving ? "Saving…" : "Save Changes"}
         </Button>
       </div>

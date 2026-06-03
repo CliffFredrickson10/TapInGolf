@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
+import { useReadOnly } from "@/context/ReadOnlyContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,6 +167,7 @@ function parseSheet(file: File): Promise<ImportRow[]> {
 
 function ImportDialog({ onImported }: { onImported: () => void }) {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"upload" | "preview" | "result">("upload");
@@ -332,7 +334,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
             {validRows.length === 0 ? (
               <p className="text-sm text-red-600 text-center py-2">No valid rows to import. Please fix the errors in your file and try again.</p>
             ) : (
-              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={handleImport} disabled={importing}>
+              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={handleImport} disabled={importing || readOnly}>
                 <Upload className="h-4 w-4" />
                 {importing ? "Importing…" : `Import ${validRows.length} Member${validRows.length !== 1 ? "s" : ""}`}
               </Button>
@@ -388,6 +390,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
 
 function EditMemberDialog({ member, onUpdated }: { member: Member; onUpdated: () => void }) {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({
@@ -509,7 +512,7 @@ function EditMemberDialog({ member, onUpdated }: { member: Member; onUpdated: ()
             <p className="text-xs text-muted-foreground">Separate multiple benefits with a semicolon (;)</p>
           </div>
 
-          <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving}>
+          <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
             {saving ? "Saving…" : "Save Changes"}
           </Button>
         </div>
@@ -533,6 +536,7 @@ function PrepaidBadge({ total, used }: { total: number; used: number }) {
 
 export default function Members() {
   const { toast } = useToast();
+  const readOnly = useReadOnly();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -676,7 +680,7 @@ export default function Members() {
                   <Label>New Renewal Date *</Label>
                   <Input type="date" value={renewDate} onChange={e => setRenewDate(e.target.value)} className="h-9 text-sm" />
                 </div>
-                <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleBulkRenew} disabled={renewing}>
+                <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleBulkRenew} disabled={renewing || readOnly}>
                   {renewing ? "Renewing…" : "Confirm Renewal"}
                 </Button>
               </div>
@@ -685,7 +689,7 @@ export default function Members() {
           <ImportDialog onImported={reloadAll} />
           <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetAddForm(); }}>
             <DialogTrigger asChild>
-              <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2"><Plus className="h-4 w-4" />Add Member</Button>
+              <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" disabled={readOnly}><Plus className="h-4 w-4" />Add Member</Button>
             </DialogTrigger>
             <DialogContent className="max-w-md">
               <DialogHeader><DialogTitle>Add Member</DialogTitle></DialogHeader>
@@ -747,7 +751,7 @@ export default function Members() {
                   <p className="text-xs text-muted-foreground">Separate multiple benefits with a semicolon (;)</p>
                 </div>
 
-                <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAdd} disabled={adding}>
+                <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAdd} disabled={adding || readOnly}>
                   {adding ? "Adding…" : "Add Member"}
                 </Button>
               </div>

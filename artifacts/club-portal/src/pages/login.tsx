@@ -26,9 +26,11 @@ function BrandLogo() {
   );
 }
 
+type Tab = "club" | "club_user" | "staff";
+
 export default function Login() {
-  const { login, staffLogin } = useAuth();
-  const [tab, setTab] = useState<"club" | "staff">("club");
+  const { login, clubUserLogin, staffLogin } = useAuth();
+  const [tab, setTab] = useState<Tab>("club");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -36,7 +38,7 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const switchTab = (next: "club" | "staff") => {
+  const switchTab = (next: Tab) => {
     setTab(next);
     setError("");
     setPassword("");
@@ -49,6 +51,8 @@ export default function Login() {
     try {
       if (tab === "staff") {
         await staffLogin(email.trim().toLowerCase(), password);
+      } else if (tab === "club_user") {
+        await clubUserLogin(email.trim().toLowerCase(), password);
       } else {
         await login(username.trim(), password);
       }
@@ -59,60 +63,55 @@ export default function Login() {
     }
   };
 
-  const isStaff = tab === "staff";
-
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-[#f0f7f3] via-white to-[#f5f5f0]">
       <div className="w-full max-w-md px-4">
         <BrandLogo />
         <Card className="shadow-xl border-0 ring-1 ring-black/5">
           <CardHeader className="pb-4">
-            <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted mb-4">
+            <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
               <button
                 type="button"
                 onClick={() => switchTab("club")}
-                className={`text-sm font-medium py-2 rounded-md transition-colors ${
-                  !isStaff ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                  tab === "club" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                Club login
+                Club Admin
+              </button>
+              <button
+                type="button"
+                onClick={() => switchTab("club_user")}
+                className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                  tab === "club_user" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                Club Staff
               </button>
               <button
                 type="button"
                 onClick={() => switchTab("staff")}
-                className={`text-sm font-medium py-2 rounded-md transition-colors ${
-                  isStaff ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                  tab === "staff" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
                 }`}
               >
-                TapIn staff
+                TapIn Staff
               </button>
             </div>
             <CardTitle className="text-xl">
-              {isStaff ? "TapIn staff sign in" : "Sign in to your club"}
+              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : "Sign in to your club"}
             </CardTitle>
             <CardDescription>
-              {isStaff
+              {tab === "staff"
                 ? "Sign in with your TapIn super-user account to manage all clubs."
+                : tab === "club_user"
+                ? "Sign in with your club staff email and password."
                 : "Enter your club credentials to access the management portal."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {isStaff ? (
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    placeholder="you@tapingolf.co.za"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    required
-                    autoComplete="username"
-                    className="h-11"
-                  />
-                </div>
-              ) : (
+              {tab === "club" ? (
                 <div className="space-y-2">
                   <Label htmlFor="username">Club Username</Label>
                   <Input
@@ -121,6 +120,20 @@ export default function Login() {
                     placeholder="e.g. glendower_golf_club"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
+                    required
+                    autoComplete="username"
+                    className="h-11"
+                  />
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    placeholder="you@example.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     required
                     autoComplete="username"
                     className="h-11"
@@ -158,7 +171,7 @@ export default function Login() {
                 {loading ? "Signing in…" : "Sign in"}
               </Button>
             </form>
-            {!isStaff && (
+            {tab === "club" && (
               <div className="flex items-center justify-between mt-5 pt-4 border-t">
                 <p className="text-xs text-muted-foreground">
                   Default: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">Golf2026!</code>

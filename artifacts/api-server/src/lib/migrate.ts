@@ -852,6 +852,25 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
   await ddl("ALTER TABLE cancellation_vouchers ADD COLUMN IF NOT EXISTS value_remaining NUMERIC(10,2)");
   await ddl("UPDATE cancellation_vouchers SET value_remaining = value_rands WHERE value_remaining IS NULL AND value_rands IS NOT NULL");
+
+  // ── Club portal users (multi-user access with per-section permissions) ────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_portal_users (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(255) NOT NULL,
+      email         VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      role          VARCHAR(20) NOT NULL DEFAULT 'member'
+                      CHECK (role IN ('admin','member')),
+      permissions   JSONB NOT NULL DEFAULT '{}',
+      active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW(),
+      UNIQUE (club_id, email)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cpu_club ON club_portal_users (club_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cpu_email ON club_portal_users (email)");
 }
 
 // ── Seed reviews ──────────────────────────────────────────────────────────────

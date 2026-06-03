@@ -33,6 +33,22 @@ import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import Payments from "@/pages/payments";
 import CancellationPolicy from "@/pages/cancellation-policy";
+import PortalUsers from "@/pages/portal-users";
+
+function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
+  const { canView } = useAuth();
+  if (!canView(section)) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="text-center">
+          <p className="text-muted-foreground font-medium">You don't have access to this section.</p>
+          <p className="text-xs text-muted-foreground mt-1">Contact your club admin to request access.</p>
+        </div>
+      </div>
+    );
+  }
+  return <>{children}</>;
+}
 
 function Router() {
   const { club, staff, loading } = useAuth();
@@ -82,18 +98,43 @@ function Router() {
     <Layout>
       <Switch>
         <Route path="/" component={Dashboard} />
-        <Route path="/profile" component={Profile} />
-        <Route path="/tee-times" component={Schedule} />
-        <Route path="/bookings" component={Schedule} />
-        <Route path="/reviews" component={Reviews} />
-        <Route path="/ads" component={Ads} />
-        <Route path="/events" component={Events} />
-        <Route path="/members" component={Members} />
-        <Route path="/vouchers" component={Vouchers} />
-        <Route path="/pricing" component={Pricing} />
-        <Route path="/payments" component={Payments} />
-        <Route path="/notifications" component={Notifications} />
-        <Route path="/cancellation-policy" component={CancellationPolicy} />
+        <Route path="/profile">
+          <SectionGuard section="profile"><Profile /></SectionGuard>
+        </Route>
+        <Route path="/tee-times">
+          <SectionGuard section="schedule"><Schedule /></SectionGuard>
+        </Route>
+        <Route path="/bookings">
+          <SectionGuard section="schedule"><Schedule /></SectionGuard>
+        </Route>
+        <Route path="/reviews">
+          <SectionGuard section="reviews"><Reviews /></SectionGuard>
+        </Route>
+        <Route path="/ads">
+          <SectionGuard section="ads"><Ads /></SectionGuard>
+        </Route>
+        <Route path="/events">
+          <SectionGuard section="events"><Events /></SectionGuard>
+        </Route>
+        <Route path="/members">
+          <SectionGuard section="members"><Members /></SectionGuard>
+        </Route>
+        <Route path="/vouchers">
+          <SectionGuard section="vouchers"><Vouchers /></SectionGuard>
+        </Route>
+        <Route path="/pricing">
+          <SectionGuard section="pricing"><Pricing /></SectionGuard>
+        </Route>
+        <Route path="/payments">
+          <SectionGuard section="payments"><Payments /></SectionGuard>
+        </Route>
+        <Route path="/notifications">
+          <SectionGuard section="notifications"><Notifications /></SectionGuard>
+        </Route>
+        <Route path="/cancellation-policy">
+          <SectionGuard section="cancellation_policy"><CancellationPolicy /></SectionGuard>
+        </Route>
+        <Route path="/portal-users" component={PortalUsers} />
         <Route>
           <div className="p-8">
             <h1 className="text-2xl font-bold">Page not found</h1>

@@ -56,18 +56,64 @@ function verifyClubToken(token: string): number | null {
   }
 }
 
+function generateClubUserToken(clubId: number, userId: number, role: string, permissions: Record<string, string>): string {
+  const payload = Buffer.from(
+    JSON.stringify({ sub: clubId, uid: userId, role, perms: permissions, type: "club_user", iat: Date.now(), exp: Date.now() + 7 * 24 * 60 * 60 * 1000 })
+  ).toString("base64url");
+  const sig = crypto.createHmac("sha256", SECRET).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+
+function verifyClubUserToken(token: string): { clubId: number; userId: number; role: string; permissions: Record<string, string> } | null {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac("sha256", SECRET).update(payload).digest("hex");
+  if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.type !== "club_user") return null;
+    if (data.exp < Date.now()) return null;
+    return { clubId: data.sub, userId: data.uid, role: data.role, permissions: data.perms ?? {} };
+  } catch {
+    return null;
+  }
+}
+
 async function requireClubAuth(req: Request, res: Response, next: NextFunction): Promise<void> {
   const header = req.headers.authorization ?? "";
   if (!header.startsWith("Bearer ")) { res.status(401).json({ message: "Unauthorized" }); return; }
-  const clubId = verifyClubToken(header.slice(7));
-  if (!clubId) { res.status(401).json({ message: "Invalid or expired token" }); return; }
-  const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
-  if (!club) { res.status(401).json({ message: "Club not found" }); return; }
-  (req as any).club = club;
-  next();
+  const token = header.slice(7);
+
+  // Try direct club login token first
+  const clubId = verifyClubToken(token);
+  if (clubId) {
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    if (!club) { res.status(401).json({ message: "Club not found" }); return; }
+    (req as any).club = club;
+    (req as any).clubUser = null; // direct admin login — no portal user record
+    next();
+    return;
+  }
+
+  // Try club portal user token
+  const userPayload = verifyClubUserToken(token);
+  if (userPayload) {
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    if (!club) { res.status(401).json({ message: "Club not found" }); return; }
+    const clubUser = await row<any>("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ? AND club_id = ? AND active = 1", [userPayload.userId, userPayload.clubId]);
+    if (!clubUser) { res.status(401).json({ message: "User not found or inactive" }); return; }
+    (req as any).club = club;
+    (req as any).clubUser = { ...clubUser, permissions: clubUser.permissions ?? {} };
+    next();
+    return;
+  }
+
+  res.status(401).json({ message: "Invalid or expired token" });
 }
 
 function getClub(req: Request): any { return (req as any).club; }
+function getClubUser(req: Request): any { return (req as any).clubUser ?? null; }
+function isPortalAdmin(req: Request): boolean { return getClubUser(req) === null || getClubUser(req)?.role === "admin"; }
 
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 
@@ -1324,6 +1370,123 @@ router.post("/portal/payments/:id/resend-invoice", requireClubAuth, async (req: 
     logger.error({ err }, "Failed to send invoice email");
     res.status(500).json({ message: "Failed to send invoice email" });
   }
+});
+
+// ─── PORTAL USERS ─────────────────────────────────────────────────────────────
+
+// Login as a club portal user (email + password)
+router.post("/portal/users/login", async (req: Request, res: Response): Promise<void> => {
+  const { email, password } = req.body ?? {};
+  if (!email || !password) { res.status(400).json({ message: "Email and password required" }); return; }
+  const u = await row<any>(
+    `SELECT cpu.id, cpu.club_id, cpu.name, cpu.email, cpu.password_hash, cpu.role, cpu.permissions, cpu.active,
+            c.name AS club_name, c.location, c.province
+     FROM club_portal_users cpu
+     JOIN clubs c ON c.id = cpu.club_id
+     WHERE LOWER(cpu.email) = ? AND cpu.active = 1
+     LIMIT 1`,
+    [String(email).trim().toLowerCase()]
+  );
+  if (!u) { res.status(401).json({ message: "Invalid credentials" }); return; }
+  const valid = await bcrypt.compare(String(password), u.password_hash);
+  if (!valid) { res.status(401).json({ message: "Invalid credentials" }); return; }
+  const permissions = u.permissions ?? {};
+  const token = generateClubUserToken(u.club_id, u.id, u.role, permissions);
+  res.json({
+    token,
+    club: { id: u.club_id, name: u.club_name, location: u.location, province: u.province },
+    clubUser: { id: u.id, name: u.name, email: u.email, role: u.role, permissions },
+  });
+});
+
+// Get current portal user profile (works for both direct club login + club user login)
+router.get("/portal/users/me-user", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const cu = getClubUser(req);
+  const club = getClub(req);
+  if (!cu) {
+    // Direct club admin login — return a synthetic "admin" record
+    res.json({ clubUser: null, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
+    return;
+  }
+  res.json({ clubUser: { id: cu.id, name: cu.name, email: cu.email, role: cu.role, permissions: cu.permissions }, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
+});
+
+// List all portal users for this club (admin only)
+router.get("/portal/users", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = getClub(req);
+  const users = await query<any>(
+    "SELECT id, name, email, role, permissions, active, created_at FROM club_portal_users WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json({ users: users.map(u => ({ ...u, permissions: u.permissions ?? {} })) });
+});
+
+// Create a new portal user (admin only)
+router.post("/portal/users", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = getClub(req);
+  const { name, email, password, role = "member", permissions = {} } = req.body ?? {};
+  if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
+  const cleanEmail = String(email).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) { res.status(400).json({ message: "Invalid email address" }); return; }
+  if (String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+  const existing = await row<any>("SELECT id FROM club_portal_users WHERE club_id = ? AND LOWER(email) = ?", [club.id, cleanEmail]);
+  if (existing) { res.status(409).json({ message: "A user with this email already exists for this club" }); return; }
+  const hash = await bcrypt.hash(String(password), 10);
+  const result = await exec<any>(
+    "INSERT INTO club_portal_users (club_id, name, email, password_hash, role, permissions) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+    [club.id, String(name).trim(), cleanEmail, hash, role === "admin" ? "admin" : "member", JSON.stringify(permissions)]
+  );
+  const newId = result[0]?.id;
+  res.status(201).json({ user: { id: newId, name: String(name).trim(), email: cleanEmail, role, permissions, active: 1 } });
+});
+
+// Update a portal user (name, email, role, permissions, active) — admin only
+router.put("/portal/users/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = getClub(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const u = await row<any>("SELECT id, role FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) { res.status(404).json({ message: "User not found" }); return; }
+  const { name, email, role, permissions, active } = req.body ?? {};
+  const fields: string[] = [];
+  const vals: any[] = [];
+  if (name !== undefined) { fields.push("name = ?"); vals.push(String(name).trim()); }
+  if (email !== undefined) { fields.push("email = ?"); vals.push(String(email).trim().toLowerCase()); }
+  if (role !== undefined) { fields.push("role = ?"); vals.push(role === "admin" ? "admin" : "member"); }
+  if (permissions !== undefined) { fields.push("permissions = ?"); vals.push(JSON.stringify(permissions)); }
+  if (active !== undefined) { fields.push("active = ?"); vals.push(active ? 1 : 0); }
+  if (fields.length === 0) { res.status(400).json({ message: "Nothing to update" }); return; }
+  vals.push(userId, club.id);
+  await run(`UPDATE club_portal_users SET ${fields.join(", ")} WHERE id = ? AND club_id = ?`, vals);
+  const updated = await row<any>("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ?", [userId]);
+  res.json({ user: { ...updated, permissions: updated?.permissions ?? {} } });
+});
+
+// Reset a portal user's password — admin only
+router.put("/portal/users/:id/password", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = getClub(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const { password } = req.body ?? {};
+  if (!password || String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+  const u = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) { res.status(404).json({ message: "User not found" }); return; }
+  const hash = await bcrypt.hash(String(password), 10);
+  await run("UPDATE club_portal_users SET password_hash = ? WHERE id = ? AND club_id = ?", [hash, userId, club.id]);
+  res.json({ message: "Password updated" });
+});
+
+// Delete a portal user — admin only
+router.delete("/portal/users/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = getClub(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const u = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) { res.status(404).json({ message: "User not found" }); return; }
+  await run("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  res.json({ message: "User deleted" });
 });
 
 export default router;

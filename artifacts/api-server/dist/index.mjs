@@ -62137,27 +62137,73 @@ function verifyClubToken2(token) {
     return null;
   }
 }
+function generateClubUserToken(clubId, userId, role, permissions) {
+  const payload = Buffer.from(
+    JSON.stringify({ sub: clubId, uid: userId, role, perms: permissions, type: "club_user", iat: Date.now(), exp: Date.now() + 7 * 24 * 60 * 60 * 1e3 })
+  ).toString("base64url");
+  const sig = crypto6.createHmac("sha256", SECRET2).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+function verifyClubUserToken(token) {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto6.createHmac("sha256", SECRET2).update(payload).digest("hex");
+  if (!crypto6.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.type !== "club_user") return null;
+    if (data.exp < Date.now()) return null;
+    return { clubId: data.sub, userId: data.uid, role: data.role, permissions: data.perms ?? {} };
+  } catch {
+    return null;
+  }
+}
 async function requireClubAuth2(req, res, next) {
   const header = req.headers.authorization ?? "";
   if (!header.startsWith("Bearer ")) {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
-  const clubId = verifyClubToken2(header.slice(7));
-  if (!clubId) {
-    res.status(401).json({ message: "Invalid or expired token" });
+  const token = header.slice(7);
+  const clubId = verifyClubToken2(token);
+  if (clubId) {
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    if (!club) {
+      res.status(401).json({ message: "Club not found" });
+      return;
+    }
+    req.club = club;
+    req.clubUser = null;
+    next();
     return;
   }
-  const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
-  if (!club) {
-    res.status(401).json({ message: "Club not found" });
+  const userPayload = verifyClubUserToken(token);
+  if (userPayload) {
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    if (!club) {
+      res.status(401).json({ message: "Club not found" });
+      return;
+    }
+    const clubUser = await row("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ? AND club_id = ? AND active = 1", [userPayload.userId, userPayload.clubId]);
+    if (!clubUser) {
+      res.status(401).json({ message: "User not found or inactive" });
+      return;
+    }
+    req.club = club;
+    req.clubUser = { ...clubUser, permissions: clubUser.permissions ?? {} };
+    next();
     return;
   }
-  req.club = club;
-  next();
+  res.status(401).json({ message: "Invalid or expired token" });
 }
 function getClub2(req) {
   return req.club;
+}
+function getClubUser(req) {
+  return req.clubUser ?? null;
+}
+function isPortalAdmin(req) {
+  return getClubUser(req) === null || getClubUser(req)?.role === "admin";
 }
 router14.post("/portal/auth/login", async (req, res) => {
   const { username, password } = req.body ?? {};
@@ -63583,6 +63629,172 @@ router14.post("/portal/payments/:id/resend-invoice", requireClubAuth2, async (re
     logger.error({ err }, "Failed to send invoice email");
     res.status(500).json({ message: "Failed to send invoice email" });
   }
+});
+router14.post("/portal/users/login", async (req, res) => {
+  const { email, password } = req.body ?? {};
+  if (!email || !password) {
+    res.status(400).json({ message: "Email and password required" });
+    return;
+  }
+  const u = await row(
+    `SELECT cpu.id, cpu.club_id, cpu.name, cpu.email, cpu.password_hash, cpu.role, cpu.permissions, cpu.active,
+            c.name AS club_name, c.location, c.province
+     FROM club_portal_users cpu
+     JOIN clubs c ON c.id = cpu.club_id
+     WHERE LOWER(cpu.email) = ? AND cpu.active = 1
+     LIMIT 1`,
+    [String(email).trim().toLowerCase()]
+  );
+  if (!u) {
+    res.status(401).json({ message: "Invalid credentials" });
+    return;
+  }
+  const valid = await bcryptjs_default.compare(String(password), u.password_hash);
+  if (!valid) {
+    res.status(401).json({ message: "Invalid credentials" });
+    return;
+  }
+  const permissions = u.permissions ?? {};
+  const token = generateClubUserToken(u.club_id, u.id, u.role, permissions);
+  res.json({
+    token,
+    club: { id: u.club_id, name: u.club_name, location: u.location, province: u.province },
+    clubUser: { id: u.id, name: u.name, email: u.email, role: u.role, permissions }
+  });
+});
+router14.get("/portal/users/me-user", requireClubAuth2, async (req, res) => {
+  const cu = getClubUser(req);
+  const club = getClub2(req);
+  if (!cu) {
+    res.json({ clubUser: null, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
+    return;
+  }
+  res.json({ clubUser: { id: cu.id, name: cu.name, email: cu.email, role: cu.role, permissions: cu.permissions }, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
+});
+router14.get("/portal/users", requireClubAuth2, async (req, res) => {
+  if (!isPortalAdmin(req)) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = getClub2(req);
+  const users = await query(
+    "SELECT id, name, email, role, permissions, active, created_at FROM club_portal_users WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json({ users: users.map((u) => ({ ...u, permissions: u.permissions ?? {} })) });
+});
+router14.post("/portal/users", requireClubAuth2, async (req, res) => {
+  if (!isPortalAdmin(req)) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = getClub2(req);
+  const { name, email, password, role = "member", permissions = {} } = req.body ?? {};
+  if (!name || !email || !password) {
+    res.status(400).json({ message: "Name, email and password are required" });
+    return;
+  }
+  const cleanEmail = String(email).trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+    res.status(400).json({ message: "Invalid email address" });
+    return;
+  }
+  if (String(password).length < 6) {
+    res.status(400).json({ message: "Password must be at least 6 characters" });
+    return;
+  }
+  const existing = await row("SELECT id FROM club_portal_users WHERE club_id = ? AND LOWER(email) = ?", [club.id, cleanEmail]);
+  if (existing) {
+    res.status(409).json({ message: "A user with this email already exists for this club" });
+    return;
+  }
+  const hash2 = await bcryptjs_default.hash(String(password), 10);
+  const result = await exec(
+    "INSERT INTO club_portal_users (club_id, name, email, password_hash, role, permissions) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
+    [club.id, String(name).trim(), cleanEmail, hash2, role === "admin" ? "admin" : "member", JSON.stringify(permissions)]
+  );
+  const newId = result[0]?.id;
+  res.status(201).json({ user: { id: newId, name: String(name).trim(), email: cleanEmail, role, permissions, active: 1 } });
+});
+router14.put("/portal/users/:id", requireClubAuth2, async (req, res) => {
+  if (!isPortalAdmin(req)) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = getClub2(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const u = await row("SELECT id, role FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+  const { name, email, role, permissions, active } = req.body ?? {};
+  const fields = [];
+  const vals = [];
+  if (name !== void 0) {
+    fields.push("name = ?");
+    vals.push(String(name).trim());
+  }
+  if (email !== void 0) {
+    fields.push("email = ?");
+    vals.push(String(email).trim().toLowerCase());
+  }
+  if (role !== void 0) {
+    fields.push("role = ?");
+    vals.push(role === "admin" ? "admin" : "member");
+  }
+  if (permissions !== void 0) {
+    fields.push("permissions = ?");
+    vals.push(JSON.stringify(permissions));
+  }
+  if (active !== void 0) {
+    fields.push("active = ?");
+    vals.push(active ? 1 : 0);
+  }
+  if (fields.length === 0) {
+    res.status(400).json({ message: "Nothing to update" });
+    return;
+  }
+  vals.push(userId, club.id);
+  await run(`UPDATE club_portal_users SET ${fields.join(", ")} WHERE id = ? AND club_id = ?`, vals);
+  const updated = await row("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ?", [userId]);
+  res.json({ user: { ...updated, permissions: updated?.permissions ?? {} } });
+});
+router14.put("/portal/users/:id/password", requireClubAuth2, async (req, res) => {
+  if (!isPortalAdmin(req)) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = getClub2(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const { password } = req.body ?? {};
+  if (!password || String(password).length < 6) {
+    res.status(400).json({ message: "Password must be at least 6 characters" });
+    return;
+  }
+  const u = await row("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+  const hash2 = await bcryptjs_default.hash(String(password), 10);
+  await run("UPDATE club_portal_users SET password_hash = ? WHERE id = ? AND club_id = ?", [hash2, userId, club.id]);
+  res.json({ message: "Password updated" });
+});
+router14.delete("/portal/users/:id", requireClubAuth2, async (req, res) => {
+  if (!isPortalAdmin(req)) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = getClub2(req);
+  const userId = parseInt(req.params["id"] ?? "0");
+  const u = await row("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  if (!u) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+  await run("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
+  res.json({ message: "User deleted" });
 });
 var portal_default = router14;
 
@@ -65739,6 +65951,23 @@ async function createSchema() {
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS payment_method VARCHAR(50) DEFAULT NULL");
   await ddl("ALTER TABLE cancellation_vouchers ADD COLUMN IF NOT EXISTS value_remaining NUMERIC(10,2)");
   await ddl("UPDATE cancellation_vouchers SET value_remaining = value_rands WHERE value_remaining IS NULL AND value_rands IS NOT NULL");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_portal_users (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(255) NOT NULL,
+      email         VARCHAR(255) NOT NULL,
+      password_hash VARCHAR(255) NOT NULL,
+      role          VARCHAR(20) NOT NULL DEFAULT 'member'
+                      CHECK (role IN ('admin','member')),
+      permissions   JSONB NOT NULL DEFAULT '{}',
+      active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW(),
+      UNIQUE (club_id, email)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cpu_club ON club_portal_users (club_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cpu_email ON club_portal_users (email)");
 }
 var SEED_REVIEWS = [
   {

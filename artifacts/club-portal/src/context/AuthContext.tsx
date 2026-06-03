@@ -4,11 +4,22 @@ import {
   getMode, setMode, getSelectedClubId, setSelectedClubId as persistSelectedClubId,
 } from "@/lib/api";
 
+export type Permission = "none" | "view" | "edit";
+export type Permissions = Record<string, Permission>;
+
 interface ClubInfo {
   id: number;
   name: string;
   location: string;
   province: string;
+}
+
+export interface ClubUserInfo {
+  id: number;
+  name: string;
+  email: string;
+  role: "admin" | "member";
+  permissions: Permissions;
 }
 
 export interface StaffInfo {
@@ -26,30 +37,41 @@ export interface StaffClub {
 
 interface AuthContextValue {
   club: ClubInfo | null;
+  clubUser: ClubUserInfo | null;
   staff: StaffInfo | null;
   clubs: StaffClub[];
   selectedClubId: number | null;
   setSelectedClubId: (id: number | null) => void;
   loading: boolean;
+  isClubAdmin: boolean;
+  canView: (section: string) => boolean;
+  canEdit: (section: string) => boolean;
   login: (username: string, password: string) => Promise<void>;
+  clubUserLogin: (email: string, password: string) => Promise<void>;
   staffLogin: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextValue>({
   club: null,
+  clubUser: null,
   staff: null,
   clubs: [],
   selectedClubId: null,
   setSelectedClubId: () => {},
   loading: true,
+  isClubAdmin: false,
+  canView: () => true,
+  canEdit: () => true,
   login: async () => {},
+  clubUserLogin: async () => {},
   staffLogin: async () => {},
   logout: () => {},
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [club, setClub] = useState<ClubInfo | null>(null);
+  const [clubUser, setClubUser] = useState<ClubUserInfo | null>(null);
   const [staff, setStaff] = useState<StaffInfo | null>(null);
   const [clubs, setClubs] = useState<StaffClub[]>([]);
   const [selectedClubId, setSelectedClubIdState] = useState<number | null>(getSelectedClubId());
@@ -63,7 +85,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const loadClubs = useCallback(async () => {
     const data = await api<{ clubs: StaffClub[] }>("/api/admin/clubs");
     setClubs(data.clubs);
-    // Default the selected club to the first available if none chosen yet.
     const stored = getSelectedClubId();
     if (data.clubs.length > 0 && (stored == null || !data.clubs.some(c => c.id === stored))) {
       setSelectedClubId(data.clubs[0].id);
@@ -85,6 +106,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         })
         .catch(() => clearToken())
         .finally(() => setLoading(false));
+    } else if (mode === "club_user") {
+      api<{ club: ClubInfo; clubUser: ClubUserInfo | null }>("/api/portal/users/me-user")
+        .then((data) => {
+          setClub(data.club);
+          setClubUser(data.clubUser);
+        })
+        .catch(() => clearToken())
+        .finally(() => setLoading(false));
     } else {
       api("/api/portal/auth/me")
         .then((data) => setClub({ id: data.id, name: data.name, location: data.location, province: data.province }))
@@ -101,6 +130,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(data.token);
     setMode("club");
     setClub(data.club);
+    setClubUser(null);
+  }, []);
+
+  const clubUserLogin = useCallback(async (email: string, password: string) => {
+    const data = await api("/api/portal/users/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(data.token);
+    setMode("club_user");
+    setClub(data.club);
+    setClubUser(data.clubUser);
   }, []);
 
   const staffLogin = useCallback(async (email: string, password: string) => {
@@ -120,15 +161,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(() => {
     clearToken();
     setClub(null);
+    setClubUser(null);
     setStaff(null);
     setClubs([]);
     setSelectedClubIdState(null);
   }, []);
 
+  const isClubAdmin = !clubUser || clubUser.role === "admin";
+
+  const canView = useCallback((section: string): boolean => {
+    if (!clubUser) return true;
+    const level = clubUser.permissions[section];
+    return level === "view" || level === "edit";
+  }, [clubUser]);
+
+  const canEdit = useCallback((section: string): boolean => {
+    if (!clubUser) return true;
+    const level = clubUser.permissions[section];
+    return level === "edit";
+  }, [clubUser]);
+
   return (
     <AuthContext.Provider value={{
-      club, staff, clubs, selectedClubId, setSelectedClubId,
-      loading, login, staffLogin, logout,
+      club, clubUser, staff, clubs, selectedClubId, setSelectedClubId,
+      loading, isClubAdmin, canView, canEdit,
+      login, clubUserLogin, staffLogin, logout,
     }}>
       {children}
     </AuthContext.Provider>

@@ -13,31 +13,32 @@ import {
   Ticket,
   Bell,
   LogOut,
-  Images,
   CircleDollarSign,
   CreditCard,
   FileX2,
+  ShieldCheck,
+  UserCircle2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/profile", label: "Club Profile", icon: Building2 },
-  { href: "/tee-times", label: "Tee Schedule", icon: CalendarDays },
-  { href: "/payments", label: "Payments", icon: CreditCard },
-  { href: "/reviews", label: "Reviews", icon: Star },
-  { href: "/ads", label: "Advertisements", icon: Megaphone },
-  { href: "/events", label: "Events", icon: Calendar },
-  { href: "/members", label: "Members", icon: Users },
-  { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign },
-  { href: "/vouchers", label: "Vouchers", icon: Ticket },
-  { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2 },
-  { href: "/notifications", label: "Notifications", icon: Bell, inbox: true },
+  { href: "/", label: "Dashboard", icon: LayoutDashboard, section: "dashboard" },
+  { href: "/profile", label: "Club Profile", icon: Building2, section: "profile" },
+  { href: "/tee-times", label: "Tee Schedule", icon: CalendarDays, section: "schedule" },
+  { href: "/payments", label: "Payments", icon: CreditCard, section: "payments" },
+  { href: "/reviews", label: "Reviews", icon: Star, section: "reviews" },
+  { href: "/ads", label: "Advertisements", icon: Megaphone, section: "ads" },
+  { href: "/events", label: "Events", icon: Calendar, section: "events" },
+  { href: "/members", label: "Members", icon: Users, section: "members" },
+  { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign, section: "pricing" },
+  { href: "/vouchers", label: "Vouchers", icon: Ticket, section: "vouchers" },
+  { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2, section: "cancellation_policy" },
+  { href: "/notifications", label: "Notifications", icon: Bell, section: "notifications", inbox: true },
 ];
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { club, logout } = useAuth();
+  const { club, clubUser, isClubAdmin, canView, logout } = useAuth();
   const [unread, setUnread] = useState(0);
 
   useEffect(() => {
@@ -51,6 +52,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
     return () => clearInterval(timer);
   }, [club]);
 
+  const visibleNav = navItems.filter(item => canView(item.section));
+
   return (
     <div className="flex h-screen overflow-hidden bg-muted/40">
       <aside className="w-64 bg-[#1a5c38] text-white flex flex-col flex-shrink-0 overflow-hidden">
@@ -59,8 +62,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
           <h1 className="text-lg font-bold leading-tight">{club?.name ?? "TapIn Golf"}</h1>
           {club && <p className="text-xs text-white/60 mt-0.5">{club.location}, {club.province}</p>}
         </div>
+
+        {clubUser && (
+          <div className="px-4 py-3 border-b border-white/10 flex items-center gap-2">
+            <UserCircle2 className="h-4 w-4 text-white/50 flex-shrink-0" />
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-white truncate">{clubUser.name}</p>
+              <p className="text-[10px] text-white/50 capitalize">{clubUser.role}</p>
+            </div>
+          </div>
+        )}
+
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
-          {navItems.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = item.icon;
             const isActive = location === item.href || (item.href !== "/" && location.startsWith(item.href));
             return (
@@ -81,7 +95,21 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {isClubAdmin && (
+            <Link href="/portal-users">
+              <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer text-sm font-medium ${
+                location === "/portal-users"
+                  ? "bg-white/20 text-white"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`}>
+                <ShieldCheck className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1">Portal Users</span>
+              </div>
+            </Link>
+          )}
         </nav>
+
         <div className="p-3 border-t border-white/10">
           <Button
             variant="ghost"

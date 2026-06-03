@@ -507,7 +507,15 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
                         WHERE bp.booking_id = b.id),
                       '[]'::json
                     ) AS player_paid,
-                    pts.date, pts.tee_time AS time, 0 AS tee_price
+                    pts.date, pts.tee_time AS time, 0 AS tee_price,
+                    (SELECT id FROM club_inbox_notifications
+                       WHERE club_id = pts.club_id AND type = 'cancellation'
+                         AND meta::jsonb->>'booking_ref' = b.booking_ref
+                       LIMIT 1) AS inbox_notification_id,
+                    (SELECT refund_processed_at FROM club_inbox_notifications
+                       WHERE club_id = pts.club_id AND type = 'cancellation'
+                         AND meta::jsonb->>'booking_ref' = b.booking_ref
+                       LIMIT 1) AS refund_processed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
              JOIN users u ON b.user_id = u.id

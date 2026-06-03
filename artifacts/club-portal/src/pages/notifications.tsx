@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Bell, Inbox, XCircle, CheckCheck, BadgeCheck, ShieldOff } from "lucide-react";
+import { Send, Bell, Inbox, XCircle, CheckCheck, ShieldOff } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -26,7 +26,6 @@ interface InboxItem {
   body: string;
   meta: string | null;
   read_at: string | null;
-  refund_processed_at: string | null;
   created_at: string;
 }
 
@@ -81,12 +80,6 @@ export default function Notifications() {
   const markUnread = async (id: number) => {
     await api(`/api/portal/inbox/${id}/unread`, { method: "PUT" }).catch(() => {});
     setInbox(prev => prev.map(n => n.id === id ? { ...n, read_at: null } : n));
-  };
-
-  const markRefundProcessed = async (id: number) => {
-    await api(`/api/portal/inbox/${id}/refund-processed`, { method: "PUT" }).catch(() => {});
-    const now = new Date().toISOString();
-    setInbox(prev => prev.map(n => n.id === id ? { ...n, refund_processed_at: now, read_at: n.read_at ?? now } : n));
   };
 
   const unreadCount = inbox.filter(n => !n.read_at).length;
@@ -182,7 +175,6 @@ export default function Notifications() {
               {inbox.map(n => {
                 const style = inboxStyle(n.type);
                 const isUnread = !n.read_at;
-                const refundDone = !!n.refund_processed_at;
                 const isCancellation = n.type === "cancellation";
                 return (
                   <Card
@@ -260,22 +252,6 @@ export default function Notifications() {
                                 </Button>
                               ) : null;
                             })()}
-                            {isCancellation && (
-                              refundDone ? (
-                                <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
-                                  <BadgeCheck className="h-3.5 w-3.5" />
-                                  Refund Processed · {format(new Date(n.refund_processed_at!), "dd MMM HH:mm")}
-                                </span>
-                              ) : (
-                                <Button
-                                  variant="outline" size="sm"
-                                  className="h-6 px-2.5 text-xs gap-1 border-green-300 text-green-700 hover:bg-green-50"
-                                  onClick={() => markRefundProcessed(n.id)}
-                                >
-                                  <BadgeCheck className="h-3.5 w-3.5" />Mark Refund Processed
-                                </Button>
-                              )
-                            )}
                           </div>
                         </div>
                       </div>

@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { XCircle, Search, User, Mail, Phone, CalendarDays, Clock, Users, CreditCard } from "lucide-react";
+import { XCircle, Search, User, Mail, Phone, CalendarDays, Clock, Users, CreditCard, BadgeCheck } from "lucide-react";
 import { format } from "date-fns";
 
 interface Booking {
@@ -26,6 +26,8 @@ interface Booking {
   time: string;
   tee_price: number;
   voucher_code: string | null;
+  inbox_notification_id: number | null;
+  refund_processed_at: string | null;
 }
 
 function fmtDate(d: string | null | undefined) {
@@ -59,6 +61,7 @@ export default function CancelledBookings() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [detail, setDetail] = useState<Booking | null>(null);
+  const [markingRefund, setMarkingRefund] = useState(false);
 
   const autoOpenedRef = useRef(false);
 
@@ -90,6 +93,23 @@ export default function CancelledBookings() {
 
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
+  const markRefundProcessed = async () => {
+    if (!detail?.inbox_notification_id) return;
+    setMarkingRefund(true);
+    try {
+      await api(`/api/portal/inbox/${detail.inbox_notification_id}/refund-processed`, { method: "PUT" });
+      const now = new Date().toISOString();
+      const updated = { ...detail, refund_processed_at: now };
+      setDetail(updated);
+      setBookings(prev => prev.map(b => b.id === detail.id ? updated : b));
+      toast({ title: "Refund marked as processed" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setMarkingRefund(false);
+    }
+  };
+
   const filtered = bookings.filter(b => {
     if (!q.trim()) return true;
     const lq = q.toLowerCase();
@@ -105,7 +125,7 @@ export default function CancelledBookings() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Cancelled Bookings</h1>
         <p className="text-muted-foreground mt-1">
-          All bookings cancelled by golfers. Click a row to view the full details.
+          All bookings cancelled by golfers. Click a row to view details and manage refunds.
         </p>
       </div>
 
@@ -145,6 +165,11 @@ export default function CancelledBookings() {
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{b.guest_name}</span>
                         <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{b.booking_ref}</code>
+                        {b.refund_processed_at && (
+                          <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">
+                            <BadgeCheck className="h-3 w-3" />Refund Processed
+                          </span>
+                        )}
                       </div>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         {b.date ? fmtDate(b.date) : "—"} at {b.time ? String(b.time).slice(0, 5) : "—"} · {b.players} player{b.players !== 1 ? "s" : ""} · R{Number(b.total_amount).toFixed(2)}
@@ -206,6 +231,27 @@ export default function CancelledBookings() {
                 <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
                   <p>Booked on {fmtDateTime(detail.created_at)}</p>
                 </div>
+
+                {/* Refund action */}
+                {detail.inbox_notification_id && (
+                  <div className="pt-2 border-t">
+                    {detail.refund_processed_at ? (
+                      <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+                        <BadgeCheck className="h-4 w-4" />
+                        Refund processed · {fmtDate(detail.refund_processed_at)}
+                      </div>
+                    ) : (
+                      <Button
+                        className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                        onClick={markRefundProcessed}
+                        disabled={markingRefund}
+                      >
+                        <BadgeCheck className="h-4 w-4" />
+                        {markingRefund ? "Saving…" : "Mark Refund as Processed"}
+                      </Button>
+                    )}
+                  </div>
+                )}
               </div>
             </>
           )}

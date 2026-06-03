@@ -233,15 +233,25 @@ export default function Notifications() {
                           })()}
                           {isCancellation && (() => {
                             let bookingId: number | null = null;
-                            try { bookingId = JSON.parse(n.meta ?? "{}").booking_id ?? null; } catch {}
-                            return bookingId ? (
+                            let bookingRef: string | null = null;
+                            try {
+                              const m = JSON.parse(n.meta ?? "{}");
+                              bookingId = m.booking_id ?? null;
+                              bookingRef = m.booking_ref ?? null;
+                            } catch {}
+                            const dest = bookingId
+                              ? `/cancelled-bookings?booking=${bookingId}`
+                              : bookingRef
+                              ? `/cancelled-bookings?ref=${encodeURIComponent(bookingRef)}`
+                              : null;
+                            return dest ? (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 className="h-6 px-2.5 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50"
                                 onClick={async () => {
                                   if (isUnread) await markRead(n.id);
-                                  navigate(`/cancelled-bookings?booking=${bookingId}`);
+                                  navigate(dest);
                                 }}
                               >
                                 <XCircle className="h-3.5 w-3.5" />

@@ -68,13 +68,17 @@ export default function CancelledBookings() {
       const data = await api<Booking[]>("/api/portal/bookings?status=cancelled&limit=500");
       setBookings(data);
       if (!autoOpenedRef.current) {
-        const targetId = new URLSearchParams(search).get("booking");
-        if (targetId) {
-          const found = data.find(b => b.id === parseInt(targetId, 10));
-          if (found) {
-            setDetail(found);
-            autoOpenedRef.current = true;
-          }
+        const params = new URLSearchParams(search);
+        const targetId = params.get("booking");
+        const targetRef = params.get("ref");
+        const found = targetId
+          ? data.find(b => b.id === parseInt(targetId, 10))
+          : targetRef
+          ? data.find(b => b.booking_ref === targetRef)
+          : null;
+        if (found) {
+          setDetail(found);
+          autoOpenedRef.current = true;
         }
       }
     } catch (e: any) {

@@ -35,6 +35,7 @@ import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import Payments from "@/pages/payments";
 import CancellationPolicy from "@/pages/cancellation-policy";
+import CancelledBookings from "@/pages/cancelled-bookings";
 import PortalUsers from "@/pages/portal-users";
 
 function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
@@ -144,6 +145,9 @@ function Router() {
         </Route>
         <Route path="/cancellation-policy">
           <SectionGuard section="cancellation_policy"><CancellationPolicy /></SectionGuard>
+        </Route>
+        <Route path="/cancelled-bookings">
+          <SectionGuard section="schedule"><CancelledBookings /></SectionGuard>
         </Route>
         <Route path="/portal-users" component={PortalUsers} />
         <Route>

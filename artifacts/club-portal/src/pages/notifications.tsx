@@ -231,6 +231,24 @@ export default function Notifications() {
                               </Button>
                             ) : null;
                           })()}
+                          {isCancellation && (() => {
+                            let bookingId: number | null = null;
+                            try { bookingId = JSON.parse(n.meta ?? "{}").booking_id ?? null; } catch {}
+                            return bookingId ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2.5 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50"
+                                onClick={async () => {
+                                  if (isUnread) await markRead(n.id);
+                                  navigate(`/cancelled-bookings?booking=${bookingId}`);
+                                }}
+                              >
+                                <XCircle className="h-3.5 w-3.5" />
+                                View Booking
+                              </Button>
+                            ) : null;
+                          })()}
                           {isCancellation && (
                             refundDone ? (
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">

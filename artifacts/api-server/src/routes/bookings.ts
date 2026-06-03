@@ -1051,7 +1051,7 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
         "cancellation",
         title,
         body,
-        JSON.stringify({ booking_ref: booking.booking_ref, golfer_name: booking.golfer_name, golfer_email: booking.golfer_email, golfer_phone: booking.golfer_phone ?? null, tee_date: club.tee_date, tee_time: club.tee_time, players, total_amount: total, cancel_fee_pct: feePct, refund_amount: refund }),
+        JSON.stringify({ booking_id: id, booking_ref: booking.booking_ref, golfer_name: booking.golfer_name, golfer_email: booking.golfer_email, golfer_phone: booking.golfer_phone ?? null, tee_date: club.tee_date, tee_time: club.tee_time, players, total_amount: total, cancel_fee_pct: feePct, refund_amount: refund }),
       ]
     ).catch((err: unknown) => {
       console.error("[cancel] Failed to write portal inbox notification:", err);

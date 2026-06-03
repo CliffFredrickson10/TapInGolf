@@ -180,7 +180,7 @@ export default function Bans() {
   const displayed = filter === "all" ? bans : bans.filter(b => b.status === filter);
 
   return (
-    <div className="p-6 max-w-4xl mx-auto space-y-6">
+    <div className="p-8 space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">

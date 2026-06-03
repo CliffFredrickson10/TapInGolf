@@ -174,14 +174,7 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="flex items-center justify-between mt-5 pt-4 border-t">
-              {tab === "club" ? (
-                <p className="text-xs text-muted-foreground">
-                  Default: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">Golf2026!</code>
-                </p>
-              ) : (
-                <span />
-              )}
+            <div className="flex items-center justify-end mt-5 pt-4 border-t">
               <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
                 Forgot password?
               </a>

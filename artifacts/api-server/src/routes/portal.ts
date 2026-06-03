@@ -1494,10 +1494,11 @@ router.delete("/portal/users/:id", requireClubAuth, async (req: Request, res: Re
 // Search any TapIn user by phone or name (for the "ban a golfer" dialog)
 router.get("/portal/user-lookup", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const q = String(req.query["q"] ?? "").trim();
+  res.setHeader("Cache-Control", "no-store");
   if (q.length < 2) { res.json([]); return; }
   const like = `%${q}%`;
   const users = await query<any>(
-    "SELECT id, name, phone, email FROM users WHERE phone LIKE ? OR name LIKE ? ORDER BY name LIMIT 10",
+    "SELECT id, name, phone, email FROM users WHERE phone ILIKE ? OR name ILIKE ? ORDER BY name LIMIT 10",
     [like, like]
   );
   res.json(users);

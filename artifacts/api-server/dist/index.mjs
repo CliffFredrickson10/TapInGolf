@@ -63826,13 +63826,14 @@ router14.delete("/portal/users/:id", requireClubAuth2, async (req, res) => {
 });
 router14.get("/portal/user-lookup", requireClubAuth2, async (req, res) => {
   const q = String(req.query["q"] ?? "").trim();
+  res.setHeader("Cache-Control", "no-store");
   if (q.length < 2) {
     res.json([]);
     return;
   }
   const like = `%${q}%`;
   const users = await query(
-    "SELECT id, name, phone, email FROM users WHERE phone LIKE ? OR name LIKE ? ORDER BY name LIMIT 10",
+    "SELECT id, name, phone, email FROM users WHERE phone ILIKE ? OR name ILIKE ? ORDER BY name LIMIT 10",
     [like, like]
   );
   res.json(users);

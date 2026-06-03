@@ -61,13 +61,47 @@ router.get("/admin/users", async (req, res): Promise<void> => {
     return;
   }
 
+  const q = String(req.query.q ?? "").trim();
+  const params: any[] = [];
+  let whereClause = "";
+  if (q) {
+    whereClause = "WHERE (u.name ILIKE ? OR u.email ILIKE ?)";
+    params.push(`%${q}%`, `%${q}%`);
+  }
+
   const users = await query<any>(
-    `SELECT u.id, u.name, u.email, u.role, u.club_id, c.name as club_name
+    `SELECT u.id, u.name, u.email, u.role, u.club_id, u.is_super_user, u.created_at,
+            c.name as club_name
      FROM users u
      LEFT JOIN clubs c ON c.id = u.club_id
-     ORDER BY u.role DESC, u.name ASC`
+     ${whereClause}
+     ORDER BY u.is_super_user DESC, u.role DESC, u.name ASC
+     LIMIT 500`,
+    params
   );
   res.json({ users });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// PUT /admin/users/:id/role — platform admin only: update user role
+// ─────────────────────────────────────────────────────────────────────
+router.put("/admin/users/:id/role", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) { res.status(400).json({ message: "Invalid user id" }); return; }
+
+  const { role } = req.body ?? {};
+  if (!["user", "club_admin"].includes(role)) {
+    res.status(400).json({ message: "role must be 'user' or 'club_admin'" });
+    return;
+  }
+
+  const clubId = role === "user" ? null : (req.body.club_id ?? null);
+  await exec("UPDATE users SET role = ?, club_id = ? WHERE id = ?", [role, clubId, targetId]);
+  const updated = await row<any>("SELECT id, name, email, role, club_id FROM users WHERE id = ?", [targetId]);
+  res.json({ user: updated });
 });
 
 // ─────────────────────────────────────────────────────────────────────
@@ -308,6 +342,166 @@ router.put("/admin/revenue/fee", async (req, res): Promise<void> => {
   );
 
   res.json({ success: true, platform_fee_flat: flat });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// GET /admin/clubs-list — paginated clubs for management
+// ─────────────────────────────────────────────────────────────────────
+router.get("/admin/clubs-list", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const q        = String(req.query.q ?? "").trim();
+  const province = String(req.query.province ?? "").trim();
+  const active   = req.query.active != null ? String(req.query.active) : null;
+  const page     = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit    = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "30"), 10)));
+  const offset   = (page - 1) * limit;
+
+  const where: string[] = [];
+  const params: any[]   = [];
+  if (q)                          { where.push("(c.name ILIKE ? OR c.location ILIKE ?)"); params.push(`%${q}%`, `%${q}%`); }
+  if (province)                   { where.push("c.province = ?"); params.push(province); }
+  if (active === "1" || active === "0") { where.push("c.active = ?"); params.push(parseInt(active)); }
+
+  const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+
+  const [clubs, total] = await Promise.all([
+    query<any>(
+      `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
+              c.active, c.featured, c.created_at
+       FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    ),
+    row<any>(`SELECT COUNT(*) AS total FROM clubs c ${whereSQL}`, params),
+  ]);
+
+  res.json({ clubs, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+
+// PUT /admin/clubs/:id/toggle — toggle active
+router.put("/admin/clubs/:id/toggle", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  const club = await row<any>("SELECT id, active FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
+});
+
+// PUT /admin/clubs/:id/toggle-featured
+router.put("/admin/clubs/:id/toggle-featured", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET featured = CASE WHEN featured = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  const club = await row<any>("SELECT id, featured FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Ads management — platform admin only
+// ─────────────────────────────────────────────────────────────────────
+router.get("/admin/ads", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const ads = await query<any>(
+    `SELECT a.*, c.name AS club_name
+     FROM ads a LEFT JOIN clubs c ON c.id = a.club_id
+     ORDER BY a.priority DESC, a.id DESC`
+  );
+  res.json({ ads });
+});
+
+router.post("/admin/ads", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  if (!title || !placement) { res.status(400).json({ message: "title and placement are required" }); return; }
+  const id = await exec(
+    `INSERT INTO ads (title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [title, subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
+     placement, priority ?? 0, active !== false ? 1 : 0, club_id ?? null]
+  );
+  res.status(201).json({ id });
+});
+
+router.put("/admin/ads/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  await exec(
+    `UPDATE ads SET title=?, subtitle=?, image_url=?, cta_text=?, link_url=?,
+     placement=?, priority=?, active=?, club_id=? WHERE id=?`,
+    [title, subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
+     placement, priority ?? 0, active ? 1 : 0, club_id ?? null, id]
+  );
+  res.json({ success: true });
+});
+
+router.delete("/admin/ads/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  await exec("DELETE FROM ads WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Vouchers management — platform admin only
+// ─────────────────────────────────────────────────────────────────────
+router.get("/admin/vouchers", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const vouchers = await query<any>(
+    `SELECT v.*, c.name AS club_name
+     FROM vouchers v LEFT JOIN clubs c ON c.id = v.club_id
+     ORDER BY v.created_at DESC`
+  );
+  res.json({ vouchers });
+});
+
+router.post("/admin/vouchers", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const { code, discount_type, discount_value, club_id, min_amount, max_uses, expires_at } = req.body ?? {};
+  if (!code || !discount_type || discount_value === undefined) {
+    res.status(400).json({ message: "code, discount_type and discount_value are required" });
+    return;
+  }
+  const codeUpper = String(code).toUpperCase().trim();
+  const id = await exec(
+    `INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [codeUpper, discount_type, parseFloat(discount_value),
+     club_id ?? null, min_amount ? parseFloat(min_amount) : 0,
+     max_uses ? parseInt(max_uses) : null, expires_at ?? null]
+  );
+  res.status(201).json({ id });
+});
+
+router.put("/admin/vouchers/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { active, max_uses, expires_at, min_amount } = req.body ?? {};
+  const sets: string[] = [];
+  const params: any[] = [];
+  if (active !== undefined)    { sets.push("active = ?");    params.push(active ? 1 : 0); }
+  if (max_uses !== undefined)  { sets.push("max_uses = ?");  params.push(max_uses ? parseInt(max_uses) : null); }
+  if (expires_at !== undefined){ sets.push("expires_at = ?");params.push(expires_at || null); }
+  if (min_amount !== undefined){ sets.push("min_amount = ?");params.push(parseFloat(min_amount) || 0); }
+  if (sets.length === 0) { res.status(400).json({ message: "Nothing to update" }); return; }
+  await exec(`UPDATE vouchers SET ${sets.join(", ")} WHERE id = ?`, [...params, id]);
+  res.json({ success: true });
+});
+
+router.delete("/admin/vouchers/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  await exec("DELETE FROM vouchers WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
 });
 
 export default router;

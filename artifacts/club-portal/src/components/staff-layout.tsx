@@ -12,6 +12,11 @@ import {
   ShieldAlert,
   MessageSquareWarning,
   LogOut,
+  Users,
+  Flag,
+  Monitor,
+  Ticket,
+  AlarmClock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -24,6 +29,11 @@ const navItems = [
   { href: "/hna-review", label: "HNA Verifications", icon: IdCard, badge: "hnaPending" as const },
   { href: "/moderation", label: "Chat Reports", icon: ShieldAlert, badge: "reportsPending" as const },
   { href: "/review-reports", label: "Review Reports", icon: MessageSquareWarning, badge: "reviewReportsPending" as const },
+  { href: "/users", label: "User Management", icon: Users },
+  { href: "/clubs", label: "Club Management", icon: Flag },
+  { href: "/ads", label: "Ads & Promotions", icon: Monitor },
+  { href: "/vouchers", label: "Vouchers", icon: Ticket },
+  { href: "/reminder-settings", label: "Reminder Settings", icon: AlarmClock },
 ];
 
 // Pages that operate on a single selected club need the club selector shown.

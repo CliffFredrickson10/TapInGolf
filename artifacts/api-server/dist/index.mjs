@@ -60516,13 +60516,45 @@ router10.get("/admin/users", async (req, res) => {
     res.status(403).json({ message: "Forbidden" });
     return;
   }
+  const q = String(req.query.q ?? "").trim();
+  const params = [];
+  let whereClause = "";
+  if (q) {
+    whereClause = "WHERE (u.name ILIKE ? OR u.email ILIKE ?)";
+    params.push(`%${q}%`, `%${q}%`);
+  }
   const users = await query(
-    `SELECT u.id, u.name, u.email, u.role, u.club_id, c.name as club_name
+    `SELECT u.id, u.name, u.email, u.role, u.club_id, u.is_super_user, u.created_at,
+            c.name as club_name
      FROM users u
      LEFT JOIN clubs c ON c.id = u.club_id
-     ORDER BY u.role DESC, u.name ASC`
+     ${whereClause}
+     ORDER BY u.is_super_user DESC, u.role DESC, u.name ASC
+     LIMIT 500`,
+    params
   );
   res.json({ users });
+});
+router10.put("/admin/users/:id/role", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const targetId = parseInt(req.params.id, 10);
+  if (isNaN(targetId)) {
+    res.status(400).json({ message: "Invalid user id" });
+    return;
+  }
+  const { role } = req.body ?? {};
+  if (!["user", "club_admin"].includes(role)) {
+    res.status(400).json({ message: "role must be 'user' or 'club_admin'" });
+    return;
+  }
+  const clubId = role === "user" ? null : req.body.club_id ?? null;
+  await exec("UPDATE users SET role = ?, club_id = ? WHERE id = ?", [role, clubId, targetId]);
+  const updated = await row("SELECT id, name, email, role, club_id FROM users WHERE id = ?", [targetId]);
+  res.json({ user: updated });
 });
 router10.get("/admin/revenue/summary", async (req, res) => {
   const user = await getUser(req);
@@ -60725,6 +60757,224 @@ router10.put("/admin/revenue/fee", async (req, res) => {
     [flat.toFixed(2)]
   );
   res.json({ success: true, platform_fee_flat: flat });
+});
+router10.get("/admin/clubs-list", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const q = String(req.query.q ?? "").trim();
+  const province = String(req.query.province ?? "").trim();
+  const active = req.query.active != null ? String(req.query.active) : null;
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(50, Math.max(1, parseInt(String(req.query.limit ?? "30"), 10)));
+  const offset = (page - 1) * limit;
+  const where = [];
+  const params = [];
+  if (q) {
+    where.push("(c.name ILIKE ? OR c.location ILIKE ?)");
+    params.push(`%${q}%`, `%${q}%`);
+  }
+  if (province) {
+    where.push("c.province = ?");
+    params.push(province);
+  }
+  if (active === "1" || active === "0") {
+    where.push("c.active = ?");
+    params.push(parseInt(active));
+  }
+  const whereSQL = where.length ? `WHERE ${where.join(" AND ")}` : "";
+  const [clubs, total] = await Promise.all([
+    query(
+      `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
+              c.active, c.featured, c.created_at
+       FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    ),
+    row(`SELECT COUNT(*) AS total FROM clubs c ${whereSQL}`, params)
+  ]);
+  res.json({ clubs, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+router10.put("/admin/clubs/:id/toggle", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  const club = await row("SELECT id, active FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
+});
+router10.put("/admin/clubs/:id/toggle-featured", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET featured = CASE WHEN featured = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  const club = await row("SELECT id, featured FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
+});
+router10.get("/admin/ads", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const ads = await query(
+    `SELECT a.*, c.name AS club_name
+     FROM ads a LEFT JOIN clubs c ON c.id = a.club_id
+     ORDER BY a.priority DESC, a.id DESC`
+  );
+  res.json({ ads });
+});
+router10.post("/admin/ads", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  if (!title || !placement) {
+    res.status(400).json({ message: "title and placement are required" });
+    return;
+  }
+  const id = await exec(
+    `INSERT INTO ads (title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      title,
+      subtitle ?? null,
+      image_url ?? null,
+      cta_text ?? null,
+      link_url ?? null,
+      placement,
+      priority ?? 0,
+      active !== false ? 1 : 0,
+      club_id ?? null
+    ]
+  );
+  res.status(201).json({ id });
+});
+router10.put("/admin/ads/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  await exec(
+    `UPDATE ads SET title=?, subtitle=?, image_url=?, cta_text=?, link_url=?,
+     placement=?, priority=?, active=?, club_id=? WHERE id=?`,
+    [
+      title,
+      subtitle ?? null,
+      image_url ?? null,
+      cta_text ?? null,
+      link_url ?? null,
+      placement,
+      priority ?? 0,
+      active ? 1 : 0,
+      club_id ?? null,
+      id
+    ]
+  );
+  res.json({ success: true });
+});
+router10.delete("/admin/ads/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  await exec("DELETE FROM ads WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
+});
+router10.get("/admin/vouchers", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const vouchers = await query(
+    `SELECT v.*, c.name AS club_name
+     FROM vouchers v LEFT JOIN clubs c ON c.id = v.club_id
+     ORDER BY v.created_at DESC`
+  );
+  res.json({ vouchers });
+});
+router10.post("/admin/vouchers", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const { code, discount_type, discount_value, club_id, min_amount, max_uses, expires_at } = req.body ?? {};
+  if (!code || !discount_type || discount_value === void 0) {
+    res.status(400).json({ message: "code, discount_type and discount_value are required" });
+    return;
+  }
+  const codeUpper = String(code).toUpperCase().trim();
+  const id = await exec(
+    `INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, expires_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?)`,
+    [
+      codeUpper,
+      discount_type,
+      parseFloat(discount_value),
+      club_id ?? null,
+      min_amount ? parseFloat(min_amount) : 0,
+      max_uses ? parseInt(max_uses) : null,
+      expires_at ?? null
+    ]
+  );
+  res.status(201).json({ id });
+});
+router10.put("/admin/vouchers/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { active, max_uses, expires_at, min_amount } = req.body ?? {};
+  const sets = [];
+  const params = [];
+  if (active !== void 0) {
+    sets.push("active = ?");
+    params.push(active ? 1 : 0);
+  }
+  if (max_uses !== void 0) {
+    sets.push("max_uses = ?");
+    params.push(max_uses ? parseInt(max_uses) : null);
+  }
+  if (expires_at !== void 0) {
+    sets.push("expires_at = ?");
+    params.push(expires_at || null);
+  }
+  if (min_amount !== void 0) {
+    sets.push("min_amount = ?");
+    params.push(parseFloat(min_amount) || 0);
+  }
+  if (sets.length === 0) {
+    res.status(400).json({ message: "Nothing to update" });
+    return;
+  }
+  await exec(`UPDATE vouchers SET ${sets.join(", ")} WHERE id = ?`, [...params, id]);
+  res.json({ success: true });
+});
+router10.delete("/admin/vouchers/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  await exec("DELETE FROM vouchers WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
 });
 var admin_default = router10;
 

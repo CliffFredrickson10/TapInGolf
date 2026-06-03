@@ -26,6 +26,11 @@ import StaffEventsMembers from "@/pages/staff/events-members";
 import StaffHnaReview from "@/pages/staff/hna-review";
 import StaffModeration from "@/pages/staff/moderation";
 import StaffReviewModeration from "@/pages/staff/review-moderation";
+import StaffUsers from "@/pages/staff/users";
+import StaffClubs from "@/pages/staff/clubs";
+import StaffAds from "@/pages/staff/ads";
+import StaffVouchers from "@/pages/staff/vouchers";
+import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import Payments from "@/pages/payments";
 import CancellationPolicy from "@/pages/cancellation-policy";
 
@@ -56,6 +61,11 @@ function Router() {
                 <Route path="/hna-review" component={StaffHnaReview} />
                 <Route path="/moderation" component={StaffModeration} />
                 <Route path="/review-reports" component={StaffReviewModeration} />
+                <Route path="/users" component={StaffUsers} />
+                <Route path="/clubs" component={StaffClubs} />
+                <Route path="/ads" component={StaffAds} />
+                <Route path="/vouchers" component={StaffVouchers} />
+                <Route path="/reminder-settings" component={StaffReminderSettings} />
                 <Route>
                   <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
                 </Route>

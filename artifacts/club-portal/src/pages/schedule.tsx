@@ -881,6 +881,7 @@ function EditTeeTimeDialog({
   onSave: () => void;
   saving: boolean;
 }) {
+  const readOnly = useReadOnly();
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent>

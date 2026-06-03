@@ -508,14 +508,7 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
                       '[]'::json
                     ) AS player_paid,
                     pts.date, pts.tee_time AS time, 0 AS tee_price,
-                    (SELECT id FROM club_inbox_notifications
-                       WHERE club_id = pts.club_id AND type = 'cancellation'
-                         AND meta::jsonb->>'booking_ref' = b.booking_ref
-                       LIMIT 1) AS inbox_notification_id,
-                    (SELECT refund_processed_at FROM club_inbox_notifications
-                       WHERE club_id = pts.club_id AND type = 'cancellation'
-                         AND meta::jsonb->>'booking_ref' = b.booking_ref
-                       LIMIT 1) AS refund_processed_at
+                    b.refund_processed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
              JOIN users u ON b.user_id = u.id
@@ -538,6 +531,19 @@ router.put("/portal/bookings/:id", requireClubAuth, async (req: Request, res: Re
   if (!existing) { res.status(404).json({ message: "Booking not found" }); return; }
   await exec("UPDATE bookings SET status = ? WHERE id = ?", [status, bId]);
   res.json({ message: "Updated", status });
+});
+
+// Mark a cancelled booking's refund as processed.
+router.put("/portal/bookings/:id/refund-processed", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const bId = Number(req.params.id);
+  const existing = await row<any>(
+    "SELECT b.id FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE b.id = ? AND pts.club_id = ? AND b.status = 'cancelled'",
+    [bId, club.id]
+  );
+  if (!existing) { res.status(404).json({ message: "Booking not found or not cancelled" }); return; }
+  await exec("UPDATE bookings SET refund_processed_at = NOW() WHERE id = ?", [bId]);
+  res.json({ ok: true });
 });
 
 // ─── REVIEWS ─────────────────────────────────────────────────────────────────

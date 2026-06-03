@@ -26,7 +26,6 @@ interface Booking {
   time: string;
   tee_price: number;
   voucher_code: string | null;
-  inbox_notification_id: number | null;
   refund_processed_at: string | null;
 }
 
@@ -94,10 +93,10 @@ export default function CancelledBookings() {
   useEffect(() => { fetchBookings(); }, [fetchBookings]);
 
   const markRefundProcessed = async () => {
-    if (!detail?.inbox_notification_id) return;
+    if (!detail) return;
     setMarkingRefund(true);
     try {
-      await api(`/api/portal/inbox/${detail.inbox_notification_id}/refund-processed`, { method: "PUT" });
+      await api(`/api/portal/bookings/${detail.id}/refund-processed`, { method: "PUT" });
       const now = new Date().toISOString();
       const updated = { ...detail, refund_processed_at: now };
       setDetail(updated);
@@ -228,30 +227,27 @@ export default function CancelledBookings() {
                   )}
                 </div>
 
-                <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground space-y-1">
+                <div className="rounded-lg border bg-muted/40 px-4 py-3 text-xs text-muted-foreground">
                   <p>Booked on {fmtDateTime(detail.created_at)}</p>
                 </div>
 
-                {/* Refund action */}
-                {detail.inbox_notification_id && (
-                  <div className="pt-2 border-t">
-                    {detail.refund_processed_at ? (
-                      <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
-                        <BadgeCheck className="h-4 w-4" />
-                        Refund processed · {fmtDate(detail.refund_processed_at)}
-                      </div>
-                    ) : (
-                      <Button
-                        className="w-full gap-2 bg-green-600 hover:bg-green-700"
-                        onClick={markRefundProcessed}
-                        disabled={markingRefund}
-                      >
-                        <BadgeCheck className="h-4 w-4" />
-                        {markingRefund ? "Saving…" : "Mark Refund as Processed"}
-                      </Button>
-                    )}
-                  </div>
-                )}
+                <div className="pt-2 border-t">
+                  {detail.refund_processed_at ? (
+                    <div className="flex items-center gap-2 text-sm text-green-700 font-medium">
+                      <BadgeCheck className="h-4 w-4" />
+                      Refund processed · {fmtDate(detail.refund_processed_at)}
+                    </div>
+                  ) : (
+                    <Button
+                      className="w-full gap-2 bg-green-600 hover:bg-green-700"
+                      onClick={markRefundProcessed}
+                      disabled={markingRefund}
+                    >
+                      <BadgeCheck className="h-4 w-4" />
+                      {markingRefund ? "Saving…" : "Mark Refund as Processed"}
+                    </Button>
+                  )}
+                </div>
               </div>
             </>
           )}

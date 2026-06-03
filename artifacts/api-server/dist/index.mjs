@@ -62717,14 +62717,7 @@ router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
                       '[]'::json
                     ) AS player_paid,
                     pts.date, pts.tee_time AS time, 0 AS tee_price,
-                    (SELECT id FROM club_inbox_notifications
-                       WHERE club_id = pts.club_id AND type = 'cancellation'
-                         AND meta::jsonb->>'booking_ref' = b.booking_ref
-                       LIMIT 1) AS inbox_notification_id,
-                    (SELECT refund_processed_at FROM club_inbox_notifications
-                       WHERE club_id = pts.club_id AND type = 'cancellation'
-                         AND meta::jsonb->>'booking_ref' = b.booking_ref
-                       LIMIT 1) AS refund_processed_at
+                    b.refund_processed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
              JOIN users u ON b.user_id = u.id
@@ -62760,6 +62753,20 @@ router14.put("/portal/bookings/:id", requireClubAuth2, async (req, res) => {
   }
   await exec("UPDATE bookings SET status = ? WHERE id = ?", [status, bId]);
   res.json({ message: "Updated", status });
+});
+router14.put("/portal/bookings/:id/refund-processed", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const bId = Number(req.params.id);
+  const existing = await row(
+    "SELECT b.id FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE b.id = ? AND pts.club_id = ? AND b.status = 'cancelled'",
+    [bId, club.id]
+  );
+  if (!existing) {
+    res.status(404).json({ message: "Booking not found or not cancelled" });
+    return;
+  }
+  await exec("UPDATE bookings SET refund_processed_at = NOW() WHERE id = ?", [bId]);
+  res.json({ ok: true });
 });
 router14.get("/portal/reviews", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -66152,6 +66159,7 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_inbox_club ON club_inbox_notifications (club_id, created_at DESC)");
   await ddl("ALTER TABLE club_inbox_notifications ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS refund_processed_at TIMESTAMP");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_sent_at TIMESTAMP");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS invoice_resend_count INT NOT NULL DEFAULT 0");
   await query(`

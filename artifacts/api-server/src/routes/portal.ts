@@ -8,6 +8,7 @@ import { query, row, exec, run } from "../lib/pg";
 import { objectStorageClient } from "../lib/objectStorage";
 import { generateOTP, hashOTP, generateResetToken, sendOTPEmail, sendInvoiceEmail } from "../lib/otp";
 import { logger } from "../lib/logger";
+import { saveUserNotification } from "../lib/userNotifications";
 
 // Normalize tee_start_type: the portal sends snake_case, the DB constraint requires display format
 const TEE_START_MAP: Record<string, string> = {

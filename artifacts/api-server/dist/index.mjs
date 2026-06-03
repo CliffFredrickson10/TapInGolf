@@ -58049,7 +58049,7 @@ async function sendPushNotifications2(messages) {
 
 // src/lib/userNotifications.ts
 init_pg();
-async function saveUserNotification2(userId, type, title, body, data = {}) {
+async function saveUserNotification(userId, type, title, body, data = {}) {
   try {
     await exec(
       `INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?)`,
@@ -58973,7 +58973,7 @@ router4.post("/bookings", async (req, res) => {
   sendPushNotifications2(pushMessages);
   for (const p of playerRows) {
     const isOrganizer = p.id === user.id;
-    saveUserNotification2(
+    saveUserNotification(
       p.id,
       isOrganizer ? "booking_confirmed" : "booking_invited",
       buildTitle(isOrganizer),
@@ -59383,7 +59383,7 @@ router5.post("/friends/request", async (req, res) => {
       data: { type: "friend_request", friendship_id: friendshipId }
     }]);
   }
-  saveUserNotification2(target.id, "friend_request", "New Friend Request \u{1F91D}", `${user.name} wants to connect with you on TapIn Golf.`, { friendship_id: friendshipId });
+  saveUserNotification(target.id, "friend_request", "New Friend Request \u{1F91D}", `${user.name} wants to connect with you on TapIn Golf.`, { friendship_id: friendshipId });
   res.json({ success: true, message: `Request sent to ${target.name}` });
 });
 router5.put("/friends/:id/accept", async (req, res) => {
@@ -59420,7 +59420,7 @@ router5.put("/friends/:id/accept", async (req, res) => {
         data: { type: "friend_accepted" }
       }]);
     }
-    saveUserNotification2(friendship.requester_id, "friend_accepted", "Friend Request Accepted! \u{1F389}", `${user.name} accepted your friend request. You can now add them to a round.`);
+    saveUserNotification(friendship.requester_id, "friend_accepted", "Friend Request Accepted! \u{1F389}", `${user.name} accepted your friend request. You can now add them to a round.`);
   }
   res.json({ success: true });
 });
@@ -59957,7 +59957,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
     [id, user.id]
   );
   for (const o of allOthers) {
-    saveUserNotification2(o.id, "new_message", pushTitle, pushBody, { conversation_id: id });
+    saveUserNotification(o.id, "new_message", pushTitle, pushBody, { conversation_id: id });
   }
   res.status(201).json({
     id: messageId,
@@ -60307,7 +60307,7 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
       issued.push({ userId: recipient.id, name: recipient.name, code: null, voucher_value: null, prepaid_rollback: true });
       const notifTitle = `Prepaid round returned \u2014 ${club.name}`;
       const notifBody = `Your tee time on ${dateParam} was cancelled. Your prepaid round has been returned to your membership balance.`;
-      saveUserNotification2(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code: null,
         club_id: clubId,
         batch_id: batchId,
@@ -60344,7 +60344,7 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
       const valueStr = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
       const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
       const notifBody = `Your tee time was cancelled${valueStr ? ` \u2014 here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
-      saveUserNotification2(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code,
         club_id: clubId,
         batch_id: batchId,
@@ -61256,7 +61256,7 @@ router12.post("/admin/notifications/broadcast", async (req, res) => {
   const fullTitle = `${club.name}: ${title}`;
   const fullBody = `${body}${type === "tee_shift" && tee_shift_minutes != null ? tee_shift_minutes > 0 ? ` (pushed out by ${tee_shift_minutes} min)` : ` (brought forward by ${Math.abs(tee_shift_minutes)} min)` : ""}`;
   for (const u of recipients) {
-    saveUserNotification2(u.id, "club_broadcast", fullTitle, fullBody, { club_id: clubId, broadcast_type: type, affected_date: dateParam });
+    saveUserNotification(u.id, "club_broadcast", fullTitle, fullBody, { club_id: clubId, broadcast_type: type, affected_date: dateParam });
   }
   res.json({ success: true, recipient_count: withTokens.length, total_booked: recipients.length });
 });
@@ -64851,7 +64851,7 @@ router19.post("/admin/hna-verifications/:id/approve", async (req, res) => {
   const approveTitle = "HNA Verified \u2705";
   const approveBody = validUntil ? `Your SA Player ID has been verified by TapIn (valid until ${validUntil}). You now get affiliated-visitor rates.` : `Your SA Player ID has been verified by TapIn. You now get affiliated-visitor rates.`;
   const approveData = { type: "hna_verification_update", status: "approved" };
-  saveUserNotification2(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
+  saveUserNotification(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
     sendPushNotifications2([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
@@ -64885,7 +64885,7 @@ router19.post("/admin/hna-verifications/:id/reject", async (req, res) => {
   const rejectTitle = "HNA Verification Update";
   const rejectBody = note ? `Your HNA card could not be verified: ${note}. Please submit a clearer photo.` : `Your HNA card could not be verified. Please submit a clearer photo of your SA Player ID.`;
   const rejectData = { type: "hna_verification_update", status: "rejected" };
-  saveUserNotification2(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
+  saveUserNotification(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
     sendPushNotifications2([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
@@ -64918,7 +64918,7 @@ router19.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   const resetTitle = "HNA Verification Update";
   const resetBody = "Your HNA card is under review again. You'll be notified once it's finalised.";
   const resetData = { type: "hna_verification_update", status: "pending" };
-  saveUserNotification2(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
+  saveUserNotification(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
     sendPushNotifications2([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
@@ -64942,7 +64942,7 @@ router19.delete("/admin/hna-verifications/:id", async (req, res) => {
   const deleteTitle = "HNA Verification Reset";
   const deleteBody = "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.";
   const deleteData = { type: "hna_verification_update", status: "deleted" };
-  saveUserNotification2(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
+  saveUserNotification(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
     sendPushNotifications2([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
@@ -66554,7 +66554,7 @@ async function runReminderCycle() {
     await sendPushNotifications2(pushMessages.slice(i, i + 100));
   }
   for (const r of due) {
-    saveUserNotification2(
+    saveUserNotification(
       r.user_id,
       "tee_time_reminder",
       `\u26F3 Tee time in ${timeStr}`,

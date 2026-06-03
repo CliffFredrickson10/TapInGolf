@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { BarChart3, Percent, IdCard, Megaphone, ChevronRight } from "lucide-react";
+import { BarChart3, Percent, IdCard, Megaphone, ChevronRight, Banknote } from "lucide-react";
 import { format } from "date-fns";
 
 interface Summary {
@@ -175,7 +175,7 @@ export default function StaffRevenue() {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
-          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Percent className="h-5 w-5" />Platform Fee</CardTitle></CardHeader>
+          <CardHeader><CardTitle className="flex items-center gap-2 text-lg"><Banknote className="h-5 w-5" />Platform Fee</CardTitle></CardHeader>
           <CardContent>
             <div className="flex items-end gap-3">
               <div className="space-y-1.5">

@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { useSearch } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
@@ -67,6 +68,7 @@ function fmt(d: string | null) {
 export default function Bans() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
+  const search = useSearch();
 
   const [bans, setBans] = useState<Ban[]>([]);
   const [loading, setLoading] = useState(true);
@@ -85,16 +87,32 @@ export default function Bans() {
   const [respondNote, setRespondNote] = useState("");
   const [actioning, setActioning] = useState(false);
 
+  // Track whether we've already auto-opened from the URL param so we only do it once.
+  const autoOpenedRef = useRef(false);
+
   const fetchBans = useCallback(async () => {
     setLoading(true);
     try {
       const params = filter !== "all" ? `?status=${filter}` : "";
       const data = await api<Ban[]>(`/api/portal/bans${params}`);
       setBans(data);
+      // If the page was navigated to with ?ban=<id> (e.g. from a notification), open that ban.
+      if (!autoOpenedRef.current) {
+        const targetId = new URLSearchParams(search).get("ban");
+        if (targetId) {
+          const found = data.find(b => b.id === parseInt(targetId, 10));
+          if (found) {
+            setDetailBan(found);
+            setLiftNote("");
+            setRespondNote("");
+            autoOpenedRef.current = true;
+          }
+        }
+      }
     } catch { /* ignore */ } finally {
       setLoading(false);
     }
-  }, [filter]);
+  }, [filter, search]);
 
   useEffect(() => { fetchBans(); }, [fetchBans]);
 

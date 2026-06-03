@@ -8,8 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Bell, Inbox, XCircle, CheckCheck, BadgeCheck } from "lucide-react";
+import { Send, Bell, Inbox, XCircle, CheckCheck, BadgeCheck, ShieldOff } from "lucide-react";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
 
 interface OutboundNotification {
   id: number; type: string; title: string; body: string;
@@ -39,6 +40,7 @@ const OUTBOUND_BADGE: Record<string, string> = {
 const INBOX_ICON: Record<string, { bg: string; text: string }> = {
   cancellation: { bg: "bg-red-100",    text: "text-red-600"    },
   booking:      { bg: "bg-green-100",  text: "text-green-700"  },
+  ban_appeal:   { bg: "bg-amber-100",  text: "text-amber-700"  },
   info:         { bg: "bg-blue-100",   text: "text-blue-700"   },
 };
 
@@ -49,6 +51,7 @@ function inboxStyle(type: string) {
 export default function Notifications() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
+  const [, navigate] = useLocation();
 
   // ── Inbox state ──────────────────────────────────────────────────────────
   const [inbox, setInbox] = useState<InboxItem[]>([]);
@@ -170,6 +173,8 @@ export default function Notifications() {
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${style.bg}`}>
                         {isCancellation
                           ? <XCircle className={`h-4.5 w-4.5 ${style.text}`} />
+                          : n.type === "ban_appeal"
+                          ? <ShieldOff className={`h-4.5 w-4.5 ${style.text}`} />
                           : <Bell className={`h-4.5 w-4.5 ${style.text}`} />
                         }
                       </div>
@@ -208,6 +213,24 @@ export default function Notifications() {
                           <p className="text-xs text-muted-foreground">
                             {format(new Date(n.created_at), "dd MMM yyyy HH:mm")}
                           </p>
+                          {n.type === "ban_appeal" && (() => {
+                            let banId: number | null = null;
+                            try { banId = JSON.parse(n.meta ?? "{}").ban_id ?? null; } catch {}
+                            return banId ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-6 px-2.5 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
+                                onClick={async () => {
+                                  if (isUnread) await markRead(n.id);
+                                  navigate(`/bans?ban=${banId}`);
+                                }}
+                              >
+                                <ShieldOff className="h-3.5 w-3.5" />
+                                View Appeal
+                              </Button>
+                            ) : null;
+                          })()}
                           {isCancellation && (
                             refundDone ? (
                               <span className="inline-flex items-center gap-1 text-xs font-medium text-green-700 bg-green-100 px-2 py-0.5 rounded-full">

@@ -18,6 +18,7 @@ import {
   FileX2,
   ShieldCheck,
   UserCircle2,
+  ShieldOff,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -30,6 +31,7 @@ const navItems = [
   { href: "/ads", label: "Advertisements", icon: Megaphone, section: "ads" },
   { href: "/events", label: "Events", icon: Calendar, section: "events" },
   { href: "/members", label: "Members", icon: Users, section: "members" },
+  { href: "/bans", label: "Banned Golfers", icon: ShieldOff, section: "bans" },
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign, section: "pricing" },
   { href: "/vouchers", label: "Vouchers", icon: Ticket, section: "vouchers" },
   { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2, section: "cancellation_policy" },

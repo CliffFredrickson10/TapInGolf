@@ -19,6 +19,7 @@ import settingsRouter from "./settings";
 import mapRouter from "./map";
 import hnaVerificationRouter from "./hnaVerification";
 import moderationRouter from "./moderation";
+import bansRouter from "./bans";
 
 const router: IRouter = Router();
 
@@ -42,5 +43,6 @@ router.use(settingsRouter);
 router.use(mapRouter);
 router.use(hnaVerificationRouter);
 router.use(moderationRouter);
+router.use(bansRouter);
 
 export default router;

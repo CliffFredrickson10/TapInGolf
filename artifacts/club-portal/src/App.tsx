@@ -17,6 +17,7 @@ import Reviews from "@/pages/reviews";
 import Ads from "@/pages/ads";
 import Events from "@/pages/events";
 import Members from "@/pages/members";
+import Bans from "@/pages/bans";
 import Vouchers from "@/pages/vouchers";
 import Notifications from "@/pages/notifications";
 import Pricing from "@/pages/pricing";
@@ -125,6 +126,9 @@ function Router() {
         </Route>
         <Route path="/members">
           <SectionGuard section="members"><Members /></SectionGuard>
+        </Route>
+        <Route path="/bans">
+          <SectionGuard section="bans"><Bans /></SectionGuard>
         </Route>
         <Route path="/vouchers">
           <SectionGuard section="vouchers"><Vouchers /></SectionGuard>

@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router22;
+    module.exports = Router23;
     module.exports.Route = Route;
-    function Router22(options) {
-      if (!(this instanceof Router22)) {
-        return new Router22(options);
+    function Router23(options) {
+      if (!(this instanceof Router23)) {
+        return new Router23(options);
       }
       const opts = options || {};
-      function router22(req, res, next) {
-        router22.handle(req, res, next);
+      function router23(req, res, next) {
+        router23.handle(req, res, next);
       }
-      Object.setPrototypeOf(router22, this);
-      router22.caseSensitive = opts.caseSensitive;
-      router22.mergeParams = opts.mergeParams;
-      router22.params = {};
-      router22.strict = opts.strict;
-      router22.stack = [];
-      return router22;
+      Object.setPrototypeOf(router23, this);
+      router23.caseSensitive = opts.caseSensitive;
+      router23.mergeParams = opts.mergeParams;
+      router23.params = {};
+      router23.strict = opts.strict;
+      router23.stack = [];
+      return router23;
     }
-    Router22.prototype = function() {
+    Router23.prototype = function() {
     };
-    Router22.prototype.param = function param(name, fn) {
+    Router23.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router22.prototype.handle = function handle(req, res, callback) {
+    Router23.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router22.prototype.use = function use(handler) {
+    Router23.prototype.use = function use(handler) {
       let offset = 0;
       let path3 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router22.prototype.route = function route(path3) {
+    Router23.prototype.route = function route(path3) {
       const route2 = new Route(path3);
       const layer = new Layer(path3, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router22.prototype[method] = function(path3) {
+      Router23.prototype[method] = function(path3) {
         const route = this.route(path3);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router22 = require_router();
+    var Router23 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router22 = null;
+      var router23 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router22 === null) {
-            router22 = new Router22({
+          if (router23 === null) {
+            router23 = new Router23({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router22;
+          return router23;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router22 = this.router;
+      var router23 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router22.use(path3, fn2);
+          return router23.use(path3, fn2);
         }
         debug(".use app under %s", path3);
         fn2.mountpath = path3;
         fn2.parent = this;
-        router22.use(path3, function mounted_app(req, res, next) {
+        router23.use(path3, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router22 = require_router();
+    var Router23 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router22.Route;
-    exports.Router = Router22;
+    exports.Route = Router23.Route;
+    exports.Router = Router23;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -52269,14 +52269,14 @@ var require_multer = __commonJS({
 });
 
 // src/app.ts
-var import_express22 = __toESM(require_express2(), 1);
+var import_express23 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path2 from "path";
 import { fileURLToPath as fileURLToPath2 } from "url";
 
 // src/routes/index.ts
-var import_express21 = __toESM(require_express2(), 1);
+var import_express22 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -58031,7 +58031,7 @@ init_pg();
 import crypto4 from "crypto";
 
 // src/lib/notifications.ts
-async function sendPushNotifications(messages) {
+async function sendPushNotifications2(messages) {
   const valid = messages.filter((m) => m.to && m.to.startsWith("ExponentPushToken["));
   if (!valid.length) return;
   try {
@@ -58049,7 +58049,7 @@ async function sendPushNotifications(messages) {
 
 // src/lib/userNotifications.ts
 init_pg();
-async function saveUserNotification(userId, type, title, body, data = {}) {
+async function saveUserNotification2(userId, type, title, body, data = {}) {
   try {
     await exec(
       `INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?)`,
@@ -58665,6 +58665,34 @@ router4.post("/bookings", async (req, res) => {
       }
     }
   }
+  const activeBan = await row(
+    "SELECT id FROM club_bans WHERE club_id = ? AND user_id = ? AND status IN ('active','appealing')",
+    [slot.club_id, user.id]
+  );
+  if (activeBan) {
+    res.status(403).json({
+      message: "You are not permitted to book at this club. Please contact the club if you believe this is an error.",
+      error_code: "club_ban_active"
+    });
+    return;
+  }
+  const invitedUserIds = normalised.filter((p) => p.user_id).map((p) => p.user_id);
+  if (invitedUserIds.length > 0) {
+    const ph = invitedUserIds.map(() => "?").join(",");
+    const bannedGuests = await query(
+      `SELECT u.name FROM club_bans cb JOIN users u ON u.id = cb.user_id
+       WHERE cb.club_id = ? AND cb.user_id IN (${ph}) AND cb.status IN ('active','appealing')`,
+      [slot.club_id, ...invitedUserIds]
+    );
+    if (bannedGuests.length > 0) {
+      const names = bannedGuests.map((b) => b.name).join(", ");
+      res.status(403).json({
+        message: `The following player(s) are not permitted to book at this club: ${names}.`,
+        error_code: "player_ban_active"
+      });
+      return;
+    }
+  }
   const numHoles = holes === 9 && slot.price_9 != null ? 9 : 18;
   const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);
   const priceCol = numHoles === 9 ? "price_9h" : "price_18h";
@@ -58942,10 +58970,10 @@ router4.post("/bookings", async (req, res) => {
       data: { type: isOrganizer ? "booking_confirmed" : "booking_invited", booking_id: bookingId }
     };
   });
-  sendPushNotifications(pushMessages);
+  sendPushNotifications2(pushMessages);
   for (const p of playerRows) {
     const isOrganizer = p.id === user.id;
-    saveUserNotification(
+    saveUserNotification2(
       p.id,
       isOrganizer ? "booking_confirmed" : "booking_invited",
       buildTitle(isOrganizer),
@@ -59347,7 +59375,7 @@ router5.post("/friends/request", async (req, res) => {
   );
   const targetRow = await row("SELECT push_token FROM users WHERE id = ?", [target.id]);
   if (targetRow?.push_token) {
-    sendPushNotifications([{
+    sendPushNotifications2([{
       to: targetRow.push_token,
       sound: "default",
       title: "New Friend Request \u{1F91D}",
@@ -59355,7 +59383,7 @@ router5.post("/friends/request", async (req, res) => {
       data: { type: "friend_request", friendship_id: friendshipId }
     }]);
   }
-  saveUserNotification(target.id, "friend_request", "New Friend Request \u{1F91D}", `${user.name} wants to connect with you on TapIn Golf.`, { friendship_id: friendshipId });
+  saveUserNotification2(target.id, "friend_request", "New Friend Request \u{1F91D}", `${user.name} wants to connect with you on TapIn Golf.`, { friendship_id: friendshipId });
   res.json({ success: true, message: `Request sent to ${target.name}` });
 });
 router5.put("/friends/:id/accept", async (req, res) => {
@@ -59384,7 +59412,7 @@ router5.put("/friends/:id/accept", async (req, res) => {
       [friendship.requester_id]
     );
     if (requesterRow?.push_token) {
-      sendPushNotifications([{
+      sendPushNotifications2([{
         to: requesterRow.push_token,
         sound: "default",
         title: "Friend Request Accepted! \u{1F389}",
@@ -59392,7 +59420,7 @@ router5.put("/friends/:id/accept", async (req, res) => {
         data: { type: "friend_accepted" }
       }]);
     }
-    saveUserNotification(friendship.requester_id, "friend_accepted", "Friend Request Accepted! \u{1F389}", `${user.name} accepted your friend request. You can now add them to a round.`);
+    saveUserNotification2(friendship.requester_id, "friend_accepted", "Friend Request Accepted! \u{1F389}", `${user.name} accepted your friend request. You can now add them to a round.`);
   }
   res.json({ success: true });
 });
@@ -59630,7 +59658,7 @@ router7.post("/conversations", async (req, res) => {
     body: is_group ? `${user.name} added you to a group chat.` : `${user.name} started a conversation with you.`,
     data: { type: "new_conversation", conversation_id: conversationId }
   }));
-  sendPushNotifications(msgs);
+  sendPushNotifications2(msgs);
   res.status(201).json({ conversation_id: conversationId, existing: false });
 });
 router7.get("/conversations/:id", async (req, res) => {
@@ -59913,7 +59941,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const chatName = convo?.is_group ? convo.name ?? "Group Chat" : user.name;
   const pushTitle = `${user.name}${convo?.is_group ? ` in ${chatName}` : ""}`;
   const pushBody = content.length > 80 ? content.slice(0, 80) + "\u2026" : content;
-  sendPushNotifications(
+  sendPushNotifications2(
     others.filter((o) => o.push_token).map((o) => ({
       to: o.push_token,
       sound: "default",
@@ -59929,7 +59957,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
     [id, user.id]
   );
   for (const o of allOthers) {
-    saveUserNotification(o.id, "new_message", pushTitle, pushBody, { conversation_id: id });
+    saveUserNotification2(o.id, "new_message", pushTitle, pushBody, { conversation_id: id });
   }
   res.status(201).json({
     id: messageId,
@@ -60279,14 +60307,14 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
       issued.push({ userId: recipient.id, name: recipient.name, code: null, voucher_value: null, prepaid_rollback: true });
       const notifTitle = `Prepaid round returned \u2014 ${club.name}`;
       const notifBody = `Your tee time on ${dateParam} was cancelled. Your prepaid round has been returned to your membership balance.`;
-      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+      saveUserNotification2(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code: null,
         club_id: clubId,
         batch_id: batchId,
         value_rands: null
       });
       if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-        sendPushNotifications([{
+        sendPushNotifications2([{
           to: recipient.push_token,
           sound: "default",
           title: notifTitle,
@@ -60316,14 +60344,14 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
       const valueStr = recipient.voucher_value ? ` worth R${recipient.voucher_value.toFixed(2)}` : "";
       const expiryStr = expiresAt ? ` \u2014 valid until ${new Date(expiresAt).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
       const notifBody = `Your tee time was cancelled${valueStr ? ` \u2014 here's a voucher${valueStr}` : ""}${expiryStr}. Code: ${code}`;
-      saveUserNotification(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
+      saveUserNotification2(recipient.id, "cancellation_voucher", notifTitle, notifBody, {
         code,
         club_id: clubId,
         batch_id: batchId,
         value_rands: recipient.voucher_value ?? null
       });
       if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-        sendPushNotifications([{
+        sendPushNotifications2([{
           to: recipient.push_token,
           sound: "default",
           title: notifTitle,
@@ -61208,7 +61236,7 @@ router12.post("/admin/notifications/broadcast", async (req, res) => {
     }
   }));
   for (let i = 0; i < messages.length; i += 100) {
-    sendPushNotifications(messages.slice(i, i + 100));
+    sendPushNotifications2(messages.slice(i, i + 100));
   }
   await exec(
     `INSERT INTO club_notifications
@@ -61228,7 +61256,7 @@ router12.post("/admin/notifications/broadcast", async (req, res) => {
   const fullTitle = `${club.name}: ${title}`;
   const fullBody = `${body}${type === "tee_shift" && tee_shift_minutes != null ? tee_shift_minutes > 0 ? ` (pushed out by ${tee_shift_minutes} min)` : ` (brought forward by ${Math.abs(tee_shift_minutes)} min)` : ""}`;
   for (const u of recipients) {
-    saveUserNotification(u.id, "club_broadcast", fullTitle, fullBody, { club_id: clubId, broadcast_type: type, affected_date: dateParam });
+    saveUserNotification2(u.id, "club_broadcast", fullTitle, fullBody, { club_id: clubId, broadcast_type: type, affected_date: dateParam });
   }
   res.json({ success: true, recipient_count: withTokens.length, total_booked: recipients.length });
 });
@@ -61653,7 +61681,7 @@ router13.put("/admin/events/:id/registrations/:userId", async (req, res) => {
   );
   const target = await row("SELECT push_token FROM users WHERE id = ?", [targetId]);
   if (target?.push_token) {
-    sendPushNotifications([{
+    sendPushNotifications2([{
       to: target.push_token,
       sound: "default",
       title: status === "approved" ? `You're In! \u26F3` : `Registration Update`,
@@ -61753,7 +61781,7 @@ router13.post("/admin/members", async (req, res) => {
   }
   const targetUser = await row("SELECT push_token FROM users WHERE id = ?", [user_id]);
   if (targetUser?.push_token) {
-    sendPushNotifications([{
+    sendPushNotifications2([{
       to: targetUser.push_token,
       sound: "default",
       title: "Club Membership \u26F3",
@@ -63796,6 +63824,169 @@ router14.delete("/portal/users/:id", requireClubAuth2, async (req, res) => {
   await run("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
   res.json({ message: "User deleted" });
 });
+router14.get("/portal/user-lookup", requireClubAuth2, async (req, res) => {
+  const q = String(req.query["q"] ?? "").trim();
+  if (q.length < 2) {
+    res.json([]);
+    return;
+  }
+  const like = `%${q}%`;
+  const users = await query(
+    "SELECT id, name, phone, email FROM users WHERE phone LIKE ? OR name LIKE ? ORDER BY name LIMIT 10",
+    [like, like]
+  );
+  res.json(users);
+});
+router14.get("/portal/bans", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const statusFilter = req.query["status"] ? "AND cb.status = ?" : "";
+  const params = [club.id];
+  if (req.query["status"]) params.push(req.query["status"]);
+  const bans = await query(
+    `SELECT cb.id, cb.status, cb.reason, cb.appeal_message, cb.appealed_at,
+            cb.appeal_response, cb.lift_note, cb.lifted_at, cb.created_at,
+            u.id AS user_id, u.name AS user_name, u.phone, u.email
+     FROM club_bans cb
+     JOIN users u ON u.id = cb.user_id
+     WHERE cb.club_id = ? ${statusFilter}
+     ORDER BY CASE cb.status WHEN 'appealing' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, cb.created_at DESC`,
+    params
+  );
+  res.json(bans);
+});
+router14.get("/portal/bans/appeals/count", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const r = await row(
+    "SELECT COUNT(*) AS pending FROM club_bans WHERE club_id = ? AND status = 'appealing'",
+    [club.id]
+  );
+  res.json({ pending: Number(r?.pending ?? 0) });
+});
+router14.post("/portal/bans", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const clubUser = req.clubUser;
+  const { user_id, reason } = req.body ?? {};
+  if (!user_id || !String(reason ?? "").trim()) {
+    res.status(400).json({ message: "user_id and reason are required." });
+    return;
+  }
+  const target = await row("SELECT id, name, push_token FROM users WHERE id = ?", [user_id]);
+  if (!target) {
+    res.status(404).json({ message: "User not found" });
+    return;
+  }
+  const existing = await row(
+    "SELECT id, status FROM club_bans WHERE club_id = ? AND user_id = ?",
+    [club.id, user_id]
+  );
+  let banId;
+  if (existing) {
+    if (existing.status === "active" || existing.status === "appealing") {
+      res.status(409).json({ message: "This golfer is already banned at your club." });
+      return;
+    }
+    await run(
+      `UPDATE club_bans SET reason = ?, status = 'active', banned_by = ?, created_at = NOW(),
+       appeal_message = NULL, appealed_at = NULL, appeal_response = NULL,
+       lift_note = NULL, lifted_at = NULL, lifted_by = NULL WHERE id = ?`,
+      [String(reason).trim(), clubUser?.id ?? null, existing.id]
+    );
+    banId = existing.id;
+  } else {
+    const inserted = await row(
+      "INSERT INTO club_bans (club_id, user_id, reason, banned_by) VALUES (?, ?, ?, ?) RETURNING id",
+      [club.id, user_id, String(reason).trim(), clubUser?.id ?? null]
+    );
+    banId = inserted.id;
+  }
+  const title = `Club Access Restricted \u2014 ${club.name}`;
+  const body = String(reason).trim().slice(0, 200);
+  if (target.push_token) {
+    sendPushNotifications([{
+      to: target.push_token,
+      sound: "default",
+      title,
+      body,
+      data: { type: "club_ban", club_id: club.id }
+    }]);
+  }
+  saveUserNotification(user_id, "club_ban", title, body, { club_id: club.id, ban_id: banId });
+  res.status(201).json({ success: true, id: banId });
+});
+router14.post("/portal/bans/:id/lift", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const clubUser = req.clubUser;
+  const id = parseInt(req.params["id"] ?? "0");
+  const { lift_note } = req.body ?? {};
+  const ban = await row(
+    "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
+    [id, club.id]
+  );
+  if (!ban) {
+    res.status(404).json({ message: "Ban not found" });
+    return;
+  }
+  if (ban.status === "lifted") {
+    res.status(409).json({ message: "Ban is already lifted." });
+    return;
+  }
+  await run(
+    "UPDATE club_bans SET status = 'lifted', lift_note = ?, lifted_at = NOW(), lifted_by = ? WHERE id = ?",
+    [lift_note ? String(lift_note).trim() : null, clubUser?.id ?? null, id]
+  );
+  const userRow = await row("SELECT push_token FROM users WHERE id = ?", [ban.user_id]);
+  const title = `Access Restored \u2014 ${club.name}`;
+  const body = lift_note ? String(lift_note).trim().slice(0, 200) : `Your booking access at ${club.name} has been restored.`;
+  if (userRow?.push_token) {
+    sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban_lifted", club_id: club.id } }]);
+  }
+  saveUserNotification(ban.user_id, "club_ban_lifted", title, body, { club_id: club.id, ban_id: id });
+  res.json({ success: true });
+});
+router14.post("/portal/bans/:id/respond", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const clubUser = req.clubUser;
+  const id = parseInt(req.params["id"] ?? "0");
+  const { action, response_note } = req.body ?? {};
+  if (!["lift", "maintain"].includes(action)) {
+    res.status(400).json({ message: "action must be 'lift' or 'maintain'" });
+    return;
+  }
+  const ban = await row(
+    "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
+    [id, club.id]
+  );
+  if (!ban) {
+    res.status(404).json({ message: "Ban not found" });
+    return;
+  }
+  if (ban.status !== "appealing") {
+    res.status(409).json({ message: "This ban has no pending appeal." });
+    return;
+  }
+  const note = response_note ? String(response_note).trim() : null;
+  const userRow = await row("SELECT push_token FROM users WHERE id = ?", [ban.user_id]);
+  if (action === "lift") {
+    await run(
+      "UPDATE club_bans SET status = 'lifted', appeal_response = ?, lift_note = ?, lifted_at = NOW(), lifted_by = ? WHERE id = ?",
+      [note, note, clubUser?.id ?? null, id]
+    );
+    const title = `Appeal Accepted \u2014 ${club.name}`;
+    const body = note ?? `Your appeal at ${club.name} was accepted. Your booking access has been restored.`;
+    if (userRow?.push_token) sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban_lifted", club_id: club.id } }]);
+    saveUserNotification(ban.user_id, "club_ban_lifted", title, body, { club_id: club.id, ban_id: id });
+  } else {
+    await run(
+      "UPDATE club_bans SET status = 'active', appeal_response = ? WHERE id = ?",
+      [note, id]
+    );
+    const title = `Appeal Declined \u2014 ${club.name}`;
+    const body = note ?? `Your appeal at ${club.name} was reviewed. The restriction on your booking access remains in place.`;
+    if (userRow?.push_token) sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban", club_id: club.id } }]);
+    saveUserNotification(ban.user_id, "club_ban", title, body, { club_id: club.id, ban_id: id });
+  }
+  res.json({ success: true });
+});
 var portal_default = router14;
 
 // src/routes/storage.ts
@@ -64659,10 +64850,10 @@ router19.post("/admin/hna-verifications/:id/approve", async (req, res) => {
   const approveTitle = "HNA Verified \u2705";
   const approveBody = validUntil ? `Your SA Player ID has been verified by TapIn (valid until ${validUntil}). You now get affiliated-visitor rates.` : `Your SA Player ID has been verified by TapIn. You now get affiliated-visitor rates.`;
   const approveData = { type: "hna_verification_update", status: "approved" };
-  saveUserNotification(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
+  saveUserNotification2(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
+    sendPushNotifications2([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
   }
   res.json({ success: true, status: "approved" });
 });
@@ -64693,10 +64884,10 @@ router19.post("/admin/hna-verifications/:id/reject", async (req, res) => {
   const rejectTitle = "HNA Verification Update";
   const rejectBody = note ? `Your HNA card could not be verified: ${note}. Please submit a clearer photo.` : `Your HNA card could not be verified. Please submit a clearer photo of your SA Player ID.`;
   const rejectData = { type: "hna_verification_update", status: "rejected" };
-  saveUserNotification(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
+  saveUserNotification2(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
+    sendPushNotifications2([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
   }
   res.json({ success: true, status: "rejected" });
 });
@@ -64726,10 +64917,10 @@ router19.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   const resetTitle = "HNA Verification Update";
   const resetBody = "Your HNA card is under review again. You'll be notified once it's finalised.";
   const resetData = { type: "hna_verification_update", status: "pending" };
-  saveUserNotification(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
+  saveUserNotification2(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
+    sendPushNotifications2([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
   }
   res.json({ success: true, status: "pending" });
 });
@@ -64750,10 +64941,10 @@ router19.delete("/admin/hna-verifications/:id", async (req, res) => {
   const deleteTitle = "HNA Verification Reset";
   const deleteBody = "Your HNA verification has been reset by TapIn. You can submit a new card photo from your profile.";
   const deleteData = { type: "hna_verification_update", status: "deleted" };
-  saveUserNotification(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
+  saveUserNotification2(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
+    sendPushNotifications2([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
   }
   res.json({ success: true, deleted: true });
 });
@@ -65129,34 +65320,93 @@ router20.post("/admin/review-reports/:id/restore", async (req, res) => {
 });
 var moderation_default = router20;
 
-// src/routes/index.ts
+// src/routes/bans.ts
+var import_express21 = __toESM(require_express2(), 1);
+init_pg();
 var router21 = (0, import_express21.Router)();
-router21.use(health_default);
-router21.use(auth_default);
-router21.use(geofencing_default);
-router21.use(clubs_default);
-router21.use(bookings_default);
-router21.use(friends_default);
-router21.use(ads_default);
-router21.use(messages_default);
-router21.use(vouchers_default);
-router21.use(cancellationVouchers_default);
-router21.use(admin_default);
-router21.use(notifications_default);
-router21.use(events_default);
-router21.use(portal_default);
-router21.use(storage_default);
-router21.use(payments_default);
-router21.use(settings_default);
-router21.use(map_default);
-router21.use(hnaVerification_default);
-router21.use(moderation_default);
-var routes_default = router21;
+router21.get("/bans/me", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const bans = await query(
+    `SELECT cb.id, cb.status, cb.reason, cb.appeal_message, cb.appealed_at,
+            cb.appeal_response, cb.lift_note, cb.lifted_at, cb.created_at,
+            c.id AS club_id, c.name AS club_name, c.location, c.logo_url
+     FROM club_bans cb
+     JOIN clubs c ON c.id = cb.club_id
+     WHERE cb.user_id = ?
+     ORDER BY CASE cb.status WHEN 'active' THEN 0 WHEN 'appealing' THEN 1 ELSE 2 END, cb.created_at DESC`,
+    [user.id]
+  );
+  res.json(bans);
+});
+router21.post("/bans/:id/appeal", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { message } = req.body ?? {};
+  if (!message || String(message).trim().length < 10) {
+    res.status(400).json({ message: "Please provide a meaningful appeal message (at least 10 characters)." });
+    return;
+  }
+  const ban = await row(
+    "SELECT id, club_id, status FROM club_bans WHERE id = ? AND user_id = ?",
+    [id, user.id]
+  );
+  if (!ban) {
+    res.status(404).json({ message: "Ban not found" });
+    return;
+  }
+  if (ban.status === "appealing") {
+    res.status(409).json({ message: "You have already submitted an appeal. Please wait for the club to respond." });
+    return;
+  }
+  if (ban.status === "lifted") {
+    res.status(409).json({ message: "This ban has already been lifted." });
+    return;
+  }
+  await run(
+    "UPDATE club_bans SET status = 'appealing', appeal_message = ?, appealed_at = NOW() WHERE id = ?",
+    [String(message).trim(), id]
+  );
+  res.json({ success: true });
+});
+var bans_default = router21;
+
+// src/routes/index.ts
+var router22 = (0, import_express22.Router)();
+router22.use(health_default);
+router22.use(auth_default);
+router22.use(geofencing_default);
+router22.use(clubs_default);
+router22.use(bookings_default);
+router22.use(friends_default);
+router22.use(ads_default);
+router22.use(messages_default);
+router22.use(vouchers_default);
+router22.use(cancellationVouchers_default);
+router22.use(admin_default);
+router22.use(notifications_default);
+router22.use(events_default);
+router22.use(portal_default);
+router22.use(storage_default);
+router22.use(payments_default);
+router22.use(settings_default);
+router22.use(map_default);
+router22.use(hnaVerification_default);
+router22.use(moderation_default);
+router22.use(bans_default);
+var routes_default = router22;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
-var app = (0, import_express22.default)();
+var app = (0, import_express23.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -65177,18 +65427,18 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express22.default.raw({ type: "*/*" }));
-app.use(import_express22.default.json());
-app.use(import_express22.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express23.default.raw({ type: "*/*" }));
+app.use(import_express23.default.json());
+app.use(import_express23.default.urlencoded({ extended: true }));
 var logosDir = path2.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express22.default.static(logosDir));
+app.use("/api/logos", import_express23.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express22.default.static(clientDir));
+  app.use(import_express23.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path2.join(clientDir, "index.html"));
   });
@@ -65914,6 +66164,27 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
   await ddl(`
+    CREATE TABLE IF NOT EXISTS club_bans (
+      id               SERIAL PRIMARY KEY,
+      club_id          INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason           TEXT NOT NULL,
+      banned_by        INT REFERENCES club_portal_users(id) ON DELETE SET NULL,
+      status           VARCHAR(20) NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('active','appealing','lifted')),
+      appeal_message   TEXT,
+      appealed_at      TIMESTAMP,
+      appeal_response  TEXT,
+      lift_note        TEXT,
+      lifted_at        TIMESTAMP,
+      lifted_by        INT REFERENCES club_portal_users(id) ON DELETE SET NULL,
+      created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (club_id, user_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_bans_club ON club_bans (club_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_bans_user ON club_bans (user_id, status)");
+  await ddl(`
     CREATE TABLE IF NOT EXISTS cancellation_voucher_batches (
       id            SERIAL PRIMARY KEY,
       club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
@@ -66279,10 +66550,10 @@ async function runReminderCycle() {
     }
   }));
   for (let i = 0; i < pushMessages.length; i += 100) {
-    await sendPushNotifications(pushMessages.slice(i, i + 100));
+    await sendPushNotifications2(pushMessages.slice(i, i + 100));
   }
   for (const r of due) {
-    saveUserNotification(
+    saveUserNotification2(
       r.user_id,
       "tee_time_reminder",
       `\u26F3 Tee time in ${timeStr}`,

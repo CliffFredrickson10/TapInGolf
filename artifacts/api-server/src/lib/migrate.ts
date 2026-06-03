@@ -811,6 +811,32 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
 
+  // ── Club bans ──────────────────────────────────────────────────────────────
+  // A club can ban a golfer from booking at their club. The golfer is notified
+  // and can submit a single appeal; the club decides whether to lift or maintain.
+  // Also blocks a banned user from being added as an invited player by others.
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_bans (
+      id               SERIAL PRIMARY KEY,
+      club_id          INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      user_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      reason           TEXT NOT NULL,
+      banned_by        INT REFERENCES club_portal_users(id) ON DELETE SET NULL,
+      status           VARCHAR(20) NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('active','appealing','lifted')),
+      appeal_message   TEXT,
+      appealed_at      TIMESTAMP,
+      appeal_response  TEXT,
+      lift_note        TEXT,
+      lifted_at        TIMESTAMP,
+      lifted_by        INT REFERENCES club_portal_users(id) ON DELETE SET NULL,
+      created_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+      UNIQUE (club_id, user_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_bans_club ON club_bans (club_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_bans_user ON club_bans (user_id, status)");
+
   // ── Cancellation vouchers ─────────────────────────────────────────────────
   // One batch per issuance event (club cancels a day due to flooding etc.)
   // One voucher row per affected user (unique code, user-specific)

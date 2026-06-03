@@ -499,6 +499,40 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
   // ────────────────────────────────────────────────────────────────
 
+  // ── Club ban check ────────────────────────────────────────────────────────
+  // Prevent banned golfers from booking, and close the loophole where a
+  // non-banned user could add a banned user as an invited player.
+  // Named cash-guests have no user_id and cannot be checked by name.
+  const activeBan = await row<any>(
+    "SELECT id FROM club_bans WHERE club_id = ? AND user_id = ? AND status IN ('active','appealing')",
+    [slot.club_id, user.id]
+  );
+  if (activeBan) {
+    res.status(403).json({
+      message: "You are not permitted to book at this club. Please contact the club if you believe this is an error.",
+      error_code: "club_ban_active",
+    });
+    return;
+  }
+  const invitedUserIds = normalised.filter((p: any) => p.user_id).map((p: any) => p.user_id);
+  if (invitedUserIds.length > 0) {
+    const ph = invitedUserIds.map(() => "?").join(",");
+    const bannedGuests = await query<any>(
+      `SELECT u.name FROM club_bans cb JOIN users u ON u.id = cb.user_id
+       WHERE cb.club_id = ? AND cb.user_id IN (${ph}) AND cb.status IN ('active','appealing')`,
+      [slot.club_id, ...invitedUserIds]
+    );
+    if (bannedGuests.length > 0) {
+      const names = bannedGuests.map((b: any) => b.name).join(", ");
+      res.status(403).json({
+        message: `The following player(s) are not permitted to book at this club: ${names}.`,
+        error_code: "player_ban_active",
+      });
+      return;
+    }
+  }
+  // ────────────────────────────────────────────────────────────────
+
   // Use 9-hole price when requested and available, else 18-hole
   const numHoles = holes === 9 && slot.price_9 != null ? 9 : 18;
   const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);

@@ -82,6 +82,35 @@ export default function ProfileScreen() {
   const [loadingVouchers, setLoadingVouchers] = useState(false);
   const [copiedCode, setCopiedCode]         = useState<string | null>(null);
 
+  // Club bans
+  const [myBans, setMyBans]               = useState<any[]>([]);
+  const [appealBan, setAppealBan]         = useState<any | null>(null);
+  const [appealText, setAppealText]       = useState("");
+  const [submittingAppeal, setSubmittingAppeal] = useState(false);
+
+  React.useEffect(() => {
+    if (!user?.token) return;
+    apiFetch("/bans/me", user.token)
+      .then((data: any) => setMyBans(Array.isArray(data) ? data.filter((b: any) => b.status !== "lifted") : []))
+      .catch(() => {});
+  }, [user?.token]);
+
+  const handleSubmitAppeal = async () => {
+    if (!appealBan || !user?.token || appealText.trim().length < 10) return;
+    setSubmittingAppeal(true);
+    try {
+      await apiFetch(`/bans/${appealBan.id}/appeal`, user.token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: appealText.trim() }),
+      });
+      setMyBans(prev => prev.map(b => b.id === appealBan.id ? { ...b, status: "appealing", appeal_message: appealText.trim() } : b));
+      setAppealBan(null);
+      setAppealText("");
+    } catch {}
+    setSubmittingAppeal(false);
+  };
+
   const fetchVouchers = React.useCallback(async () => {
     if (!user?.token) return;
     setLoadingVouchers(true);
@@ -605,6 +634,81 @@ export default function ProfileScreen() {
                 .catch(() => {});
             }}
           />
+
+          {/* Club bans */}
+          {myBans.length > 0 && (
+            <View style={{ gap: 8 }}>
+              <View style={styles.sectionDivider}>
+                <View style={[styles.dividerLine, { backgroundColor: colors.destructive + "40" }]} />
+                <Text style={[styles.dividerLabel, { color: colors.destructive }]}>Club Restrictions</Text>
+                <View style={[styles.dividerLine, { backgroundColor: colors.destructive + "40" }]} />
+              </View>
+              {myBans.map((ban) => (
+                <View key={ban.id} style={[styles.editCard, { borderColor: colors.destructive + "50", backgroundColor: colors.destructive + "08" }]}>
+                  <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 }}>
+                    <Text style={[styles.cardTitle, { color: colors.destructive, fontSize: 14 }]}>{ban.club_name}</Text>
+                    <View style={{ backgroundColor: ban.status === "appealing" ? "#92400e20" : colors.destructive + "20", borderRadius: 20, paddingHorizontal: 8, paddingVertical: 2 }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: ban.status === "appealing" ? "#92400e" : colors.destructive }}>
+                        {ban.status === "appealing" ? "Appeal Pending" : "Restricted"}
+                      </Text>
+                    </View>
+                  </View>
+                  <Text style={[styles.fieldLabel, { color: colors.foreground, marginTop: 0, marginBottom: 4 }]}>{ban.reason}</Text>
+                  {ban.status === "appealing" && ban.appeal_response && (
+                    <View style={{ backgroundColor: colors.muted, borderRadius: 8, padding: 10, marginTop: 4 }}>
+                      <Text style={{ fontSize: 12, fontFamily: "Inter_600SemiBold", color: colors.mutedForeground, marginBottom: 2 }}>Club's response:</Text>
+                      <Text style={{ fontSize: 13, fontFamily: "Inter_400Regular", color: colors.foreground }}>{ban.appeal_response}</Text>
+                    </View>
+                  )}
+                  {ban.status === "active" && (
+                    <TouchableOpacity
+                      style={{ marginTop: 8, borderRadius: 10, borderWidth: 1.5, borderColor: colors.destructive + "60", paddingVertical: 10, alignItems: "center" }}
+                      onPress={() => { setAppealBan(ban); setAppealText(""); }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.destructive }}>Submit Appeal</Text>
+                    </TouchableOpacity>
+                  )}
+                  {ban.status === "appealing" && !ban.appeal_response && (
+                    <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, marginTop: 6 }}>
+                      Your appeal has been submitted. The club will review it and respond.
+                    </Text>
+                  )}
+                </View>
+              ))}
+            </View>
+          )}
+
+          {/* Appeal modal */}
+          {appealBan && (
+            <View style={[styles.editCard, { borderColor: colors.primary + "50", backgroundColor: colors.card }]}>
+              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Appeal to {appealBan.club_name}</Text>
+              <Text style={[styles.fieldLabel, { color: colors.mutedForeground, marginTop: 0 }]}>
+                Explain why you believe the ban should be lifted. The club will review your appeal.
+              </Text>
+              <TextInput
+                style={[styles.fieldInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background, height: 100, textAlignVertical: "top", paddingTop: 12, marginTop: 4 }]}
+                value={appealText}
+                onChangeText={setAppealText}
+                placeholder="Describe your appeal…"
+                placeholderTextColor={colors.mutedForeground}
+                multiline
+              />
+              <View style={styles.editBtns}>
+                <TouchableOpacity style={[styles.cancelBtn, { borderColor: colors.border }]} onPress={() => { setAppealBan(null); setAppealText(""); }}>
+                  <Text style={[styles.cancelText, { color: colors.foreground }]}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.saveBtn, { backgroundColor: appealText.trim().length >= 10 ? colors.primary : colors.muted }]}
+                  onPress={handleSubmitAppeal}
+                  disabled={submittingAppeal || appealText.trim().length < 10}
+                  activeOpacity={0.8}
+                >
+                  <Text style={styles.saveBtnText}>{submittingAppeal ? "Submitting…" : "Submit Appeal"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          )}
 
           {/* Super User tools */}
           {user.is_super_user && (

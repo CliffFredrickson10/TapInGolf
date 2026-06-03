@@ -1489,4 +1489,168 @@ router.delete("/portal/users/:id", requireClubAuth, async (req: Request, res: Re
   res.json({ message: "User deleted" });
 });
 
+// ── Club bans ──────────────────────────────────────────────────────────────
+
+// Search any TapIn user by phone or name (for the "ban a golfer" dialog)
+router.get("/portal/user-lookup", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const q = String(req.query["q"] ?? "").trim();
+  if (q.length < 2) { res.json([]); return; }
+  const like = `%${q}%`;
+  const users = await query<any>(
+    "SELECT id, name, phone, email FROM users WHERE phone LIKE ? OR name LIKE ? ORDER BY name LIMIT 10",
+    [like, like]
+  );
+  res.json(users);
+});
+
+// GET /portal/bans — list all bans for this club, appeals first
+router.get("/portal/bans", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const statusFilter = req.query["status"] ? "AND cb.status = ?" : "";
+  const params: any[] = [club.id];
+  if (req.query["status"]) params.push(req.query["status"]);
+  const bans = await query<any>(
+    `SELECT cb.id, cb.status, cb.reason, cb.appeal_message, cb.appealed_at,
+            cb.appeal_response, cb.lift_note, cb.lifted_at, cb.created_at,
+            u.id AS user_id, u.name AS user_name, u.phone, u.email
+     FROM club_bans cb
+     JOIN users u ON u.id = cb.user_id
+     WHERE cb.club_id = ? ${statusFilter}
+     ORDER BY CASE cb.status WHEN 'appealing' THEN 0 WHEN 'active' THEN 1 ELSE 2 END, cb.created_at DESC`,
+    params
+  );
+  res.json(bans);
+});
+
+// GET /portal/bans/appeals/count — pending appeal badge count
+router.get("/portal/bans/appeals/count", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const r = await row<any>(
+    "SELECT COUNT(*) AS pending FROM club_bans WHERE club_id = ? AND status = 'appealing'",
+    [club.id]
+  );
+  res.json({ pending: Number(r?.pending ?? 0) });
+});
+
+// POST /portal/bans — ban a golfer from this club
+router.post("/portal/bans", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const clubUser = (req as any).clubUser;
+  const { user_id, reason } = req.body ?? {};
+  if (!user_id || !String(reason ?? "").trim()) {
+    res.status(400).json({ message: "user_id and reason are required." });
+    return;
+  }
+  const target = await row<any>("SELECT id, name, push_token FROM users WHERE id = ?", [user_id]);
+  if (!target) { res.status(404).json({ message: "User not found" }); return; }
+
+  const existing = await row<any>(
+    "SELECT id, status FROM club_bans WHERE club_id = ? AND user_id = ?",
+    [club.id, user_id]
+  );
+  let banId: number;
+  if (existing) {
+    if (existing.status === "active" || existing.status === "appealing") {
+      res.status(409).json({ message: "This golfer is already banned at your club." });
+      return;
+    }
+    await run(
+      `UPDATE club_bans SET reason = ?, status = 'active', banned_by = ?, created_at = NOW(),
+       appeal_message = NULL, appealed_at = NULL, appeal_response = NULL,
+       lift_note = NULL, lifted_at = NULL, lifted_by = NULL WHERE id = ?`,
+      [String(reason).trim(), clubUser?.id ?? null, existing.id]
+    );
+    banId = existing.id;
+  } else {
+    const inserted = await row<any>(
+      "INSERT INTO club_bans (club_id, user_id, reason, banned_by) VALUES (?, ?, ?, ?) RETURNING id",
+      [club.id, user_id, String(reason).trim(), clubUser?.id ?? null]
+    );
+    banId = inserted!.id;
+  }
+
+  const title = `Club Access Restricted — ${club.name}`;
+  const body = String(reason).trim().slice(0, 200);
+  if (target.push_token) {
+    sendPushNotifications([{
+      to: target.push_token, sound: "default", title, body,
+      data: { type: "club_ban", club_id: club.id },
+    }]);
+  }
+  saveUserNotification(user_id, "club_ban", title, body, { club_id: club.id, ban_id: banId });
+  res.status(201).json({ success: true, id: banId });
+});
+
+// POST /portal/bans/:id/lift — lift a ban (optionally with a note)
+router.post("/portal/bans/:id/lift", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const clubUser = (req as any).clubUser;
+  const id = parseInt(req.params["id"] ?? "0");
+  const { lift_note } = req.body ?? {};
+  const ban = await row<any>(
+    "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
+    [id, club.id]
+  );
+  if (!ban) { res.status(404).json({ message: "Ban not found" }); return; }
+  if (ban.status === "lifted") { res.status(409).json({ message: "Ban is already lifted." }); return; }
+
+  await run(
+    "UPDATE club_bans SET status = 'lifted', lift_note = ?, lifted_at = NOW(), lifted_by = ? WHERE id = ?",
+    [lift_note ? String(lift_note).trim() : null, clubUser?.id ?? null, id]
+  );
+  const userRow = await row<any>("SELECT push_token FROM users WHERE id = ?", [ban.user_id]);
+  const title = `Access Restored — ${club.name}`;
+  const body = lift_note ? String(lift_note).trim().slice(0, 200) : `Your booking access at ${club.name} has been restored.`;
+  if (userRow?.push_token) {
+    sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban_lifted", club_id: club.id } }]);
+  }
+  saveUserNotification(ban.user_id, "club_ban_lifted", title, body, { club_id: club.id, ban_id: id });
+  res.json({ success: true });
+});
+
+// POST /portal/bans/:id/respond — respond to a golfer's appeal (lift or maintain)
+router.post("/portal/bans/:id/respond", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const clubUser = (req as any).clubUser;
+  const id = parseInt(req.params["id"] ?? "0");
+  const { action, response_note } = req.body ?? {};
+  if (!["lift", "maintain"].includes(action)) {
+    res.status(400).json({ message: "action must be 'lift' or 'maintain'" });
+    return;
+  }
+  const ban = await row<any>(
+    "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
+    [id, club.id]
+  );
+  if (!ban) { res.status(404).json({ message: "Ban not found" }); return; }
+  if (ban.status !== "appealing") {
+    res.status(409).json({ message: "This ban has no pending appeal." });
+    return;
+  }
+
+  const note = response_note ? String(response_note).trim() : null;
+  const userRow = await row<any>("SELECT push_token FROM users WHERE id = ?", [ban.user_id]);
+
+  if (action === "lift") {
+    await run(
+      "UPDATE club_bans SET status = 'lifted', appeal_response = ?, lift_note = ?, lifted_at = NOW(), lifted_by = ? WHERE id = ?",
+      [note, note, clubUser?.id ?? null, id]
+    );
+    const title = `Appeal Accepted — ${club.name}`;
+    const body = note ?? `Your appeal at ${club.name} was accepted. Your booking access has been restored.`;
+    if (userRow?.push_token) sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban_lifted", club_id: club.id } }]);
+    saveUserNotification(ban.user_id, "club_ban_lifted", title, body, { club_id: club.id, ban_id: id });
+  } else {
+    await run(
+      "UPDATE club_bans SET status = 'active', appeal_response = ? WHERE id = ?",
+      [note, id]
+    );
+    const title = `Appeal Declined — ${club.name}`;
+    const body = note ?? `Your appeal at ${club.name} was reviewed. The restriction on your booking access remains in place.`;
+    if (userRow?.push_token) sendPushNotifications([{ to: userRow.push_token, sound: "default", title, body, data: { type: "club_ban", club_id: club.id } }]);
+    saveUserNotification(ban.user_id, "club_ban", title, body, { club_id: club.id, ban_id: id });
+  }
+  res.json({ success: true });
+});
+
 export default router;

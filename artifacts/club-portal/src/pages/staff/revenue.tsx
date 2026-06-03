@@ -11,7 +11,7 @@ import { BarChart3, Percent, IdCard, Megaphone, ChevronRight } from "lucide-reac
 import { format } from "date-fns";
 
 interface Summary {
-  platform_fee_pct: number;
+  platform_fee_flat: number;
   vat_pct: number;
   total_bookings: number;
   total_collected: number;
@@ -58,7 +58,7 @@ export default function StaffRevenue() {
         api<{ notifications: BroadcastRow[] }>("/api/admin/notifications/recent?limit=5"),
       ]);
       setSummary(s);
-      setFeeInput(String(s.platform_fee_pct));
+      setFeeInput(String(s.platform_fee_flat));
       setVatInput(String(s.vat_pct ?? 15));
       setClubs(c.clubs);
       setBookings(b.bookings);
@@ -90,14 +90,14 @@ export default function StaffRevenue() {
   };
 
   const saveFee = async () => {
-    const pct = parseFloat(feeInput);
-    if (isNaN(pct) || pct < 0 || pct > 50) {
-      toast({ title: "Invalid fee", description: "Enter a number between 0 and 50.", variant: "destructive" });
+    const flat = parseFloat(feeInput);
+    if (isNaN(flat) || flat < 0 || flat > 1000) {
+      toast({ title: "Invalid fee", description: "Enter a rand amount between R0 and R1000.", variant: "destructive" });
       return;
     }
     setSavingFee(true);
     try {
-      await api("/api/admin/revenue/fee", { method: "PUT", body: JSON.stringify({ fee_pct: pct }) });
+      await api("/api/admin/revenue/fee", { method: "PUT", body: JSON.stringify({ fee_flat: flat }) });
       toast({ title: "Platform fee updated" });
       load();
     } catch (e: any) {
@@ -179,13 +179,14 @@ export default function StaffRevenue() {
           <CardContent>
             <div className="flex items-end gap-3">
               <div className="space-y-1.5">
-                <label className="text-sm text-muted-foreground">Fee percentage (%)</label>
-                <Input type="number" className="w-40" value={feeInput} onChange={e => setFeeInput(e.target.value)} step="0.1" min="0" max="50" />
+                <label className="text-sm text-muted-foreground">Flat fee per booking (R)</label>
+                <Input type="number" className="w-40" value={feeInput} onChange={e => setFeeInput(e.target.value)} step="1" min="0" max="1000" />
               </div>
               <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={saveFee} disabled={savingFee}>
                 {savingFee ? "Saving…" : "Save fee"}
               </Button>
             </div>
+            <p className="text-xs text-muted-foreground mt-2">Charged per booking, regardless of booking size.</p>
           </CardContent>
         </Card>
         <Card>

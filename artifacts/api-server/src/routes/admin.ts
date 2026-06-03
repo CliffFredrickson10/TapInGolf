@@ -94,12 +94,12 @@ router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
   );
 
   const [feeSetting, vatSetting] = await Promise.all([
-    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'"),
     row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'"),
   ]);
 
   res.json({
-    platform_fee_pct:    feeSetting ? parseFloat(feeSetting.setting_value) : 5,
+    platform_fee_flat:   feeSetting ? parseFloat(feeSetting.setting_value) : 10,
     vat_pct:             vatSetting ? parseFloat(vatSetting.setting_value) : 15,
     total_bookings:      parseInt(summary?.total_bookings ?? "0"),
     total_collected:     parseFloat(summary?.total_collected ?? "0"),
@@ -232,19 +232,19 @@ router.put("/admin/revenue/fee", async (req, res): Promise<void> => {
     return;
   }
 
-  const { fee_pct } = req.body ?? {};
-  const pct = parseFloat(String(fee_pct ?? ""));
-  if (isNaN(pct) || pct < 0 || pct > 50) {
-    res.status(400).json({ message: "fee_pct must be a number between 0 and 50" });
+  const { fee_flat } = req.body ?? {};
+  const flat = parseFloat(String(fee_flat ?? ""));
+  if (isNaN(flat) || flat < 0 || flat > 1000) {
+    res.status(400).json({ message: "fee_flat must be a rand amount between 0 and 1000" });
     return;
   }
 
   await exec(
-    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'platform_fee_pct'",
-    [pct.toFixed(2)]
+    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'platform_fee_flat'",
+    [flat.toFixed(2)]
   );
 
-  res.json({ success: true, platform_fee_pct: pct });
+  res.json({ success: true, platform_fee_flat: flat });
 });
 
 export default router;

@@ -58765,9 +58765,8 @@ router4.post("/bookings", async (req, res) => {
   const effectivePaymentMethod = splitAmount <= 0 ? "voucher" : payment_method;
   const friendAmounts = invitedGreens.map((g) => split_bill ? g + cartShare : 0);
   const ref = generateRef();
-  const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
-  const feePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
-  const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
+  const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
   const clubAmount = Math.round((totalAmount - platformFee) * 100) / 100;
   if (effectivePaymentMethod === "wallet") {
     const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
@@ -60545,11 +60544,11 @@ router10.get("/admin/revenue/summary", async (req, res) => {
     scope.params
   );
   const [feeSetting, vatSetting] = await Promise.all([
-    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
+    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'"),
     row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'")
   ]);
   res.json({
-    platform_fee_pct: feeSetting ? parseFloat(feeSetting.setting_value) : 5,
+    platform_fee_flat: feeSetting ? parseFloat(feeSetting.setting_value) : 10,
     vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15,
     total_bookings: parseInt(summary?.total_bookings ?? "0"),
     total_collected: parseFloat(summary?.total_collected ?? "0"),
@@ -60657,17 +60656,17 @@ router10.put("/admin/revenue/fee", async (req, res) => {
     res.status(403).json({ message: "Only platform admins can change the platform fee" });
     return;
   }
-  const { fee_pct } = req.body ?? {};
-  const pct = parseFloat(String(fee_pct ?? ""));
-  if (isNaN(pct) || pct < 0 || pct > 50) {
-    res.status(400).json({ message: "fee_pct must be a number between 0 and 50" });
+  const { fee_flat } = req.body ?? {};
+  const flat = parseFloat(String(fee_flat ?? ""));
+  if (isNaN(flat) || flat < 0 || flat > 1e3) {
+    res.status(400).json({ message: "fee_flat must be a rand amount between 0 and 1000" });
     return;
   }
   await exec(
-    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'platform_fee_pct'",
-    [pct.toFixed(2)]
+    "UPDATE platform_settings SET setting_value = ? WHERE setting_key = 'platform_fee_flat'",
+    [flat.toFixed(2)]
   );
-  res.json({ success: true, platform_fee_pct: pct });
+  res.json({ success: true, platform_fee_flat: flat });
 });
 var admin_default = router10;
 
@@ -62095,10 +62094,8 @@ router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) =
               cancel_fee_pct
        FROM clubs WHERE id = ?`,
       [club.id]
-    ),
-    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'")
+    )
   ]);
-  const minFeePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
   res.json({
     preset: data?.cancel_policy_preset ?? "standard",
     full_refund_hours: data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
@@ -62110,8 +62107,8 @@ router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) =
     contact_email: data?.cancel_contact_email ?? null,
     contact_phone: data?.cancel_contact_phone ?? null,
     other_policies: data?.cancel_other_policies ?? null,
-    fee_pct: data?.cancel_fee_pct != null ? Math.max(Number(data.cancel_fee_pct), minFeePct) : minFeePct,
-    min_fee_pct: minFeePct
+    fee_pct: data?.cancel_fee_pct != null ? Number(data.cancel_fee_pct) : 0,
+    min_fee_pct: 0
   });
 });
 router14.put("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
@@ -62136,9 +62133,7 @@ router14.put("/portal/cancellation-policy", requireClubAuth2, async (req, res) =
   const weatherVal = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
   const rawMins = payment_minutes != null ? Number(payment_minutes) : payment_hours != null ? Number(payment_hours) * 60 : 1440;
   const payMins = Math.min(2880, Math.max(30, Math.round(rawMins)));
-  const platformFeeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
-  const minFeePct = platformFeeSetting ? parseFloat(platformFeeSetting.setting_value) : 5;
-  const feePct = Math.max(minFeePct, Math.min(100, Math.round(Number(fee_pct) || minFeePct)));
+  const feePct = Math.min(100, Math.max(0, Math.round(Number(fee_pct) || 0)));
   const fullHours = full_refund_hours != null ? Number(full_refund_hours) : null;
   const hasPartial = !!has_partial && presetVal !== "non_refundable";
   const partialPct = partial_pct != null ? Math.min(100, Math.max(1, Number(partial_pct))) : null;
@@ -65601,6 +65596,10 @@ async function seedData() {
   }
   await exec(
     "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_pct', '5') ON CONFLICT (setting_key) DO NOTHING",
+    []
+  );
+  await exec(
+    "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_flat', '10') ON CONFLICT (setting_key) DO NOTHING",
     []
   );
   await exec(

@@ -1049,6 +1049,10 @@ async function seedData(): Promise<void> {
     []
   );
   await exec(
+    "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_flat', '10') ON CONFLICT (setting_key) DO NOTHING",
+    []
+  );
+  await exec(
     "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('vat_pct', '15') ON CONFLICT (setting_key) DO NOTHING",
     []
   );

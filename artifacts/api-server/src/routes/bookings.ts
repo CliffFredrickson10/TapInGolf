@@ -645,10 +645,9 @@ router.post("/bookings", async (req, res): Promise<void> => {
 
   const ref = generateRef();
 
-  // Load platform fee percentage (default 5%)
-  const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
-  const feePct     = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
-  const platformFee = Math.round(totalAmount * feePct / 100 * 100) / 100;
+  // Load platform flat fee (default R10)
+  const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
   const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
 
   // Pre-flight wallet balance check (outside transaction for a clear error response)

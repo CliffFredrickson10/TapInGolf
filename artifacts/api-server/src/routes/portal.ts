@@ -247,9 +247,7 @@ router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
        FROM clubs WHERE id = ?`,
       [club.id]
     ),
-    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'"),
   ]);
-  const minFeePct = feeSetting ? parseFloat(feeSetting.setting_value) : 5;
   res.json({
     preset:             data?.cancel_policy_preset   ?? "standard",
     full_refund_hours:  data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
@@ -263,8 +261,8 @@ router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
     contact_email:      data?.cancel_contact_email  ?? null,
     contact_phone:      data?.cancel_contact_phone  ?? null,
     other_policies:     data?.cancel_other_policies ?? null,
-    fee_pct:            data?.cancel_fee_pct != null ? Math.max(Number(data.cancel_fee_pct), minFeePct) : minFeePct,
-    min_fee_pct:        minFeePct,
+    fee_pct:            data?.cancel_fee_pct != null ? Number(data.cancel_fee_pct) : 0,
+    min_fee_pct:        0,
   });
 });
 
@@ -280,9 +278,7 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
   const weatherVal     = VALID_WEATHER.includes(String(weather)) ? String(weather) : "full_refund";
   const rawMins        = payment_minutes != null ? Number(payment_minutes) : (payment_hours != null ? Number(payment_hours) * 60 : 1440);
   const payMins        = Math.min(2880, Math.max(30, Math.round(rawMins)));
-  const platformFeeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_pct'");
-  const minFeePct      = platformFeeSetting ? parseFloat(platformFeeSetting.setting_value) : 5;
-  const feePct         = Math.max(minFeePct, Math.min(100, Math.round(Number(fee_pct) || minFeePct)));
+  const feePct         = Math.min(100, Math.max(0, Math.round(Number(fee_pct) || 0)));
   const fullHours      = full_refund_hours != null ? Number(full_refund_hours) : null;
   const hasPartial     = !!has_partial && presetVal !== "non_refundable";
   const partialPct     = partial_pct  != null ? Math.min(100, Math.max(1, Number(partial_pct)))  : null;

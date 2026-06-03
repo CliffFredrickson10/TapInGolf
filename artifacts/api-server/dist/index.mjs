@@ -60628,6 +60628,64 @@ router10.get("/admin/revenue/clubs", async (req, res) => {
     }))
   });
 });
+router10.get("/admin/revenue/clubs/:id/bookings", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = parseInt(req.params.id, 10);
+  if (isNaN(clubId)) {
+    res.status(400).json({ message: "Invalid club id" });
+    return;
+  }
+  if (user.club_id != null && user.club_id !== clubId) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const { from, to } = req.query;
+  const limit = Math.min(parseInt(String(req.query.limit ?? "500"), 10), 500);
+  const offset = parseInt(String(req.query.offset ?? "0"), 10);
+  const dateFilter = from && to ? "AND pts.date >= ? AND pts.date <= ?" : "";
+  const dateParams = from && to ? [from, to] : [];
+  const bookings = await query(
+    `SELECT b.id, b.booking_ref, b.total_amount, b.platform_fee, b.club_amount,
+            b.payment_method, b.status, b.created_at, b.players,
+            u.name as golfer_name, u.email as golfer_email,
+            pts.date, pts.tee_time AS time
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN users u ON u.id = b.user_id
+     WHERE pts.club_id = ? AND b.status IN ('confirmed','completed') ${dateFilter}
+     ORDER BY pts.date DESC, pts.tee_time DESC
+     LIMIT ${limit} OFFSET ${offset}`,
+    [clubId, ...dateParams]
+  );
+  const agg = await row(
+    `SELECT COUNT(b.id) AS cnt,
+            COALESCE(SUM(b.total_amount), 0) AS gross,
+            COALESCE(SUM(b.platform_fee), 0) AS fees,
+            COALESCE(SUM(b.club_amount),  0) AS earnings
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE pts.club_id = ? AND b.status IN ('confirmed','completed') ${dateFilter}`,
+    [clubId, ...dateParams]
+  );
+  res.json({
+    bookings: bookings.map((b) => ({
+      ...b,
+      total_amount: parseFloat(b.total_amount ?? 0),
+      platform_fee: parseFloat(b.platform_fee ?? 0),
+      club_amount: parseFloat(b.club_amount ?? 0)
+    })),
+    summary: {
+      total_bookings: parseInt(agg?.cnt ?? "0"),
+      gross_revenue: parseFloat(agg?.gross ?? "0"),
+      platform_fees: parseFloat(agg?.fees ?? "0"),
+      club_earnings: parseFloat(agg?.earnings ?? "0")
+    }
+  });
+});
 router10.get("/settings", async (_req, res) => {
   const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
   res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });

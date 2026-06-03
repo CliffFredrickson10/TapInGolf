@@ -65356,7 +65356,11 @@ router21.post("/bans/:id/appeal", async (req, res) => {
     return;
   }
   const ban = await row(
-    "SELECT id, club_id, status FROM club_bans WHERE id = ? AND user_id = ?",
+    `SELECT cb.id, cb.club_id, cb.status,
+            c.name AS club_name
+     FROM club_bans cb
+     JOIN clubs c ON c.id = cb.club_id
+     WHERE cb.id = ? AND cb.user_id = ?`,
     [id, user.id]
   );
   if (!ban) {
@@ -65371,10 +65375,21 @@ router21.post("/bans/:id/appeal", async (req, res) => {
     res.status(409).json({ message: "This ban has already been lifted." });
     return;
   }
+  const appealText = String(message).trim();
   await run(
     "UPDATE club_bans SET status = 'appealing', appeal_message = ?, appealed_at = NOW() WHERE id = ?",
-    [String(message).trim(), id]
+    [appealText, id]
   );
+  const clubTitle = `Appeal received \u2014 ${user.name}`;
+  const clubBody = `${user.name} has submitted an appeal against their ban. Tap to review.`;
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, ?, ?, ?, ?)`,
+    [ban.club_id, "ban_appeal", clubTitle, clubBody, JSON.stringify({ ban_id: id, user_id: user.id, user_name: user.name })]
+  ).catch(() => {
+  });
+  const userTitle = "Appeal Submitted";
+  const userBody = `Your appeal to ${ban.club_name} has been received. The club will review it and respond.`;
+  await saveUserNotification(user.id, "club_ban_appeal_sent", userTitle, userBody, { club_id: ban.club_id, ban_id: id });
   res.json({ success: true });
 });
 var bans_default = router21;

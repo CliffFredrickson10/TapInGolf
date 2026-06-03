@@ -1553,7 +1553,8 @@ router.post("/portal/bans", requireClubAuth, async (req: Request, res: Response)
   let banId: number;
   if (existing) {
     if (existing.status === "active" || existing.status === "appealing") {
-      res.status(409).json({ message: "This golfer is already banned at your club." });
+      // Already banned — idempotent, return success so the UI can refresh
+      res.status(200).json({ success: true, id: existing.id, already_active: true });
       return;
     }
     await run(

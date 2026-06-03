@@ -63883,7 +63883,7 @@ router14.post("/portal/bans", requireClubAuth2, async (req, res) => {
   let banId;
   if (existing) {
     if (existing.status === "active" || existing.status === "appealing") {
-      res.status(409).json({ message: "This golfer is already banned at your club." });
+      res.status(200).json({ success: true, id: existing.id, already_active: true });
       return;
     }
     await run(

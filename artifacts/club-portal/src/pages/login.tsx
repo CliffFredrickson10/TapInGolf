@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Eye, EyeOff } from "lucide-react";
+import { Eye, EyeOff, ChevronLeft } from "lucide-react";
 
 function BrandLogo() {
   return (
@@ -69,35 +69,37 @@ export default function Login() {
         <BrandLogo />
         <Card className="shadow-xl border-0 ring-1 ring-black/5">
           <CardHeader className="pb-4">
-            <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
+            {tab === "staff" ? (
               <button
                 type="button"
                 onClick={() => switchTab("club")}
-                className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                  tab === "club" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                }`}
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground mb-3 -mt-1 w-fit"
               >
-                Club Admin
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Back
               </button>
-              <button
-                type="button"
-                onClick={() => switchTab("club_user")}
-                className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                  tab === "club_user" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                Club Staff
-              </button>
-              <button
-                type="button"
-                onClick={() => switchTab("staff")}
-                className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                  tab === "staff" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                TapIn Staff
-              </button>
-            </div>
+            ) : (
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted mb-4">
+                <button
+                  type="button"
+                  onClick={() => switchTab("club")}
+                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                    tab === "club" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Club Admin
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchTab("club_user")}
+                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                    tab === "club_user" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Club Staff
+                </button>
+              </div>
+            )}
             <CardTitle className="text-xl">
               {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : "Sign in to your club"}
             </CardTitle>
@@ -171,14 +173,29 @@ export default function Login() {
                 {loading ? "Signing in…" : "Sign in"}
               </Button>
             </form>
-            {tab === "club" && (
-              <div className="flex items-center justify-between mt-5 pt-4 border-t">
+
+            <div className="flex items-center justify-between mt-5 pt-4 border-t">
+              {tab === "club" ? (
                 <p className="text-xs text-muted-foreground">
                   Default: <code className="font-mono bg-muted px-1.5 py-0.5 rounded text-[11px]">Golf2026!</code>
                 </p>
-                <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
-                  Forgot password?
-                </a>
+              ) : (
+                <span />
+              )}
+              <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
+                Forgot password?
+              </a>
+            </div>
+
+            {tab !== "staff" && (
+              <div className="text-center mt-4">
+                <button
+                  type="button"
+                  onClick={() => switchTab("staff")}
+                  className="text-[11px] text-muted-foreground/60 hover:text-muted-foreground transition-colors"
+                >
+                  TapIn staff sign in
+                </button>
               </div>
             )}
           </CardContent>

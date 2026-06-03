@@ -61728,7 +61728,7 @@ router13.post("/admin/events", async (req, res) => {
     res.status(400).json({ message: "name and event_date are required" });
     return;
   }
-  const result = await exec(
+  const eventId = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, start_time, end_time, event_type, format,
         restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
@@ -61757,7 +61757,41 @@ router13.post("/admin/events", async (req, res) => {
       user.id
     ]
   );
-  res.status(201).json({ event_id: result.insertId });
+  const [clubRow, audience] = await Promise.all([
+    row("SELECT name FROM clubs WHERE id = ?", [clubId]),
+    query(
+      `SELECT DISTINCT u.push_token
+       FROM users u
+       WHERE u.push_token IS NOT NULL
+         AND (
+           EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+           OR EXISTS (
+             SELECT 1 FROM bookings b
+             JOIN tee_times tt ON tt.id = b.tee_time_id
+             WHERE tt.club_id = ? AND b.user_id = u.id
+           )
+         )
+       LIMIT 500`,
+      [clubId, clubId]
+    )
+  ]);
+  if (audience.length > 0 && clubRow) {
+    const fmtDate3 = (d) => {
+      try {
+        return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+      } catch {
+        return d;
+      }
+    };
+    sendPushNotifications(audience.map((u) => ({
+      to: u.push_token,
+      sound: "default",
+      title: `\u26F3 New Event \u2014 ${clubRow.name}`,
+      body: `${String(name)} \xB7 ${fmtDate3(event_date)}. Tap to view & enter.`,
+      data: { type: "event_created", event_id: eventId, club_id: clubId }
+    })));
+  }
+  res.status(201).json({ event_id: eventId });
 });
 router13.put("/admin/events/:id", async (req, res) => {
   const user = await getUser(req);
@@ -63389,7 +63423,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
     { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36, format: "stableford", tees: "club" }
   ];
-  const result = await exec(
+  const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, rounds, status, created_by)
@@ -63418,7 +63452,38 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       club.id
     ]
   );
-  res.json(await row("SELECT * FROM golf_events WHERE id = ?", [result.insertId]));
+  const audience = await query(
+    `SELECT DISTINCT u.push_token
+     FROM users u
+     WHERE u.push_token IS NOT NULL
+       AND (
+         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+         OR EXISTS (
+           SELECT 1 FROM bookings b
+           JOIN tee_times tt ON tt.id = b.tee_time_id
+           WHERE tt.club_id = ? AND b.user_id = u.id
+         )
+       )
+     LIMIT 500`,
+    [club.id, club.id]
+  );
+  if (audience.length > 0) {
+    const fmtDate3 = (d) => {
+      try {
+        return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+      } catch {
+        return d;
+      }
+    };
+    sendPushNotifications(audience.map((u) => ({
+      to: u.push_token,
+      sound: "default",
+      title: `\u26F3 New Event \u2014 ${club.name}`,
+      body: `${String(name)} \xB7 ${fmtDate3(event_date)}. Tap to view & enter.`,
+      data: { type: "event_created", event_id: eventId, club_id: club.id }
+    })));
+  }
+  res.json(await row("SELECT * FROM golf_events WHERE id = ?", [eventId]));
 });
 router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

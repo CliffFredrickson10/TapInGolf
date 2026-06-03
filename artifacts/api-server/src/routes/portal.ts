@@ -712,7 +712,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
     { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
     { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36,   format: "stableford",  tees: "club" },
   ];
-  const result = await exec(
+  const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, rounds, status, created_by)
@@ -726,7 +726,37 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      ballot ? 1 : 0, scoring_enabled ? 1 : 0, payment_required ? 1 : 0,
      Number(rounds), status, club.id]
   );
-  res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [(result as any).insertId]));
+
+  // Notify club members + past bookers about the new event (fire-and-forget)
+  const audience = await query<any>(
+    `SELECT DISTINCT u.push_token
+     FROM users u
+     WHERE u.push_token IS NOT NULL
+       AND (
+         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+         OR EXISTS (
+           SELECT 1 FROM bookings b
+           JOIN tee_times tt ON tt.id = b.tee_time_id
+           WHERE tt.club_id = ? AND b.user_id = u.id
+         )
+       )
+     LIMIT 500`,
+    [club.id, club.id]
+  );
+  if (audience.length > 0) {
+    const fmtDate = (d: string) => {
+      try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
+      catch { return d; }
+    };
+    sendPushNotifications(audience.map((u: any) => ({
+      to: u.push_token, sound: "default",
+      title: `⛳ New Event — ${club.name}`,
+      body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
+      data:  { type: "event_created", event_id: eventId, club_id: club.id },
+    })));
+  }
+
+  res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [eventId]));
 });
 
 router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

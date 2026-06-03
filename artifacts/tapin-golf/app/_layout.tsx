@@ -80,6 +80,11 @@ function RootLayoutNav() {
             router.push({ pathname: "/club/[id]", params: { id: data.club_id } });
           }
           break;
+        case "event_created":
+          if (data.event_id) {
+            router.push({ pathname: "/event/[id]", params: { id: data.event_id } });
+          }
+          break;
         case "hna_verification_update":
           router.push("/(tabs)/profile");
           break;
@@ -110,6 +115,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(super)/reminder-settings" options={{ headerShown: false }} />
       <Stack.Screen name="(admin)/geofence-config" options={{ headerShown: false }} />
       <Stack.Screen name="(admin)/broadcast" options={{ headerShown: false }} />
+      <Stack.Screen name="event/[id]" options={{ headerShown: false }} />
       <Stack.Screen name="(admin)/events" options={{ headerShown: false }} />
       <Stack.Screen name="(admin)/revenue" options={{ headerShown: false }} />
       <Stack.Screen name="notifications" options={{ headerShown: false }} />

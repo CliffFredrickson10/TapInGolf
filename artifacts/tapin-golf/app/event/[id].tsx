@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, RefreshControl,
+  ActivityIndicator, Alert, RefreshControl, TextInput,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -79,7 +79,6 @@ function fmtDate(d: string | null | undefined) {
 function ScoreRow({
   hole, value, onChange, colors,
 }: { hole: number; value: string; onChange: (v: string) => void; colors: ReturnType<typeof useColors> }) {
-  const { TextInput } = require("react-native");
   return (
     <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
       <Text style={{ width: 60, fontSize: 13, color: colors.mutedForeground }}>Hole {hole}</Text>

@@ -244,7 +244,7 @@ function BookingDialog({ slot, onBook, onCancel }: {
   const isFull = slot.player_count >= slot.max_players;
 
   const { data: bookings, isLoading: isLoadingBookings } = useListSlotBookings(slot.id, {
-    query: { enabled: open }
+    query: { queryKey: getListSlotBookingsQueryKey(slot.id), enabled: open }
   });
 
   const form = useForm<BookingFormValues>({

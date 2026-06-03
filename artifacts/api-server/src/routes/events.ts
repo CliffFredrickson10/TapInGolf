@@ -328,7 +328,7 @@ router.post("/admin/events", async (req, res): Promise<void> => {
 
   if (!name || !event_date) { res.status(400).json({ message: "name and event_date are required" }); return; }
 
-  const result = await exec(
+  const eventId = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, start_time, end_time, event_type, format,
         restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
@@ -350,7 +350,39 @@ router.post("/admin/events", async (req, res): Promise<void> => {
     ]
   );
 
-  res.status(201).json({ event_id: (result as any).insertId });
+  // Notify club members + past bookers about the new event (fire-and-forget)
+  const [clubRow, audience] = await Promise.all([
+    row<any>("SELECT name FROM clubs WHERE id = ?", [clubId]),
+    query<any>(
+      `SELECT DISTINCT u.push_token
+       FROM users u
+       WHERE u.push_token IS NOT NULL
+         AND (
+           EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+           OR EXISTS (
+             SELECT 1 FROM bookings b
+             JOIN tee_times tt ON tt.id = b.tee_time_id
+             WHERE tt.club_id = ? AND b.user_id = u.id
+           )
+         )
+       LIMIT 500`,
+      [clubId, clubId]
+    ),
+  ]);
+  if (audience.length > 0 && clubRow) {
+    const fmtDate = (d: string) => {
+      try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
+      catch { return d; }
+    };
+    sendPushNotifications(audience.map((u: any) => ({
+      to: u.push_token, sound: "default",
+      title: `⛳ New Event — ${clubRow.name}`,
+      body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
+      data:  { type: "event_created", event_id: eventId, club_id: clubId },
+    })));
+  }
+
+  res.status(201).json({ event_id: eventId });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

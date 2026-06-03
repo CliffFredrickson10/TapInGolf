@@ -376,7 +376,7 @@ router.get("/admin/cancellation-vouchers/batches/:batchId", requireClubAuth, asy
   const club   = getClub(req);
   const clubId = club.id as number;
 
-  const batchId = parseInt(req.params.batchId, 10);
+  const batchId = parseInt(String(req.params["batchId"]), 10);
 
   const batch = await row<any>(
     "SELECT * FROM cancellation_voucher_batches WHERE id = ? AND club_id = ?",

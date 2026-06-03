@@ -345,7 +345,12 @@ export default function ClubDetailScreen() {
                 const rc = restrictColors[ev.restriction] ?? "#43a047";
                 const dateLabel = new Date(String(ev.event_date).split("T")[0] + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short" });
                 return (
-                  <View key={ev.id} style={[styles.eventCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <TouchableOpacity
+                    key={ev.id}
+                    style={[styles.eventCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                    activeOpacity={0.82}
+                    onPress={() => router.push({ pathname: "/event/[id]", params: { id: ev.id } })}
+                  >
                     <View style={styles.eventCardTop}>
                       <View style={[styles.eventTypeChip, { backgroundColor: tc + "18" }]}>
                         <Text style={[styles.eventTypeChipText, { color: tc }]}>{String(ev.event_type).replace("_", " ")}</Text>
@@ -364,11 +369,11 @@ export default function ClubDetailScreen() {
                       <View style={[styles.eventIneligible, { backgroundColor: rc + "10" }]}>
                         <Ionicons name="lock-closed" size={11} color={rc} />
                         <Text style={[styles.eventIneligibleText, { color: rc }]}>
-                          {ev.user_registration_status === "pending" ? "Awaiting approval" : "Restricted — contact club"}
+                          {ev.user_registration?.status === "pending" ? "Awaiting approval" : "Restricted — contact club"}
                         </Text>
                       </View>
                     )}
-                  </View>
+                  </TouchableOpacity>
                 );
               })}
             </ScrollView>

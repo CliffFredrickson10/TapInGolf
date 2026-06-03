@@ -117,7 +117,7 @@ router.post("/friends/request", async (req, res): Promise<void> => {
     return;
   }
 
-  const { insertId: friendshipId } = await exec(
+  const friendshipId = await exec(
     "INSERT INTO friendships (requester_id, addressee_id, status) VALUES (?, ?, 'pending')",
     [user.id, target.id]
   );

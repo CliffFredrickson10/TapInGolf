@@ -316,7 +316,7 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
       }
       tierCandidates.push(tierType);
     } else {
-      tierType = memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+      tierType = (memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor")) as string;
       tierCandidates.push(tierType);
     }
   } else {

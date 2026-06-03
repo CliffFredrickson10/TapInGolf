@@ -9,6 +9,7 @@ import { objectStorageClient } from "../lib/objectStorage";
 import { generateOTP, hashOTP, generateResetToken, sendOTPEmail, sendInvoiceEmail } from "../lib/otp";
 import { logger } from "../lib/logger";
 import { saveUserNotification } from "../lib/userNotifications";
+import { sendPushNotifications } from "../lib/notifications";
 
 // Normalize tee_start_type: the portal sends snake_case, the DB constraint requires display format
 const TEE_START_MAP: Record<string, string> = {
@@ -285,16 +286,15 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
 
 router.get("/portal/cancellation-policy", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const [data, feeSetting] = await Promise.all([
-    row<any>(
-      `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
-              cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
-              cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies,
-              cancel_fee_pct
-       FROM clubs WHERE id = ?`,
-      [club.id]
-    ),
-  ]);
+  const data = await row<any>(
+    `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
+            cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
+            cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies,
+            cancel_fee_pct
+     FROM clubs WHERE id = ?`,
+    [club.id]
+  );
+  const feeSetting = null;
   res.json({
     preset:             data?.cancel_policy_preset   ?? "standard",
     full_refund_hours:  data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
@@ -571,7 +571,7 @@ router.get("/portal/reviews", requireClubAuth, async (req: Request, res: Respons
 // Passing an empty/blank response clears it.
 router.post("/portal/reviews/:id/respond", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params["id"]), 10);
   const review = await row<any>("SELECT id, club_id FROM reviews WHERE id = ?", [id]);
   if (!review || review.club_id !== club.id) {
     res.status(404).json({ message: "Review not found" });
@@ -593,7 +593,7 @@ const REVIEW_REPORT_REASONS = ["spam", "harassment", "hate_speech", "inappropria
 // Club flags a review as abusive → a TapIn super-admin reviews & decides.
 router.post("/portal/reviews/:id/report", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params["id"]), 10);
   const review = await row<any>("SELECT id, club_id, rating, comment FROM reviews WHERE id = ?", [id]);
   if (!review || review.club_id !== club.id) {
     res.status(404).json({ message: "Review not found" });
@@ -672,19 +672,59 @@ router.delete("/portal/ads/:id", requireClubAuth, async (req: Request, res: Resp
 
 // ─── EVENTS ──────────────────────────────────────────────────────────────────
 
+// Portal proxies to admin/events routes — all event management uses the same
+// underlying events.ts handlers (requireClubAuth verifies ownership here).
+
 router.get("/portal/events", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
-  const club = getClub(req);
-  res.json(await query<any>("SELECT id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_at FROM golf_events WHERE club_id = ? ORDER BY event_date DESC LIMIT 200", [club.id]));
+  const club     = getClub(req);
+  const upcoming = req.query.upcoming !== "false";
+  const today    = new Date().toISOString().split("T")[0];
+  const filter   = upcoming ? `AND e.event_date >= '${today}'` : `AND e.event_date < '${today}'`;
+  const events   = await query<any>(
+    `SELECT e.*,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) as total_registrations,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'pending') as pending_count
+     FROM golf_events e WHERE e.club_id = ? ${filter}
+     ORDER BY e.event_date ASC, e.start_time ASC`,
+    [club.id]
+  );
+  res.json(events.map((e: any) => ({
+    ...e,
+    entry_fee:           e.entry_fee != null ? parseFloat(e.entry_fee) : null,
+    total_registrations: parseInt(e.total_registrations ?? "0"),
+    approved_count:      parseInt(e.approved_count ?? "0"),
+    pending_count:       parseInt(e.pending_count ?? "0"),
+  })));
 });
 
 router.post("/portal/events", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { name, description, event_date, start_time, end_time, event_type = "other",
-          restriction = "open", entry_fee, max_participants, status = "active" } = req.body ?? {};
+  const {
+    name, description, event_date, end_date, start_time, end_time,
+    event_type = "competition", format = "stroke_play", restriction = "open",
+    entry_fee, max_participants, divisions, entries_open, entries_close,
+    ballot, scoring_enabled, payment_required, rounds = 1, status = "active",
+  } = req.body ?? {};
   if (!name || !event_date) { res.status(400).json({ message: "name and event_date required" }); return; }
+  const DEFAULT_DIVISIONS = [
+    { label: "A Division", key: "A", min_hcp: 0,  max_hcp: 9.9,  format: "stroke_play", tees: "championship" },
+    { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
+    { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36,   format: "stableford",  tees: "club" },
+  ];
   const result = await exec(
-    "INSERT INTO golf_events (club_id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [club.id, name, description ?? null, event_date, start_time ?? null, end_time ?? null, event_type, restriction, entry_fee ?? null, max_participants ?? null, status, club.id]
+    `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
+       event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+       ballot, scoring_enabled, payment_required, rounds, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
+     event_type, format, restriction,
+     entry_fee != null ? parseFloat(entry_fee) : null,
+     max_participants != null ? parseInt(max_participants) : null,
+     divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS),
+     entries_open ?? null, entries_close ?? null,
+     ballot ? 1 : 0, scoring_enabled ? 1 : 0, payment_required ? 1 : 0,
+     Number(rounds), status, club.id]
   );
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [(result as any).insertId]));
 });
@@ -694,24 +734,183 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   const evId = Number(req.params.id);
   const existing = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) { res.status(404).json({ message: "Event not found" }); return; }
-  const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status } = req.body ?? {};
-  await exec(
-    `UPDATE golf_events SET name = COALESCE(?, name), description = ?, event_date = COALESCE(?, event_date),
-      start_time = ?, end_time = ?, event_type = COALESCE(?, event_type), restriction = COALESCE(?, restriction),
-      entry_fee = ?, max_participants = ?, status = COALESCE(?, status) WHERE id = ? AND club_id = ?`,
-    [name ?? null, description ?? null, event_date ?? null, start_time ?? null, end_time ?? null,
-     event_type ?? null, restriction ?? null, entry_fee ?? null, max_participants ?? null, status ?? null, evId, club.id]
-  );
+  const {
+    name, description, event_date, end_date, start_time, end_time, event_type, format,
+    restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
+    ballot, scoring_enabled, payment_required, rounds,
+  } = req.body ?? {};
+  const updates: string[] = []; const vals: any[] = [];
+  if (name !== undefined)                { updates.push("name = ?");              vals.push(name); }
+  if (description !== undefined)         { updates.push("description = ?");       vals.push(description ?? null); }
+  if (event_date !== undefined)          { updates.push("event_date = ?");        vals.push(event_date); }
+  if (end_date !== undefined)            { updates.push("end_date = ?");          vals.push(end_date ?? null); }
+  if (start_time !== undefined)          { updates.push("start_time = ?");        vals.push(start_time ?? null); }
+  if (end_time !== undefined)            { updates.push("end_time = ?");          vals.push(end_time ?? null); }
+  if (event_type !== undefined)          { updates.push("event_type = ?");        vals.push(event_type); }
+  if (format !== undefined)              { updates.push("format = ?");            vals.push(format); }
+  if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
+  if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }
+  if (max_participants !== undefined)    { updates.push("max_participants = ?");  vals.push(max_participants != null ? parseInt(max_participants) : null); }
+  if (status !== undefined)              { updates.push("status = ?");            vals.push(status); }
+  if (divisions !== undefined)           { updates.push("divisions = ?");         vals.push(JSON.stringify(divisions)); }
+  if (entries_open !== undefined)        { updates.push("entries_open = ?");      vals.push(entries_open ?? null); }
+  if (entries_close !== undefined)       { updates.push("entries_close = ?");     vals.push(entries_close ?? null); }
+  if (ballot !== undefined)              { updates.push("ballot = ?");            vals.push(ballot ? 1 : 0); }
+  if (scoring_enabled !== undefined)     { updates.push("scoring_enabled = ?");   vals.push(scoring_enabled ? 1 : 0); }
+  if (payment_required !== undefined)    { updates.push("payment_required = ?");  vals.push(payment_required ? 1 : 0); }
+  if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
+  if (!updates.length) { res.json({ message: "No changes" }); return; }
+  vals.push(evId, club.id);
+  await exec(`UPDATE golf_events SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
 
 router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
-  const existing = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
-  if (!existing) { res.status(404).json({ message: "Event not found" }); return; }
-  await exec("DELETE FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
-  res.json({ message: "Deleted" });
+  await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  res.json({ message: "Cancelled" });
+});
+
+router.get("/portal/events/:id/registrations", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club    = getClub(req);
+  const evId    = Number(req.params.id);
+  const event   = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  const regs = await query<any>(
+    `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
+            er.payment_status, er.paid_at,
+            u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ?
+     ORDER BY er.division ASC, er.registered_at ASC`,
+    [evId]
+  );
+  res.json(regs.map((r: any) => ({ ...r, frozen_handicap: r.frozen_handicap != null ? parseFloat(r.frozen_handicap) : null })));
+});
+
+router.put("/portal/events/:id/registrations/:userId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club     = getClub(req);
+  const evId     = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const { status } = req.body ?? {};
+  if (!["approved","rejected"].includes(status)) { res.status(400).json({ message: "status must be approved or rejected" }); return; }
+  const event = await row<any>(
+    "SELECT e.id, e.name, e.payment_required, e.entry_fee, c.name as club_name FROM golf_events e JOIN clubs c ON c.id = e.club_id WHERE e.id = ? AND e.club_id = ?",
+    [evId, club.id]
+  );
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  await exec("UPDATE event_registrations SET status = ? WHERE event_id = ? AND user_id = ?", [status, evId, targetId]);
+  const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [targetId]);
+  if (target?.push_token) {
+    const needsPayment = status === "approved" && event.payment_required && event.entry_fee;
+    const { sendPushNotifications } = await import("../lib/notifications");
+    sendPushNotifications([{
+      to: target.push_token, sound: "default",
+      title: status === "approved" ? "Spot Confirmed ⛳" : "Registration Update",
+      body:  status === "approved"
+        ? needsPayment
+          ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.`
+          : `Your entry for "${event.name}" is confirmed.`
+        : `Your entry for "${event.name}" was not accepted.`,
+      data: { type: "event_registration_update", event_id: evId, status },
+    }]);
+  }
+  res.json({ success: true });
+});
+
+router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const round = req.query.round ? Number(req.query.round) : 1;
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  const draws = await query<any>(
+    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.notes,
+            u.id as user_id, u.name as user_name, u.email as user_email,
+            r.division, r.frozen_handicap
+     FROM event_draws d
+     JOIN users u ON u.id = d.user_id
+     JOIN event_registrations r ON r.event_id = d.event_id AND r.user_id = d.user_id
+     WHERE d.event_id = ? AND d.round = ?
+     ORDER BY d.draw_group ASC, d.tee_time ASC`,
+    [evId, round]
+  );
+  res.json(draws);
+});
+
+router.put("/portal/events/:id/draw", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const { round = 1, entries = [] } = req.body ?? {};
+  const event = await row<any>("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  await exec("DELETE FROM event_draws WHERE event_id = ? AND round = ?", [evId, round]);
+  for (const entry of entries) {
+    if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
+    await exec(
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
+    );
+  }
+  const registrants = await query<any>(
+    "SELECT u.push_token FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL",
+    [evId]
+  );
+  if (registrants.length > 0) {
+    const { sendPushNotifications } = await import("../lib/notifications");
+    sendPushNotifications(registrants.map((r: any) => ({
+      to: r.push_token, sound: "default",
+      title: "Draw Published ⛳",
+      body:  `The tee-time draw for "${event.name}" Round ${round} is now available.`,
+      data:  { type: "event_draw_published", event_id: evId, round },
+    })));
+  }
+  res.json({ success: true });
+});
+
+router.get("/portal/events/:id/scores", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const round = req.query.round ? Number(req.query.round) : null;
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  const roundFilter = round != null ? "AND s.round = ?" : "";
+  const params: any[] = round != null ? [evId, round] : [evId];
+  const scores = await query<any>(
+    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            u.id as user_id, u.name as user_name,
+            r.division, r.frozen_handicap
+     FROM event_scores s
+     JOIN users u ON u.id = s.user_id
+     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     WHERE s.event_id = ? ${roundFilter}
+     ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
+    params
+  );
+  res.json(scores);
+});
+
+router.post("/portal/events/:id/scores", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const { round = 1, scores = [] } = req.body ?? {};
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  for (const s of scores) {
+    if (!s.user_id) continue;
+    await exec(
+      `INSERT INTO event_scores (event_id, user_id, round, hole_scores, gross, net, points, verified, verified_by, verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())
+       ON CONFLICT (event_id, user_id, round) DO UPDATE
+         SET hole_scores = EXCLUDED.hole_scores, gross = EXCLUDED.gross, net = EXCLUDED.net,
+             points = EXCLUDED.points, verified = 1, verified_by = EXCLUDED.verified_by, verified_at = EXCLUDED.verified_at`,
+      [evId, s.user_id, round, s.hole_scores ? JSON.stringify(s.hole_scores) : null,
+       s.gross ?? null, s.net ?? null, s.points ?? null, club.id]
+    );
+  }
+  res.json({ success: true });
 });
 
 // ─── MEMBERS ─────────────────────────────────────────────────────────────────
@@ -1009,7 +1208,7 @@ router.get("/portal/inbox/unread-count", requireClubAuth, async (req: Request, r
 
 router.put("/portal/inbox/:id/read", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
@@ -1022,14 +1221,14 @@ router.put("/portal/inbox/read-all", requireClubAuth, async (req: Request, res: 
 
 router.put("/portal/inbox/:id/unread", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
 
 router.put("/portal/inbox/:id/refund-processed", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec(
     "UPDATE club_inbox_notifications SET refund_processed_at = NOW(), read_at = COALESCE(read_at, NOW()) WHERE id = ? AND club_id = ? AND type = 'cancellation'",
     [nid, club.id]
@@ -1165,7 +1364,7 @@ router.post("/portal/images", requireClubAuth, async (req: Request, res: Respons
 
 router.put("/portal/images/:imageId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const imageId = parseInt(req.params.imageId, 10);
+  const imageId = parseInt(String(req.params["imageId"]), 10);
   const { caption, display_order } = req.body ?? {};
   await exec(
     "UPDATE club_images SET caption = ?, display_order = ? WHERE id = ? AND club_id = ?",
@@ -1178,7 +1377,7 @@ router.put("/portal/images/:imageId", requireClubAuth, async (req: Request, res:
 
 router.delete("/portal/images/:imageId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const imageId = parseInt(req.params.imageId, 10);
+  const imageId = parseInt(String(req.params["imageId"]), 10);
   await exec("DELETE FROM club_images WHERE id = ? AND club_id = ?", [imageId, club.id]);
   res.json({ message: "Deleted" });
 });
@@ -1449,11 +1648,11 @@ router.post("/portal/users", requireClubAuth, async (req: Request, res: Response
   const existing = await row<any>("SELECT id FROM club_portal_users WHERE club_id = ? AND LOWER(email) = ?", [club.id, cleanEmail]);
   if (existing) { res.status(409).json({ message: "A user with this email already exists for this club" }); return; }
   const hash = await bcrypt.hash(String(password), 10);
-  const result = await exec<any>(
+  const newRow = await row<any>(
     "INSERT INTO club_portal_users (club_id, name, email, password_hash, role, permissions) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
     [club.id, String(name).trim(), cleanEmail, hash, role === "admin" ? "admin" : "member", JSON.stringify(permissions)]
   );
-  const newId = result[0]?.id;
+  const newId = newRow?.id;
   res.status(201).json({ user: { id: newId, name: String(name).trim(), email: cleanEmail, role, permissions, active: 1 } });
 });
 
@@ -1461,7 +1660,7 @@ router.post("/portal/users", requireClubAuth, async (req: Request, res: Response
 router.put("/portal/users/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
   const club = getClub(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const u = await row<any>("SELECT id, role FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
   if (!u) { res.status(404).json({ message: "User not found" }); return; }
   const { name, email, role, permissions, active } = req.body ?? {};
@@ -1483,7 +1682,7 @@ router.put("/portal/users/:id", requireClubAuth, async (req: Request, res: Respo
 router.put("/portal/users/:id/password", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
   const club = getClub(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const { password } = req.body ?? {};
   if (!password || String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
   const u = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
@@ -1497,7 +1696,7 @@ router.put("/portal/users/:id/password", requireClubAuth, async (req: Request, r
 router.delete("/portal/users/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   if (!isPortalAdmin(req)) { res.status(403).json({ message: "Admin access required" }); return; }
   const club = getClub(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const u = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
   if (!u) { res.status(404).json({ message: "User not found" }); return; }
   await run("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
@@ -1602,7 +1801,7 @@ router.post("/portal/bans", requireClubAuth, async (req: Request, res: Response)
 router.post("/portal/bans/:id/lift", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const clubUser = (req as any).clubUser;
-  const id = parseInt(req.params["id"] ?? "0");
+  const id = parseInt(String(req.params["id"] ?? "0"), 10);
   const { lift_note } = req.body ?? {};
   const ban = await row<any>(
     "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
@@ -1629,7 +1828,7 @@ router.post("/portal/bans/:id/lift", requireClubAuth, async (req: Request, res: 
 router.post("/portal/bans/:id/respond", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const clubUser = (req as any).clubUser;
-  const id = parseInt(req.params["id"] ?? "0");
+  const id = parseInt(String(req.params["id"] ?? "0"), 10);
   const { action, response_note } = req.body ?? {};
   if (!["lift", "maintain"].includes(action)) {
     res.status(400).json({ message: "action must be 'lift' or 'maintain'" });

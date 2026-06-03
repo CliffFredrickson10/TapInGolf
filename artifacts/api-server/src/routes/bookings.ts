@@ -1155,6 +1155,33 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     return;
   }
 
+  // Event entry payment: externalReference is "event-<eventId>-user-<userId>"
+  if (externalRef.startsWith("event-")) {
+    const parts   = externalRef.split("-");
+    const eventId = parseInt(parts[1] ?? "", 10);
+    const userId  = parseInt(parts[3] ?? "", 10);
+    if (!isNaN(eventId) && !isNaN(userId)) {
+      const claimed = await run(
+        "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
+        [eventId, userId]
+      );
+      if (claimed === 1) {
+        const ev = await row<any>("SELECT name FROM golf_events WHERE id = ?", [eventId]);
+        const u  = await row<any>("SELECT push_token FROM users WHERE id = ?", [userId]);
+        if (u?.push_token && ev) {
+          sendPushNotifications([{
+            to: u.push_token, sound: "default",
+            title: "Payment Confirmed ⛳",
+            body:  `Your entry fee for "${ev.name}" has been received. You're in!`,
+            data:  { type: "event_payment_confirmed", event_id: eventId },
+          }]);
+        }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
   // Booking payment: externalReference is "<bookingId>" or "<bookingId>-player-<userId>"
   const [rawId] = externalRef.split("-player-");
   const bookingId = parseInt(rawId, 10);

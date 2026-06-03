@@ -813,6 +813,65 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
 
+  // ── Tournament / Event enhancements ────────────────────────────────────────
+  // Extend golf_events with championship-grade fields: multi-day, format,
+  // divisional structure, entry window, ballot, payment, scoring toggle.
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS end_date DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format VARCHAR(30) NOT NULL DEFAULT 'stroke_play'");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS divisions JSONB");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_open DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_close DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS ballot SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
+
+  // Extend event_registrations: division auto-assign, frozen handicap, payment.
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS frozen_handicap DECIMAL(4,1)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_id VARCHAR(120)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
+
+  // Tee-time draw for a tournament round: groups players onto tee slots.
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_draws (
+      id            SERIAL PRIMARY KEY,
+      event_id      INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round         INT NOT NULL DEFAULT 1,
+      tee_date      DATE NOT NULL,
+      tee_time      TIME NOT NULL,
+      draw_group    INT NOT NULL,
+      user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notes         TEXT,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
+
+  // Per-player per-round scores (hole-by-hole JSON + computed totals).
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_scores (
+      id            SERIAL PRIMARY KEY,
+      event_id      INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      round         INT NOT NULL DEFAULT 1,
+      hole_scores   JSONB,
+      gross         INT,
+      net           INT,
+      points        INT,
+      submitted_at  TIMESTAMP DEFAULT NOW(),
+      verified      SMALLINT NOT NULL DEFAULT 0,
+      verified_by   INT REFERENCES users(id) ON DELETE SET NULL,
+      verified_at   TIMESTAMP,
+      UNIQUE (event_id, user_id, round)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_event ON event_scores (event_id, round)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_user  ON event_scores (user_id)");
+
   // ── Club bans ──────────────────────────────────────────────────────────────
   // A club can ban a golfer from booking at their club. The golfer is notified
   // and can submit a single appeal; the club decides whether to lift or maintain.

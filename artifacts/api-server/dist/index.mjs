@@ -35623,6 +35623,32 @@ var init_pg = __esm({
   }
 });
 
+// src/lib/notifications.ts
+var notifications_exports = {};
+__export(notifications_exports, {
+  sendPushNotifications: () => sendPushNotifications
+});
+async function sendPushNotifications(messages) {
+  const valid = messages.filter((m) => m.to && m.to.startsWith("ExponentPushToken["));
+  if (!valid.length) return;
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(valid)
+    });
+  } catch {
+  }
+}
+var init_notifications = __esm({
+  "src/lib/notifications.ts"() {
+    "use strict";
+  }
+});
+
 // ../../node_modules/.pnpm/media-typer@0.3.0/node_modules/media-typer/index.js
 var require_media_typer2 = __commonJS({
   "../../node_modules/.pnpm/media-typer@0.3.0/node_modules/media-typer/index.js"(exports) {
@@ -58029,23 +58055,7 @@ var clubs_default = router3;
 var import_express4 = __toESM(require_express2(), 1);
 init_pg();
 import crypto4 from "crypto";
-
-// src/lib/notifications.ts
-async function sendPushNotifications2(messages) {
-  const valid = messages.filter((m) => m.to && m.to.startsWith("ExponentPushToken["));
-  if (!valid.length) return;
-  try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(valid)
-    });
-  } catch {
-  }
-}
+init_notifications();
 
 // src/lib/userNotifications.ts
 init_pg();
@@ -58970,7 +58980,7 @@ router4.post("/bookings", async (req, res) => {
       data: { type: isOrganizer ? "booking_confirmed" : "booking_invited", booking_id: bookingId }
     };
   });
-  sendPushNotifications2(pushMessages);
+  sendPushNotifications(pushMessages);
   for (const p of playerRows) {
     const isOrganizer = p.id === user.id;
     saveUserNotification(
@@ -59225,6 +59235,32 @@ router4.post("/stitch/webhook", async (req, res) => {
     res.status(200).json({ received: true });
     return;
   }
+  if (externalRef.startsWith("event-")) {
+    const parts = externalRef.split("-");
+    const eventId = parseInt(parts[1] ?? "", 10);
+    const userId = parseInt(parts[3] ?? "", 10);
+    if (!isNaN(eventId) && !isNaN(userId)) {
+      const claimed = await run(
+        "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
+        [eventId, userId]
+      );
+      if (claimed === 1) {
+        const ev = await row("SELECT name FROM golf_events WHERE id = ?", [eventId]);
+        const u = await row("SELECT push_token FROM users WHERE id = ?", [userId]);
+        if (u?.push_token && ev) {
+          sendPushNotifications([{
+            to: u.push_token,
+            sound: "default",
+            title: "Payment Confirmed \u26F3",
+            body: `Your entry fee for "${ev.name}" has been received. You're in!`,
+            data: { type: "event_payment_confirmed", event_id: eventId }
+          }]);
+        }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
   const [rawId] = externalRef.split("-player-");
   const bookingId = parseInt(rawId, 10);
   if (!isNaN(bookingId)) {
@@ -59253,6 +59289,7 @@ var bookings_default = router4;
 // src/routes/friends.ts
 var import_express5 = __toESM(require_express2(), 1);
 init_pg();
+init_notifications();
 var router5 = (0, import_express5.Router)();
 router5.get("/friends", async (req, res) => {
   const user = await getUser(req);
@@ -59369,13 +59406,13 @@ router5.post("/friends/request", async (req, res) => {
     res.status(409).json({ message: "Friend request already exists" });
     return;
   }
-  const { insertId: friendshipId } = await exec(
+  const friendshipId = await exec(
     "INSERT INTO friendships (requester_id, addressee_id, status) VALUES (?, ?, 'pending')",
     [user.id, target.id]
   );
   const targetRow = await row("SELECT push_token FROM users WHERE id = ?", [target.id]);
   if (targetRow?.push_token) {
-    sendPushNotifications2([{
+    sendPushNotifications([{
       to: targetRow.push_token,
       sound: "default",
       title: "New Friend Request \u{1F91D}",
@@ -59412,7 +59449,7 @@ router5.put("/friends/:id/accept", async (req, res) => {
       [friendship.requester_id]
     );
     if (requesterRow?.push_token) {
-      sendPushNotifications2([{
+      sendPushNotifications([{
         to: requesterRow.push_token,
         sound: "default",
         title: "Friend Request Accepted! \u{1F389}",
@@ -59489,6 +59526,7 @@ var ads_default = router6;
 // src/routes/messages.ts
 var import_express7 = __toESM(require_express2(), 1);
 init_pg();
+init_notifications();
 var router7 = (0, import_express7.Router)();
 async function isMember(conversationId, userId) {
   const r = await row(
@@ -59658,7 +59696,7 @@ router7.post("/conversations", async (req, res) => {
     body: is_group ? `${user.name} added you to a group chat.` : `${user.name} started a conversation with you.`,
     data: { type: "new_conversation", conversation_id: conversationId }
   }));
-  sendPushNotifications2(msgs);
+  sendPushNotifications(msgs);
   res.status(201).json({ conversation_id: conversationId, existing: false });
 });
 router7.get("/conversations/:id", async (req, res) => {
@@ -59941,7 +59979,7 @@ router7.post("/conversations/:id/messages", async (req, res) => {
   const chatName = convo?.is_group ? convo.name ?? "Group Chat" : user.name;
   const pushTitle = `${user.name}${convo?.is_group ? ` in ${chatName}` : ""}`;
   const pushBody = content.length > 80 ? content.slice(0, 80) + "\u2026" : content;
-  sendPushNotifications2(
+  sendPushNotifications(
     others.filter((o) => o.push_token).map((o) => ({
       to: o.push_token,
       sound: "default",
@@ -60128,6 +60166,7 @@ function getClub(req) {
 }
 
 // src/routes/cancellationVouchers.ts
+init_notifications();
 var router9 = (0, import_express9.Router)();
 function generateVoucherCode(clubName, userId) {
   const slug = clubName.toUpperCase().replace(/[^A-Z]/g, "").slice(0, 3).padEnd(3, "X");
@@ -60314,7 +60353,7 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
         value_rands: null
       });
       if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-        sendPushNotifications2([{
+        sendPushNotifications([{
           to: recipient.push_token,
           sound: "default",
           title: notifTitle,
@@ -60351,7 +60390,7 @@ router9.post("/admin/cancellation-vouchers/issue", requireClubAuth, async (req, 
         value_rands: recipient.voucher_value ?? null
       });
       if (recipient.push_token?.startsWith("ExponentPushToken[")) {
-        sendPushNotifications2([{
+        sendPushNotifications([{
           to: recipient.push_token,
           sound: "default",
           title: notifTitle,
@@ -60414,7 +60453,7 @@ router9.get("/admin/cancellation-vouchers/batches", requireClubAuth, async (req,
 router9.get("/admin/cancellation-vouchers/batches/:batchId", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const clubId = club.id;
-  const batchId = parseInt(req.params.batchId, 10);
+  const batchId = parseInt(String(req.params["batchId"]), 10);
   const batch = await row(
     "SELECT * FROM cancellation_voucher_batches WHERE id = ? AND club_id = ?",
     [batchId, clubId]
@@ -61106,6 +61145,7 @@ var geofencing_default = router11;
 // src/routes/notifications.ts
 var import_express12 = __toESM(require_express2(), 1);
 init_pg();
+init_notifications();
 var router12 = (0, import_express12.Router)();
 var VALID_TYPES = ["course_closed", "lightning", "course_open", "tee_shift", "general"];
 async function getBookedUsersForClub(clubId, affectedDate) {
@@ -61236,7 +61276,7 @@ router12.post("/admin/notifications/broadcast", async (req, res) => {
     }
   }));
   for (let i = 0; i < messages.length; i += 100) {
-    sendPushNotifications2(messages.slice(i, i + 100));
+    sendPushNotifications(messages.slice(i, i + 100));
   }
   await exec(
     `INSERT INTO club_notifications
@@ -61375,17 +61415,30 @@ var notifications_default = router12;
 // src/routes/events.ts
 var import_express13 = __toESM(require_express2(), 1);
 init_pg();
+init_notifications();
 var router13 = (0, import_express13.Router)();
-var VALID_TYPES2 = ["open_day", "competition", "corporate", "social", "other"];
-var VALID_RESTRICTIONS = ["open", "members_only", "invitation_only"];
 var VALID_MEMBERSHIP_TYPES = ["standard", "premium", "honorary"];
+var DEFAULT_DIVISIONS = [
+  { label: "A Division", key: "A", min_hcp: 0, max_hcp: 9.9, format: "stroke_play", tees: "championship" },
+  { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
+  { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36, format: "stableford", tees: "club" }
+];
+function assignDivision(handicap, divisions) {
+  if (handicap == null) return null;
+  for (const d of divisions) {
+    if (handicap >= d.min_hcp && handicap <= d.max_hcp) return d.key;
+  }
+  return divisions[divisions.length - 1]?.key ?? null;
+}
 router13.get("/clubs/:id/events", async (req, res) => {
   const clubId = parseInt(req.params.id, 10);
   const caller = await getUser(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
   const events = await query(
-    `SELECT e.id, e.name, e.description, e.event_date, e.start_time, e.end_time,
-            e.event_type, e.restriction, e.entry_fee, e.max_participants, e.status,
+    `SELECT e.id, e.name, e.description, e.event_date, e.end_date, e.start_time, e.end_time,
+            e.event_type, e.format, e.restriction, e.entry_fee, e.max_participants, e.status,
+            e.divisions, e.entries_open, e.entries_close, e.ballot, e.scoring_enabled,
+            e.payment_required, e.rounds,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
      FROM golf_events e
      WHERE e.club_id = ? AND e.status = 'active' AND e.event_date >= ?
@@ -61394,7 +61447,7 @@ router13.get("/clubs/:id/events", async (req, res) => {
   );
   const enriched = await Promise.all(events.map(async (ev) => {
     let user_eligible = null;
-    let user_registration_status = null;
+    let user_registration = null;
     if (caller) {
       if (ev.restriction === "open") {
         user_eligible = true;
@@ -61406,22 +61459,66 @@ router13.get("/clubs/:id/events", async (req, res) => {
         user_eligible = !!m;
       } else if (ev.restriction === "invitation_only") {
         const r = await row(
-          "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+          "SELECT status, division, frozen_handicap, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
           [ev.id, caller.id]
         );
-        user_registration_status = r?.status ?? null;
+        user_registration = r ?? null;
         user_eligible = r?.status === "approved";
       }
     }
+    const divisions = ev.divisions ?? DEFAULT_DIVISIONS;
+    const userDiv = caller ? assignDivision(caller.handicap ? parseFloat(caller.handicap) : null, divisions) : null;
     return {
       ...ev,
       entry_fee: ev.entry_fee != null ? parseFloat(ev.entry_fee) : null,
       approved_count: parseInt(ev.approved_count ?? "0"),
+      divisions,
       user_eligible,
-      user_registration_status
+      user_registration,
+      user_division_preview: userDiv
     };
   }));
   res.json({ events: enriched });
+});
+router13.get("/events/:id", async (req, res) => {
+  const caller = await getUser(req);
+  const eventId = parseInt(req.params.id, 10);
+  const ev = await row(
+    `SELECT e.*, c.name as club_name, c.id as club_id,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
+     FROM golf_events e JOIN clubs c ON c.id = e.club_id
+     WHERE e.id = ?`,
+    [eventId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const divisions = ev.divisions ?? DEFAULT_DIVISIONS;
+  let user_registration = null;
+  let user_eligible = null;
+  if (caller) {
+    const r = await row(
+      "SELECT status, division, frozen_handicap, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
+      [eventId, caller.id]
+    );
+    user_registration = r ?? null;
+    if (ev.restriction === "open") user_eligible = true;
+    else if (ev.restriction === "members_only") {
+      const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, caller.id]);
+      user_eligible = !!m;
+    } else user_eligible = r?.status === "approved";
+  }
+  const userDiv = caller ? assignDivision(caller.handicap ? parseFloat(caller.handicap) : null, divisions) : null;
+  res.json({
+    ...ev,
+    entry_fee: ev.entry_fee != null ? parseFloat(ev.entry_fee) : null,
+    approved_count: parseInt(ev.approved_count ?? "0"),
+    divisions,
+    user_registration,
+    user_eligible,
+    user_division_preview: userDiv
+  });
 });
 router13.post("/events/:id/register", async (req, res) => {
   const caller = await getUser(req);
@@ -61435,23 +61532,131 @@ router13.post("/events/:id/register", async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  if (event.restriction !== "invitation_only") {
-    res.status(400).json({ message: "This event does not require registration" });
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  if (event.entries_open && today < event.entries_open) {
+    res.status(400).json({ message: "Entries not yet open" });
     return;
   }
+  if (event.entries_close && today > event.entries_close) {
+    res.status(400).json({ message: "Entries are closed" });
+    return;
+  }
+  if (event.restriction === "members_only") {
+    const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [event.club_id, caller.id]);
+    if (!m) {
+      res.status(403).json({ message: "This event is for club members only" });
+      return;
+    }
+  }
   const existing = await row(
-    "SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    "SELECT id, status, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
     [eventId, caller.id]
   );
   if (existing) {
-    res.json({ message: "Already registered", status: existing.status });
+    res.json({ message: "Already registered", status: existing.status, payment_status: existing.payment_status, payment_url: existing.payment_url });
     return;
   }
+  const divisions = event.divisions ?? DEFAULT_DIVISIONS;
+  const handicap = caller.handicap ? parseFloat(caller.handicap) : null;
+  const division = assignDivision(handicap, divisions);
+  if (event.max_participants) {
+    const { cnt } = await row(
+      "SELECT COUNT(*) AS cnt FROM event_registrations WHERE event_id = ? AND status != 'rejected'",
+      [eventId]
+    ) ?? { cnt: "0" };
+    if (parseInt(cnt) >= event.max_participants) {
+      res.status(400).json({ message: "Event is full" });
+      return;
+    }
+  }
+  const autoApprove = event.restriction === "open" && !event.payment_required;
+  const status = autoApprove ? "approved" : "pending";
   await exec(
-    "INSERT INTO event_registrations (event_id, user_id, status) VALUES (?, ?, 'pending')",
+    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
+    [eventId, caller.id, status, division, handicap]
+  );
+  res.status(201).json({ success: true, status, division, frozen_handicap: handicap });
+});
+router13.post("/events/:id/pay", async (req, res) => {
+  const caller = await getUser(req);
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const event = await row("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (!event.entry_fee || !event.payment_required) {
+    res.status(400).json({ message: "This event does not require payment" });
+    return;
+  }
+  const reg = await row(
+    "SELECT id, status, payment_status FROM event_registrations WHERE event_id = ? AND user_id = ?",
     [eventId, caller.id]
   );
-  res.status(201).json({ success: true, status: "pending" });
+  if (!reg) {
+    res.status(404).json({ message: "Not registered for this event" });
+    return;
+  }
+  if (reg.status !== "approved") {
+    res.status(400).json({ message: "Registration is not yet approved" });
+    return;
+  }
+  if (reg.payment_status === "paid") {
+    res.status(400).json({ message: "Already paid" });
+    return;
+  }
+  const pr = await createStitchPayment({
+    amount: parseFloat(event.entry_fee),
+    payerName: caller.name ?? "Golfer",
+    merchantReference: `event-${eventId}-user-${caller.id}`,
+    redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
+  });
+  await exec(
+    "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
+    [pr.id, pr.url, eventId, caller.id]
+  );
+  res.json({ payment_url: pr.url });
+});
+router13.get("/events/:id/leaderboard", async (req, res) => {
+  const eventId = parseInt(req.params.id, 10);
+  const round = req.query.round ? parseInt(String(req.query.round), 10) : null;
+  const event = await row("SELECT id, scoring_enabled, rounds, divisions, format FROM golf_events WHERE id = ?", [eventId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (!event.scoring_enabled) {
+    res.json({ leaderboard: [] });
+    return;
+  }
+  const roundFilter = round ? "AND s.round = ?" : "";
+  const params = round ? [eventId, round] : [eventId];
+  const rows = await query(
+    `SELECT s.user_id, s.round, s.gross, s.net, s.points, s.verified,
+            u.name as player_name, u.handicap,
+            r.division, r.frozen_handicap
+     FROM event_scores s
+     JOIN users u ON u.id = s.user_id
+     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     WHERE s.event_id = ? ${roundFilter}
+     ORDER BY r.division ASC, s.gross ASC`,
+    params
+  );
+  const divisions = {};
+  for (const r of rows) {
+    const div = r.division ?? "Open";
+    if (!divisions[div]) divisions[div] = [];
+    divisions[div].push(r);
+  }
+  const leaderboard = Object.entries(divisions).map(([division, players]) => ({
+    division,
+    players: players.sort((a, b) => (a.gross ?? 999) - (b.gross ?? 999)).map((p, i) => ({ ...p, position: i + 1 }))
+  }));
+  res.json({ leaderboard });
 });
 router13.get("/admin/events", async (req, res) => {
   const user = await getUser(req);
@@ -61483,7 +61688,8 @@ router13.get("/admin/events", async (req, res) => {
       entry_fee: e.entry_fee != null ? parseFloat(e.entry_fee) : null,
       total_registrations: parseInt(e.total_registrations ?? "0"),
       approved_count: parseInt(e.approved_count ?? "0"),
-      pending_count: parseInt(e.pending_count ?? "0")
+      pending_count: parseInt(e.pending_count ?? "0"),
+      divisions: e.divisions ?? DEFAULT_DIVISIONS
     }))
   });
 });
@@ -61498,38 +61704,56 @@ router13.post("/admin/events", async (req, res) => {
     res.status(400).json({ message: "club_id required" });
     return;
   }
-  const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants } = req.body ?? {};
+  const {
+    name,
+    description,
+    event_date,
+    end_date,
+    start_time,
+    end_time,
+    event_type,
+    format,
+    restriction,
+    entry_fee,
+    max_participants,
+    divisions,
+    entries_open,
+    entries_close,
+    ballot,
+    scoring_enabled,
+    payment_required,
+    rounds
+  } = req.body ?? {};
   if (!name || !event_date) {
     res.status(400).json({ message: "name and event_date are required" });
     return;
   }
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(event_date)) {
-    res.status(400).json({ message: "event_date must be YYYY-MM-DD" });
-    return;
-  }
-  if (event_type && !VALID_TYPES2.includes(event_type)) {
-    res.status(400).json({ message: `event_type must be one of: ${VALID_TYPES2.join(", ")}` });
-    return;
-  }
-  if (restriction && !VALID_RESTRICTIONS.includes(restriction)) {
-    res.status(400).json({ message: `restriction must be one of: ${VALID_RESTRICTIONS.join(", ")}` });
-    return;
-  }
   const result = await exec(
     `INSERT INTO golf_events
-       (club_id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (club_id, name, description, event_date, end_date, start_time, end_time, event_type, format,
+        restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+        ballot, scoring_enabled, payment_required, rounds, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', ?)`,
     [
       clubId,
       String(name),
       description ?? null,
       event_date,
+      end_date ?? null,
       start_time ?? null,
       end_time ?? null,
-      event_type ?? "other",
+      event_type ?? "competition",
+      format ?? "stroke_play",
       restriction ?? "open",
       entry_fee != null ? parseFloat(entry_fee) : null,
       max_participants != null ? parseInt(max_participants) : null,
+      divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS),
+      entries_open ?? null,
+      entries_close ?? null,
+      ballot ? 1 : 0,
+      scoring_enabled ? 1 : 0,
+      payment_required ? 1 : 0,
+      rounds ?? 1,
       user.id
     ]
   );
@@ -61552,7 +61776,27 @@ router13.put("/admin/events/:id", async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status } = req.body ?? {};
+  const {
+    name,
+    description,
+    event_date,
+    end_date,
+    start_time,
+    end_time,
+    event_type,
+    format,
+    restriction,
+    entry_fee,
+    max_participants,
+    status,
+    divisions,
+    entries_open,
+    entries_close,
+    ballot,
+    scoring_enabled,
+    payment_required,
+    rounds
+  } = req.body ?? {};
   const updates = [];
   const vals = [];
   if (name) {
@@ -61567,6 +61811,10 @@ router13.put("/admin/events/:id", async (req, res) => {
     updates.push("event_date = ?");
     vals.push(event_date);
   }
+  if (end_date !== void 0) {
+    updates.push("end_date = ?");
+    vals.push(end_date ?? null);
+  }
   if (start_time !== void 0) {
     updates.push("start_time = ?");
     vals.push(start_time ?? null);
@@ -61578,6 +61826,10 @@ router13.put("/admin/events/:id", async (req, res) => {
   if (event_type) {
     updates.push("event_type = ?");
     vals.push(event_type);
+  }
+  if (format) {
+    updates.push("format = ?");
+    vals.push(format);
   }
   if (restriction) {
     updates.push("restriction = ?");
@@ -61594,6 +61846,34 @@ router13.put("/admin/events/:id", async (req, res) => {
   if (status) {
     updates.push("status = ?");
     vals.push(status);
+  }
+  if (divisions !== void 0) {
+    updates.push("divisions = ?");
+    vals.push(JSON.stringify(divisions));
+  }
+  if (entries_open !== void 0) {
+    updates.push("entries_open = ?");
+    vals.push(entries_open ?? null);
+  }
+  if (entries_close !== void 0) {
+    updates.push("entries_close = ?");
+    vals.push(entries_close ?? null);
+  }
+  if (ballot !== void 0) {
+    updates.push("ballot = ?");
+    vals.push(ballot ? 1 : 0);
+  }
+  if (scoring_enabled !== void 0) {
+    updates.push("scoring_enabled = ?");
+    vals.push(scoring_enabled ? 1 : 0);
+  }
+  if (payment_required !== void 0) {
+    updates.push("payment_required = ?");
+    vals.push(payment_required ? 1 : 0);
+  }
+  if (rounds !== void 0) {
+    updates.push("rounds = ?");
+    vals.push(Number(rounds));
   }
   if (!updates.length) {
     res.json({ success: true });
@@ -61615,10 +61895,7 @@ router13.delete("/admin/events/:id", async (req, res) => {
     return;
   }
   const eventId = parseInt(req.params.id, 10);
-  await exec(
-    "UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?",
-    [eventId, clubId]
-  );
+  await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [eventId, clubId]);
   res.json({ success: true });
 });
 router13.get("/admin/events/:id/registrations", async (req, res) => {
@@ -61639,15 +61916,16 @@ router13.get("/admin/events/:id/registrations", async (req, res) => {
     return;
   }
   const regs = await query(
-    `SELECT er.id, er.status, er.registered_at,
-            u.id as user_id, u.name as user_name, u.email as user_email
+    `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
+            er.payment_status, er.paid_at,
+            u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
      FROM event_registrations er
      JOIN users u ON u.id = er.user_id
      WHERE er.event_id = ?
-     ORDER BY er.registered_at ASC`,
+     ORDER BY er.division ASC, er.registered_at ASC`,
     [eventId]
   );
-  res.json({ registrations: regs });
+  res.json({ registrations: regs.map((r) => ({ ...r, frozen_handicap: r.frozen_handicap != null ? parseFloat(r.frozen_handicap) : null })) });
 });
 router13.put("/admin/events/:id/registrations/:userId", async (req, res) => {
   const user = await getUser(req);
@@ -61668,27 +61946,203 @@ router13.put("/admin/events/:id/registrations/:userId", async (req, res) => {
     return;
   }
   const event = await row(
-    "SELECT e.id, e.name, c.name as club_name FROM golf_events e JOIN clubs c ON c.id = e.club_id WHERE e.id = ? AND e.club_id = ?",
+    "SELECT e.id, e.name, e.payment_required, e.entry_fee, c.name as club_name FROM golf_events e JOIN clubs c ON c.id = e.club_id WHERE e.id = ? AND e.club_id = ?",
     [eventId, clubId]
   );
   if (!event) {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  await exec(
-    "UPDATE event_registrations SET status = ? WHERE event_id = ? AND user_id = ?",
-    [status, eventId, targetId]
-  );
+  await exec("UPDATE event_registrations SET status = ? WHERE event_id = ? AND user_id = ?", [status, eventId, targetId]);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [targetId]);
   if (target?.push_token) {
-    sendPushNotifications2([{
+    const needsPayment = status === "approved" && event.payment_required && event.entry_fee;
+    sendPushNotifications([{
       to: target.push_token,
       sound: "default",
-      title: status === "approved" ? `You're In! \u26F3` : `Registration Update`,
-      body: status === "approved" ? `Your registration for "${event.name}" at ${event.club_name} has been approved. You can now book your tee time.` : `Your registration request for "${event.name}" at ${event.club_name} was not approved at this time.`,
+      title: status === "approved" ? `Spot Confirmed \u26F3` : `Registration Update`,
+      body: status === "approved" ? needsPayment ? `Your entry for "${event.name}" at ${event.club_name} is approved. Open the app to complete payment (R${parseFloat(event.entry_fee).toFixed(2)}).` : `Your entry for "${event.name}" at ${event.club_name} is confirmed.` : `Your entry for "${event.name}" at ${event.club_name} was not accepted at this time.`,
       data: { type: "event_registration_update", event_id: eventId, status }
     }]);
   }
+  res.json({ success: true });
+});
+router13.get("/admin/events/:id/draw", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const round = req.query.round ? parseInt(String(req.query.round), 10) : 1;
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const draws = await query(
+    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.notes,
+            u.id as user_id, u.name as user_name, u.email as user_email,
+            r.division, r.frozen_handicap
+     FROM event_draws d
+     JOIN users u ON u.id = d.user_id
+     JOIN event_registrations r ON r.event_id = d.event_id AND r.user_id = d.user_id
+     WHERE d.event_id = ? AND d.round = ?
+     ORDER BY d.draw_group ASC, d.tee_time ASC`,
+    [eventId, round]
+  );
+  res.json({ draws });
+});
+router13.put("/admin/events/:id/draw", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const { round = 1, entries = [] } = req.body ?? {};
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await exec("DELETE FROM event_draws WHERE event_id = ? AND round = ?", [eventId, round]);
+  for (const entry of entries) {
+    if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
+    await exec(
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [eventId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
+    );
+  }
+  const registrants = await query(
+    "SELECT u.push_token, u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL",
+    [eventId]
+  );
+  const ev = await row("SELECT name FROM golf_events WHERE id = ?", [eventId]);
+  if (registrants.length > 0 && ev) {
+    sendPushNotifications(registrants.map((r) => ({
+      to: r.push_token,
+      sound: "default",
+      title: `Draw Published \u26F3`,
+      body: `The tee-time draw for "${ev.name}" Round ${round} is now available.`,
+      data: { type: "event_draw_published", event_id: eventId, round }
+    })));
+  }
+  res.json({ success: true });
+});
+router13.get("/admin/events/:id/scores", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const round = req.query.round ? parseInt(String(req.query.round), 10) : null;
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const roundFilter = round != null ? "AND s.round = ?" : "";
+  const params = round != null ? [eventId, round] : [eventId];
+  const scores = await query(
+    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified, s.verified_at,
+            u.id as user_id, u.name as user_name, u.handicap,
+            r.division, r.frozen_handicap
+     FROM event_scores s
+     JOIN users u ON u.id = s.user_id
+     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     WHERE s.event_id = ? ${roundFilter}
+     ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
+    params
+  );
+  res.json({ scores });
+});
+router13.post("/admin/events/:id/scores", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const { round = 1, scores = [] } = req.body ?? {};
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  for (const s of scores) {
+    if (!s.user_id) continue;
+    await exec(
+      `INSERT INTO event_scores (event_id, user_id, round, hole_scores, gross, net, points, verified, verified_by, verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())
+       ON CONFLICT (event_id, user_id, round) DO UPDATE
+         SET hole_scores = EXCLUDED.hole_scores, gross = EXCLUDED.gross, net = EXCLUDED.net,
+             points = EXCLUDED.points, verified = 1, verified_by = EXCLUDED.verified_by, verified_at = EXCLUDED.verified_at`,
+      [
+        eventId,
+        s.user_id,
+        round,
+        s.hole_scores ? JSON.stringify(s.hole_scores) : null,
+        s.gross ?? null,
+        s.net ?? null,
+        s.points ?? null,
+        user.id
+      ]
+    );
+  }
+  res.json({ success: true });
+});
+router13.post("/events/:id/scores", async (req, res) => {
+  const caller = await getUser(req);
+  if (!caller) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const { round = 1, hole_scores, gross, net, points } = req.body ?? {};
+  const event = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (!event.scoring_enabled) {
+    res.status(400).json({ message: "Scoring not enabled for this event" });
+    return;
+  }
+  const reg = await row("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [eventId, caller.id]);
+  if (!reg || reg.status !== "approved") {
+    res.status(403).json({ message: "Not an approved participant" });
+    return;
+  }
+  await exec(
+    `INSERT INTO event_scores (event_id, user_id, round, hole_scores, gross, net, points)
+     VALUES (?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT (event_id, user_id, round) DO UPDATE
+       SET hole_scores = EXCLUDED.hole_scores, gross = EXCLUDED.gross, net = EXCLUDED.net,
+           points = EXCLUDED.points, submitted_at = NOW(), verified = 0`,
+    [eventId, caller.id, round, hole_scores ? JSON.stringify(hole_scores) : null, gross ?? null, net ?? null, points ?? null]
+  );
   res.json({ success: true });
 });
 router13.get("/admin/members", async (req, res) => {
@@ -61767,25 +62221,19 @@ router13.post("/admin/members", async (req, res) => {
   }
   const club = await row("SELECT name FROM clubs WHERE id = ?", [clubId]);
   try {
-    await exec(
-      "INSERT INTO club_members (club_id, user_id, membership_type, added_by) VALUES (?, ?, ?, ?)",
-      [clubId, user_id, membership_type, user.id]
-    );
+    await exec("INSERT INTO club_members (club_id, user_id, membership_type, added_by) VALUES (?, ?, ?, ?)", [clubId, user_id, membership_type, user.id]);
   } catch (err) {
-    if (err.code === "ER_DUP_ENTRY") {
-      await exec(
-        "UPDATE club_members SET status = 'active', membership_type = ? WHERE club_id = ? AND user_id = ?",
-        [membership_type, clubId, user_id]
-      );
+    if (err.code === "23505" || err.code === "ER_DUP_ENTRY") {
+      await exec("UPDATE club_members SET status = 'active', membership_type = ? WHERE club_id = ? AND user_id = ?", [membership_type, clubId, user_id]);
     } else throw err;
   }
   const targetUser = await row("SELECT push_token FROM users WHERE id = ?", [user_id]);
   if (targetUser?.push_token) {
-    sendPushNotifications2([{
+    sendPushNotifications([{
       to: targetUser.push_token,
       sound: "default",
       title: "Club Membership \u26F3",
-      body: `You have been added as a ${membership_type} member of ${club?.name ?? "the club"}. You now have access to members-only events.`,
+      body: `You have been added as a ${membership_type} member of ${club?.name ?? "the club"}.`,
       data: { type: "club_membership_added", club_id: clubId }
     }]);
   }
@@ -61833,11 +62281,7 @@ router13.delete("/admin/members/:userId", async (req, res) => {
     res.status(400).json({ message: "club_id required" });
     return;
   }
-  const targetId = parseInt(req.params.userId, 10);
-  await exec(
-    "DELETE FROM club_members WHERE club_id = ? AND user_id = ?",
-    [clubId, targetId]
-  );
+  await exec("DELETE FROM club_members WHERE club_id = ? AND user_id = ?", [clubId, parseInt(req.params.userId, 10)]);
   res.json({ success: true });
 });
 var events_default = router13;
@@ -62125,6 +62569,7 @@ async function signObjectURL({
 
 // src/routes/portal.ts
 init_logger();
+init_notifications();
 var TEE_START_MAP = {
   first_tee: "1st Tee",
   tenth_tee: "10th Tee",
@@ -62468,16 +62913,15 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
 });
 router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const [data, feeSetting] = await Promise.all([
-    row(
-      `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
-              cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
-              cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies,
-              cancel_fee_pct
-       FROM clubs WHERE id = ?`,
-      [club.id]
-    )
-  ]);
+  const data = await row(
+    `SELECT cancel_policy_preset, cancel_full_refund_hours, cancel_has_partial, cancel_partial_pct,
+            cancel_partial_hours, cancel_payment_hours, cancel_payment_minutes,
+            cancel_weather, cancel_contact_email, cancel_contact_phone, cancel_other_policies,
+            cancel_fee_pct
+     FROM clubs WHERE id = ?`,
+    [club.id]
+  );
+  const feeSetting = null;
   res.json({
     preset: data?.cancel_policy_preset ?? "standard",
     full_refund_hours: data?.cancel_full_refund_hours != null ? Number(data.cancel_full_refund_hours) : 48,
@@ -62788,7 +63232,7 @@ router14.get("/portal/reviews", requireClubAuth2, async (req, res) => {
 });
 router14.post("/portal/reviews/:id/respond", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params["id"]), 10);
   const review = await row("SELECT id, club_id FROM reviews WHERE id = ?", [id]);
   if (!review || review.club_id !== club.id) {
     res.status(404).json({ message: "Review not found" });
@@ -62806,7 +63250,7 @@ router14.post("/portal/reviews/:id/respond", requireClubAuth2, async (req, res) 
 var REVIEW_REPORT_REASONS = ["spam", "harassment", "hate_speech", "inappropriate", "false_info", "other"];
 router14.post("/portal/reviews/:id/report", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params["id"]), 10);
   const review = await row("SELECT id, club_id, rating, comment FROM reviews WHERE id = ?", [id]);
   if (!review || review.club_id !== club.id) {
     res.status(404).json({ message: "Review not found" });
@@ -62893,7 +63337,25 @@ router14.delete("/portal/ads/:id", requireClubAuth2, async (req, res) => {
 });
 router14.get("/portal/events", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  res.json(await query("SELECT id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_at FROM golf_events WHERE club_id = ? ORDER BY event_date DESC LIMIT 200", [club.id]));
+  const upcoming = req.query.upcoming !== "false";
+  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const filter = upcoming ? `AND e.event_date >= '${today}'` : `AND e.event_date < '${today}'`;
+  const events = await query(
+    `SELECT e.*,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) as total_registrations,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'pending') as pending_count
+     FROM golf_events e WHERE e.club_id = ? ${filter}
+     ORDER BY e.event_date ASC, e.start_time ASC`,
+    [club.id]
+  );
+  res.json(events.map((e) => ({
+    ...e,
+    entry_fee: e.entry_fee != null ? parseFloat(e.entry_fee) : null,
+    total_registrations: parseInt(e.total_registrations ?? "0"),
+    approved_count: parseInt(e.approved_count ?? "0"),
+    pending_count: parseInt(e.pending_count ?? "0")
+  })));
 });
 router14.post("/portal/events", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -62901,21 +63363,60 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     name,
     description,
     event_date,
+    end_date,
     start_time,
     end_time,
-    event_type = "other",
+    event_type = "competition",
+    format = "stroke_play",
     restriction = "open",
     entry_fee,
     max_participants,
+    divisions,
+    entries_open,
+    entries_close,
+    ballot,
+    scoring_enabled,
+    payment_required,
+    rounds = 1,
     status = "active"
   } = req.body ?? {};
   if (!name || !event_date) {
     res.status(400).json({ message: "name and event_date required" });
     return;
   }
+  const DEFAULT_DIVISIONS2 = [
+    { label: "A Division", key: "A", min_hcp: 0, max_hcp: 9.9, format: "stroke_play", tees: "championship" },
+    { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
+    { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36, format: "stableford", tees: "club" }
+  ];
   const result = await exec(
-    "INSERT INTO golf_events (club_id, name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status, created_by) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [club.id, name, description ?? null, event_date, start_time ?? null, end_time ?? null, event_type, restriction, entry_fee ?? null, max_participants ?? null, status, club.id]
+    `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
+       event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+       ballot, scoring_enabled, payment_required, rounds, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      club.id,
+      name,
+      description ?? null,
+      event_date,
+      end_date ?? null,
+      start_time ?? null,
+      end_time ?? null,
+      event_type,
+      format,
+      restriction,
+      entry_fee != null ? parseFloat(entry_fee) : null,
+      max_participants != null ? parseInt(max_participants) : null,
+      divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS2),
+      entries_open ?? null,
+      entries_close ?? null,
+      ballot ? 1 : 0,
+      scoring_enabled ? 1 : 0,
+      payment_required ? 1 : 0,
+      Number(rounds),
+      status,
+      club.id
+    ]
   );
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [result.insertId]));
 });
@@ -62927,38 +63428,280 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  const { name, description, event_date, start_time, end_time, event_type, restriction, entry_fee, max_participants, status } = req.body ?? {};
-  await exec(
-    `UPDATE golf_events SET name = COALESCE(?, name), description = ?, event_date = COALESCE(?, event_date),
-      start_time = ?, end_time = ?, event_type = COALESCE(?, event_type), restriction = COALESCE(?, restriction),
-      entry_fee = ?, max_participants = ?, status = COALESCE(?, status) WHERE id = ? AND club_id = ?`,
-    [
-      name ?? null,
-      description ?? null,
-      event_date ?? null,
-      start_time ?? null,
-      end_time ?? null,
-      event_type ?? null,
-      restriction ?? null,
-      entry_fee ?? null,
-      max_participants ?? null,
-      status ?? null,
-      evId,
-      club.id
-    ]
-  );
+  const {
+    name,
+    description,
+    event_date,
+    end_date,
+    start_time,
+    end_time,
+    event_type,
+    format,
+    restriction,
+    entry_fee,
+    max_participants,
+    status,
+    divisions,
+    entries_open,
+    entries_close,
+    ballot,
+    scoring_enabled,
+    payment_required,
+    rounds
+  } = req.body ?? {};
+  const updates = [];
+  const vals = [];
+  if (name !== void 0) {
+    updates.push("name = ?");
+    vals.push(name);
+  }
+  if (description !== void 0) {
+    updates.push("description = ?");
+    vals.push(description ?? null);
+  }
+  if (event_date !== void 0) {
+    updates.push("event_date = ?");
+    vals.push(event_date);
+  }
+  if (end_date !== void 0) {
+    updates.push("end_date = ?");
+    vals.push(end_date ?? null);
+  }
+  if (start_time !== void 0) {
+    updates.push("start_time = ?");
+    vals.push(start_time ?? null);
+  }
+  if (end_time !== void 0) {
+    updates.push("end_time = ?");
+    vals.push(end_time ?? null);
+  }
+  if (event_type !== void 0) {
+    updates.push("event_type = ?");
+    vals.push(event_type);
+  }
+  if (format !== void 0) {
+    updates.push("format = ?");
+    vals.push(format);
+  }
+  if (restriction !== void 0) {
+    updates.push("restriction = ?");
+    vals.push(restriction);
+  }
+  if (entry_fee !== void 0) {
+    updates.push("entry_fee = ?");
+    vals.push(entry_fee != null ? parseFloat(entry_fee) : null);
+  }
+  if (max_participants !== void 0) {
+    updates.push("max_participants = ?");
+    vals.push(max_participants != null ? parseInt(max_participants) : null);
+  }
+  if (status !== void 0) {
+    updates.push("status = ?");
+    vals.push(status);
+  }
+  if (divisions !== void 0) {
+    updates.push("divisions = ?");
+    vals.push(JSON.stringify(divisions));
+  }
+  if (entries_open !== void 0) {
+    updates.push("entries_open = ?");
+    vals.push(entries_open ?? null);
+  }
+  if (entries_close !== void 0) {
+    updates.push("entries_close = ?");
+    vals.push(entries_close ?? null);
+  }
+  if (ballot !== void 0) {
+    updates.push("ballot = ?");
+    vals.push(ballot ? 1 : 0);
+  }
+  if (scoring_enabled !== void 0) {
+    updates.push("scoring_enabled = ?");
+    vals.push(scoring_enabled ? 1 : 0);
+  }
+  if (payment_required !== void 0) {
+    updates.push("payment_required = ?");
+    vals.push(payment_required ? 1 : 0);
+  }
+  if (rounds !== void 0) {
+    updates.push("rounds = ?");
+    vals.push(Number(rounds));
+  }
+  if (!updates.length) {
+    res.json({ message: "No changes" });
+    return;
+  }
+  vals.push(evId, club.id);
+  await exec(`UPDATE golf_events SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
 router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
-  if (!existing) {
+  await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  res.json({ message: "Cancelled" });
+});
+router14.get("/portal/events/:id/registrations", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  await exec("DELETE FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
-  res.json({ message: "Deleted" });
+  const regs = await query(
+    `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
+            er.payment_status, er.paid_at,
+            u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ?
+     ORDER BY er.division ASC, er.registered_at ASC`,
+    [evId]
+  );
+  res.json(regs.map((r) => ({ ...r, frozen_handicap: r.frozen_handicap != null ? parseFloat(r.frozen_handicap) : null })));
+});
+router14.put("/portal/events/:id/registrations/:userId", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const targetId = Number(req.params.userId);
+  const { status } = req.body ?? {};
+  if (!["approved", "rejected"].includes(status)) {
+    res.status(400).json({ message: "status must be approved or rejected" });
+    return;
+  }
+  const event = await row(
+    "SELECT e.id, e.name, e.payment_required, e.entry_fee, c.name as club_name FROM golf_events e JOIN clubs c ON c.id = e.club_id WHERE e.id = ? AND e.club_id = ?",
+    [evId, club.id]
+  );
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await exec("UPDATE event_registrations SET status = ? WHERE event_id = ? AND user_id = ?", [status, evId, targetId]);
+  const target = await row("SELECT push_token FROM users WHERE id = ?", [targetId]);
+  if (target?.push_token) {
+    const needsPayment = status === "approved" && event.payment_required && event.entry_fee;
+    const { sendPushNotifications: sendPushNotifications2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+    sendPushNotifications2([{
+      to: target.push_token,
+      sound: "default",
+      title: status === "approved" ? "Spot Confirmed \u26F3" : "Registration Update",
+      body: status === "approved" ? needsPayment ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.` : `Your entry for "${event.name}" is confirmed.` : `Your entry for "${event.name}" was not accepted.`,
+      data: { type: "event_registration_update", event_id: evId, status }
+    }]);
+  }
+  res.json({ success: true });
+});
+router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const round = req.query.round ? Number(req.query.round) : 1;
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const draws = await query(
+    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.notes,
+            u.id as user_id, u.name as user_name, u.email as user_email,
+            r.division, r.frozen_handicap
+     FROM event_draws d
+     JOIN users u ON u.id = d.user_id
+     JOIN event_registrations r ON r.event_id = d.event_id AND r.user_id = d.user_id
+     WHERE d.event_id = ? AND d.round = ?
+     ORDER BY d.draw_group ASC, d.tee_time ASC`,
+    [evId, round]
+  );
+  res.json(draws);
+});
+router14.put("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const { round = 1, entries = [] } = req.body ?? {};
+  const event = await row("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await exec("DELETE FROM event_draws WHERE event_id = ? AND round = ?", [evId, round]);
+  for (const entry of entries) {
+    if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
+    await exec(
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
+    );
+  }
+  const registrants = await query(
+    "SELECT u.push_token FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL",
+    [evId]
+  );
+  if (registrants.length > 0) {
+    const { sendPushNotifications: sendPushNotifications2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+    sendPushNotifications2(registrants.map((r) => ({
+      to: r.push_token,
+      sound: "default",
+      title: "Draw Published \u26F3",
+      body: `The tee-time draw for "${event.name}" Round ${round} is now available.`,
+      data: { type: "event_draw_published", event_id: evId, round }
+    })));
+  }
+  res.json({ success: true });
+});
+router14.get("/portal/events/:id/scores", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const round = req.query.round ? Number(req.query.round) : null;
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const roundFilter = round != null ? "AND s.round = ?" : "";
+  const params = round != null ? [evId, round] : [evId];
+  const scores = await query(
+    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            u.id as user_id, u.name as user_name,
+            r.division, r.frozen_handicap
+     FROM event_scores s
+     JOIN users u ON u.id = s.user_id
+     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     WHERE s.event_id = ? ${roundFilter}
+     ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
+    params
+  );
+  res.json(scores);
+});
+router14.post("/portal/events/:id/scores", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const { round = 1, scores = [] } = req.body ?? {};
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  for (const s of scores) {
+    if (!s.user_id) continue;
+    await exec(
+      `INSERT INTO event_scores (event_id, user_id, round, hole_scores, gross, net, points, verified, verified_by, verified_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, NOW())
+       ON CONFLICT (event_id, user_id, round) DO UPDATE
+         SET hole_scores = EXCLUDED.hole_scores, gross = EXCLUDED.gross, net = EXCLUDED.net,
+             points = EXCLUDED.points, verified = 1, verified_by = EXCLUDED.verified_by, verified_at = EXCLUDED.verified_at`,
+      [
+        evId,
+        s.user_id,
+        round,
+        s.hole_scores ? JSON.stringify(s.hole_scores) : null,
+        s.gross ?? null,
+        s.net ?? null,
+        s.points ?? null,
+        club.id
+      ]
+    );
+  }
+  res.json({ success: true });
 });
 router14.get("/portal/members", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -63298,7 +64041,7 @@ router14.get("/portal/inbox/unread-count", requireClubAuth2, async (req, res) =>
 });
 router14.put("/portal/inbox/:id/read", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NOW() WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
@@ -63309,13 +64052,13 @@ router14.put("/portal/inbox/read-all", requireClubAuth2, async (req, res) => {
 });
 router14.put("/portal/inbox/:id/unread", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec("UPDATE club_inbox_notifications SET read_at = NULL WHERE id = ? AND club_id = ?", [nid, club.id]);
   res.json({ ok: true });
 });
 router14.put("/portal/inbox/:id/refund-processed", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const nid = parseInt(req.params.id, 10);
+  const nid = parseInt(String(req.params["id"]), 10);
   await exec(
     "UPDATE club_inbox_notifications SET refund_processed_at = NOW(), read_at = COALESCE(read_at, NOW()) WHERE id = ? AND club_id = ? AND type = 'cancellation'",
     [nid, club.id]
@@ -63434,7 +64177,7 @@ router14.post("/portal/images", requireClubAuth2, async (req, res) => {
 });
 router14.put("/portal/images/:imageId", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const imageId = parseInt(req.params.imageId, 10);
+  const imageId = parseInt(String(req.params["imageId"]), 10);
   const { caption, display_order } = req.body ?? {};
   await exec(
     "UPDATE club_images SET caption = ?, display_order = ? WHERE id = ? AND club_id = ?",
@@ -63449,7 +64192,7 @@ router14.put("/portal/images/:imageId", requireClubAuth2, async (req, res) => {
 });
 router14.delete("/portal/images/:imageId", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const imageId = parseInt(req.params.imageId, 10);
+  const imageId = parseInt(String(req.params["imageId"]), 10);
   await exec("DELETE FROM club_images WHERE id = ? AND club_id = ?", [imageId, club.id]);
   res.json({ message: "Deleted" });
 });
@@ -63752,11 +64495,11 @@ router14.post("/portal/users", requireClubAuth2, async (req, res) => {
     return;
   }
   const hash2 = await bcryptjs_default.hash(String(password), 10);
-  const result = await exec(
+  const newRow = await row(
     "INSERT INTO club_portal_users (club_id, name, email, password_hash, role, permissions) VALUES (?, ?, ?, ?, ?, ?) RETURNING id",
     [club.id, String(name).trim(), cleanEmail, hash2, role === "admin" ? "admin" : "member", JSON.stringify(permissions)]
   );
-  const newId = result[0]?.id;
+  const newId = newRow?.id;
   res.status(201).json({ user: { id: newId, name: String(name).trim(), email: cleanEmail, role, permissions, active: 1 } });
 });
 router14.put("/portal/users/:id", requireClubAuth2, async (req, res) => {
@@ -63765,7 +64508,7 @@ router14.put("/portal/users/:id", requireClubAuth2, async (req, res) => {
     return;
   }
   const club = getClub2(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const u = await row("SELECT id, role FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
   if (!u) {
     res.status(404).json({ message: "User not found" });
@@ -63809,7 +64552,7 @@ router14.put("/portal/users/:id/password", requireClubAuth2, async (req, res) =>
     return;
   }
   const club = getClub2(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const { password } = req.body ?? {};
   if (!password || String(password).length < 6) {
     res.status(400).json({ message: "Password must be at least 6 characters" });
@@ -63830,7 +64573,7 @@ router14.delete("/portal/users/:id", requireClubAuth2, async (req, res) => {
     return;
   }
   const club = getClub2(req);
-  const userId = parseInt(req.params["id"] ?? "0");
+  const userId = parseInt(String(req.params["id"] ?? "0"), 10);
   const u = await row("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, club.id]);
   if (!u) {
     res.status(404).json({ message: "User not found" });
@@ -63932,7 +64675,7 @@ router14.post("/portal/bans", requireClubAuth2, async (req, res) => {
 router14.post("/portal/bans/:id/lift", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const clubUser = req.clubUser;
-  const id = parseInt(req.params["id"] ?? "0");
+  const id = parseInt(String(req.params["id"] ?? "0"), 10);
   const { lift_note } = req.body ?? {};
   const ban = await row(
     "SELECT id, user_id, status FROM club_bans WHERE id = ? AND club_id = ?",
@@ -63962,7 +64705,7 @@ router14.post("/portal/bans/:id/lift", requireClubAuth2, async (req, res) => {
 router14.post("/portal/bans/:id/respond", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const clubUser = req.clubUser;
-  const id = parseInt(req.params["id"] ?? "0");
+  const id = parseInt(String(req.params["id"] ?? "0"), 10);
   const { action, response_note } = req.body ?? {};
   if (!["lift", "maintain"].includes(action)) {
     res.status(400).json({ message: "action must be 'lift' or 'maintain'" });
@@ -64689,6 +65432,7 @@ var map_default = router18;
 // src/routes/hnaVerification.ts
 var import_express19 = __toESM(require_express2(), 1);
 init_pg();
+init_notifications();
 var router19 = (0, import_express19.Router)();
 var cleanHna = (v) => String(v ?? "").trim().replace(/\D/g, "");
 router19.get("/hna/verification", async (req, res) => {
@@ -64869,7 +65613,7 @@ router19.post("/admin/hna-verifications/:id/approve", async (req, res) => {
   saveUserNotification(v.user_id, "hna_verification_update", approveTitle, approveBody, approveData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications2([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: approveTitle, body: approveBody, data: approveData }]);
   }
   res.json({ success: true, status: "approved" });
 });
@@ -64903,7 +65647,7 @@ router19.post("/admin/hna-verifications/:id/reject", async (req, res) => {
   saveUserNotification(v.user_id, "hna_verification_update", rejectTitle, rejectBody, rejectData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications2([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData }]);
   }
   res.json({ success: true, status: "rejected" });
 });
@@ -64936,7 +65680,7 @@ router19.post("/admin/hna-verifications/:id/reset", async (req, res) => {
   saveUserNotification(v.user_id, "hna_verification_update", resetTitle, resetBody, resetData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications2([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: resetTitle, body: resetBody, data: resetData }]);
   }
   res.json({ success: true, status: "pending" });
 });
@@ -64960,7 +65704,7 @@ router19.delete("/admin/hna-verifications/:id", async (req, res) => {
   saveUserNotification(v.user_id, "hna_verification_update", deleteTitle, deleteBody, deleteData);
   const target = await row("SELECT push_token FROM users WHERE id = ?", [v.user_id]);
   if (target?.push_token) {
-    sendPushNotifications2([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: deleteTitle, body: deleteBody, data: deleteData }]);
   }
   res.json({ success: true, deleted: true });
 });
@@ -66195,6 +66939,55 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS end_date DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format VARCHAR(30) NOT NULL DEFAULT 'stroke_play'");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS divisions JSONB");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_open DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_close DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS ballot SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS frozen_handicap DECIMAL(4,1)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_id VARCHAR(120)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_draws (
+      id            SERIAL PRIMARY KEY,
+      event_id      INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round         INT NOT NULL DEFAULT 1,
+      tee_date      DATE NOT NULL,
+      tee_time      TIME NOT NULL,
+      draw_group    INT NOT NULL,
+      user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      notes         TEXT,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_scores (
+      id            SERIAL PRIMARY KEY,
+      event_id      INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      round         INT NOT NULL DEFAULT 1,
+      hole_scores   JSONB,
+      gross         INT,
+      net           INT,
+      points        INT,
+      submitted_at  TIMESTAMP DEFAULT NOW(),
+      verified      SMALLINT NOT NULL DEFAULT 0,
+      verified_by   INT REFERENCES users(id) ON DELETE SET NULL,
+      verified_at   TIMESTAMP,
+      UNIQUE (event_id, user_id, round)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_event ON event_scores (event_id, round)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_user  ON event_scores (user_id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_bans (
       id               SERIAL PRIMARY KEY,
@@ -66526,6 +67319,7 @@ init_pg();
 
 // src/worker/reminder.ts
 init_pg();
+init_notifications();
 init_logger();
 var POLL_INTERVAL_MS = 6e4;
 var WINDOW_MINUTES = 3;
@@ -66582,7 +67376,7 @@ async function runReminderCycle() {
     }
   }));
   for (let i = 0; i < pushMessages.length; i += 100) {
-    await sendPushNotifications2(pushMessages.slice(i, i + 100));
+    await sendPushNotifications(pushMessages.slice(i, i + 100));
   }
   for (const r of due) {
     saveUserNotification(

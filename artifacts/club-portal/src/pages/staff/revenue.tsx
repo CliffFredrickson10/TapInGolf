@@ -251,8 +251,9 @@ export default function StaffRevenue() {
                   <th className="py-2 px-4 font-medium">Golfer</th>
                   <th className="py-2 px-4 font-medium">Club</th>
                   <th className="py-2 px-4 font-medium">Tee</th>
-                  <th className="py-2 px-4 font-medium text-right">Amount (incl. VAT)</th>
-                  <th className="py-2 pl-4 font-medium text-right">Fee</th>
+                  <th className="py-2 px-4 font-medium text-right">Total</th>
+                  <th className="py-2 px-4 font-medium text-right text-emerald-700">Club Payout</th>
+                  <th className="py-2 pl-4 font-medium text-right text-amber-700">TapIn Fee</th>
                 </tr></thead>
                 <tbody>
                   {bookings.map(b => (
@@ -262,7 +263,8 @@ export default function StaffRevenue() {
                       <td className="py-2 px-4">{b.club_name}</td>
                       <td className="py-2 px-4 text-xs">{b.date ? format(new Date(b.date), "dd MMM") : "—"} {b.time ?? ""}</td>
                       <td className="py-2 px-4 text-right">{rand(b.total_amount)}</td>
-                      <td className="py-2 pl-4 text-right text-[#1a5c38]">{rand(b.platform_fee)}</td>
+                      <td className="py-2 px-4 text-right font-semibold text-emerald-700">{rand(b.club_amount)}</td>
+                      <td className="py-2 pl-4 text-right font-semibold text-amber-700">{rand(b.platform_fee)}</td>
                     </tr>
                   ))}
                 </tbody>

@@ -315,12 +315,19 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
 router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const today = new Date().toISOString().split("T")[0];
-  const [teeTimes, bookings, reviews, members, events] = await Promise.all([
+  const [teeTimes, bookings, reviews, members, events, revenue] = await Promise.all([
     row<any>("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
     row<any>("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
     row<any>("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
     row<any>("SELECT COUNT(*) AS total FROM club_members WHERE club_id = ? AND status = 'active'", [club.id]),
     row<any>("SELECT COUNT(*) AS total FROM golf_events WHERE club_id = ? AND status = 'active'", [club.id]),
+    row<any>(`SELECT COALESCE(SUM(b.total_amount),0) AS total_revenue,
+                     COALESCE(SUM(b.club_amount),0)  AS club_earnings,
+                     COALESCE(SUM(b.platform_fee),0) AS platform_fees
+              FROM bookings b
+              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+              WHERE pts.club_id = ? AND b.status IN ('confirmed','completed')
+                AND b.payment_method != 'prepaid'`, [club.id]),
   ]);
   const recentBookings = await query<any>(
     `SELECT b.id, b.booking_ref, b.players, b.total_amount, b.status, b.created_at,
@@ -343,6 +350,9 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
     active_members: Number(members?.total ?? 0),
     active_events: Number(events?.total ?? 0),
     recent_bookings: recentBookings.map((b: any) => ({ ...b, time: String(b.time).slice(0, 5) })),
+    total_revenue:   Number(revenue?.total_revenue ?? 0),
+    club_earnings:   Number(revenue?.club_earnings  ?? 0),
+    platform_fees:   Number(revenue?.platform_fees  ?? 0),
   });
 });
 

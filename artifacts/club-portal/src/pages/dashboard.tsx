@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, CalendarCheck, Star, Users, Calendar, TrendingUp } from "lucide-react";
+import { Clock, CalendarCheck, Star, Users, Calendar, TrendingUp, Banknote, Building2 } from "lucide-react";
 import { format } from "date-fns";
 
 interface DashboardData {
@@ -17,7 +17,12 @@ interface DashboardData {
   active_members: number;
   active_events: number;
   recent_bookings: any[];
+  total_revenue: number;
+  club_earnings: number;
+  platform_fees: number;
 }
+
+const fmtRand = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default function Dashboard() {
   const { club } = useAuth();
@@ -62,6 +67,8 @@ export default function Dashboard() {
     { label: "Active Members", value: data.active_members, sub: "registered golfers", icon: Users, color: "text-purple-600" },
     { label: "Active Events", value: data.active_events, sub: "upcoming events", icon: Calendar, color: "text-orange-600" },
     { label: "Pending Bookings", value: data.pending_bookings_today, sub: "awaiting confirmation", icon: TrendingUp, color: "text-red-600" },
+    { label: "Club Earnings", value: fmtRand(data.club_earnings ?? 0), sub: `of ${fmtRand(data.total_revenue ?? 0)} total collected`, icon: Building2, color: "text-[#1a5c38]" },
+    { label: "TapIn Platform Fees", value: fmtRand(data.platform_fees ?? 0), sub: "flat fee per booking", icon: Banknote, color: "text-amber-600" },
   ];
 
   return (

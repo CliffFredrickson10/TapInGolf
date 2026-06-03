@@ -14,7 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import {
   CreditCard, Download, Mail, Search, TrendingUp, ReceiptText,
-  CheckCircle2, Clock, X, Users, FileSpreadsheet,
+  CheckCircle2, Clock, X, Users, FileSpreadsheet, Building2, Banknote,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -328,10 +328,12 @@ export default function Payments() {
     // Prepaid rounds are settled directly with the club — exclude from digital revenue
     const digital = paid.filter(p => p.payment_method !== "prepaid");
     return {
-      total:     payments.length,
-      revenue:   digital.reduce((s, p) => s + p.my_amount, 0),
-      confirmed: paid.length,
-      pending:   payments.filter(p => p.status === "pending").length,
+      total:          payments.length,
+      revenue:        digital.reduce((s, p) => s + p.my_amount, 0),
+      club_earnings:  digital.reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      platform_fees:  digital.reduce((s, p) => s + (p.platform_fee ?? 0), 0),
+      confirmed:      paid.length,
+      pending:        payments.filter(p => p.status === "pending").length,
     };
   }, [payments]);
 
@@ -364,13 +366,31 @@ export default function Payments() {
       </div>
 
       {/* Summary Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 bg-green-50 rounded-lg"><TrendingUp className="h-5 w-5 text-green-600" /></div>
             <div>
               <p className="text-xs text-muted-foreground font-medium">Total Revenue</p>
               <p className="text-xl font-bold text-[#1a5c38]">{fmtRand(stats.revenue)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-emerald-50 rounded-lg"><Building2 className="h-5 w-5 text-emerald-600" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">Club Earnings</p>
+              <p className="text-xl font-bold text-emerald-700">{fmtRand(stats.club_earnings)}</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 bg-amber-50 rounded-lg"><Banknote className="h-5 w-5 text-amber-600" /></div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">TapIn Fees</p>
+              <p className="text-xl font-bold text-amber-700">{fmtRand(stats.platform_fees)}</p>
             </div>
           </CardContent>
         </Card>
@@ -479,7 +499,7 @@ export default function Payments() {
       ) : (
         <div className="rounded-lg border bg-white overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_95px_85px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             <div className="px-4 py-3">Reference</div>
             <div className="px-4 py-3">Golfer</div>
             <div className="px-4 py-3">Tee Date</div>
@@ -487,13 +507,15 @@ export default function Payments() {
             <div className="px-4 py-3">Service</div>
             <div className="px-4 py-3">Paid On</div>
             <div className="px-4 py-3 text-right">Amount</div>
+            <div className="px-4 py-3 text-right text-emerald-700">Club Earns</div>
+            <div className="px-4 py-3 text-right text-amber-700">TapIn Fee</div>
             <div className="px-4 py-3 text-center">Status</div>
           </div>
           {/* Rows */}
           {filtered.map(p => (
             <div
               key={p.id}
-              className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
+              className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_95px_85px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
               onClick={() => setSelected(p)}
             >
               <div className="px-4 py-3">
@@ -514,6 +536,12 @@ export default function Payments() {
                 <span className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "HH:mm")}</span>
               </div>
               <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(p.my_amount)}</div>
+              <div className="px-4 py-3 text-sm font-semibold text-right text-emerald-700">
+                {p.payment_method === "prepaid" ? <span className="text-muted-foreground text-xs">prepaid</span> : fmtRand(p.club_amount ?? 0)}
+              </div>
+              <div className="px-4 py-3 text-sm font-semibold text-right text-amber-700">
+                {p.payment_method === "prepaid" ? <span className="text-muted-foreground text-xs">—</span> : fmtRand(p.platform_fee ?? 0)}
+              </div>
               <div className="px-4 py-3 text-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[p.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
                   {p.status}

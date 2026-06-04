@@ -98,7 +98,7 @@ function ScoreRow({
 // ─── Main screen ─────────────────────────────────────────────────────────────
 
 export default function EventDetailScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, tab } = useLocalSearchParams<{ id: string; tab?: string }>();
   const { user } = useAuth();
   const colors   = useColors();
 
@@ -112,7 +112,10 @@ export default function EventDetailScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [lbLoaded, setLbLoaded] = useState(false);
 
-  const [activeTab, setActiveTab] = useState<"info" | "draw" | "scores" | "submit">("info");
+  const validTabs = ["info", "draw", "scores", "submit"] as const;
+  const [activeTab, setActiveTab] = useState<"info" | "draw" | "scores" | "submit">(
+    validTabs.includes(tab as any) ? (tab as "info" | "draw" | "scores" | "submit") : "info"
+  );
 
   // Registration / payment state
   const [registering, setRegistering] = useState(false);

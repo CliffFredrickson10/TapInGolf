@@ -85,6 +85,11 @@ function RootLayoutNav() {
             router.push({ pathname: "/event/[id]", params: { id: data.event_id } });
           }
           break;
+        case "event_draw_published":
+          if (data.event_id) {
+            router.push({ pathname: "/event/[id]", params: { id: data.event_id, tab: "draw" } });
+          }
+          break;
         case "hna_verification_update":
           router.push("/(tabs)/profile");
           break;

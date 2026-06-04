@@ -236,6 +236,9 @@ export default function Events() {
     if (!form.name || !form.event_date) {
       toast({ title: "Name and start date are required", variant: "destructive" }); return;
     }
+    if (form.payment_required && (!form.entry_fee || Number(form.entry_fee) <= 0)) {
+      toast({ title: "Entry fee required", description: "Set an entry fee amount when payment is required.", variant: "destructive" }); return;
+    }
     setSaving(true);
     try {
       const body = {
@@ -748,8 +751,11 @@ export default function Events() {
                 <Input type="date" value={form.entries_close} onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Entry Fee (ZAR)</Label>
-                <Input type="number" value={form.entry_fee} onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))} placeholder="Optional" />
+                <Label>Entry Fee (ZAR){form.payment_required ? <span className="text-destructive ml-1">*</span> : ""}</Label>
+                <Input type="number" value={form.entry_fee} onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))} placeholder={form.payment_required ? "Required" : "Optional"} />
+                {form.payment_required && (!form.entry_fee || Number(form.entry_fee) <= 0) && (
+                  <p className="text-xs text-destructive">Required when payment is enabled</p>
+                )}
               </div>
               <div className="space-y-1.5">
                 <Label>Max Participants</Label>

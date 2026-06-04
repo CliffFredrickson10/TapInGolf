@@ -120,6 +120,7 @@ export default function EventDetailScreen() {
   // Registration / payment state
   const [registering, setRegistering] = useState(false);
   const [paying, setPaying]           = useState(false);
+  const [payError, setPayError]       = useState<string | null>(null);
 
   // Score submission (18 holes)
   const [holeScores, setHoleScores]   = useState<Record<number, string>>({});
@@ -186,13 +187,14 @@ export default function EventDetailScreen() {
   const handlePay = async () => {
     if (!user || !event) return;
     setPaying(true);
+    setPayError(null);
     try {
       const res = await apiFetch(`/events/${event.id}/pay`, user.token, { method: "POST", body: JSON.stringify({}) });
       if (res.payment_url) {
         router.push({ pathname: "/booking/payment", params: { payment_url: res.payment_url, type: "event" } });
       }
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      setPayError(e.message ?? "Payment failed. Please try again.");
     } finally { setPaying(false); }
   };
 
@@ -416,6 +418,7 @@ export default function EventDetailScreen() {
                   <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handlePay} disabled={paying}>
                     {paying ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Pay Entry Fee — R{event.entry_fee?.toFixed(2)}</Text>}
                   </TouchableOpacity>
+                  {payError ? <Text style={{ fontSize: 12, color: colors.destructive, textAlign: "center", marginTop: 4 }}>{payError}</Text> : null}
                 </>
               )}
               {ctaState === "confirmed" && (

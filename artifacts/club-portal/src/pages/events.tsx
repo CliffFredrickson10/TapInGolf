@@ -320,7 +320,7 @@ export default function Events() {
         method: "PUT",
         body: JSON.stringify({ slot_ids: selectedSlotIds }),
       });
-      toast({ title: editId ? "Event updated" : "Event created" });
+      toast({ title: editId ? "Tournament updated" : "Tournament created" });
       setDlgOpen(false);
       loadEvents();
     } catch (e: any) {
@@ -350,11 +350,11 @@ export default function Events() {
 
   const handleCancel = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Cancel this event?")) return;
+    if (!confirm("Cancel this tournament?")) return;
     try {
       await api(`/api/portal/events/${id}`, { method: "DELETE" });
       setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, status: "cancelled" } : ev));
-      toast({ title: "Event cancelled" });
+      toast({ title: "Tournament cancelled" });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
@@ -437,8 +437,8 @@ export default function Events() {
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Events</h1>
-          <p className="text-muted-foreground mt-1">Manage golf events, tournaments and competitions.</p>
+          <h1 className="text-3xl font-bold tracking-tight">Tournaments</h1>
+          <p className="text-muted-foreground mt-1">Manage club tournaments and competitions.</p>
         </div>
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -446,7 +446,7 @@ export default function Events() {
             <Label htmlFor="past-toggle">Show past</Label>
           </div>
           <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
-            <Plus className="h-4 w-4" />New Event
+            <Plus className="h-4 w-4" />New Tournament
           </Button>
         </div>
       </div>
@@ -457,7 +457,7 @@ export default function Events() {
       ) : events.length === 0 ? (
         <Card>
           <CardContent className="py-14 text-center text-muted-foreground">
-            {showPast ? "No past events." : "No upcoming events. Create your first tournament."}
+            {showPast ? "No past tournaments." : "No upcoming tournaments. Create your first one."}
           </CardContent>
         </Card>
       ) : (
@@ -753,12 +753,12 @@ export default function Events() {
       {/* ── Create / Edit Dialog ───────────────────────────────────────────────── */}
       <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Event</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Tournament</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
 
             {/* Basic info */}
             <div className="space-y-1.5">
-              <Label>Event Name *</Label>
+              <Label>Tournament Name *</Label>
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Club Championship 2026" />
             </div>
             <div className="space-y-1.5">
@@ -898,7 +898,7 @@ export default function Events() {
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Event Type</Label>
+                <Label>Tournament Type</Label>
                 <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
@@ -1043,7 +1043,7 @@ export default function Events() {
             </div>
 
             <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
-              {saving ? "Saving…" : editId ? "Update Event" : "Create Event"}
+              {saving ? "Saving…" : editId ? "Update Tournament" : "Create Tournament"}
             </Button>
           </div>
         </DialogContent>

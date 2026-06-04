@@ -30,7 +30,7 @@ const navItems = [
   { href: "/payments", label: "Payments", icon: CreditCard, section: "payments" },
   { href: "/reviews", label: "Reviews", icon: Star, section: "reviews" },
   { href: "/ads", label: "Advertisements", icon: Megaphone, section: "ads" },
-  { href: "/events", label: "Events", icon: Calendar, section: "events" },
+  { href: "/events", label: "Tournaments", icon: Calendar, section: "events" },
   { href: "/members", label: "Members", icon: Users, section: "members" },
   { href: "/bans", label: "Banned Golfers", icon: ShieldOff, section: "bans" },
   { href: "/cancelled-bookings", label: "Cancelled Bookings", icon: XCircle, section: "schedule" },

@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
@@ -195,14 +195,24 @@ export default function Events() {
     } catch {} finally { setDrawLoading(false); }
   }, []);
 
+  const slotAbortRef = useRef<AbortController | null>(null);
+
   const loadAvailableSlots = useCallback(async (date: string, endDate?: string) => {
     if (!date) { setAvailableSlots([]); return; }
+    // Cancel any in-flight request so stale day-1-only results don't overwrite day-range results
+    slotAbortRef.current?.abort();
+    const controller = new AbortController();
+    slotAbortRef.current = controller;
     setSlotsLoading(true);
     try {
       const params = endDate ? `from=${date}&to=${endDate}` : `date=${date}`;
-      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}`);
-      setAvailableSlots(data);
-    } catch {} finally { setSlotsLoading(false); }
+      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}`, { signal: controller.signal });
+      if (!controller.signal.aborted) setAvailableSlots(data);
+    } catch (e: any) {
+      if (e?.name !== "AbortError") { /* ignore cancellation */ }
+    } finally {
+      if (!controller.signal.aborted) setSlotsLoading(false);
+    }
   }, []);
 
   const loadEventSlots = useCallback(async (eventId: number) => {

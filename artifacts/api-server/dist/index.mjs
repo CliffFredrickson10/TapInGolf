@@ -61439,6 +61439,7 @@ router13.get("/clubs/:id/events", async (req, res) => {
             e.event_type, e.format, e.restriction, e.entry_fee, e.max_participants, e.status,
             e.divisions, e.entries_open, e.entries_close, e.ballot, e.scoring_enabled,
             e.payment_required, e.rounds,
+            e.use_tiered_pricing, e.allow_wallet, e.allow_prepaid, e.allow_voucher,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
      FROM golf_events e
      WHERE e.club_id = ? AND e.status = 'active' AND e.event_date >= ?
@@ -61589,7 +61590,7 @@ router13.post("/events/:id/pay", async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  if (!event.entry_fee || !event.payment_required) {
+  if (!event.payment_required) {
     res.status(400).json({ message: "This event does not require payment" });
     return;
   }
@@ -61609,12 +61610,149 @@ router13.post("/events/:id/pay", async (req, res) => {
     res.status(400).json({ message: "Already paid" });
     return;
   }
-  const pr = await createStitchPayment({
-    amount: parseFloat(event.entry_fee),
-    payerName: caller.name ?? "Golfer",
-    merchantReference: `event-${eventId}-user-${caller.id}`,
-    redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
-  });
+  let amount;
+  if (event.use_tiered_pricing) {
+    const tier = await getUserTierPrices(caller.id, event.club_id);
+    if (tier.price18 == null) {
+      res.status(400).json({ message: "No pricing tier is configured for your membership type at this club." });
+      return;
+    }
+    amount = tier.price18;
+  } else {
+    if (!event.entry_fee) {
+      res.status(400).json({ message: "No entry fee set for this event." });
+      return;
+    }
+    amount = parseFloat(event.entry_fee);
+  }
+  const method = String(req.body?.payment_method ?? "stitch");
+  const allowed = ["stitch"];
+  if (event.allow_wallet) allowed.push("wallet");
+  if (event.allow_prepaid) allowed.push("prepaid");
+  if (event.allow_voucher) allowed.push("voucher");
+  if (!allowed.includes(method)) {
+    res.status(400).json({ message: `Payment method '${method}' is not allowed for this event. Allowed: ${allowed.join(", ")}` });
+    return;
+  }
+  if (method === "wallet") {
+    const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [caller.id]);
+    const available = walletRow ? parseFloat(walletRow.balance) : 0;
+    if (available < amount) {
+      res.status(402).json({
+        message: `Insufficient wallet balance. You have R${available.toFixed(2)} but need R${amount.toFixed(2)}.`,
+        error_code: "wallet_insufficient_funds"
+      });
+      return;
+    }
+    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?", [amount, caller.id, amount]);
+    await exec(
+      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+      ["wallet", eventId, caller.id]
+    );
+    res.json({ success: true, paid: true, payment_method: "wallet", amount });
+    return;
+  }
+  if (method === "prepaid") {
+    const membership = await row(
+      "SELECT id, prepaid_rounds, prepaid_rounds_used FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+      [event.club_id, caller.id]
+    );
+    if (!membership) {
+      res.status(400).json({ message: "You must be an active member of this club to use prepaid rounds." });
+      return;
+    }
+    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
+    if (remaining <= 0) {
+      res.status(402).json({ message: "You have no prepaid rounds remaining at this club." });
+      return;
+    }
+    await exec(
+      "UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1 WHERE id = ? AND prepaid_rounds > prepaid_rounds_used",
+      [membership.id]
+    );
+    await exec(
+      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+      ["prepaid", eventId, caller.id]
+    );
+    res.json({ success: true, paid: true, payment_method: "prepaid" });
+    return;
+  }
+  if (method === "voucher") {
+    const voucherCode = req.body?.voucher_code ? String(req.body.voucher_code).toUpperCase().trim() : null;
+    if (!voucherCode) {
+      res.status(400).json({ message: "voucher_code is required when using voucher payment." });
+      return;
+    }
+    let discountAmount = 0;
+    let appliedVoucher = null;
+    const cancelVoucher = await row(
+      "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ? AND value_remaining > 0",
+      [voucherCode, caller.id]
+    );
+    if (cancelVoucher) {
+      discountAmount = Math.min(parseFloat(cancelVoucher.value_remaining), amount);
+      appliedVoucher = cancelVoucher.code;
+    } else {
+      const voucher = await row("SELECT * FROM vouchers WHERE code = ? AND active = 1", [voucherCode]);
+      const valid = voucher && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) && (voucher.club_id === null || voucher.club_id === event.club_id);
+      if (valid) {
+        discountAmount = voucher.discount_type === "percentage" ? Math.round(amount * parseFloat(voucher.discount_value) / 100 * 100) / 100 : Math.min(parseFloat(voucher.discount_value), amount);
+        appliedVoucher = voucher.code;
+      }
+    }
+    if (!appliedVoucher) {
+      res.status(400).json({ message: "Voucher code is invalid, expired, or not applicable to this event." });
+      return;
+    }
+    const remainder = Math.max(0, amount - discountAmount);
+    if (cancelVoucher) {
+      await exec("UPDATE cancellation_vouchers SET value_remaining = value_remaining - ? WHERE code = ?", [discountAmount, voucherCode]);
+    } else {
+      await exec("UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+    }
+    if (remainder <= 0) {
+      await exec(
+        "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+        ["voucher", eventId, caller.id]
+      );
+      res.json({ success: true, paid: true, payment_method: "voucher", discount: discountAmount, amount: 0 });
+      return;
+    }
+    let pr2;
+    try {
+      pr2 = await createStitchPayment({
+        amount: remainder,
+        payerName: caller.name ?? "Golfer",
+        merchantReference: `event-${eventId}-user-${caller.id}`,
+        redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
+      });
+    } catch (e) {
+      const msg = e?.message ?? "Payment gateway error";
+      const isConfig = msg.includes("not configured") || msg.includes("credentials");
+      res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform." : msg });
+      return;
+    }
+    await exec(
+      "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
+      [pr2.id, pr2.url, eventId, caller.id]
+    );
+    res.json({ payment_url: pr2.url, voucher_applied: true, discount: discountAmount, remainder });
+    return;
+  }
+  let pr;
+  try {
+    pr = await createStitchPayment({
+      amount,
+      payerName: caller.name ?? "Golfer",
+      merchantReference: `event-${eventId}-user-${caller.id}`,
+      redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
+    });
+  } catch (e) {
+    const msg = e?.message ?? "Payment gateway error";
+    const isConfig = msg.includes("not configured") || msg.includes("credentials");
+    res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform. Please contact support." : msg });
+    return;
+  }
   await exec(
     "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
     [pr.id, pr.url, eventId, caller.id]
@@ -63411,6 +63549,10 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     ballot,
     scoring_enabled,
     payment_required,
+    use_tiered_pricing,
+    allow_wallet,
+    allow_prepaid,
+    allow_voucher,
     rounds = 1,
     status = "active"
   } = req.body ?? {};
@@ -63426,8 +63568,9 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
-       ballot, scoring_enabled, payment_required, rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
+       rounds, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -63447,6 +63590,10 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       ballot ? 1 : 0,
       scoring_enabled ? 1 : 0,
       payment_required ? 1 : 0,
+      use_tiered_pricing ? 1 : 0,
+      allow_wallet ? 1 : 0,
+      allow_prepaid ? 1 : 0,
+      allow_voucher ? 1 : 0,
       Number(rounds),
       status,
       club.id
@@ -63512,6 +63659,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     ballot,
     scoring_enabled,
     payment_required,
+    use_tiered_pricing,
+    allow_wallet,
+    allow_prepaid,
+    allow_voucher,
     rounds
   } = req.body ?? {};
   const updates = [];
@@ -63587,6 +63738,22 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (payment_required !== void 0) {
     updates.push("payment_required = ?");
     vals.push(payment_required ? 1 : 0);
+  }
+  if (use_tiered_pricing !== void 0) {
+    updates.push("use_tiered_pricing = ?");
+    vals.push(use_tiered_pricing ? 1 : 0);
+  }
+  if (allow_wallet !== void 0) {
+    updates.push("allow_wallet = ?");
+    vals.push(allow_wallet ? 1 : 0);
+  }
+  if (allow_prepaid !== void 0) {
+    updates.push("allow_prepaid = ?");
+    vals.push(allow_prepaid ? 1 : 0);
+  }
+  if (allow_voucher !== void 0) {
+    updates.push("allow_voucher = ?");
+    vals.push(allow_voucher ? 1 : 0);
   }
   if (rounds !== void 0) {
     updates.push("rounds = ?");
@@ -67013,12 +67180,17 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS use_tiered_pricing SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_wallet SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS frozen_handicap DECIMAL(4,1)");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_status VARCHAR(20) NOT NULL DEFAULT 'unpaid'");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_id VARCHAR(120)");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_draws (
       id            SERIAL PRIMARY KEY,

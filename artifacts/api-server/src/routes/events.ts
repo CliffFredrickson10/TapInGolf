@@ -3,6 +3,7 @@ import { query, row, exec, run } from "../lib/pg";
 import { getUser, isStaff, effectiveClubId } from "../lib/auth";
 import { sendPushNotifications } from "../lib/notifications";
 import { createStitchPayment } from "../lib/stitch";
+import { getUserTierPrices } from "../lib/pricing";
 
 const router: IRouter = Router();
 
@@ -38,6 +39,7 @@ router.get("/clubs/:id/events", async (req, res): Promise<void> => {
             e.event_type, e.format, e.restriction, e.entry_fee, e.max_participants, e.status,
             e.divisions, e.entries_open, e.entries_close, e.ballot, e.scoring_enabled,
             e.payment_required, e.rounds,
+            e.use_tiered_pricing, e.allow_wallet, e.allow_prepaid, e.allow_voucher,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
      FROM golf_events e
      WHERE e.club_id = ? AND e.status = 'active' AND e.event_date >= ?
@@ -195,7 +197,9 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // PUBLIC: POST /events/:id/pay
-// Called after registration is approved — creates a Stitch payment link.
+// Called after registration is approved. Supports: stitch (default), wallet,
+// prepaid (one round), voucher. Club controls which methods are allowed.
+// body: { payment_method?: string, voucher_code?: string }
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/events/:id/pay", async (req, res): Promise<void> => {
   const caller = await getUser(req);
@@ -203,10 +207,8 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
 
   const eventId = parseInt(req.params.id, 10);
   const event   = await row<any>("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
-  if (!event)         { res.status(404).json({ message: "Event not found" }); return; }
-  if (!event.entry_fee || !event.payment_required) {
-    res.status(400).json({ message: "This event does not require payment" }); return;
-  }
+  if (!event)                  { res.status(404).json({ message: "Event not found" }); return; }
+  if (!event.payment_required) { res.status(400).json({ message: "This event does not require payment" }); return; }
 
   const reg = await row<any>(
     "SELECT id, status, payment_status FROM event_registrations WHERE event_id = ? AND user_id = ?",
@@ -216,10 +218,152 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
   if (reg.status !== "approved")      { res.status(400).json({ message: "Registration is not yet approved" }); return; }
   if (reg.payment_status === "paid")  { res.status(400).json({ message: "Already paid" }); return; }
 
+  // ── Resolve the fee amount ──────────────────────────────────────────────────
+  let amount: number;
+  if (event.use_tiered_pricing) {
+    const tier = await getUserTierPrices(caller.id, event.club_id);
+    if (tier.price18 == null) {
+      res.status(400).json({ message: "No pricing tier is configured for your membership type at this club." }); return;
+    }
+    amount = tier.price18;
+  } else {
+    if (!event.entry_fee) {
+      res.status(400).json({ message: "No entry fee set for this event." }); return;
+    }
+    amount = parseFloat(event.entry_fee);
+  }
+
+  // ── Validate payment method ─────────────────────────────────────────────────
+  const method = String(req.body?.payment_method ?? "stitch");
+  const allowed = ["stitch"];
+  if (event.allow_wallet)  allowed.push("wallet");
+  if (event.allow_prepaid) allowed.push("prepaid");
+  if (event.allow_voucher) allowed.push("voucher");
+  if (!allowed.includes(method)) {
+    res.status(400).json({ message: `Payment method '${method}' is not allowed for this event. Allowed: ${allowed.join(", ")}` });
+    return;
+  }
+
+  // ── Wallet ──────────────────────────────────────────────────────────────────
+  if (method === "wallet") {
+    const walletRow = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [caller.id]);
+    const available = walletRow ? parseFloat(walletRow.balance) : 0;
+    if (available < amount) {
+      res.status(402).json({
+        message: `Insufficient wallet balance. You have R${available.toFixed(2)} but need R${amount.toFixed(2)}.`,
+        error_code: "wallet_insufficient_funds",
+      }); return;
+    }
+    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?", [amount, caller.id, amount]);
+    await exec(
+      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+      ["wallet", eventId, caller.id]
+    );
+    res.json({ success: true, paid: true, payment_method: "wallet", amount }); return;
+  }
+
+  // ── Prepaid round ───────────────────────────────────────────────────────────
+  if (method === "prepaid") {
+    const membership = await row<any>(
+      "SELECT id, prepaid_rounds, prepaid_rounds_used FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+      [event.club_id, caller.id]
+    );
+    if (!membership) {
+      res.status(400).json({ message: "You must be an active member of this club to use prepaid rounds." }); return;
+    }
+    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
+    if (remaining <= 0) {
+      res.status(402).json({ message: "You have no prepaid rounds remaining at this club." }); return;
+    }
+    await exec(
+      "UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1 WHERE id = ? AND prepaid_rounds > prepaid_rounds_used",
+      [membership.id]
+    );
+    await exec(
+      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+      ["prepaid", eventId, caller.id]
+    );
+    res.json({ success: true, paid: true, payment_method: "prepaid" }); return;
+  }
+
+  // ── Voucher ─────────────────────────────────────────────────────────────────
+  if (method === "voucher") {
+    const voucherCode = req.body?.voucher_code ? String(req.body.voucher_code).toUpperCase().trim() : null;
+    if (!voucherCode) {
+      res.status(400).json({ message: "voucher_code is required when using voucher payment." }); return;
+    }
+    let discountAmount = 0;
+    let appliedVoucher: string | null = null;
+
+    const cancelVoucher = await row<any>(
+      "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ? AND value_remaining > 0",
+      [voucherCode, caller.id]
+    );
+    if (cancelVoucher) {
+      discountAmount = Math.min(parseFloat(cancelVoucher.value_remaining), amount);
+      appliedVoucher = cancelVoucher.code;
+    } else {
+      const voucher = await row<any>("SELECT * FROM vouchers WHERE code = ? AND active = 1", [voucherCode]);
+      const valid =
+        voucher &&
+        (!voucher.expires_at || new Date(voucher.expires_at) > new Date()) &&
+        (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) &&
+        (voucher.club_id === null || voucher.club_id === event.club_id);
+      if (valid) {
+        discountAmount = voucher.discount_type === "percentage"
+          ? Math.round(amount * parseFloat(voucher.discount_value) / 100 * 100) / 100
+          : Math.min(parseFloat(voucher.discount_value), amount);
+        appliedVoucher = voucher.code;
+      }
+    }
+    if (!appliedVoucher) {
+      res.status(400).json({ message: "Voucher code is invalid, expired, or not applicable to this event." }); return;
+    }
+
+    const remainder = Math.max(0, amount - discountAmount);
+
+    // Deduct voucher
+    if (cancelVoucher) {
+      await exec("UPDATE cancellation_vouchers SET value_remaining = value_remaining - ? WHERE code = ?", [discountAmount, voucherCode]);
+    } else {
+      await exec("UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+    }
+
+    if (remainder <= 0) {
+      // Fully covered by voucher — confirm immediately
+      await exec(
+        "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
+        ["voucher", eventId, caller.id]
+      );
+      res.json({ success: true, paid: true, payment_method: "voucher", discount: discountAmount, amount: 0 }); return;
+    }
+
+    // Partial coverage — create a Stitch link for the remainder
+    let pr: { id: string; url: string };
+    try {
+      pr = await createStitchPayment({
+        amount:            remainder,
+        payerName:         caller.name ?? "Golfer",
+        merchantReference: `event-${eventId}-user-${caller.id}`,
+        redirectUrl:       `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`,
+      });
+    } catch (e: any) {
+      const msg = e?.message ?? "Payment gateway error";
+      const isConfig = msg.includes("not configured") || msg.includes("credentials");
+      res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform." : msg }); return;
+    }
+    await exec(
+      "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
+      [pr.id, pr.url, eventId, caller.id]
+    );
+    res.json({ payment_url: pr.url, voucher_applied: true, discount: discountAmount, remainder }); return;
+  }
+
+  // ── Stitch (default) ────────────────────────────────────────────────────────
   let pr: { id: string; url: string };
   try {
     pr = await createStitchPayment({
-      amount:            parseFloat(event.entry_fee),
+      amount,
       payerName:         caller.name ?? "Golfer",
       merchantReference: `event-${eventId}-user-${caller.id}`,
       redirectUrl:       `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`,
@@ -230,12 +374,10 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
     res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform. Please contact support." : msg });
     return;
   }
-
   await exec(
     "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
     [pr.id, pr.url, eventId, caller.id]
   );
-
   res.json({ payment_url: pr.url });
 });
 

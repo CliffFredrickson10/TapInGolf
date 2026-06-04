@@ -36,6 +36,7 @@ interface GolfEvent {
   divisions: Division[];
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number;
+  use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number;
   total_registrations: number; approved_count: number; pending_count: number;
 }
@@ -108,6 +109,7 @@ const EMPTY_FORM = {
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds: 1,
   ballot: false, scoring_enabled: false, payment_required: false,
+  use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
   status: "active", divisions: DEFAULT_DIVISIONS,
 };
 
@@ -226,6 +228,8 @@ export default function Events() {
       rounds: ev.rounds ?? 1,
       ballot: !!ev.ballot, scoring_enabled: !!ev.scoring_enabled,
       payment_required: !!ev.payment_required,
+      use_tiered_pricing: !!ev.use_tiered_pricing,
+      allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
       status: ev.status, divisions: ev.divisions ?? DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
@@ -236,8 +240,8 @@ export default function Events() {
     if (!form.name || !form.event_date) {
       toast({ title: "Name and start date are required", variant: "destructive" }); return;
     }
-    if (form.payment_required && (!form.entry_fee || Number(form.entry_fee) <= 0)) {
-      toast({ title: "Entry fee required", description: "Set an entry fee amount when payment is required.", variant: "destructive" }); return;
+    if (form.payment_required && !form.use_tiered_pricing && (!form.entry_fee || Number(form.entry_fee) <= 0)) {
+      toast({ title: "Entry fee required", description: "Set an entry fee or enable tiered pricing.", variant: "destructive" }); return;
     }
     setSaving(true);
     try {
@@ -751,10 +755,18 @@ export default function Events() {
                 <Input type="date" value={form.entries_close} onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
-                <Label>Entry Fee (ZAR){form.payment_required ? <span className="text-destructive ml-1">*</span> : ""}</Label>
-                <Input type="number" value={form.entry_fee} onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))} placeholder={form.payment_required ? "Required" : "Optional"} />
-                {form.payment_required && (!form.entry_fee || Number(form.entry_fee) <= 0) && (
-                  <p className="text-xs text-destructive">Required when payment is enabled</p>
+                <Label>
+                  Entry Fee (ZAR)
+                  {form.payment_required && !form.use_tiered_pricing ? <span className="text-destructive ml-1">*</span> : ""}
+                </Label>
+                <Input
+                  type="number" value={form.entry_fee}
+                  onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))}
+                  placeholder={form.use_tiered_pricing ? "Not used (tiered pricing)" : form.payment_required ? "Required" : "Optional"}
+                  disabled={!!form.use_tiered_pricing}
+                />
+                {form.payment_required && !form.use_tiered_pricing && (!form.entry_fee || Number(form.entry_fee) <= 0) && (
+                  <p className="text-xs text-destructive">Required unless tiered pricing is enabled</p>
                 )}
               </div>
               <div className="space-y-1.5">
@@ -767,7 +779,7 @@ export default function Events() {
             <Card className="bg-muted/30">
               <CardContent className="p-4 space-y-3">
                 {[
-                  { key: "payment_required", label: "Payment required", desc: "Golfers must pay entry fee via Stitch before spot is confirmed" },
+                  { key: "payment_required", label: "Payment required", desc: "Golfers must pay before their spot is confirmed" },
                   { key: "scoring_enabled",  label: "Live scoring",     desc: "Enable score submission and leaderboard in the mobile app" },
                   { key: "ballot",           label: "Ballot if oversubscribed", desc: "When field is full, a ballot determines who gets a spot" },
                 ].map(opt => (
@@ -782,6 +794,30 @@ export default function Events() {
                     />
                   </div>
                 ))}
+
+                {/* Payment method options — shown when payment is required */}
+                {form.payment_required && (
+                  <div className="pt-3 mt-1 border-t space-y-3">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing &amp; payment methods</p>
+                    {[
+                      { key: "use_tiered_pricing", label: "Use tiered pricing",  desc: "Charge each golfer their standard club rate (member, visitor, junior…). Ignores the entry fee above." },
+                      { key: "allow_wallet",       label: "Allow wallet",         desc: "Golfers can pay from their TapIn wallet balance" },
+                      { key: "allow_prepaid",      label: "Allow prepaid rounds", desc: "Members can redeem one prepaid round credit to cover the entry" },
+                      { key: "allow_voucher",      label: "Allow vouchers",       desc: "Golfers can apply a discount or cancellation voucher" },
+                    ].map(opt => (
+                      <div key={opt.key} className="flex items-center justify-between gap-4">
+                        <div>
+                          <p className="text-sm font-medium">{opt.label}</p>
+                          <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                        </div>
+                        <Switch
+                          checked={!!(form as any)[opt.key]}
+                          onCheckedChange={v => setForm(f => ({ ...f, [opt.key]: v }))}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
 

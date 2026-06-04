@@ -825,6 +825,11 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
+  // Payment method options per event (club chooses which methods golfers can use)
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS use_tiered_pricing SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_wallet SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
 
   // Extend event_registrations: division auto-assign, frozen handicap, payment.
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");
@@ -833,6 +838,7 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_id VARCHAR(120)");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
 
   // Tee-time draw for a tournament round: groups players onto tee slots.
   await ddl(`

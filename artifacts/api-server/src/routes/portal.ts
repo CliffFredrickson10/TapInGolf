@@ -704,7 +704,9 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
     name, description, event_date, end_date, start_time, end_time,
     event_type = "competition", format = "stroke_play", restriction = "open",
     entry_fee, max_participants, divisions, entries_open, entries_close,
-    ballot, scoring_enabled, payment_required, rounds = 1, status = "active",
+    ballot, scoring_enabled, payment_required,
+    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
+    rounds = 1, status = "active",
   } = req.body ?? {};
   if (!name || !event_date) { res.status(400).json({ message: "name and event_date required" }); return; }
   const DEFAULT_DIVISIONS = [
@@ -715,8 +717,9 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
-       ballot, scoring_enabled, payment_required, rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
+       rounds, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
      event_type, format, restriction,
      entry_fee != null ? parseFloat(entry_fee) : null,
@@ -724,6 +727,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS),
      entries_open ?? null, entries_close ?? null,
      ballot ? 1 : 0, scoring_enabled ? 1 : 0, payment_required ? 1 : 0,
+     use_tiered_pricing ? 1 : 0, allow_wallet ? 1 : 0, allow_prepaid ? 1 : 0, allow_voucher ? 1 : 0,
      Number(rounds), status, club.id]
   );
 
@@ -767,7 +771,8 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   const {
     name, description, event_date, end_date, start_time, end_time, event_type, format,
     restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
-    ballot, scoring_enabled, payment_required, rounds,
+    ballot, scoring_enabled, payment_required,
+    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds,
   } = req.body ?? {};
   const updates: string[] = []; const vals: any[] = [];
   if (name !== undefined)                { updates.push("name = ?");              vals.push(name); }
@@ -788,6 +793,10 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (ballot !== undefined)              { updates.push("ballot = ?");            vals.push(ballot ? 1 : 0); }
   if (scoring_enabled !== undefined)     { updates.push("scoring_enabled = ?");   vals.push(scoring_enabled ? 1 : 0); }
   if (payment_required !== undefined)    { updates.push("payment_required = ?");  vals.push(payment_required ? 1 : 0); }
+  if (use_tiered_pricing !== undefined)  { updates.push("use_tiered_pricing = ?"); vals.push(use_tiered_pricing ? 1 : 0); }
+  if (allow_wallet !== undefined)        { updates.push("allow_wallet = ?");       vals.push(allow_wallet ? 1 : 0); }
+  if (allow_prepaid !== undefined)       { updates.push("allow_prepaid = ?");      vals.push(allow_prepaid ? 1 : 0); }
+  if (allow_voucher !== undefined)       { updates.push("allow_voucher = ?");      vals.push(allow_voucher ? 1 : 0); }
   if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
   if (!updates.length) { res.json({ message: "No changes" }); return; }
   vals.push(evId, club.id);

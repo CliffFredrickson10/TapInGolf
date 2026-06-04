@@ -34,6 +34,7 @@ interface EventDetail {
   divisions: Division[];
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number;
+  use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number;
   user_registration: UserRegistration | null;
   user_eligible: boolean | null;
@@ -121,6 +122,7 @@ export default function EventDetailScreen() {
   const [registering, setRegistering] = useState(false);
   const [paying, setPaying]           = useState(false);
   const [payError, setPayError]       = useState<string | null>(null);
+  const [voucherCode, setVoucherCode] = useState("");
 
   // Score submission (18 holes)
   const [holeScores, setHoleScores]   = useState<Record<number, string>>({});
@@ -184,14 +186,19 @@ export default function EventDetailScreen() {
     } finally { setRegistering(false); }
   };
 
-  const handlePay = async () => {
+  const handlePay = async (method: string, vcode?: string) => {
     if (!user || !event) return;
     setPaying(true);
     setPayError(null);
     try {
-      const res = await apiFetch(`/events/${event.id}/pay`, user.token, { method: "POST", body: JSON.stringify({}) });
+      const res = await apiFetch(`/events/${event.id}/pay`, user.token, {
+        method: "POST",
+        body: JSON.stringify({ payment_method: method, voucher_code: vcode || undefined }),
+      });
       if (res.payment_url) {
         router.push({ pathname: "/booking/payment", params: { payment_url: res.payment_url, type: "event" } });
+      } else if (res.paid) {
+        await loadEvent(true);
       }
     } catch (e: any) {
       setPayError(e.message ?? "Payment failed. Please try again.");
@@ -412,12 +419,73 @@ export default function EventDetailScreen() {
                     </Text>
                   </View>
                   <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>
-                    Your entry is approved. Complete payment of R{event.entry_fee?.toFixed(2)} to secure your spot.
-                    {reg?.division ? ` Division: ${reg.division}` : ""}
+                    {event.use_tiered_pricing
+                      ? "Your club rate applies."
+                      : `Entry fee: R${event.entry_fee?.toFixed(2)}`}
+                    {reg?.division ? `  ·  Division: ${reg.division}` : ""}
                   </Text>
-                  <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.accent }]} onPress={handlePay} disabled={paying}>
-                    {paying ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Pay Entry Fee — R{event.entry_fee?.toFixed(2)}</Text>}
+
+                  {/* Stitch — always available */}
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
+                    onPress={() => handlePay("stitch")}
+                    disabled={paying}
+                  >
+                    {paying
+                      ? <ActivityIndicator color="#fff" size="small" />
+                      : <Text style={styles.primaryBtnText}>
+                          Pay via Stitch
+                          {!event.use_tiered_pricing && event.entry_fee ? ` — R${event.entry_fee.toFixed(2)}` : ""}
+                        </Text>
+                    }
                   </TouchableOpacity>
+
+                  {/* Wallet */}
+                  {!!event.allow_wallet && (
+                    <TouchableOpacity
+                      style={[styles.outlineBtn, { borderColor: colors.primary }]}
+                      onPress={() => handlePay("wallet")}
+                      disabled={paying}
+                    >
+                      <Ionicons name="wallet-outline" size={15} color={colors.primary} />
+                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Pay with Wallet</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Prepaid round */}
+                  {!!event.allow_prepaid && (
+                    <TouchableOpacity
+                      style={[styles.outlineBtn, { borderColor: colors.primary }]}
+                      onPress={() => handlePay("prepaid")}
+                      disabled={paying}
+                    >
+                      <Ionicons name="golf-outline" size={15} color={colors.primary} />
+                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>Use Prepaid Round</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Voucher */}
+                  {!!event.allow_voucher && (
+                    <View style={{ gap: 6 }}>
+                      <TextInput
+                        style={[styles.voucherInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.card }]}
+                        placeholder="Voucher code"
+                        placeholderTextColor={colors.mutedForeground}
+                        value={voucherCode}
+                        onChangeText={setVoucherCode}
+                        autoCapitalize="characters"
+                      />
+                      <TouchableOpacity
+                        style={[styles.outlineBtn, { borderColor: colors.accent, opacity: voucherCode.trim() ? 1 : 0.45 }]}
+                        onPress={() => handlePay("voucher", voucherCode)}
+                        disabled={paying || !voucherCode.trim()}
+                      >
+                        <Ionicons name="pricetag-outline" size={15} color={colors.accent} />
+                        <Text style={[styles.outlineBtnText, { color: colors.accent }]}>Apply Voucher</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
                   {payError ? <Text style={{ fontSize: 12, color: colors.destructive, textAlign: "center", marginTop: 4 }}>{payError}</Text> : null}
                 </>
               )}
@@ -441,7 +509,7 @@ export default function EventDetailScreen() {
         {activeTab === "draw" && (
           <>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Tee-Time Draw</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Published by the club once entries close.</Text>
+            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Published by the club.</Text>
             {draw.length === 0 ? (
               <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                 <Ionicons name="list-outline" size={32} color={colors.mutedForeground} style={{ marginBottom: 8 }} />
@@ -591,6 +659,9 @@ const styles = StyleSheet.create({
   statusRow:     { flexDirection: "row", alignItems: "center", gap: 10 },
   primaryBtn:    { borderRadius: 10, paddingVertical: 13, alignItems: "center", marginTop: 4 },
   primaryBtnText:{ fontSize: 15, fontWeight: "700", color: "#fff" },
+  outlineBtn:    { borderRadius: 10, borderWidth: 1.5, paddingVertical: 11, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 4 },
+  outlineBtnText:{ fontSize: 14, fontWeight: "600" },
+  voucherInput:  { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, marginTop: 4 },
   emptyCard:     { borderRadius: 12, borderWidth: 1, padding: 32, alignItems: "center", marginTop: 8 },
   emptyText:     { fontSize: 13, textAlign: "center" },
   drawGroup:     { borderRadius: 10, borderWidth: 1, padding: 12, marginBottom: 10 },

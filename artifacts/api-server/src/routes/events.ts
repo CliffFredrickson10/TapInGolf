@@ -216,12 +216,20 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
   if (reg.status !== "approved")      { res.status(400).json({ message: "Registration is not yet approved" }); return; }
   if (reg.payment_status === "paid")  { res.status(400).json({ message: "Already paid" }); return; }
 
-  const pr = await createStitchPayment({
-    amount:            parseFloat(event.entry_fee),
-    payerName:         caller.name ?? "Golfer",
-    merchantReference: `event-${eventId}-user-${caller.id}`,
-    redirectUrl:       `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`,
-  });
+  let pr: { id: string; url: string };
+  try {
+    pr = await createStitchPayment({
+      amount:            parseFloat(event.entry_fee),
+      payerName:         caller.name ?? "Golfer",
+      merchantReference: `event-${eventId}-user-${caller.id}`,
+      redirectUrl:       `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`,
+    });
+  } catch (e: any) {
+    const msg = e?.message ?? "Payment gateway error";
+    const isConfig = msg.includes("not configured") || msg.includes("credentials");
+    res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform. Please contact support." : msg });
+    return;
+  }
 
   await exec(
     "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",

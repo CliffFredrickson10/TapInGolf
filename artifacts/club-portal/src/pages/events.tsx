@@ -62,6 +62,11 @@ interface Score {
   hole_scores: Record<string, number> | null; verified: number;
 }
 
+interface TeeSlot {
+  id: number; date: string; time: string;
+  total_slots: number; active: boolean;
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -150,6 +155,16 @@ export default function Events() {
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);
 
+  // Tee slot linking
+  const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
+  const [availableSlots, setAvailableSlots]   = useState<TeeSlot[]>([]);
+  const [slotsLoading, setSlotsLoading]       = useState(false);
+  const [showAddSlot, setShowAddSlot]         = useState(false);
+  const [newSlotDate, setNewSlotDate]         = useState("");
+  const [newSlotTime, setNewSlotTime]         = useState("");
+  const [newSlotPlayers, setNewSlotPlayers]   = useState(4);
+  const [addingSlot, setAddingSlot]           = useState(false);
+
   // ── Loaders ──────────────────────────────────────────────────────────────
 
   const loadEvents = useCallback(async () => {
@@ -180,6 +195,23 @@ export default function Events() {
     } catch {} finally { setDrawLoading(false); }
   }, []);
 
+  const loadAvailableSlots = useCallback(async (date: string, endDate?: string) => {
+    if (!date) { setAvailableSlots([]); return; }
+    setSlotsLoading(true);
+    try {
+      const params = endDate ? `from=${date}&to=${endDate}` : `date=${date}`;
+      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}`);
+      setAvailableSlots(data);
+    } catch {} finally { setSlotsLoading(false); }
+  }, []);
+
+  const loadEventSlots = useCallback(async (eventId: number) => {
+    try {
+      const data = await api<TeeSlot[]>(`/api/portal/events/${eventId}/tee-slots`);
+      setSelectedSlotIds(data.map(s => s.id));
+    } catch {}
+  }, []);
+
   const loadScores = useCallback(async (ev: GolfEvent, round: number) => {
     setScoresLoading(true);
     try {
@@ -206,11 +238,23 @@ export default function Events() {
     if (detail && detailTab === "scores")      loadScores(detail, scoreRound);
   }, [detailTab, drawRound, scoreRound, detail]);
 
+  // Load available tee slots whenever the dialog is open and the event date changes
+  useEffect(() => {
+    if (!dlgOpen || !form.event_date) { setAvailableSlots([]); return; }
+    loadAvailableSlots(form.event_date, form.end_date || undefined);
+  }, [dlgOpen, form.event_date, form.end_date, loadAvailableSlots]);
+
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
     setEditId(null);
+    setSelectedSlotIds([]);
+    setAvailableSlots([]);
+    setShowAddSlot(false);
+    setNewSlotDate("");
+    setNewSlotTime("");
+    setNewSlotPlayers(4);
     setDlgOpen(true);
   };
 
@@ -233,7 +277,14 @@ export default function Events() {
       status: ev.status, divisions: ev.divisions ?? DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
+    setSelectedSlotIds([]);
+    setAvailableSlots([]);
+    setShowAddSlot(false);
+    setNewSlotDate(ev.event_date);
+    setNewSlotTime("");
+    setNewSlotPlayers(4);
     setDlgOpen(true);
+    loadEventSlots(ev.id);
   };
 
   const handleSave = async () => {
@@ -249,21 +300,52 @@ export default function Events() {
         ...form,
         description:      form.description || null,
         end_date:         form.end_date || null,
-        start_time:       form.start_time || null,
-        end_time:         form.end_time || null,
+        start_time:       null,   // derived from tee schedule
+        end_time:         null,
         entries_open:     form.entries_open || null,
         entries_close:    form.entries_close || null,
         entry_fee:        form.entry_fee === "" ? null : Number(form.entry_fee),
-        max_participants: form.max_participants === "" ? null : Number(form.max_participants),
+        max_participants: null,   // auto-computed from tee slots
       };
-      if (editId) await api(`/api/portal/events/${editId}`, { method: "PUT", body: JSON.stringify(body) });
-      else        await api("/api/portal/events",            { method: "POST", body: JSON.stringify(body) });
+      let evId: number;
+      if (editId) {
+        await api(`/api/portal/events/${editId}`, { method: "PUT", body: JSON.stringify(body) });
+        evId = editId;
+      } else {
+        const saved = await api<{ id: number }>("/api/portal/events", { method: "POST", body: JSON.stringify(body) });
+        evId = saved.id;
+      }
+      // Link the selected tee slots (server recalculates max_participants)
+      await api(`/api/portal/events/${evId}/tee-slots`, {
+        method: "PUT",
+        body: JSON.stringify({ slot_ids: selectedSlotIds }),
+      });
       toast({ title: editId ? "Event updated" : "Event created" });
       setDlgOpen(false);
       loadEvents();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setSaving(false); }
+  };
+
+  const handleAddSlot = async () => {
+    if (!newSlotTime || !newSlotDate) return;
+    setAddingSlot(true);
+    try {
+      const slot = await api<TeeSlot>("/api/portal/tee-times", {
+        method: "POST",
+        body: JSON.stringify({ date: newSlotDate, time: newSlotTime, total_slots: newSlotPlayers, active: 1 }),
+      });
+      setAvailableSlots(prev =>
+        [...prev, slot].sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1))
+      );
+      setSelectedSlotIds(prev => [...prev, slot.id]);
+      setNewSlotTime("");
+      setShowAddSlot(false);
+      toast({ title: "Tee time added and linked" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setAddingSlot(false); }
   };
 
   const handleCancel = async (id: number, e: React.MouseEvent) => {
@@ -693,15 +775,117 @@ export default function Events() {
                 <Label>End Date (multi-day)</Label>
                 <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
               </div>
-              <div className="space-y-1.5">
-                <Label>First Tee Time</Label>
-                <Input type="time" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
+              <div className="space-y-1.5 col-span-1">
                 <Label>Number of Rounds</Label>
                 <Input type="number" min="1" max="4" value={form.rounds} onChange={e => setForm(f => ({ ...f, rounds: Number(e.target.value) }))} />
               </div>
             </div>
+
+            {/* ── Tee Schedule ──────────────────────────────────────────────────────── */}
+            {form.event_date ? (() => {
+              const computedMax = availableSlots
+                .filter(s => selectedSlotIds.includes(s.id))
+                .reduce((sum, s) => sum + s.total_slots, 0);
+              const grouped = availableSlots.reduce((acc, s) => {
+                (acc[s.date] ||= []).push(s); return acc;
+              }, {} as Record<string, TeeSlot[]>);
+              return (
+                <Card className="bg-muted/30">
+                  <CardContent className="p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />Tee Schedule
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Select tee slots from your schedule for this event. Max participants is calculated automatically.
+                        </p>
+                      </div>
+                      {selectedSlotIds.length > 0 && (
+                        <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
+                          {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
+                        </span>
+                      )}
+                    </div>
+
+                    {slotsLoading ? (
+                      <p className="text-xs text-muted-foreground">Loading tee times…</p>
+                    ) : availableSlots.length === 0 && !showAddSlot ? (
+                      <div className="space-y-2">
+                        <p className="text-xs text-amber-600">
+                          No tee times scheduled for {fmtDate(form.event_date)}{form.end_date ? ` – ${fmtDate(form.end_date)}` : ""}.
+                        </p>
+                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => { setShowAddSlot(true); setNewSlotDate(form.event_date); }}>
+                          <Plus className="h-3 w-3" />Create a tee time
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
+                        {Object.entries(grouped).map(([date, slots]) => (
+                          <div key={date}>
+                            {Object.keys(grouped).length > 1 && (
+                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-1">{fmtDate(date)}</p>
+                            )}
+                            {slots.map(slot => (
+                              <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
+                                <input
+                                  type="checkbox"
+                                  className="h-3.5 w-3.5 accent-[#1a5c38]"
+                                  checked={selectedSlotIds.includes(slot.id)}
+                                  onChange={e =>
+                                    setSelectedSlotIds(prev =>
+                                      e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
+                                    )
+                                  }
+                                />
+                                <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
+                                <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                              </label>
+                            ))}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Quick-add tee time */}
+                    {showAddSlot ? (
+                      <div className="border rounded-md p-3 space-y-2 bg-background">
+                        <p className="text-xs font-medium">Add a tee time to the schedule</p>
+                        <div className="grid grid-cols-3 gap-2">
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-muted-foreground">Date</label>
+                            <Input type="date" className="h-7 text-xs" value={newSlotDate} onChange={e => setNewSlotDate(e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-muted-foreground">Time</label>
+                            <Input type="time" className="h-7 text-xs" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <label className="text-[11px] text-muted-foreground">Players</label>
+                            <Input type="number" className="h-7 text-xs" min="1" max="4" value={newSlotPlayers} onChange={e => setNewSlotPlayers(Number(e.target.value))} />
+                          </div>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button size="sm" className="h-7 text-xs bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAddSlot} disabled={addingSlot || !newSlotTime || !newSlotDate}>
+                            {addingSlot ? "Adding…" : "Add & Link"}
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddSlot(false)}>Cancel</Button>
+                        </div>
+                      </div>
+                    ) : availableSlots.length > 0 && (
+                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => { setShowAddSlot(true); setNewSlotDate(form.event_date); }}>
+                        <Plus className="h-3 w-3" />Add tee time
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })() : (
+              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />Set a start date to link tee times from your schedule.
+              </p>
+            )}
 
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -771,7 +955,12 @@ export default function Events() {
               </div>
               <div className="space-y-1.5">
                 <Label>Max Participants</Label>
-                <Input type="number" value={form.max_participants} onChange={e => setForm(f => ({ ...f, max_participants: e.target.value }))} placeholder="Optional" />
+                <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm text-muted-foreground h-10">
+                  <Users className="h-3.5 w-3.5 flex-shrink-0" />
+                  {selectedSlotIds.length > 0
+                    ? `${availableSlots.filter(s => selectedSlotIds.includes(s.id)).reduce((sum, s) => sum + s.total_slots, 0)} spots (${selectedSlotIds.length} tee slot${selectedSlotIds.length !== 1 ? "s" : ""})`
+                    : "Auto-calculated from tee schedule"}
+                </div>
               </div>
             </div>
 

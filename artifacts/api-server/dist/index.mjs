@@ -63773,6 +63773,60 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   res.json({ message: "Cancelled" });
 });
+router14.get("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const slots = await query(
+    `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+            pts.is_active AS active, pts.session_type
+     FROM event_tee_slots ets
+     JOIN portal_tee_slots pts ON pts.id = ets.tee_slot_id
+     WHERE ets.event_id = ?
+     ORDER BY pts.date, pts.tee_time`,
+    [evId]
+  );
+  res.json(slots.map((s) => ({ ...s, active: !!s.active })));
+});
+router14.put("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const raw = Array.isArray(req.body?.slot_ids) ? req.body.slot_ids : [];
+  const ids = raw.map(Number).filter((n) => n > 0);
+  if (ids.length > 0) {
+    const valid = await query(
+      `SELECT id FROM portal_tee_slots WHERE id IN (${ids.map(() => "?").join(",")}) AND club_id = ?`,
+      [...ids, club.id]
+    );
+    if (valid.length !== ids.length) {
+      res.status(400).json({ message: "One or more tee slots not found for this club" });
+      return;
+    }
+  }
+  await exec("DELETE FROM event_tee_slots WHERE event_id = ?", [evId]);
+  for (const slotId of ids) {
+    await exec("INSERT INTO event_tee_slots (event_id, tee_slot_id) VALUES (?, ?)", [evId, slotId]);
+  }
+  let maxParticipants = null;
+  if (ids.length > 0) {
+    const cap = await row(
+      `SELECT COALESCE(SUM(max_players), 0) AS total FROM portal_tee_slots WHERE id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    maxParticipants = Number(cap?.total ?? 0);
+  }
+  await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [maxParticipants, evId]);
+  res.json({ linked: ids.length, max_participants: maxParticipants });
+});
 router14.get("/portal/events/:id/registrations", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
@@ -67191,6 +67245,16 @@ async function createSchema() {
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_tee_slots (
+      id          SERIAL PRIMARY KEY,
+      event_id    INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      tee_slot_id INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
+      created_at  TIMESTAMP DEFAULT NOW(),
+      UNIQUE (event_id, tee_slot_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_tee_slots_event ON event_tee_slots (event_id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_draws (
       id            SERIAL PRIMARY KEY,

@@ -840,6 +840,19 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
 
+  // Links a tournament to specific portal_tee_slots from the club's schedule.
+  // max_participants on golf_events is auto-recalculated whenever this table changes.
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_tee_slots (
+      id          SERIAL PRIMARY KEY,
+      event_id    INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      tee_slot_id INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
+      created_at  TIMESTAMP DEFAULT NOW(),
+      UNIQUE (event_id, tee_slot_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_tee_slots_event ON event_tee_slots (event_id)");
+
   // Tee-time draw for a tournament round: groups players onto tee slots.
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_draws (

@@ -811,6 +811,64 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
   res.json({ message: "Cancelled" });
 });
 
+// ── Tee-slot linking (portal) ────────────────────────────────────────────────
+
+// GET /portal/events/:id/tee-slots  → tee slots linked to this event
+router.get("/portal/events/:id/tee-slots", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  const slots = await query<any>(
+    `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+            pts.is_active AS active, pts.session_type
+     FROM event_tee_slots ets
+     JOIN portal_tee_slots pts ON pts.id = ets.tee_slot_id
+     WHERE ets.event_id = ?
+     ORDER BY pts.date, pts.tee_time`,
+    [evId]
+  );
+  res.json(slots.map(s => ({ ...s, active: !!s.active })));
+});
+
+// PUT /portal/events/:id/tee-slots  → replace linked slot set; recalculates max_participants
+router.put("/portal/events/:id/tee-slots", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const raw: any[] = Array.isArray(req.body?.slot_ids) ? req.body.slot_ids : [];
+  const ids: number[] = raw.map(Number).filter(n => n > 0);
+
+  if (ids.length > 0) {
+    const valid = await query<any>(
+      `SELECT id FROM portal_tee_slots WHERE id IN (${ids.map(() => "?").join(",")}) AND club_id = ?`,
+      [...ids, club.id]
+    );
+    if (valid.length !== ids.length) {
+      res.status(400).json({ message: "One or more tee slots not found for this club" }); return;
+    }
+  }
+
+  await exec("DELETE FROM event_tee_slots WHERE event_id = ?", [evId]);
+  for (const slotId of ids) {
+    await exec("INSERT INTO event_tee_slots (event_id, tee_slot_id) VALUES (?, ?)", [evId, slotId]);
+  }
+
+  let maxParticipants: number | null = null;
+  if (ids.length > 0) {
+    const cap = await row<any>(
+      `SELECT COALESCE(SUM(max_players), 0) AS total FROM portal_tee_slots WHERE id IN (${ids.map(() => "?").join(",")})`,
+      ids
+    );
+    maxParticipants = Number(cap?.total ?? 0);
+  }
+  await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [maxParticipants, evId]);
+
+  res.json({ linked: ids.length, max_participants: maxParticipants });
+});
+
 router.get("/portal/events/:id/registrations", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club    = getClub(req);
   const evId    = Number(req.params.id);

@@ -792,20 +792,35 @@ export default function Events() {
               return (
                 <Card className="bg-muted/30">
                   <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between">
+                    <div className="flex items-center justify-between gap-3">
                       <div>
                         <p className="text-sm font-semibold flex items-center gap-1.5">
                           <Clock className="h-3.5 w-3.5" />Tee Schedule
                         </p>
                         <p className="text-xs text-muted-foreground mt-0.5">
-                          Select tee slots from your schedule for this event. Max participants is calculated automatically.
+                          Select tee slots to include in this tournament. Max participants is calculated automatically.
                         </p>
                       </div>
-                      {selectedSlotIds.length > 0 && (
-                        <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                          {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
-                        </span>
-                      )}
+                      <div className="flex items-center gap-2 shrink-0">
+                        {availableSlots.length > 0 && (
+                          <button
+                            type="button"
+                            className="text-xs text-[#1a5c38] hover:underline font-medium"
+                            onClick={() =>
+                              selectedSlotIds.length === availableSlots.length
+                                ? setSelectedSlotIds([])
+                                : setSelectedSlotIds(availableSlots.map(s => s.id))
+                            }
+                          >
+                            {selectedSlotIds.length === availableSlots.length ? "Deselect all" : "Select all"}
+                          </button>
+                        )}
+                        {selectedSlotIds.length > 0 && (
+                          <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
+                            {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {slotsLoading ? (
@@ -820,31 +835,48 @@ export default function Events() {
                         </Button>
                       </div>
                     ) : (
-                      <div className="space-y-1 max-h-44 overflow-y-auto pr-1">
-                        {Object.entries(grouped).map(([date, slots]) => (
-                          <div key={date}>
-                            {Object.keys(grouped).length > 1 && (
-                              <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-1 mt-1">{fmtDate(date)}</p>
-                            )}
-                            {slots.map(slot => (
-                              <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
-                                <input
-                                  type="checkbox"
-                                  className="h-3.5 w-3.5 accent-[#1a5c38]"
-                                  checked={selectedSlotIds.includes(slot.id)}
-                                  onChange={e =>
-                                    setSelectedSlotIds(prev =>
-                                      e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
-                                    )
-                                  }
-                                />
-                                <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
-                                <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
-                                {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
-                              </label>
-                            ))}
-                          </div>
-                        ))}
+                      <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
+                        {Object.entries(grouped).map(([date, slots]) => {
+                          const allDaySelected = slots.every(s => selectedSlotIds.includes(s.id));
+                          const isMultiDay = Object.keys(grouped).length > 1;
+                          return (
+                            <div key={date}>
+                              {isMultiDay && (
+                                <div className="flex items-center justify-between mb-1 mt-2 first:mt-0">
+                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{fmtDate(date)}</p>
+                                  <button
+                                    type="button"
+                                    className="text-[10px] text-[#1a5c38] hover:underline font-medium"
+                                    onClick={() =>
+                                      allDaySelected
+                                        ? setSelectedSlotIds(prev => prev.filter(id => !slots.map(s => s.id).includes(id)))
+                                        : setSelectedSlotIds(prev => [...new Set([...prev, ...slots.map(s => s.id)])])
+                                    }
+                                  >
+                                    {allDaySelected ? "Deselect day" : "Select day"}
+                                  </button>
+                                </div>
+                              )}
+                              {slots.map(slot => (
+                                <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
+                                  <input
+                                    type="checkbox"
+                                    className="h-3.5 w-3.5 accent-[#1a5c38]"
+                                    checked={selectedSlotIds.includes(slot.id)}
+                                    onChange={e =>
+                                      setSelectedSlotIds(prev =>
+                                        e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
+                                      )
+                                    }
+                                  />
+                                  <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
+                                  <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                  {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                                </label>
+                              ))}
+                            </div>
+                          );
+                        })}
                       </div>
                     )}
 

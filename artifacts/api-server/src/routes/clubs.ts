@@ -579,4 +579,298 @@ router.get("/clubs/:id/prepaid-balance", async (req, res): Promise<void> => {
   res.json({ is_member: true, total, used, remaining: Math.max(0, total - used) });
 });
 
+// ── Events (mobile / public) ──────────────────────────────────────────────────
+
+router.get("/clubs/:id/events", async (req, res): Promise<void> => {
+  const clubId = parseInt(req.params.id, 10);
+  const user = await getUser(req);
+  const userId = user?.id ?? null;
+
+  const events = await query<any>(
+    `SELECT ge.*,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'approved') AS approved_count,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'pending')  AS pending_count
+     FROM golf_events ge
+     WHERE ge.club_id = ? AND ge.status = 'active' AND ge.event_date >= CURRENT_DATE
+     ORDER BY ge.event_date ASC`,
+    [clubId]
+  );
+
+  for (const ev of events) {
+    ev.approved_count = parseInt(ev.approved_count ?? "0");
+    ev.pending_count  = parseInt(ev.pending_count  ?? "0");
+    ev.entry_fee      = ev.entry_fee != null ? parseFloat(ev.entry_fee) : null;
+    ev.divisions      = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+
+    if (userId) {
+      const reg = await row<any>(
+        "SELECT id, status, payment_status, division FROM event_registrations WHERE event_id = ? AND user_id = ?",
+        [ev.id, userId]
+      );
+      ev.user_registration = reg ?? null;
+      if (ev.restriction === "members_only") {
+        const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [clubId, userId]);
+        ev.user_eligible = !!m;
+      } else if (ev.restriction === "invitation_only") {
+        ev.user_eligible = !!reg;
+      } else {
+        ev.user_eligible = true;
+      }
+    } else {
+      ev.user_registration = null;
+      ev.user_eligible = ev.restriction === "open";
+    }
+  }
+
+  res.json({ events });
+});
+
+// GET /events/:id  — returns event object directly (screen uses data directly, not data.event)
+router.get("/events/:id", async (req, res): Promise<void> => {
+  const evId = parseInt(req.params.id, 10);
+  const user = await getUser(req);
+  const userId = user?.id ?? null;
+
+  const ev = await row<any>(
+    `SELECT ge.*, c.name AS club_name, c.logo_url AS club_logo,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'approved') AS approved_count,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'pending')  AS pending_count
+     FROM golf_events ge
+     JOIN clubs c ON c.id = ge.club_id
+     WHERE ge.id = ?`,
+    [evId]
+  );
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  ev.approved_count = parseInt(ev.approved_count ?? "0");
+  ev.pending_count  = parseInt(ev.pending_count  ?? "0");
+  ev.entry_fee      = ev.entry_fee != null ? parseFloat(ev.entry_fee) : null;
+  ev.divisions      = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+  ev.ballot         = Number(ev.ballot ?? 0);
+  ev.scoring_enabled   = Number(ev.scoring_enabled ?? 0);
+  ev.payment_required  = Number(ev.payment_required ?? 0);
+  ev.entries_required  = Number(ev.entries_required ?? 1);
+  ev.allow_wallet      = Number(ev.allow_wallet ?? 0);
+  ev.allow_prepaid     = Number(ev.allow_prepaid ?? 0);
+  ev.allow_voucher     = Number(ev.allow_voucher ?? 0);
+  ev.rounds            = Number(ev.rounds ?? 1);
+
+  if (userId) {
+    const reg = await row<any>(
+      "SELECT id, status, payment_status, payment_url, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+      [evId, userId]
+    );
+    ev.user_registration = reg ?? null;
+
+    // Preview which division they'd be assigned based on handicap
+    if (!reg && ev.divisions?.length && user?.handicap_index != null) {
+      const hcp = parseFloat(user.handicap_index);
+      for (const d of ev.divisions) {
+        if (hcp >= parseFloat(d.min_hcp) && hcp <= parseFloat(d.max_hcp)) {
+          ev.user_division_preview = d.key; break;
+        }
+      }
+    } else { ev.user_division_preview = null; }
+
+    if (ev.restriction === "members_only") {
+      const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, userId]);
+      ev.user_eligible = !!m;
+    } else if (ev.restriction === "invitation_only") {
+      ev.user_eligible = !!reg;
+    } else {
+      ev.user_eligible = true;
+    }
+  } else {
+    ev.user_registration = null;
+    ev.user_division_preview = null;
+    ev.user_eligible = ev.restriction === "open";
+  }
+
+  // Return event directly (not wrapped) — screen does setEvent(data)
+  res.json(ev);
+});
+
+// POST /events/:id/register — returns { status, division, frozen_handicap } directly (matches screen expectations)
+router.post("/events/:id/register", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required to register for events" }); return; }
+
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row<any>("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) { res.status(404).json({ message: "Event not found or no longer active" }); return; }
+
+  const now = new Date();
+  if (ev.entries_open  && new Date(String(ev.entries_open).slice(0, 10)  + "T00:00:00") > now) { res.status(400).json({ message: "Entries are not open yet" }); return; }
+  if (ev.entries_close && new Date(String(ev.entries_close).slice(0, 10) + "T23:59:59") < now) { res.status(400).json({ message: "Entries are closed" });          return; }
+
+  if (ev.restriction === "members_only") {
+    const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, user.id]);
+    if (!m) { res.status(403).json({ message: "This event is for active club members only" }); return; }
+  } else if (ev.restriction === "invitation_only") {
+    res.status(403).json({ message: "This event is by invitation only. Please contact the club." }); return;
+  }
+
+  const existing = await row<any>("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (existing) { res.status(409).json({ message: "You are already registered for this event", status: existing.status }); return; }
+
+  if (ev.max_participants) {
+    const cnt = await row<any>("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('pending','approved')", [evId]);
+    if (parseInt(cnt?.n ?? "0") >= parseInt(ev.max_participants)) { res.status(400).json({ message: "This event is full" }); return; }
+  }
+
+  // Auto-assign division from handicap
+  let division: string | null = null;
+  let frozenHcp: number | null = user.handicap_index != null ? parseFloat(user.handicap_index) : null;
+  if (ev.divisions && frozenHcp != null) {
+    const divs: any[] = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+    for (const d of divs) {
+      if (frozenHcp >= parseFloat(d.min_hcp) && frozenHcp <= parseFloat(d.max_hcp)) { division = d.key; break; }
+    }
+  }
+
+  const status = Number(ev.ballot) ? "pending" : "approved";
+  await exec(
+    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
+    [evId, user.id, status, division, frozenHcp]
+  );
+  // Return shape the existing event screen expects: { status, division, frozen_handicap }
+  res.json({ status, division, frozen_handicap: frozenHcp });
+});
+
+router.delete("/events/:id/register", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required" }); return; }
+
+  const evId = parseInt(req.params.id, 10);
+  const reg = await row<any>("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (!reg) { res.status(404).json({ message: "Registration not found" }); return; }
+
+  await exec("DELETE FROM event_registrations WHERE id = ?", [reg.id]);
+  res.json({ message: "Registration cancelled successfully" });
+});
+
+// GET /events/:id/leaderboard  — returns leaderboard grouped by division
+router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row<any>("SELECT id, scoring_enabled FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  if (!ev.scoring_enabled) { res.json({ leaderboard: [] }); return; }
+
+  const scores = await query<any>(
+    `SELECT es.user_id, u.name AS player_name, es.division, es.gross, es.net, es.points,
+       er.frozen_handicap, es.verified,
+       RANK() OVER (PARTITION BY es.division ORDER BY
+         CASE WHEN es.points IS NOT NULL THEN es.points END DESC,
+         CASE WHEN es.net   IS NOT NULL THEN es.net   END ASC,
+         CASE WHEN es.gross IS NOT NULL THEN es.gross END ASC
+       ) AS position
+     FROM event_scores es
+     JOIN users u ON u.id = es.user_id
+     JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
+     WHERE es.event_id = ?
+     ORDER BY es.division, position`,
+    [evId]
+  ).catch(() => [] as any[]);
+
+  const grouped: Record<string, any[]> = {};
+  for (const s of scores) {
+    const d = s.division ?? "Open";
+    if (!grouped[d]) grouped[d] = [];
+    grouped[d].push({
+      user_id: s.user_id, player_name: s.player_name,
+      position: parseInt(s.position), division: d,
+      gross: s.gross != null ? parseInt(s.gross) : null,
+      net:   s.net   != null ? parseInt(s.net)   : null,
+      points: s.points != null ? parseFloat(s.points) : null,
+      frozen_handicap: s.frozen_handicap != null ? parseFloat(s.frozen_handicap) : null,
+      verified: parseInt(s.verified ?? "0"),
+    });
+  }
+
+  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })) });
+});
+
+// POST /events/:id/scores  — submit a player's hole-by-hole scorecard
+router.post("/events/:id/scores", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required" }); return; }
+
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row<any>("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) { res.status(404).json({ message: "Event not found or not active" }); return; }
+  if (!ev.scoring_enabled) { res.status(400).json({ message: "Scoring is not enabled for this event" }); return; }
+
+  const reg = await row<any>(
+    "SELECT id, status, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    [evId, user.id]
+  );
+  if (!reg || reg.status !== "approved") { res.status(403).json({ message: "You must be a confirmed participant to submit scores" }); return; }
+
+  const { round = 1, hole_scores, gross } = req.body ?? {};
+  if (!gross && !hole_scores) { res.status(400).json({ message: "hole_scores or gross required" }); return; }
+
+  const totalGross = gross ?? Object.values(hole_scores ?? {}).reduce((s: any, v: any) => s + Number(v), 0);
+
+  // Upsert score row (one per player per event per round)
+  const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?", [evId, user.id, round]);
+  if (existing) {
+    await exec("UPDATE event_scores SET gross = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+      [totalGross, JSON.stringify(hole_scores ?? {}), existing.id]);
+  } else {
+    await exec(
+      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, JSON.stringify(hole_scores ?? {})]
+    );
+  }
+  res.json({ message: "Score submitted. A club official will verify your scorecard." });
+});
+
+// POST /events/:id/pay  — initiate event entry payment (Stitch / wallet / prepaid / voucher)
+router.post("/events/:id/pay", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required" }); return; }
+
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row<any>("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const reg = await row<any>(
+    "SELECT id, status, payment_status, division FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    [evId, user.id]
+  );
+  if (!reg || reg.status !== "approved") { res.status(403).json({ message: "You must have an approved entry to pay" }); return; }
+  if (reg.payment_status === "paid") { res.json({ paid: true, message: "Already paid" }); return; }
+
+  const { payment_method = "stitch" } = req.body ?? {};
+
+  if (payment_method === "wallet") {
+    // Deduct from user wallet
+    const walletRow = await row<any>("SELECT balance FROM user_wallets WHERE user_id = ?", [user.id]);
+    const balance = parseFloat(walletRow?.balance ?? "0");
+    const fee = parseFloat(ev.entry_fee ?? "0");
+    if (balance < fee) { res.status(400).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${fee.toFixed(2)} required)` }); return; }
+    await exec("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?", [fee, user.id]);
+    await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'wallet', paid_at = NOW() WHERE id = ?", [reg.id]);
+    res.json({ paid: true });
+    return;
+  }
+
+  // Stitch — create a payment link
+  const { createStitchPayment } = await import("../lib/stitch");
+  const host = process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080";
+  const merchantReference = `event-${evId}-user-${user.id}`;
+  try {
+    const paymentUrl = await createStitchPayment({
+      amount: parseFloat(ev.entry_fee ?? "0"),
+      currency: "ZAR",
+      merchantReference,
+      redirectUrl: `https://${host}/booking/success`,
+    });
+    await exec("UPDATE event_registrations SET payment_status = 'pending', payment_method = 'stitch' WHERE id = ?", [reg.id]);
+    res.json({ payment_url: paymentUrl });
+  } catch (e: any) {
+    res.status(502).json({ message: e?.message ?? "Payment initiation failed" });
+  }
+});
+
 export default router;

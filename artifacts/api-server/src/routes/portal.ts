@@ -953,38 +953,54 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
 router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
-  const ev = await row<any>("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row<any>("SELECT id, name, event_date, restriction FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
 
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
 
-  // Notify club members + past bookers (fire-and-forget)
-  const audience = await query<any>(
-    `SELECT DISTINCT u.push_token
-     FROM users u
-     WHERE u.push_token IS NOT NULL
-       AND (
-         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
-         OR EXISTS (
-           SELECT 1 FROM bookings b
-           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-           WHERE pts.club_id = ? AND b.user_id = u.id
-         )
-       )
-     LIMIT 500`,
-    [club.id, club.id]
-  );
   const fmtDate = (d: string) => {
     try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
     catch { return d; }
   };
+
+  // Members-only events: notify active members only
+  // Open / other events: notify members + past bookers
+  const isMembersOnly = ev.restriction === "members_only";
+  const audience = await query<any>(
+    isMembersOnly
+      ? `SELECT DISTINCT u.id, u.push_token
+         FROM users u
+         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+         WHERE u.push_token IS NOT NULL
+         LIMIT 500`
+      : `SELECT DISTINCT u.id, u.push_token
+         FROM users u
+         WHERE u.push_token IS NOT NULL
+           AND (
+             EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+             OR EXISTS (SELECT 1 FROM bookings b JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id WHERE pts.club_id = ? AND b.user_id = u.id)
+           )
+         LIMIT 500`,
+    isMembersOnly ? [club.id] : [club.id, club.id]
+  );
+
   if (audience.length > 0) {
+    const titlePrefix = isMembersOnly ? "🏌️ Members Event Open" : "⛳ Tournament Now Open";
+    const bodyPrefix  = isMembersOnly ? "Members-only: " : "";
     sendPushNotifications(audience.map((u: any) => ({
       to: u.push_token, sound: "default",
-      title: `⛳ Tournament Now Open — ${club.name}`,
-      body:  `${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
+      title: `${titlePrefix} — ${club.name}`,
+      body:  `${bodyPrefix}${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
       data:  { type: "event_published", event_id: evId, club_id: club.id },
     })));
+    // Save in-app notifications for each member
+    for (const u of audience) {
+      saveUserNotification(u.id, "event_published",
+        `${titlePrefix} — ${club.name}`,
+        `${bodyPrefix}${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
+        { event_id: evId, club_id: club.id }
+      );
+    }
   }
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });

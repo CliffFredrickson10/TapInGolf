@@ -35623,6 +35623,130 @@ var init_pg = __esm({
   }
 });
 
+// src/lib/stitch.ts
+var stitch_exports = {};
+__export(stitch_exports, {
+  createStitchPayment: () => createStitchPayment,
+  getStitchPayment: () => getStitchPayment,
+  registerStitchWebhook: () => registerStitchWebhook,
+  stitchConfigured: () => stitchConfigured
+});
+async function getAccessToken() {
+  if (_cachedToken && Date.now() < _tokenExpiry - 6e4) return _cachedToken;
+  const clientId = process.env["STITCH_CLIENT_ID"] ?? "";
+  const clientSecret = process.env["STITCH_CLIENT_SECRET"] ?? "";
+  if (!clientId || !clientSecret) {
+    throw new Error("Stitch credentials not configured (STITCH_CLIENT_ID / STITCH_CLIENT_SECRET)");
+  }
+  const res = await fetch(`${EXPRESS_BASE}/api/v1/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ clientId, clientSecret, scope: "client_paymentrequest" })
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Stitch token error ${res.status}: ${text}`);
+  }
+  const json = await res.json();
+  if (!json.success || !json.data?.accessToken) {
+    throw new Error(`Stitch token error: ${JSON.stringify(json)}`);
+  }
+  _cachedToken = json.data.accessToken;
+  _tokenExpiry = Date.now() + 15 * 60 * 1e3;
+  return _cachedToken;
+}
+async function authedFetch(path3, init = {}) {
+  const token = await getAccessToken();
+  return fetch(`${EXPRESS_BASE}${path3}`, {
+    ...init,
+    headers: { ...init.headers ?? {}, Authorization: `Bearer ${token}` }
+  });
+}
+async function ensureRedirectUrl(url) {
+  if (!url || _registeredRedirects.has(url)) return;
+  try {
+    const r = await authedFetch("/api/v1/redirect-urls", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ redirectUrl: url })
+    });
+    if (r.ok || r.status >= 400 && r.status < 500) {
+      _registeredRedirects.add(url);
+    }
+  } catch {
+  }
+}
+async function createStitchPayment(params) {
+  const amountCents = Math.round(params.amount * 100);
+  if (amountCents < 100) {
+    throw new Error("Stitch minimum payment is R1.00 (100 cents)");
+  }
+  await ensureRedirectUrl(params.redirectUrl);
+  const payload = {
+    amount: amountCents,
+    payerName: params.payerName?.trim() || "TapIn Golfer",
+    merchantReference: params.merchantReference
+  };
+  if (params.payerEmail) payload["payerEmailAddress"] = params.payerEmail;
+  const res = await authedFetch("/api/v1/payment-links", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Stitch payment-link error ${res.status}: ${text}`);
+  }
+  const json = await res.json();
+  const payment = json.data?.payment;
+  if (!json.success || !payment?.link) {
+    throw new Error(`Stitch payment-link error: ${JSON.stringify(json)}`);
+  }
+  const url = params.redirectUrl ? `${payment.link}?redirect_url=${encodeURIComponent(params.redirectUrl)}` : payment.link;
+  return { id: payment.id, url };
+}
+async function getStitchPayment(paymentId) {
+  const res = await authedFetch(`/api/v1/payment/${encodeURIComponent(paymentId)}`, { method: "GET" });
+  if (res.status === 404) return null;
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`Stitch get-payment error ${res.status}: ${text}`);
+  }
+  const json = await res.json();
+  const p = json?.data?.payment ?? json?.data ?? json ?? {};
+  return {
+    id: p.id,
+    status: p.status,
+    merchantReference: p.merchantReference ?? null,
+    amount: typeof p.amount === "number" ? p.amount : null
+  };
+}
+async function registerStitchWebhook(url) {
+  const res = await authedFetch("/api/v1/webhook", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url })
+  });
+  const json = await res.json();
+  if (!res.ok || !json?.data?.secret) {
+    throw new Error(`Stitch webhook register error ${res.status}: ${JSON.stringify(json)}`);
+  }
+  return json.data.secret;
+}
+function stitchConfigured() {
+  return !!(process.env["STITCH_CLIENT_ID"] && process.env["STITCH_CLIENT_SECRET"]);
+}
+var EXPRESS_BASE, _cachedToken, _tokenExpiry, _registeredRedirects;
+var init_stitch = __esm({
+  "src/lib/stitch.ts"() {
+    "use strict";
+    EXPRESS_BASE = "https://express.stitch.money";
+    _cachedToken = null;
+    _tokenExpiry = 0;
+    _registeredRedirects = /* @__PURE__ */ new Set();
+  }
+});
+
 // src/lib/notifications.ts
 var notifications_exports = {};
 __export(notifications_exports, {
@@ -58053,6 +58177,324 @@ router3.get("/clubs/:id/prepaid-balance", async (req, res) => {
   const used = parseInt(membership.prepaid_rounds_used) || 0;
   res.json({ is_member: true, total, used, remaining: Math.max(0, total - used) });
 });
+router3.get("/clubs/:id/events", async (req, res) => {
+  const clubId = parseInt(req.params.id, 10);
+  const user = await getUser(req);
+  const userId = user?.id ?? null;
+  const events = await query(
+    `SELECT ge.*,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'approved') AS approved_count,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'pending')  AS pending_count
+     FROM golf_events ge
+     WHERE ge.club_id = ? AND ge.status = 'active' AND ge.event_date >= CURRENT_DATE
+     ORDER BY ge.event_date ASC`,
+    [clubId]
+  );
+  for (const ev of events) {
+    ev.approved_count = parseInt(ev.approved_count ?? "0");
+    ev.pending_count = parseInt(ev.pending_count ?? "0");
+    ev.entry_fee = ev.entry_fee != null ? parseFloat(ev.entry_fee) : null;
+    ev.divisions = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+    if (userId) {
+      const reg = await row(
+        "SELECT id, status, payment_status, division FROM event_registrations WHERE event_id = ? AND user_id = ?",
+        [ev.id, userId]
+      );
+      ev.user_registration = reg ?? null;
+      if (ev.restriction === "members_only") {
+        const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [clubId, userId]);
+        ev.user_eligible = !!m;
+      } else if (ev.restriction === "invitation_only") {
+        ev.user_eligible = !!reg;
+      } else {
+        ev.user_eligible = true;
+      }
+    } else {
+      ev.user_registration = null;
+      ev.user_eligible = ev.restriction === "open";
+    }
+  }
+  res.json({ events });
+});
+router3.get("/events/:id", async (req, res) => {
+  const evId = parseInt(req.params.id, 10);
+  const user = await getUser(req);
+  const userId = user?.id ?? null;
+  const ev = await row(
+    `SELECT ge.*, c.name AS club_name, c.logo_url AS club_logo,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'approved') AS approved_count,
+       (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'pending')  AS pending_count
+     FROM golf_events ge
+     JOIN clubs c ON c.id = ge.club_id
+     WHERE ge.id = ?`,
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  ev.approved_count = parseInt(ev.approved_count ?? "0");
+  ev.pending_count = parseInt(ev.pending_count ?? "0");
+  ev.entry_fee = ev.entry_fee != null ? parseFloat(ev.entry_fee) : null;
+  ev.divisions = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+  ev.ballot = Number(ev.ballot ?? 0);
+  ev.scoring_enabled = Number(ev.scoring_enabled ?? 0);
+  ev.payment_required = Number(ev.payment_required ?? 0);
+  ev.entries_required = Number(ev.entries_required ?? 1);
+  ev.allow_wallet = Number(ev.allow_wallet ?? 0);
+  ev.allow_prepaid = Number(ev.allow_prepaid ?? 0);
+  ev.allow_voucher = Number(ev.allow_voucher ?? 0);
+  ev.rounds = Number(ev.rounds ?? 1);
+  if (userId) {
+    const reg = await row(
+      "SELECT id, status, payment_status, payment_url, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+      [evId, userId]
+    );
+    ev.user_registration = reg ?? null;
+    if (!reg && ev.divisions?.length && user?.handicap_index != null) {
+      const hcp = parseFloat(user.handicap_index);
+      for (const d of ev.divisions) {
+        if (hcp >= parseFloat(d.min_hcp) && hcp <= parseFloat(d.max_hcp)) {
+          ev.user_division_preview = d.key;
+          break;
+        }
+      }
+    } else {
+      ev.user_division_preview = null;
+    }
+    if (ev.restriction === "members_only") {
+      const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, userId]);
+      ev.user_eligible = !!m;
+    } else if (ev.restriction === "invitation_only") {
+      ev.user_eligible = !!reg;
+    } else {
+      ev.user_eligible = true;
+    }
+  } else {
+    ev.user_registration = null;
+    ev.user_division_preview = null;
+    ev.user_eligible = ev.restriction === "open";
+  }
+  res.json(ev);
+});
+router3.post("/events/:id/register", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Login required to register for events" });
+    return;
+  }
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found or no longer active" });
+    return;
+  }
+  const now = /* @__PURE__ */ new Date();
+  if (ev.entries_open && /* @__PURE__ */ new Date(String(ev.entries_open).slice(0, 10) + "T00:00:00") > now) {
+    res.status(400).json({ message: "Entries are not open yet" });
+    return;
+  }
+  if (ev.entries_close && /* @__PURE__ */ new Date(String(ev.entries_close).slice(0, 10) + "T23:59:59") < now) {
+    res.status(400).json({ message: "Entries are closed" });
+    return;
+  }
+  if (ev.restriction === "members_only") {
+    const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, user.id]);
+    if (!m) {
+      res.status(403).json({ message: "This event is for active club members only" });
+      return;
+    }
+  } else if (ev.restriction === "invitation_only") {
+    res.status(403).json({ message: "This event is by invitation only. Please contact the club." });
+    return;
+  }
+  const existing = await row("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (existing) {
+    res.status(409).json({ message: "You are already registered for this event", status: existing.status });
+    return;
+  }
+  if (ev.max_participants) {
+    const cnt = await row("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('pending','approved')", [evId]);
+    if (parseInt(cnt?.n ?? "0") >= parseInt(ev.max_participants)) {
+      res.status(400).json({ message: "This event is full" });
+      return;
+    }
+  }
+  let division = null;
+  let frozenHcp = user.handicap_index != null ? parseFloat(user.handicap_index) : null;
+  if (ev.divisions && frozenHcp != null) {
+    const divs = typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions;
+    for (const d of divs) {
+      if (frozenHcp >= parseFloat(d.min_hcp) && frozenHcp <= parseFloat(d.max_hcp)) {
+        division = d.key;
+        break;
+      }
+    }
+  }
+  const status = Number(ev.ballot) ? "pending" : "approved";
+  await exec(
+    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
+    [evId, user.id, status, division, frozenHcp]
+  );
+  res.json({ status, division, frozen_handicap: frozenHcp });
+});
+router3.delete("/events/:id/register", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Login required" });
+    return;
+  }
+  const evId = parseInt(req.params.id, 10);
+  const reg = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (!reg) {
+    res.status(404).json({ message: "Registration not found" });
+    return;
+  }
+  await exec("DELETE FROM event_registrations WHERE id = ?", [reg.id]);
+  res.json({ message: "Registration cancelled successfully" });
+});
+router3.get("/events/:id/leaderboard", async (req, res) => {
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (!ev.scoring_enabled) {
+    res.json({ leaderboard: [] });
+    return;
+  }
+  const scores = await query(
+    `SELECT es.user_id, u.name AS player_name, es.division, es.gross, es.net, es.points,
+       er.frozen_handicap, es.verified,
+       RANK() OVER (PARTITION BY es.division ORDER BY
+         CASE WHEN es.points IS NOT NULL THEN es.points END DESC,
+         CASE WHEN es.net   IS NOT NULL THEN es.net   END ASC,
+         CASE WHEN es.gross IS NOT NULL THEN es.gross END ASC
+       ) AS position
+     FROM event_scores es
+     JOIN users u ON u.id = es.user_id
+     JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
+     WHERE es.event_id = ?
+     ORDER BY es.division, position`,
+    [evId]
+  ).catch(() => []);
+  const grouped = {};
+  for (const s of scores) {
+    const d = s.division ?? "Open";
+    if (!grouped[d]) grouped[d] = [];
+    grouped[d].push({
+      user_id: s.user_id,
+      player_name: s.player_name,
+      position: parseInt(s.position),
+      division: d,
+      gross: s.gross != null ? parseInt(s.gross) : null,
+      net: s.net != null ? parseInt(s.net) : null,
+      points: s.points != null ? parseFloat(s.points) : null,
+      frozen_handicap: s.frozen_handicap != null ? parseFloat(s.frozen_handicap) : null,
+      verified: parseInt(s.verified ?? "0")
+    });
+  }
+  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })) });
+});
+router3.post("/events/:id/scores", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Login required" });
+    return;
+  }
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found or not active" });
+    return;
+  }
+  if (!ev.scoring_enabled) {
+    res.status(400).json({ message: "Scoring is not enabled for this event" });
+    return;
+  }
+  const reg = await row(
+    "SELECT id, status, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    [evId, user.id]
+  );
+  if (!reg || reg.status !== "approved") {
+    res.status(403).json({ message: "You must be a confirmed participant to submit scores" });
+    return;
+  }
+  const { round = 1, hole_scores, gross } = req.body ?? {};
+  if (!gross && !hole_scores) {
+    res.status(400).json({ message: "hole_scores or gross required" });
+    return;
+  }
+  const totalGross = gross ?? Object.values(hole_scores ?? {}).reduce((s, v) => s + Number(v), 0);
+  const existing = await row("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?", [evId, user.id, round]);
+  if (existing) {
+    await exec(
+      "UPDATE event_scores SET gross = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+      [totalGross, JSON.stringify(hole_scores ?? {}), existing.id]
+    );
+  } else {
+    await exec(
+      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
+      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, JSON.stringify(hole_scores ?? {})]
+    );
+  }
+  res.json({ message: "Score submitted. A club official will verify your scorecard." });
+});
+router3.post("/events/:id/pay", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Login required" });
+    return;
+  }
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const reg = await row(
+    "SELECT id, status, payment_status, division FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    [evId, user.id]
+  );
+  if (!reg || reg.status !== "approved") {
+    res.status(403).json({ message: "You must have an approved entry to pay" });
+    return;
+  }
+  if (reg.payment_status === "paid") {
+    res.json({ paid: true, message: "Already paid" });
+    return;
+  }
+  const { payment_method = "stitch" } = req.body ?? {};
+  if (payment_method === "wallet") {
+    const walletRow = await row("SELECT balance FROM user_wallets WHERE user_id = ?", [user.id]);
+    const balance = parseFloat(walletRow?.balance ?? "0");
+    const fee = parseFloat(ev.entry_fee ?? "0");
+    if (balance < fee) {
+      res.status(400).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${fee.toFixed(2)} required)` });
+      return;
+    }
+    await exec("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?", [fee, user.id]);
+    await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'wallet', paid_at = NOW() WHERE id = ?", [reg.id]);
+    res.json({ paid: true });
+    return;
+  }
+  const { createStitchPayment: createStitchPayment2 } = await Promise.resolve().then(() => (init_stitch(), stitch_exports));
+  const host = process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080";
+  const merchantReference = `event-${evId}-user-${user.id}`;
+  try {
+    const paymentUrl = await createStitchPayment2({
+      amount: parseFloat(ev.entry_fee ?? "0"),
+      currency: "ZAR",
+      merchantReference,
+      redirectUrl: `https://${host}/booking/success`
+    });
+    await exec("UPDATE event_registrations SET payment_status = 'pending', payment_method = 'stitch' WHERE id = ?", [reg.id]);
+    res.json({ payment_url: paymentUrl });
+  } catch (e) {
+    res.status(502).json({ message: e?.message ?? "Payment initiation failed" });
+  }
+});
 var clubs_default = router3;
 
 // src/routes/bookings.ts
@@ -58073,101 +58515,8 @@ async function saveUserNotification(userId, type, title, body, data = {}) {
   }
 }
 
-// src/lib/stitch.ts
-var EXPRESS_BASE = "https://express.stitch.money";
-var _cachedToken = null;
-var _tokenExpiry = 0;
-async function getAccessToken() {
-  if (_cachedToken && Date.now() < _tokenExpiry - 6e4) return _cachedToken;
-  const clientId = process.env["STITCH_CLIENT_ID"] ?? "";
-  const clientSecret = process.env["STITCH_CLIENT_SECRET"] ?? "";
-  if (!clientId || !clientSecret) {
-    throw new Error("Stitch credentials not configured (STITCH_CLIENT_ID / STITCH_CLIENT_SECRET)");
-  }
-  const res = await fetch(`${EXPRESS_BASE}/api/v1/token`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ clientId, clientSecret, scope: "client_paymentrequest" })
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Stitch token error ${res.status}: ${text}`);
-  }
-  const json = await res.json();
-  if (!json.success || !json.data?.accessToken) {
-    throw new Error(`Stitch token error: ${JSON.stringify(json)}`);
-  }
-  _cachedToken = json.data.accessToken;
-  _tokenExpiry = Date.now() + 15 * 60 * 1e3;
-  return _cachedToken;
-}
-async function authedFetch(path3, init = {}) {
-  const token = await getAccessToken();
-  return fetch(`${EXPRESS_BASE}${path3}`, {
-    ...init,
-    headers: { ...init.headers ?? {}, Authorization: `Bearer ${token}` }
-  });
-}
-var _registeredRedirects = /* @__PURE__ */ new Set();
-async function ensureRedirectUrl(url) {
-  if (!url || _registeredRedirects.has(url)) return;
-  try {
-    const r = await authedFetch("/api/v1/redirect-urls", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ redirectUrl: url })
-    });
-    if (r.ok || r.status >= 400 && r.status < 500) {
-      _registeredRedirects.add(url);
-    }
-  } catch {
-  }
-}
-async function createStitchPayment(params) {
-  const amountCents = Math.round(params.amount * 100);
-  if (amountCents < 100) {
-    throw new Error("Stitch minimum payment is R1.00 (100 cents)");
-  }
-  await ensureRedirectUrl(params.redirectUrl);
-  const payload = {
-    amount: amountCents,
-    payerName: params.payerName?.trim() || "TapIn Golfer",
-    merchantReference: params.merchantReference
-  };
-  if (params.payerEmail) payload["payerEmailAddress"] = params.payerEmail;
-  const res = await authedFetch("/api/v1/payment-links", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Stitch payment-link error ${res.status}: ${text}`);
-  }
-  const json = await res.json();
-  const payment = json.data?.payment;
-  if (!json.success || !payment?.link) {
-    throw new Error(`Stitch payment-link error: ${JSON.stringify(json)}`);
-  }
-  const url = params.redirectUrl ? `${payment.link}?redirect_url=${encodeURIComponent(params.redirectUrl)}` : payment.link;
-  return { id: payment.id, url };
-}
-async function getStitchPayment(paymentId) {
-  const res = await authedFetch(`/api/v1/payment/${encodeURIComponent(paymentId)}`, { method: "GET" });
-  if (res.status === 404) return null;
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Stitch get-payment error ${res.status}: ${text}`);
-  }
-  const json = await res.json();
-  const p = json?.data?.payment ?? json?.data ?? json ?? {};
-  return {
-    id: p.id,
-    status: p.status,
-    merchantReference: p.merchantReference ?? null,
-    amount: typeof p.amount === "number" ? p.amount : null
-  };
-}
+// src/routes/bookings.ts
+init_stitch();
 
 // src/lib/pricing.ts
 init_pg();
@@ -61511,6 +61860,7 @@ var notifications_default = router12;
 var import_express13 = __toESM(require_express2(), 1);
 init_pg();
 init_notifications();
+init_stitch();
 var router13 = (0, import_express13.Router)();
 var VALID_MEMBERSHIP_TYPES = ["standard", "premium", "honorary"];
 var DEFAULT_DIVISIONS = [
@@ -64028,27 +64378,12 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
 router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const ev = await row("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row("SELECT id, name, event_date, restriction FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
     return;
   }
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
-  const audience = await query(
-    `SELECT DISTINCT u.push_token
-     FROM users u
-     WHERE u.push_token IS NOT NULL
-       AND (
-         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
-         OR EXISTS (
-           SELECT 1 FROM bookings b
-           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-           WHERE pts.club_id = ? AND b.user_id = u.id
-         )
-       )
-     LIMIT 500`,
-    [club.id, club.id]
-  );
   const fmtDate3 = (d) => {
     try {
       return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -64056,14 +64391,41 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
       return d;
     }
   };
+  const isMembersOnly = ev.restriction === "members_only";
+  const audience = await query(
+    isMembersOnly ? `SELECT DISTINCT u.id, u.push_token
+         FROM users u
+         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+         WHERE u.push_token IS NOT NULL
+         LIMIT 500` : `SELECT DISTINCT u.id, u.push_token
+         FROM users u
+         WHERE u.push_token IS NOT NULL
+           AND (
+             EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+             OR EXISTS (SELECT 1 FROM bookings b JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id WHERE pts.club_id = ? AND b.user_id = u.id)
+           )
+         LIMIT 500`,
+    isMembersOnly ? [club.id] : [club.id, club.id]
+  );
   if (audience.length > 0) {
+    const titlePrefix = isMembersOnly ? "\u{1F3CC}\uFE0F Members Event Open" : "\u26F3 Tournament Now Open";
+    const bodyPrefix = isMembersOnly ? "Members-only: " : "";
     sendPushNotifications(audience.map((u) => ({
       to: u.push_token,
       sound: "default",
-      title: `\u26F3 Tournament Now Open \u2014 ${club.name}`,
-      body: `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`,
+      title: `${titlePrefix} \u2014 ${club.name}`,
+      body: `${bodyPrefix}${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`,
       data: { type: "event_published", event_id: evId, club_id: club.id }
     })));
+    for (const u of audience) {
+      saveUserNotification(
+        u.id,
+        "event_published",
+        `${titlePrefix} \u2014 ${club.name}`,
+        `${bodyPrefix}${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`,
+        { event_id: evId, club_id: club.id }
+      );
+    }
   }
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
@@ -65413,6 +65775,7 @@ var storage_default = router15;
 // src/routes/payments.ts
 var import_express16 = __toESM(require_express2(), 1);
 init_pg();
+init_stitch();
 var router16 = (0, import_express16.Router)();
 async function ensureWallet(userId) {
   const wallet = await row("SELECT balance FROM wallets WHERE user_id = ?", [userId]);

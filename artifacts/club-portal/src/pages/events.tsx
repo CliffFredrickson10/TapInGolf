@@ -194,6 +194,10 @@ export default function Events() {
   const [regs, setRegs]         = useState<Registration[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
 
+  // Detail tee schedule
+  const [detailTeeSlots, setDetailTeeSlots]           = useState<TeeSlot[]>([]);
+  const [detailTeeSlotsLoading, setDetailTeeSlotsLoading] = useState(false);
+
   // Draw
   const [draw, setDraw]         = useState<DrawEntry[]>([]);
   const [drawLoading, setDrawLoading] = useState(false);
@@ -328,8 +332,15 @@ export default function Events() {
   };
 
   useEffect(() => {
-    if (detail && detailTab === "draw")        loadDraw(detail, drawRound);
-    if (detail && detailTab === "scores")      loadScores(detail, scoreRound);
+    if (detail && detailTab === "draw")    loadDraw(detail, drawRound);
+    if (detail && detailTab === "scores")  loadScores(detail, scoreRound);
+    if (detail && detailTab === "schedule") {
+      setDetailTeeSlotsLoading(true);
+      api<TeeSlot[]>(`/api/portal/events/${detail.id}/tee-slots`)
+        .then(data => setDetailTeeSlots(data))
+        .catch(() => {})
+        .finally(() => setDetailTeeSlotsLoading(false));
+    }
   }, [detailTab, drawRound, scoreRound, detail]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
@@ -666,14 +677,15 @@ export default function Events() {
               </SheetHeader>
 
               <Tabs value={detailTab} onValueChange={setDetailTab} className="px-6 pt-4">
-                <TabsList className="w-full grid grid-cols-4 mb-4 h-10">
-                  <TabsTrigger value="registrations" className="text-xs gap-1.5">
+                <TabsList className="w-full grid grid-cols-5 mb-4 h-10">
+                  <TabsTrigger value="registrations" className="text-xs gap-1">
                     <Users className="h-3.5 w-3.5" />Entries
-                    {detail.pending_count > 0 && <span className="ml-1 bg-amber-500 text-white text-[10px] rounded-full px-1.5 py-0.5 font-bold">{detail.pending_count}</span>}
+                    {detail.pending_count > 0 && <span className="ml-0.5 bg-amber-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{detail.pending_count}</span>}
                   </TabsTrigger>
-                  <TabsTrigger value="divisions" className="text-xs gap-1.5"><Trophy className="h-3.5 w-3.5" />Divisions</TabsTrigger>
-                  <TabsTrigger value="draw" className="text-xs gap-1.5"><ListOrdered className="h-3.5 w-3.5" />Draw</TabsTrigger>
-                  <TabsTrigger value="scores" className="text-xs gap-1.5"><BarChart2 className="h-3.5 w-3.5" />Scores</TabsTrigger>
+                  <TabsTrigger value="schedule" className="text-xs gap-1"><Clock className="h-3.5 w-3.5" />Schedule</TabsTrigger>
+                  <TabsTrigger value="divisions" className="text-xs gap-1"><Trophy className="h-3.5 w-3.5" />Divisions</TabsTrigger>
+                  <TabsTrigger value="draw" className="text-xs gap-1"><ListOrdered className="h-3.5 w-3.5" />Draw</TabsTrigger>
+                  <TabsTrigger value="scores" className="text-xs gap-1"><BarChart2 className="h-3.5 w-3.5" />Scores</TabsTrigger>
                 </TabsList>
 
                 {/* REGISTRATIONS TAB */}
@@ -720,6 +732,66 @@ export default function Events() {
                       ))}
                     </div>
                   )}
+                </TabsContent>
+
+                {/* TEE SCHEDULE TAB */}
+                <TabsContent value="schedule" className="pb-8">
+                  {detailTeeSlotsLoading ? (
+                    <div className="space-y-2">
+                      {[1,2,3].map(i => <div key={i} className="h-16 rounded-lg border bg-muted/20 animate-pulse" />)}
+                    </div>
+                  ) : detailTeeSlots.length === 0 ? (
+                    <div className="text-center py-10 space-y-2">
+                      <Clock className="h-8 w-8 mx-auto text-muted-foreground/40" />
+                      <p className="text-sm text-muted-foreground">No tee slots created yet.</p>
+                      <p className="text-xs text-muted-foreground">Open Edit to generate a tee schedule for this tournament.</p>
+                    </div>
+                  ) : (() => {
+                    const slotsByDate = detailTeeSlots.reduce((acc, s) => {
+                      const key = String(s.date).slice(0, 10);
+                      (acc[key] ||= []).push(s);
+                      return acc;
+                    }, {} as Record<string, TeeSlot[]>);
+                    const dates = Object.keys(slotsByDate).sort();
+                    const totalSlots = detailTeeSlots.length;
+                    const totalSpots = detailTeeSlots.reduce((sum, s) => sum + s.total_slots, 0);
+                    return (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-xs text-muted-foreground pb-1 border-b">
+                          <span>{totalSlots} tee slot{totalSlots !== 1 ? "s" : ""} across {dates.length} day{dates.length !== 1 ? "s" : ""}</span>
+                          <span className="font-medium text-[#1a5c38]">{totalSpots} total spots</span>
+                        </div>
+                        {dates.map((date, idx) => {
+                          const slots = slotsByDate[date];
+                          const daySpots = slots.reduce((sum, s) => sum + s.total_slots, 0);
+                          return (
+                            <div key={date} className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                {dates.length > 1 && (
+                                  <span className="text-[10px] font-bold text-white bg-[#1a5c38] rounded px-1.5 py-0.5">Day {idx + 1}</span>
+                                )}
+                                <span className="text-sm font-semibold">{fmtDate(date)}</span>
+                                <span className="text-xs text-muted-foreground ml-auto">{slots.length} slots · {daySpots} spots</span>
+                              </div>
+                              <Card className="border bg-card">
+                                <CardContent className="p-2">
+                                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                                    {slots.map(slot => (
+                                      <div key={slot.id} className="flex items-center gap-2 py-1 px-1.5 rounded hover:bg-muted">
+                                        <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0,5)}</span>
+                                        <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                        {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1 py-0.5 rounded ml-auto">inactive</span>}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
                 </TabsContent>
 
                 {/* DIVISIONS TAB */}

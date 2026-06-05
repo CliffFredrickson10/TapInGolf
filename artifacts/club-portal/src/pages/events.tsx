@@ -1255,8 +1255,8 @@ export default function Events() {
                   <span style={{ width: 70 }} className="shrink-0 text-center">WHS From</span>
                   <span className="shrink-0 invisible">–</span>
                   <span style={{ width: 70 }} className="shrink-0 text-center">WHS To</span>
-                  <span style={{ width: 280 }} className="shrink-0">Format</span>
-                  <span style={{ width: 120 }} className="shrink-0">Tees</span>
+                  <span style={{ width: 340 }} className="shrink-0">Format</span>
+                  <span style={{ width: 90 }} className="shrink-0">Tees</span>
                 </div>
                 {form.divisions.map((d, i) => (
                   <div key={d.key} className="flex items-center gap-2 text-xs">
@@ -1267,12 +1267,12 @@ export default function Events() {
                     <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
                     <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
-                      <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 280 }}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 340 }}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input className="h-7 text-xs shrink-0" style={{ width: 120 }} placeholder="championship" value={d.tees}
+                    <Input className="h-7 text-xs shrink-0" style={{ width: 90 }} placeholder="club" value={d.tees}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
                   </div>
                 ))}

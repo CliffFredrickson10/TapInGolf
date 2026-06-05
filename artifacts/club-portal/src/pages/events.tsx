@@ -257,6 +257,7 @@ export default function Events() {
   }, [dlgOpen]);
 
   // Tee slot linking
+  const skipNextSlotLoad = useRef(false); // set true when openEdit pre-loads slots itself
   const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
   const [availableSlots, setAvailableSlots]   = useState<TeeSlot[]>([]);
   const [slotsLoading, setSlotsLoading]       = useState(false);
@@ -353,9 +354,11 @@ export default function Events() {
     if (detail && detailTab === "scores")      loadScores(detail, scoreRound);
   }, [detailTab, drawRound, scoreRound, detail]);
 
-  // Load available tee slots whenever the dialog is open and the event date changes
+  // Load available tee slots whenever the dialog is open and the event date changes.
+  // Skipped when openEdit pre-populates both available slots and selections itself.
   useEffect(() => {
     if (!dlgOpen || !form.event_date) { setAvailableSlots([]); return; }
+    if (skipNextSlotLoad.current) { skipNextSlotLoad.current = false; return; }
     loadAvailableSlots(form.event_date, form.end_date || undefined);
   }, [dlgOpen, form.event_date, form.end_date, loadAvailableSlots]);
 
@@ -371,19 +374,22 @@ export default function Events() {
 
   const openEdit = async (ev: GolfEvent, e: React.MouseEvent) => {
     e.stopPropagation();
-    // Normalize dates: PostgreSQL may return full ISO strings like "2026-05-01T00:00:00.000Z"
-    // input[type=date] requires exactly "YYYY-MM-DD"
     const d = (v: any) => (v ? String(v).slice(0, 10) : "");
     const startDate = d(ev.event_date);
     const endDate   = d(ev.end_date);
 
-    // Pre-fetch the event's linked tee slots BEFORE opening the dialog so
-    // selectedSlotIds is populated when the tee schedule first renders.
-    let existingSlotIds: number[] = [];
-    try {
-      const slots = await api<{ id: number }[]>(`/api/portal/events/${ev.id}/tee-slots`);
-      existingSlotIds = slots.map(s => Number(s.id));
-    } catch {}
+    // Fetch available slots and linked slots in parallel BEFORE opening the dialog.
+    // Using cache:"no-store" to guarantee a fresh response (avoids stale 304 cache).
+    const slotParams = endDate ? `from=${startDate}&to=${endDate}` : `date=${startDate}`;
+    const [availSlots, linkedSlots] = await Promise.all([
+      api<TeeSlot[]>(`/api/portal/tee-times?${slotParams}&_t=${Date.now()}`).catch(() => [] as TeeSlot[]),
+      fetch(`/api/portal/events/${ev.id}/tee-slots`, {
+        cache: "no-store",
+        headers: { Authorization: `Bearer ${localStorage.getItem("club_token") ?? ""}`, "Content-Type": "application/json" },
+      }).then(r => r.ok ? r.json() : []).catch(() => []) as Promise<{ id: number }[]>,
+    ]);
+
+    const existingSlotIds = linkedSlots.map((s: { id: number }) => Number(s.id));
 
     setForm({
       name: ev.name, description: ev.description ?? "",
@@ -409,8 +415,9 @@ export default function Events() {
       divisions: ev.divisions ?? DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
-    setSelectedSlotIds(existingSlotIds);
-    setAvailableSlots([]);
+    setAvailableSlots(availSlots);      // pre-populated — no further load needed on open
+    setSelectedSlotIds(existingSlotIds); // pre-selected — stable, no race with useEffect
+    skipNextSlotLoad.current = true;    // tell the useEffect to skip its redundant fetch
     setShowAddSlot(false);
     setNewSlotDate(startDate);
     setNewSlotTime("");

@@ -145,6 +145,17 @@ function fmtDate(d: string | null) {
   try { return format(new Date(d.slice(0, 10) + "T00:00:00"), "dd MMM yyyy"); } catch { return d; }
 }
 
+function computeDays(start: string, end?: string | null): number {
+  if (!start) return 1;
+  const [sy, sm, sd] = start.split("-").map(Number);
+  if (!sy) return 1;
+  const endStr = end || start;
+  const [ey, em, ed] = endStr.split("-").map(Number);
+  const s = new Date(Date.UTC(sy, sm - 1, sd));
+  const e = new Date(Date.UTC(ey || sy, (em || sm) - 1, ed || sd));
+  return Math.max(1, Math.round((e.getTime() - s.getTime()) / 86400000) + 1);
+}
+
 const DEFAULT_DIVISIONS: Division[] = [
   { label: "A Division", key: "A", min_hcp: 0,  max_hcp: 9.9,  format: "stroke_play", tees: "championship" },
   { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
@@ -156,7 +167,7 @@ const EMPTY_FORM = {
   start_time: "", end_time: "", event_type: "competition",
   format: "gross_stroke_play", format_custom: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
-  entries_open: "", entries_close: "", rounds: 1,
+  entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   ballot: false, scoring_enabled: false, payment_required: false,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
   divisions: DEFAULT_DIVISIONS,
@@ -321,7 +332,11 @@ export default function Events() {
       entry_fee: ev.entry_fee ?? "",
       max_participants: ev.max_participants ?? "",
       entries_open: ev.entries_open ?? "", entries_close: ev.entries_close ?? "",
-      rounds: ev.rounds ?? 1,
+      rounds_per_day: (() => {
+        const days = computeDays(ev.event_date, ev.end_date);
+        const rpd = Math.round((ev.rounds ?? 1) / days);
+        return (rpd >= 2 ? 2 : 1) as 1 | 2;
+      })(),
       ballot: !!ev.ballot, scoring_enabled: !!ev.scoring_enabled,
       payment_required: !!ev.payment_required,
       use_tiered_pricing: !!ev.use_tiered_pricing,
@@ -348,6 +363,7 @@ export default function Events() {
     }
     setSaving(true);
     try {
+      const numDays = computeDays(form.event_date, form.end_date);
       const body = {
         ...form,
         description:      form.description || null,
@@ -358,6 +374,7 @@ export default function Events() {
         entries_close:    form.entries_close || null,
         entry_fee:        form.entry_fee === "" ? null : Number(form.entry_fee),
         max_participants: null,   // auto-computed from tee slots
+        rounds:           numDays * form.rounds_per_day,
       };
       let evId: number;
       if (editId) {
@@ -822,9 +839,31 @@ export default function Events() {
                 <Label>End Date (multi-day)</Label>
                 <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
               </div>
-              <div className="space-y-1.5 col-span-1">
-                <Label>Number of Rounds</Label>
-                <Input type="number" min="1" max="4" value={form.rounds} onChange={e => setForm(f => ({ ...f, rounds: Number(e.target.value) }))} />
+              <div className="space-y-1.5 col-span-2">
+                <Label>Rounds per Day</Label>
+                <div className="flex items-center gap-3">
+                  <Select
+                    value={String(form.rounds_per_day)}
+                    onValueChange={v => setForm(f => ({ ...f, rounds_per_day: Number(v) as 1 | 2 }))}
+                  >
+                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">1 round per day</SelectItem>
+                      <SelectItem value="2">2 rounds per day</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground bg-muted/40 rounded-md border px-3 py-2 h-10 flex-1">
+                    {(() => {
+                      const days = computeDays(form.event_date, form.end_date);
+                      const total = days * form.rounds_per_day;
+                      return (
+                        <>
+                          {days} {days === 1 ? "day" : "days"} × {form.rounds_per_day} = <span className="font-semibold text-foreground ml-1">{total} {total === 1 ? "round" : "rounds"} total</span>
+                        </>
+                      );
+                    })()}
+                  </div>
+                </div>
               </div>
             </div>
 

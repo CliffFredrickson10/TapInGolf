@@ -219,7 +219,7 @@ export default function Events() {
       fd.append("image", file);
       const res = await fetch("/api/portal/events/image/upload", {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("portal_token") ?? ""}` },
+        headers: { Authorization: `Bearer ${localStorage.getItem("club_token") ?? ""}` },
         body: fd,
       });
       if (!res.ok) throw new Error((await res.json()).message ?? "Upload failed");

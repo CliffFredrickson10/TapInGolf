@@ -211,6 +211,15 @@ export default function Events() {
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
 
+  // Invite list (invitation_only events)
+  const [invites, setInvites]               = useState<{ id: number; user_id: number; name: string; email: string; handicap_index: number | null }[]>([]);
+  const [invitesLoading, setInvitesLoading] = useState(false);
+  const [inviteQuery, setInviteQuery]       = useState("");
+  const [inviteResults, setInviteResults]   = useState<{ id: number; name: string; email: string; handicap_index: number | null }[]>([]);
+  const [inviteSearching, setInviteSearching] = useState(false);
+  const [inviteAdding, setInviteAdding]     = useState<number | null>(null);
+  const [inviteRemoving, setInviteRemoving] = useState<number | null>(null);
+
   // Description textarea ref (auto-resize on open — useEffect placed after dlgOpen state)
   const descRef = useRef<HTMLTextAreaElement>(null);
 
@@ -328,17 +337,59 @@ export default function Events() {
     } catch {} finally { setScoresLoading(false); }
   }, []);
 
+  const loadInvites = useCallback(async (ev: GolfEvent) => {
+    setInvitesLoading(true);
+    try {
+      const data = await api<{ invites: typeof invites }>(`/api/portal/events/${ev.id}/invites`);
+      setInvites(data.invites ?? []);
+    } catch {} finally { setInvitesLoading(false); }
+  }, []);
+
+  const searchInviteUsers = useCallback(async (q: string) => {
+    if (!q || q.length < 2) { setInviteResults([]); return; }
+    setInviteSearching(true);
+    try {
+      const data = await api<{ users: typeof inviteResults }>(`/api/portal/users/search?q=${encodeURIComponent(q)}`);
+      setInviteResults(data.users ?? []);
+    } catch {} finally { setInviteSearching(false); }
+  }, []);
+
+  const addInvite = async (userId: number) => {
+    if (!detail) return;
+    setInviteAdding(userId);
+    try {
+      const data = await api<{ invites: typeof invites }>(`/api/portal/events/${detail.id}/invites`, {
+        method: "POST", body: JSON.stringify({ user_id: userId }),
+      });
+      setInvites(data.invites ?? []);
+      setInviteResults(prev => prev.filter(u => u.id !== userId));
+    } catch {} finally { setInviteAdding(null); }
+  };
+
+  const removeInvite = async (userId: number) => {
+    if (!detail) return;
+    setInviteRemoving(userId);
+    try {
+      await api(`/api/portal/events/${detail.id}/invites/${userId}`, { method: "DELETE" });
+      setInvites(prev => prev.filter(i => i.user_id !== userId));
+    } catch {} finally { setInviteRemoving(null); }
+  };
+
   const openDetail = (ev: GolfEvent) => {
     setDetail(ev);
     setDetailTab("registrations");
     setDrawRound(1);
     setScoreRound(1);
+    setInvites([]);
+    setInviteQuery("");
+    setInviteResults([]);
     loadRegs(ev);
   };
 
   useEffect(() => {
     if (detail && detailTab === "draw")    loadDraw(detail, drawRound);
     if (detail && detailTab === "scores")  loadScores(detail, scoreRound);
+    if (detail && detailTab === "invites") loadInvites(detail);
     if (detail && detailTab === "schedule") {
       setDetailTeeSlotsLoading(true);
       api<TeeSlot[]>(`/api/portal/events/${detail.id}/tee-slots`)
@@ -709,7 +760,7 @@ export default function Events() {
               </SheetHeader>
 
               <Tabs value={detailTab} onValueChange={setDetailTab} className="px-6 pt-4">
-                <TabsList className="w-full grid grid-cols-5 mb-4 h-10">
+                <TabsList className={`w-full grid mb-4 h-10 ${detail.restriction === "invitation_only" ? "grid-cols-6" : "grid-cols-5"}`}>
                   <TabsTrigger value="registrations" className="text-xs gap-1">
                     <Users className="h-3.5 w-3.5" />Entries
                     {detail.pending_count > 0 && <span className="ml-0.5 bg-amber-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{detail.pending_count}</span>}
@@ -718,6 +769,12 @@ export default function Events() {
                   <TabsTrigger value="divisions" className="text-xs gap-1"><Trophy className="h-3.5 w-3.5" />Divisions</TabsTrigger>
                   <TabsTrigger value="draw" className="text-xs gap-1"><ListOrdered className="h-3.5 w-3.5" />Draw</TabsTrigger>
                   <TabsTrigger value="scores" className="text-xs gap-1"><BarChart2 className="h-3.5 w-3.5" />Scores</TabsTrigger>
+                  {detail.restriction === "invitation_only" && (
+                    <TabsTrigger value="invites" className="text-xs gap-1">
+                      <Send className="h-3.5 w-3.5" />Invites
+                      {invites.length > 0 && <span className="ml-0.5 bg-blue-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{invites.length}</span>}
+                    </TabsTrigger>
+                  )}
                 </TabsList>
 
                 {/* REGISTRATIONS TAB */}
@@ -966,6 +1023,98 @@ export default function Events() {
                     </div>
                   )}
                 </TabsContent>
+
+                {/* INVITES TAB — invitation_only events only */}
+                {detail.restriction === "invitation_only" && (
+                  <TabsContent value="invites" className="pb-8">
+                    <div className="space-y-4">
+                      <p className="text-xs text-muted-foreground">
+                        Only users on this list can register. On publish, each invited user receives a push notification.
+                      </p>
+
+                      {/* Search */}
+                      {!readOnly && (
+                        <div className="space-y-2">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Search by name or email…"
+                              value={inviteQuery}
+                              onChange={e => {
+                                setInviteQuery(e.target.value);
+                                searchInviteUsers(e.target.value);
+                              }}
+                              className="h-8 text-sm"
+                            />
+                          </div>
+                          {inviteSearching && (
+                            <p className="text-xs text-muted-foreground pl-1">Searching…</p>
+                          )}
+                          {inviteResults.length > 0 && (
+                            <Card className="border shadow-sm">
+                              <CardContent className="p-2 space-y-1">
+                                {inviteResults.map(u => {
+                                  const alreadyInvited = invites.some(i => i.user_id === u.id);
+                                  return (
+                                    <div key={u.id} className="flex items-center justify-between gap-2 py-1 px-1.5 rounded hover:bg-muted">
+                                      <div className="min-w-0">
+                                        <p className="text-sm font-medium truncate">{u.name}</p>
+                                        <p className="text-xs text-muted-foreground truncate">{u.email}{u.handicap_index != null ? ` · HCP ${u.handicap_index}` : ""}</p>
+                                      </div>
+                                      <Button
+                                        size="sm" className="h-7 text-xs flex-shrink-0 bg-[#1a5c38] hover:bg-[#164d30] gap-1"
+                                        disabled={alreadyInvited || inviteAdding === u.id}
+                                        onClick={() => addInvite(u.id)}
+                                      >
+                                        {alreadyInvited ? <><Check className="h-3 w-3" />Added</> : inviteAdding === u.id ? "Adding…" : <><Plus className="h-3 w-3" />Invite</>}
+                                      </Button>
+                                    </div>
+                                  );
+                                })}
+                              </CardContent>
+                            </Card>
+                          )}
+                        </div>
+                      )}
+
+                      {/* Current invite list */}
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-medium">Invite List ({invites.length})</p>
+                        </div>
+                        {invitesLoading ? (
+                          <Skeleton className="h-24 w-full" />
+                        ) : invites.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-6 text-center">No invites yet. Search above to add golfers.</p>
+                        ) : (
+                          <div className="space-y-1.5">
+                            {invites.map(inv => (
+                              <Card key={inv.user_id}>
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <div className="min-w-0">
+                                      <p className="text-sm font-medium truncate">{inv.name}</p>
+                                      <p className="text-xs text-muted-foreground truncate">{inv.email}{inv.handicap_index != null ? ` · HCP ${inv.handicap_index}` : ""}</p>
+                                    </div>
+                                    {!readOnly && (
+                                      <Button
+                                        variant="ghost" size="icon" className="h-7 w-7 text-destructive flex-shrink-0"
+                                        disabled={inviteRemoving === inv.user_id}
+                                        onClick={() => removeInvite(inv.user_id)}
+                                        title="Remove invite"
+                                      >
+                                        <X className="h-3.5 w-3.5" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </TabsContent>
+                )}
               </Tabs>
             </>
           )}

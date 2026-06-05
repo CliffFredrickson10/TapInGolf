@@ -842,33 +842,36 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      Number(rounds), (req.body?.image_url) || null, status, club.id]
   );
 
-  // Notify club members + past bookers about the new event (fire-and-forget)
-  const audience = await query<any>(
-    `SELECT DISTINCT u.push_token
-     FROM users u
-     WHERE u.push_token IS NOT NULL
-       AND (
-         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
-         OR EXISTS (
-           SELECT 1 FROM bookings b
-           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-           WHERE pts.club_id = ? AND b.user_id = u.id
-         )
-       )
-     LIMIT 500`,
-    [club.id, club.id]
-  );
-  if (audience.length > 0) {
-    const fmtDate = (d: string) => {
-      try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
-      catch { return d; }
-    };
-    sendPushNotifications(audience.map((u: any) => ({
-      to: u.push_token, sound: "default",
-      title: `⛳ New Event — ${club.name}`,
-      body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
-      data:  { type: "event_created", event_id: eventId, club_id: club.id },
-    })));
+  // Notify active club members about the new event (invitation_only events get no notification at creation
+  // — invites are managed separately and members are notified on publish)
+  if (restriction !== "invitation_only") {
+    const audience = await query<any>(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+       WHERE u.push_token IS NOT NULL
+       LIMIT 500`,
+      [club.id]
+    );
+    if (audience.length > 0) {
+      const fmtDate = (d: string) => {
+        try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
+        catch { return d; }
+      };
+      sendPushNotifications(audience.map((u: any) => ({
+        to: u.push_token, sound: "default",
+        title: `⛳ New Event — ${club.name}`,
+        body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
+        data:  { type: "event_created", event_id: eventId, club_id: club.id },
+      })));
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_created",
+          `⛳ New Event — ${club.name}`,
+          `${String(name)} · new tournament announced. Tap to view & enter.`,
+          { event_id: eventId, club_id: club.id }
+        );
+      }
+    }
   }
 
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [eventId]));
@@ -963,46 +966,109 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
     catch { return d; }
   };
 
-  // Members-only events: notify active members only
-  // Open / other events: notify members + past bookers
-  const isMembersOnly = ev.restriction === "members_only";
+  // Notification rules on publish:
+  // - invitation_only  → notify only users on the event invite list
+  // - everything else  → notify ALL active club members
+  const isInviteOnly = ev.restriction === "invitation_only";
   const audience = await query<any>(
-    isMembersOnly
+    isInviteOnly
       ? `SELECT DISTINCT u.id, u.push_token
          FROM users u
-         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+         JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
          WHERE u.push_token IS NOT NULL
          LIMIT 500`
       : `SELECT DISTINCT u.id, u.push_token
          FROM users u
+         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
          WHERE u.push_token IS NOT NULL
-           AND (
-             EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
-             OR EXISTS (SELECT 1 FROM bookings b JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id WHERE pts.club_id = ? AND b.user_id = u.id)
-           )
          LIMIT 500`,
-    isMembersOnly ? [club.id] : [club.id, club.id]
+    isInviteOnly ? [evId] : [club.id]
   );
 
   if (audience.length > 0) {
-    const titlePrefix = isMembersOnly ? "🏌️ Members Event Open" : "⛳ Tournament Now Open";
-    const bodyPrefix  = isMembersOnly ? "Members-only: " : "";
+    const title = isInviteOnly
+      ? `📩 You've been invited — ${club.name}`
+      : `⛳ Tournament Now Open — ${club.name}`;
+    const body = isInviteOnly
+      ? `${String(ev.name)} · ${fmtDate(ev.event_date)}. You have been invited — tap to register.`
+      : `${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`;
     sendPushNotifications(audience.map((u: any) => ({
-      to: u.push_token, sound: "default",
-      title: `${titlePrefix} — ${club.name}`,
-      body:  `${bodyPrefix}${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
-      data:  { type: "event_published", event_id: evId, club_id: club.id },
+      to: u.push_token, sound: "default", title, body,
+      data: { type: "event_published", event_id: evId, club_id: club.id },
     })));
-    // Save in-app notifications for each member
     for (const u of audience) {
-      saveUserNotification(u.id, "event_published",
-        `${titlePrefix} — ${club.name}`,
-        `${bodyPrefix}${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
-        { event_id: evId, club_id: club.id }
-      );
+      saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
     }
   }
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [evId]));
+});
+
+// ── Invite list management (invitation_only events) ──────────────────────────
+
+// GET /portal/events/:id/invites
+router.get("/portal/events/:id/invites", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  const invites = await query<any>(
+    `SELECT ei.id, ei.user_id, u.name, u.email, u.handicap_index, ei.invited_at
+     FROM event_invites ei
+     JOIN users u ON u.id = ei.user_id
+     WHERE ei.event_id = ?
+     ORDER BY u.name ASC`,
+    [evId]
+  );
+  res.json({ invites });
+});
+
+// POST /portal/events/:id/invites  — add a user to the invite list
+router.post("/portal/events/:id/invites", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  const { user_id } = req.body ?? {};
+  if (!user_id) { res.status(400).json({ message: "user_id required" }); return; }
+  const userRow = await row<any>("SELECT id FROM users WHERE id = ?", [user_id]);
+  if (!userRow) { res.status(404).json({ message: "User not found" }); return; }
+  await exec(
+    "INSERT INTO event_invites (event_id, user_id) VALUES (?, ?) ON CONFLICT (event_id, user_id) DO NOTHING",
+    [evId, user_id]
+  );
+  const invites = await query<any>(
+    `SELECT ei.id, ei.user_id, u.name, u.email, u.handicap_index, ei.invited_at
+     FROM event_invites ei JOIN users u ON u.id = ei.user_id
+     WHERE ei.event_id = ? ORDER BY u.name ASC`,
+    [evId]
+  );
+  res.json({ invites });
+});
+
+// DELETE /portal/events/:id/invites/:userId  — remove user from invite list
+router.delete("/portal/events/:id/invites/:userId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  await exec("DELETE FROM event_invites WHERE event_id = ? AND user_id = ?", [evId, userId]);
+  res.json({ message: "Removed from invite list" });
+});
+
+// GET /portal/users/search?q=  — search users by name or email (for invite list)
+router.get("/portal/users/search", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const q = String(req.query.q ?? "").trim();
+  if (!q || q.length < 2) { res.json({ users: [] }); return; }
+  const users = await query<any>(
+    `SELECT id, name, email, handicap_index
+     FROM users
+     WHERE name ILIKE ? OR email ILIKE ?
+     ORDER BY name ASC
+     LIMIT 20`,
+    [`%${q}%`, `%${q}%`]
+  );
+  res.json({ users });
 });
 
 // ── Tee-slot linking (portal) ────────────────────────────────────────────────

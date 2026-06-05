@@ -914,6 +914,19 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_event ON event_scores (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_user  ON event_scores (user_id)");
 
+  // ── Event invites (invitation_only events) ────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_invites (
+      id         SERIAL PRIMARY KEY,
+      event_id   INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      user_id    INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      invited_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE (event_id, user_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_event ON event_invites (event_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_user  ON event_invites (user_id)");
+
   // ── Club bans ──────────────────────────────────────────────────────────────
   // A club can ban a golfer from booking at their club. The golfer is notified
   // and can submit a single appeal; the club decides whether to lift or maintain.

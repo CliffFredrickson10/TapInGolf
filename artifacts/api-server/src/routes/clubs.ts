@@ -612,7 +612,8 @@ router.get("/clubs/:id/events", async (req, res): Promise<void> => {
         const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [clubId, userId]);
         ev.user_eligible = !!m;
       } else if (ev.restriction === "invitation_only") {
-        ev.user_eligible = !!reg;
+        const inv = await row<any>("SELECT id FROM event_invites WHERE event_id = ? AND user_id = ?", [ev.id, userId]);
+        ev.user_eligible = !!inv;
       } else {
         ev.user_eligible = true;
       }
@@ -676,7 +677,8 @@ router.get("/events/:id", async (req, res): Promise<void> => {
       const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, userId]);
       ev.user_eligible = !!m;
     } else if (ev.restriction === "invitation_only") {
-      ev.user_eligible = !!reg;
+      const inv = await row<any>("SELECT id FROM event_invites WHERE event_id = ? AND user_id = ?", [evId, userId]);
+      ev.user_eligible = !!inv;
     } else {
       ev.user_eligible = true;
     }
@@ -707,7 +709,8 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
     const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, user.id]);
     if (!m) { res.status(403).json({ message: "This event is for active club members only" }); return; }
   } else if (ev.restriction === "invitation_only") {
-    res.status(403).json({ message: "This event is by invitation only. Please contact the club." }); return;
+    const inv = await row<any>("SELECT id FROM event_invites WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+    if (!inv) { res.status(403).json({ message: "This event is by invitation only. You have not been invited." }); return; }
   }
 
   const existing = await row<any>("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);

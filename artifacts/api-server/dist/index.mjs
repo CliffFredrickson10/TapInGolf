@@ -63729,8 +63729,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
          EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
          OR EXISTS (
            SELECT 1 FROM bookings b
-           JOIN tee_times tt ON tt.id = b.tee_time_id
-           WHERE tt.club_id = ? AND b.user_id = u.id
+           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+           WHERE pts.club_id = ? AND b.user_id = u.id
          )
        )
      LIMIT 500`,
@@ -63955,8 +63955,8 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
          EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
          OR EXISTS (
            SELECT 1 FROM bookings b
-           JOIN tee_times tt ON tt.id = b.tee_time_id
-           WHERE tt.club_id = ? AND b.user_id = u.id
+           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+           WHERE pts.club_id = ? AND b.user_id = u.id
          )
        )
      LIMIT 500`,

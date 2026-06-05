@@ -57861,9 +57861,11 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
        GREATEST(0, pts.max_players - pts.player_count) AS available_slots,
        (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
-       ) AS existing_players
+       ) AS existing_players,
+       ge.name AS event_name
      FROM portal_tee_slots pts
-     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1 AND pts.event_id IS NULL
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
+     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
      ORDER BY pts.tee_time ASC`,
     [clubId, date]
   );
@@ -57889,6 +57891,8 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
     session_type: s.session_type,
     active: s.is_active === 1,
     slot_source: "portal",
+    event_id: s.event_id ?? null,
+    event_name: s.event_name ?? null,
     existing_players: (s.existing_players ?? []).map((p) => ({
       name: fmtName(p.name),
       players: p.players

@@ -17,6 +17,8 @@ export interface TeeTime {
   date: string;
   tee_start_type?: "first_tee" | "two_tee" | "tenth_tee";
   existing_players?: ExistingPlayer[];
+  event_id?: number | null;
+  event_name?: string | null;
 }
 
 interface Props {
@@ -29,6 +31,8 @@ export default function TeeTimeSlot({ slot, selected, onPress }: Props) {
   const colors = useColors();
   const isFull = slot.available_slots === 0;
   const hasPlayers = (slot.existing_players?.length ?? 0) > 0;
+
+  const isTournament = !!slot.event_id;
 
   const teeLabel =
     slot.tee_start_type === "tenth_tee"
@@ -53,9 +57,13 @@ export default function TeeTimeSlot({ slot, selected, onPress }: Props) {
             ? colors.primary
             : isFull
             ? colors.muted
+            : isTournament
+            ? "#fffbeb"
             : colors.card,
           borderColor: selected
             ? colors.primary
+            : isTournament
+            ? "#c8a84b"
             : hasPlayers
             ? colors.accent
             : colors.border,
@@ -71,6 +79,14 @@ export default function TeeTimeSlot({ slot, selected, onPress }: Props) {
       >
         {slot.time}
       </Text>
+
+      {isTournament && (
+        <View style={[styles.teeBadge, { backgroundColor: selected ? "rgba(255,255,255,0.2)" : "#fef3c7" }]}>
+          <Text style={[styles.teeBadgeText, { color: selected ? "rgba(255,255,255,0.9)" : "#92400e" }]}>
+            🏆 Tournament
+          </Text>
+        </View>
+      )}
 
       {teeLabel && (
         <View

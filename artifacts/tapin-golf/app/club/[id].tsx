@@ -484,6 +484,8 @@ export default function ClubDetailScreen() {
                   cart_available:  club.cart_available  ? "1" : "0",
                   cart_compulsory: club.cart_compulsory ? "1" : "0",
                   cart_price:      club.cart_price ? String(club.cart_price) : "",
+                  event_id:        selectedSlot.event_id ? String(selectedSlot.event_id) : "",
+                  event_name:      selectedSlot.event_name ?? "",
                 },
               });
             }}

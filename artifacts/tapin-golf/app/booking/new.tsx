@@ -84,6 +84,8 @@ export default function NewBookingScreen() {
     cart_available?: string;
     cart_compulsory?: string;
     cart_price?: string;
+    event_id?: string;
+    event_name?: string;
   }>();
 
   const maxPlayers      = Math.min(parseInt(params.available ?? "4"), 4);
@@ -455,6 +457,7 @@ export default function NewBookingScreen() {
           include_cart:   cartAvailable && includeCart,
           holes:          holes,
           hna_number:     hnaNumber.trim() || null,
+          event_id:       params.event_id ? parseInt(params.event_id) : undefined,
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

@@ -1343,38 +1343,24 @@ export default function Schedule() {
             {dayTeeTimes.map((tt, rowIdx) => {
               const isTournament = !!tt.event_id;
 
-              // ── Tournament-exclusive slot — read-only locked row ──────────────
-              if (isTournament) {
-                return (
-                  <div key={tt.id}
-                    className={`grid grid-cols-[96px_1fr_108px] border-t text-sm ${rowIdx % 2 === 0 ? "bg-amber-50/40" : "bg-amber-50/60"}`}
-                  >
-                    <div className="px-3 py-2 flex flex-col justify-center border-r border-amber-100 gap-0.5">
-                      <span className="font-mono font-bold text-[#1a5c38] text-sm">{String(tt.time).slice(0, 5)}</span>
-                      <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-semibold w-fit">Tournament</span>
-                    </div>
-                    <div className="px-3 py-2 border-l border-amber-100 flex items-center gap-2 col-span-1">
-                      <span className="text-xs font-medium text-amber-800 truncate">
-                        {tt.event_name ?? "Tournament"} — {tt.total_slots} player slots reserved
-                      </span>
-                    </div>
-                    <div className="px-2 py-2 border-l border-amber-100 flex items-center justify-center">
-                      <span className="text-[10px] text-amber-600 font-medium">Locked</span>
-                    </div>
-                  </div>
-                );
-              }
-
-              // ── Regular slot ─────────────────────────────────────────────────
+              // ── Regular slot (+ tournament slots rendered identically but locked) ─
               const slots = buildSlots(tt, bForTT(tt.id));
+              const borderCol  = isTournament ? "border-amber-100" : "border-gray-100";
               return (
                 <div key={tt.id}
-                  className={`grid grid-cols-[96px_1fr_1fr_1fr_1fr_108px] border-t text-sm ${rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50/60"} ${!tt.active ? "opacity-60" : ""}`}
+                  className={`grid grid-cols-[96px_1fr_1fr_1fr_1fr_108px] border-t text-sm
+                    ${isTournament
+                      ? rowIdx % 2 === 0 ? "bg-amber-50/40" : "bg-amber-50/70"
+                      : rowIdx % 2 === 0 ? "bg-white" : "bg-gray-50/60"}
+                    ${!tt.active ? "opacity-60" : ""}`}
                 >
                   {/* Time cell */}
-                  <div className="px-3 py-2 flex flex-col justify-center border-r border-gray-100 gap-0.5">
+                  <div className={`px-3 py-2 flex flex-col justify-center border-r ${borderCol} gap-0.5`}>
                     <span className="font-mono font-bold text-[#1a5c38] text-sm">{String(tt.time).slice(0, 5)}</span>
                     <div className="flex gap-1 flex-wrap">
+                      {isTournament && (
+                        <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-semibold">🏆 {tt.event_name ?? "Tournament"}</span>
+                      )}
                       {tt.tee_start_type === "first_tee" && (
                         <span className="text-[9px] bg-green-100 text-green-700 px-1 py-0.5 rounded font-semibold">1st Tee</span>
                       )}
@@ -1396,17 +1382,19 @@ export default function Schedule() {
                   {/* Player cells */}
                   {slots.map((slot, i) => (
                     <div key={i}
-                      className={`px-3 py-2 border-l border-gray-100 text-xs flex items-center transition-all
+                      className={`px-3 py-2 border-l ${borderCol} text-xs flex items-center transition-all
                         ${slotBg(slot)}
-                        ${slot.kind === "booked" ? "cursor-pointer hover:brightness-95" : ""}
-                        ${slot.kind === "open" ? "cursor-pointer hover:brightness-95" : ""}
-                        ${slot.kind === "blocked" ? "cursor-pointer hover:brightness-95" : ""}`}
+                        ${!isTournament && slot.kind === "booked" ? "cursor-pointer hover:brightness-95" : ""}
+                        ${!isTournament && slot.kind === "open" ? "cursor-pointer hover:brightness-95" : ""}
+                        ${!isTournament && slot.kind === "blocked" ? "cursor-pointer hover:brightness-95" : ""}`}
                       onClick={() => {
+                        if (isTournament) return;
                         if (slot.kind === "booked" && slot.playerIndex === 0) { setSelBooking(slot.booking); setBookingOpen(true); }
                         else if (slot.kind === "open") handleBlockSlot(tt, i);
                         else if (slot.kind === "blocked") handleBlockSlot(tt, i);
                       }}
                       title={
+                        isTournament ? undefined :
                         slot.kind === "booked" ? `Manage: ${slot.booking.booking_ref}` :
                         slot.kind === "open" ? "Click to block this slot" :
                         slot.kind === "blocked" ? "Click to unblock this slot" :
@@ -1415,9 +1403,11 @@ export default function Schedule() {
                     >
                       {slot.kind === "open" && (
                         <span className="font-medium">
-                          {tt.promotional_price
-                            ? <span className="text-gray-500">R{tt.promotional_price}</span>
-                            : <span className="text-gray-300 italic text-[11px]">Click to block slot</span>}
+                          {isTournament
+                            ? <span className="text-amber-300 italic text-[11px]">Open</span>
+                            : tt.promotional_price
+                              ? <span className="text-gray-500">R{tt.promotional_price}</span>
+                              : <span className="text-gray-300 italic text-[11px]">Click to block slot</span>}
                         </span>
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
@@ -1437,15 +1427,21 @@ export default function Schedule() {
                   ))}
 
                   {/* Actions */}
-                  <div className="px-2 py-2 border-l border-gray-100 flex items-center justify-center gap-1">
-                    <Switch checked={tt.active} onCheckedChange={() => handleToggle(tt)} className="scale-75" />
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(tt)} title="Edit">
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/60 hover:text-destructive" onClick={() => handleDelete(tt.id)} title="Delete">
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
+                  {isTournament ? (
+                    <div className={`px-2 py-2 border-l ${borderCol} flex items-center justify-center`}>
+                      <span className="text-[10px] text-amber-500 font-semibold">🔒</span>
+                    </div>
+                  ) : (
+                    <div className="px-2 py-2 border-l border-gray-100 flex items-center justify-center gap-1">
+                      <Switch checked={tt.active} onCheckedChange={() => handleToggle(tt)} className="scale-75" />
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-foreground" onClick={() => openEdit(tt)} title="Edit">
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive/60 hover:text-destructive" onClick={() => handleDelete(tt.id)} title="Delete">
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  )}
                 </div>
               );
             })}

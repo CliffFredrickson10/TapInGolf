@@ -387,8 +387,8 @@ export default function EventDetailScreen() {
                 <View style={styles.statusRow}>
                   <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
                   <View style={{ flex: 1 }}>
-                    <Text style={[styles.ctaTitle, { color: colors.foreground }]}>Open to all</Text>
-                    <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>No entry required — just show up and play.</Text>
+                    <Text style={[styles.ctaTitle, { color: colors.foreground }]}>No entry required</Text>
+                    <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>No formal entry needed — contact the club to confirm participation.</Text>
                   </View>
                 </View>
               )}

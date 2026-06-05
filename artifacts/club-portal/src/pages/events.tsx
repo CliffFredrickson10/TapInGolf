@@ -172,6 +172,7 @@ const EMPTY_FORM = {
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
+  use_divisions: true,
   divisions: DEFAULT_DIVISIONS,
 };
 
@@ -413,7 +414,8 @@ export default function Events() {
       entries_required: ev.entries_required !== 0,
       use_tiered_pricing: !!ev.use_tiered_pricing,
       allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
-      divisions: ev.divisions ?? DEFAULT_DIVISIONS,
+      use_divisions: Array.isArray(ev.divisions) ? ev.divisions.length > 0 : true,
+      divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
     setAvailableSlots(availSlots);      // pre-populated — no further load needed on open
@@ -447,6 +449,7 @@ export default function Events() {
         entry_fee:        form.entry_fee === "" ? null : Number(form.entry_fee),
         max_participants: null,   // auto-computed from tee slots
         rounds:           numDays * form.rounds_per_day,
+        divisions:        form.use_divisions ? form.divisions : [],
       };
       let evId: number;
       if (editId) {
@@ -1281,13 +1284,15 @@ export default function Events() {
 
             {/* Entry window */}
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
+              <div className={`space-y-1.5 transition-opacity ${!form.entries_required ? "opacity-40 pointer-events-none" : ""}`}>
                 <Label>Entries Open</Label>
-                <Input type="date" value={form.entries_open} onChange={e => setForm(f => ({ ...f, entries_open: e.target.value }))} />
+                <Input type="date" value={form.entries_open} disabled={!form.entries_required}
+                  onChange={e => setForm(f => ({ ...f, entries_open: e.target.value }))} />
               </div>
-              <div className="space-y-1.5">
+              <div className={`space-y-1.5 transition-opacity ${!form.entries_required ? "opacity-40 pointer-events-none" : ""}`}>
                 <Label>Entries Close</Label>
-                <Input type="date" value={form.entries_close} onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
+                <Input type="date" value={form.entries_close} disabled={!form.entries_required}
+                  onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
               </div>
               <div className="space-y-1.5">
                 <Label>
@@ -1364,35 +1369,46 @@ export default function Events() {
 
             {/* Divisions */}
             <div className="space-y-2">
-              <Label>Divisions (auto-assigned from HNA handicap)</Label>
-              <div className="space-y-2">
-                <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
-                  <span className="w-20 shrink-0">Division</span>
-                  <span style={{ width: 70 }} className="shrink-0">WHS Index From</span>
-                  <span className="shrink-0 invisible">–</span>
-                  <span style={{ width: 70 }} className="shrink-0">WHS Index To</span>
-                  <span style={{ width: 340 }} className="shrink-0">Format</span>
-                  <span className="flex-1 min-w-0">Tees</span>
+              <div className="flex items-center justify-between">
+                <Label>Divisions (auto-assigned from HNA handicap)</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-muted-foreground">{form.use_divisions ? "Enabled" : "Disabled"}</span>
+                  <Switch checked={form.use_divisions} onCheckedChange={v => setForm(f => ({ ...f, use_divisions: v }))} />
                 </div>
-                {form.divisions.map((d, i) => (
-                  <div key={d.key} className="flex items-center gap-2 text-xs">
-                    <span className="font-medium w-20 shrink-0">{d.label}</span>
-                    <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
-                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
-                    <span className="text-muted-foreground shrink-0">–</span>
-                    <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
-                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
-                    <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
-                      <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 340 }}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    <Input className="h-7 text-xs flex-1 min-w-0" placeholder="club" value={d.tees}
-                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
-                  </div>
-                ))}
               </div>
+              {!form.use_divisions && (
+                <p className="text-xs text-muted-foreground">Divisions are disabled — all golfers compete in a single field.</p>
+              )}
+              {form.use_divisions && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+                    <span className="w-20 shrink-0">Division</span>
+                    <span style={{ width: 70 }} className="shrink-0">WHS Index From</span>
+                    <span className="shrink-0 invisible">–</span>
+                    <span style={{ width: 70 }} className="shrink-0">WHS Index To</span>
+                    <span style={{ width: 340 }} className="shrink-0">Format</span>
+                    <span className="flex-1 min-w-0">Tees</span>
+                  </div>
+                  {form.divisions.map((d, i) => (
+                    <div key={d.key} className="flex items-center gap-2 text-xs">
+                      <span className="font-medium w-20 shrink-0">{d.label}</span>
+                      <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
+                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
+                      <span className="text-muted-foreground shrink-0">–</span>
+                      <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
+                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
+                      <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
+                        <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 340 }}><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                      <Input className="h-7 text-xs flex-1 min-w-0" placeholder="club" value={d.tees}
+                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>

@@ -63549,6 +63549,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     ballot,
     scoring_enabled,
     payment_required,
+    entries_required,
     use_tiered_pricing,
     allow_wallet,
     allow_prepaid,
@@ -63568,9 +63569,9 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
-       ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
+       ballot, scoring_enabled, payment_required, entries_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
        rounds, image_url, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -63593,6 +63594,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       ballot ? 1 : 0,
       scoring_enabled ? 1 : 0,
       payment_required ? 1 : 0,
+      entries_required === false || entries_required === 0 ? 0 : 1,
       use_tiered_pricing ? 1 : 0,
       allow_wallet ? 1 : 0,
       allow_prepaid ? 1 : 0,
@@ -63666,6 +63668,7 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     ballot,
     scoring_enabled,
     payment_required,
+    entries_required,
     use_tiered_pricing,
     allow_wallet,
     allow_prepaid,
@@ -63758,6 +63761,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (payment_required !== void 0) {
     updates.push("payment_required = ?");
     vals.push(payment_required ? 1 : 0);
+  }
+  if (entries_required !== void 0) {
+    updates.push("entries_required = ?");
+    vals.push(entries_required === false || entries_required === 0 ? 0 : 1);
   }
   if (use_tiered_pricing !== void 0) {
     updates.push("use_tiered_pricing = ?");
@@ -66840,7 +66847,7 @@ async function createSchema() {
       event_type       VARCHAR(30) NOT NULL DEFAULT 'other'
                          CHECK (event_type IN ('open_day','competition','corporate','social','other')),
       restriction      VARCHAR(30) NOT NULL DEFAULT 'open'
-                         CHECK (restriction IN ('open','members_only','invitation_only')),
+                         CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only')),
       entry_fee        DECIMAL(10,2),
       max_participants INT,
       status           VARCHAR(20) NOT NULL DEFAULT 'active'
@@ -67358,6 +67365,9 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_required SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");
+  await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_restriction_check CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only'))");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_status_check CHECK (status IN ('active','cancelled','completed','pending_publish'))");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");

@@ -117,7 +117,7 @@ const TYPE_LABELS: Record<string, string> = {
   social: "Social", other: "Other",
 };
 const RESTRICT_LABELS: Record<string, string> = {
-  open: "Open", members_only: "Members Only", invitation_only: "Invite Only",
+  open: "Open", members_only: "Members Only", invitation_only: "Invite Only", whs_players_only: "WHS Index Players Only",
 };
 const STATUS_BADGE: Record<string, string> = {
   pending_publish: "bg-amber-100 text-amber-700",

@@ -64,7 +64,7 @@ const FORMAT_LABELS: Record<string, string> = {
   fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey", other: "Other",
 };
 const RESTRICT_LABELS: Record<string, string> = {
-  open: "Open", members_only: "Members Only", invitation_only: "Invite Only",
+  open: "Open", members_only: "Members Only", invitation_only: "Invite Only", whs_players_only: "WHS Index Players Only",
 };
 
 function fmtDate(d: string | null | undefined) {

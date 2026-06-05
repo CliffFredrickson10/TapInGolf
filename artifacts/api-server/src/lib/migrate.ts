@@ -223,7 +223,7 @@ async function createSchema(): Promise<void> {
       event_type       VARCHAR(30) NOT NULL DEFAULT 'other'
                          CHECK (event_type IN ('open_day','competition','corporate','social','other')),
       restriction      VARCHAR(30) NOT NULL DEFAULT 'open'
-                         CHECK (restriction IN ('open','members_only','invitation_only')),
+                         CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only')),
       entry_fee        DECIMAL(10,2),
       max_participants INT,
       status           VARCHAR(20) NOT NULL DEFAULT 'active'
@@ -836,6 +836,9 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_required SMALLINT NOT NULL DEFAULT 1");
+  // Widen restriction check to include whs_players_only
+  await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");
+  await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_restriction_check CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only'))");
   // Widen status check to include pending_publish (added after initial schema)
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_status_check CHECK (status IN ('active','cancelled','completed','pending_publish'))");

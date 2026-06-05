@@ -1256,7 +1256,7 @@ export default function Events() {
                   <span className="shrink-0 invisible">–</span>
                   <span style={{ width: 70 }} className="shrink-0 text-center">WHS To</span>
                   <span style={{ width: 340 }} className="shrink-0">Format</span>
-                  <span style={{ width: 90 }} className="shrink-0">Tees</span>
+                  <span className="flex-1 min-w-0">Tees</span>
                 </div>
                 {form.divisions.map((d, i) => (
                   <div key={d.key} className="flex items-center gap-2 text-xs">
@@ -1272,7 +1272,7 @@ export default function Events() {
                         {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
                       </SelectContent>
                     </Select>
-                    <Input className="h-7 text-xs shrink-0" style={{ width: 90 }} placeholder="club" value={d.tees}
+                    <Input className="h-7 text-xs flex-1 min-w-0" placeholder="club" value={d.tees}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
                   </div>
                 ))}

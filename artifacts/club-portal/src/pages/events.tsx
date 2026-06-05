@@ -1254,10 +1254,10 @@ export default function Events() {
                   <div key={d.key} className="flex items-center gap-2 text-xs">
                     <span className="font-medium w-20 shrink-0">{d.label}</span>
                     <span className="text-muted-foreground shrink-0">WHS Index</span>
-                    <Input type="number" className="h-7 text-xs w-14 shrink-0" value={d.min_hcp}
+                    <Input type="number" className="h-7 text-xs w-16 shrink-0" value={d.min_hcp}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
                     <span className="text-muted-foreground shrink-0">–</span>
-                    <Input type="number" className="h-7 text-xs w-14 shrink-0" value={d.max_hcp}
+                    <Input type="number" className="h-7 text-xs w-16 shrink-0" value={d.max_hcp}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
                     <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
                       <SelectTrigger className="h-7 text-xs w-44 shrink-0"><SelectValue /></SelectTrigger>

@@ -162,6 +162,10 @@ export default function Events() {
   const [slotsLoading, setSlotsLoading]       = useState(false);
   const [genDialogOpen, setGenDialogOpen]     = useState(false);
   const [genDialogDate, setGenDialogDate]     = useState("");
+  const [showAddSlot, setShowAddSlot]         = useState(false);
+  const [newSlotDate, setNewSlotDate]         = useState("");
+  const [newSlotTime, setNewSlotTime]         = useState("");
+  const [newSlotPlayers, setNewSlotPlayers]   = useState(4);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -204,7 +208,7 @@ export default function Events() {
     setSlotsLoading(true);
     try {
       const params = endDate ? `from=${date}&to=${endDate}` : `date=${date}`;
-      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}`, { signal: controller.signal });
+      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}&_t=${Date.now()}`, { signal: controller.signal });
       if (!controller.signal.aborted) setAvailableSlots(data);
     } catch (e: any) {
       if (e?.name !== "AbortError") { /* ignore cancellation */ }

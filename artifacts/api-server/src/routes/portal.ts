@@ -432,11 +432,13 @@ router.post("/portal/tee-times", requireClubAuth, async (req: Request, res: Resp
   const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes } = req.body ?? {};
   if (!date || !time) { res.status(400).json({ message: "date and time required" }); return; }
   const insertRows = await query<any>(
-    "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id",
+    "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) DO NOTHING RETURNING id",
     [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
   );
   const insertId = insertRows[0]?.id;
-  const inserted = await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId]);
+  const inserted = insertId
+    ? await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId])
+    : await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ?", [club.id, date, time]);
   res.json({ ...inserted, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!inserted!.active });
 });
 

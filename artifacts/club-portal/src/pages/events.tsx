@@ -38,7 +38,7 @@ interface GolfEvent {
   status: string; created_at: string;
   divisions: Division[];
   entries_open: string | null; entries_close: string | null;
-  ballot: number; scoring_enabled: number; payment_required: number;
+  ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number;
   total_registrations: number; approved_count: number; pending_count: number;
@@ -170,7 +170,7 @@ const EMPTY_FORM = {
   format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", image_url: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
-  ballot: false, scoring_enabled: false, payment_required: false,
+  ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
   divisions: DEFAULT_DIVISIONS,
 };
@@ -410,6 +410,7 @@ export default function Events() {
       })(),
       ballot: !!ev.ballot, scoring_enabled: !!ev.scoring_enabled,
       payment_required: !!ev.payment_required,
+      entries_required: ev.entries_required !== 0,
       use_tiered_pricing: !!ev.use_tiered_pricing,
       allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
       divisions: ev.divisions ?? DEFAULT_DIVISIONS,
@@ -1318,6 +1319,7 @@ export default function Events() {
             <Card className="bg-muted/30">
               <CardContent className="p-4 space-y-3">
                 {[
+                  { key: "entries_required", label: "Entries / enrollment required", desc: "When off, golfers can participate without submitting an entry — open to all" },
                   { key: "payment_required", label: "Payment required", desc: "Golfers must pay before their spot is confirmed" },
                   { key: "scoring_enabled",  label: "Live scoring",     desc: "Enable score submission and leaderboard in the mobile app" },
                   { key: "ballot",           label: "Ballot if oversubscribed", desc: "When field is full, a ballot determines who gets a spot" },

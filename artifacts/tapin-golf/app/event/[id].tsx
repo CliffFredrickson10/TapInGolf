@@ -34,7 +34,7 @@ interface EventDetail {
   status: string; approved_count: number;
   divisions: Division[];
   entries_open: string | null; entries_close: string | null;
-  ballot: number; scoring_enabled: number; payment_required: number;
+  ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number;
   user_registration: UserRegistration | null;
@@ -244,8 +244,11 @@ export default function EventDetailScreen() {
   const division = reg?.division ?? event.user_division_preview;
 
   // What action should the CTA show?
+  const entriesRequired = event.entries_required !== 0; // default true for existing events
   const ctaState = !user
     ? "login"
+    : !entriesRequired
+    ? "open_all"                // no enrollment step — open to all
     : !reg
     ? (event.status === "active" ? "register" : "closed")
     : reg.status === "pending"
@@ -380,6 +383,15 @@ export default function EventDetailScreen() {
 
             {/* Registration status / CTA */}
             <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              {ctaState === "open_all" && (
+                <View style={styles.statusRow}>
+                  <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.ctaTitle, { color: colors.foreground }]}>Open to all</Text>
+                    <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>No entry required — just show up and play.</Text>
+                  </View>
+                </View>
+              )}
               {ctaState === "login" && (
                 <>
                   <Text style={[styles.ctaTitle, { color: colors.foreground }]}>Sign in to enter</Text>

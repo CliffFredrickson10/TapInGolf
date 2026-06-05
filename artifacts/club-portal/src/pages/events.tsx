@@ -829,7 +829,13 @@ export default function Events() {
             </div>
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <textarea className="w-full border rounded-md px-3 py-2 text-sm min-h-[60px] bg-background resize-none" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Tournament details, rules, conditions…" />
+              <textarea
+                className="w-full border rounded-md px-3 py-2 text-sm min-h-[100px] bg-background resize-none overflow-hidden"
+                value={form.description}
+                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                onInput={e => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; }}
+                placeholder="Tournament details, rules, conditions…"
+              />
             </div>
 
             <div className="grid grid-cols-2 gap-3">

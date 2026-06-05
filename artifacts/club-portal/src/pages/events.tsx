@@ -254,7 +254,7 @@ export default function Events() {
 
   const slotAbortRef = useRef<AbortController | null>(null);
 
-  const loadAvailableSlots = useCallback(async (date: string, endDate?: string) => {
+  const loadAvailableSlots = useCallback(async (date: string, endDate?: string, autoSelectAll = false) => {
     if (!date) { setAvailableSlots([]); return; }
     // Cancel any in-flight request so stale day-1-only results don't overwrite day-range results
     slotAbortRef.current?.abort();
@@ -264,7 +264,10 @@ export default function Events() {
     try {
       const params = endDate ? `from=${date}&to=${endDate}` : `date=${date}`;
       const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}&_t=${Date.now()}`, { signal: controller.signal });
-      if (!controller.signal.aborted) setAvailableSlots(data);
+      if (!controller.signal.aborted) {
+        setAvailableSlots(data);
+        if (autoSelectAll) setSelectedSlotIds(data.map(s => s.id));
+      }
     } catch (e: any) {
       if (e?.name !== "AbortError") { /* ignore cancellation */ }
     } finally {
@@ -1297,7 +1300,7 @@ export default function Events() {
         open={genDialogOpen}
         onOpenChange={setGenDialogOpen}
         initialDate={genDialogDate}
-        onComplete={() => loadAvailableSlots(form.event_date, form.end_date || undefined)}
+        onComplete={() => loadAvailableSlots(form.event_date, form.end_date || undefined, true)}
       />
     </div>
   );

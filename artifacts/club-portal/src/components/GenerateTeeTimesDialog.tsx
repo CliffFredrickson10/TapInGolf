@@ -174,6 +174,8 @@ export function GenerateTeeTimesDialog({
   const slots = 4;
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
+  const [tournamentConflicts, setTournamentConflicts] = useState<Array<{ date: string; time: string; event_name: string }>>([]);
+  const [conflictsLoading, setConflictsLoading] = useState(false);
 
   // Saved configs state
   const [savedConfigs, setSavedConfigs] = useState<Array<{ id: number; name: string; config_type: string; config_data: any }>>([]);
@@ -199,6 +201,16 @@ export function GenerateTeeTimesDialog({
       setDateTo(initialDate);
     }
   }, [open, initialDate]);
+
+  // Fetch tournament conflicts when date range changes (only for general schedule generation)
+  useEffect(() => {
+    if (!open || eventId || !dateFrom || !dateTo) { setTournamentConflicts([]); return; }
+    setConflictsLoading(true);
+    api<Array<{ date: string; time: string; event_name: string }>>(`/api/portal/tee-times/tournament-conflicts?from=${dateFrom}&to=${dateTo}`)
+      .then(setTournamentConflicts)
+      .catch(() => setTournamentConflicts([]))
+      .finally(() => setConflictsLoading(false));
+  }, [open, eventId, dateFrom, dateTo]);
 
   // Live preview
   const preview = useMemo(() => {
@@ -307,11 +319,16 @@ export function GenerateTeeTimesDialog({
     setGenerating(true);
     const dates = datesInRange(dateFrom, dateTo);
 
+    // Build conflict lookup for general schedule generation (tournament-mode has no conflicts)
+    const conflictSet = new Set(tournamentConflicts.map(c => `${String(c.date).slice(0, 10)}|${String(c.time).slice(0, 5)}`));
+
     let allSlots: Array<{ date: string; time: string; tee_start_type: string; crossover_enabled: boolean }> = [];
+    let skipped = 0;
     for (const date of dates) {
       if (tab === "A") {
         const addBlock = (b: Block) =>
           generateBlockTimes(b.start, b.end, b.interval).forEach(t => {
+            if (!eventId && conflictSet.has(`${date}|${t}`)) { skipped++; return; }
             if (b.tee_start_type === "two_tee") {
               allSlots.push({ date, time: t, tee_start_type: "first_tee", crossover_enabled: b.crossover_enabled });
               allSlots.push({ date, time: t, tee_start_type: "tenth_tee", crossover_enabled: b.crossover_enabled });
@@ -322,9 +339,10 @@ export function GenerateTeeTimesDialog({
         addBlock(cfgA.morning); addBlock(cfgA.midday); addBlock(cfgA.twilight);
       } else {
         const addBlock = (b: Block) =>
-          generateBlockTimes(b.start, b.end, b.interval).forEach(t =>
-            allSlots.push({ date, time: t, tee_start_type: b.tee_start_type, crossover_enabled: false })
-          );
+          generateBlockTimes(b.start, b.end, b.interval).forEach(t => {
+            if (!eventId && conflictSet.has(`${date}|${t}`)) { skipped++; return; }
+            allSlots.push({ date, time: t, tee_start_type: b.tee_start_type, crossover_enabled: false });
+          });
         addBlock(cfgB.morning); addBlock(cfgB.midday);
       }
     }
@@ -350,9 +368,10 @@ export function GenerateTeeTimesDialog({
         done = Math.min(i + BATCH, allSlots.length);
         setProgress({ done, total: allSlots.length });
       }
+      const skippedNote = skipped > 0 ? ` · ${skipped} tournament slot${skipped > 1 ? "s" : ""} preserved` : "";
       toast({
         title: errors > 0 ? `Generated with ${errors} errors` : "Schedule generated",
-        description: `${done - errors} tee times created across ${dates.length} day${dates.length > 1 ? "s" : ""}`,
+        description: `${done - errors} tee times created across ${dates.length} day${dates.length > 1 ? "s" : ""}${skippedNote}`,
       });
       onOpenChange(false);
       onComplete(dateFrom);
@@ -639,6 +658,34 @@ export function GenerateTeeTimesDialog({
                 Save this configuration for reuse
               </Button>
             )}
+            {/* Tournament conflict notice (only for general schedule generation) */}
+            {!eventId && (conflictsLoading || tournamentConflicts.length > 0) && (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🏆</span>
+                  <span className="text-xs font-semibold text-amber-800">
+                    {conflictsLoading
+                      ? "Checking for tournament tee times…"
+                      : `${tournamentConflicts.length} tournament tee time${tournamentConflicts.length > 1 ? "s" : ""} in this range will be preserved`}
+                  </span>
+                </div>
+                {!conflictsLoading && tournamentConflicts.length > 0 && (
+                  <>
+                    <p className="text-xs text-amber-700">
+                      These slots belong to existing tournaments and will <strong>not</strong> be replaced. General tee times at those times will be skipped automatically.
+                    </p>
+                    <div className="flex flex-wrap gap-1 max-h-20 overflow-y-auto">
+                      {tournamentConflicts.map((c, i) => (
+                        <span key={i} className="text-[10px] bg-amber-100 border border-amber-300 text-amber-800 rounded px-1.5 py-0.5 font-mono">
+                          {String(c.date).slice(5)} · {String(c.time).slice(0, 5)} · {c.event_name}
+                        </span>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
             <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]"
               disabled={preview.perDay === 0 || readOnly}
               onClick={handleGenerate}>

@@ -63381,20 +63381,26 @@ router14.delete("/portal/tee-times/clear", requireClubAuth2, async (req, res) =>
     const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
     await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
   } else {
-    const blocking = await query(
-      `SELECT DISTINCT ge.name FROM portal_tee_slots pts
-       JOIN golf_events ge ON ge.id = pts.event_id
-       WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ? AND pts.event_id IS NOT NULL`,
-      [club.id, from, to]
-    );
-    if (blocking.length > 0) {
-      const names = blocking.map((r) => r.name).join(", ");
-      res.status(409).json({ message: `Cannot delete: tournament slots exist in this range (${names}). Cancel the tournament first or manage its tee times from the Events page.` });
-      return;
-    }
     deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL", [club.id, from, to]);
   }
   res.json({ message: "Cleared", deleted });
+});
+router14.get("/portal/tee-times/tournament-conflicts", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { from, to } = req.query;
+  if (!from || !to) {
+    res.status(400).json({ message: "from and to are required" });
+    return;
+  }
+  const conflicts = await query(
+    `SELECT pts.date, pts.tee_time AS time, ge.name AS event_name
+     FROM portal_tee_slots pts
+     JOIN golf_events ge ON ge.id = pts.event_id
+     WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ? AND pts.event_id IS NOT NULL
+     ORDER BY pts.date, pts.tee_time`,
+    [club.id, from, to]
+  );
+  res.json(conflicts);
 });
 router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

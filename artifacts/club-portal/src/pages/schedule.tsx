@@ -957,8 +957,8 @@ function EditTeeTimeDialog({
 // ─── Delete Tee Times Dialog ───────────────────────────────────────────────────
 
 function DeleteTeeTimesDialog({
-  open, onOpenChange, defaultDate, onDeleted,
-}: { open: boolean; onOpenChange: (v: boolean) => void; defaultDate: string; onDeleted: (from: string, to: string) => void }) {
+  open, onOpenChange, defaultDate, onDeleted, teeTimes,
+}: { open: boolean; onOpenChange: (v: boolean) => void; defaultDate: string; onDeleted: (from: string, to: string) => void; teeTimes: TeeTime[] }) {
   const { toast } = useToast();
   const readOnly = useReadOnly();
   const [mode, setMode] = useState<"day" | "range">("day");
@@ -972,6 +972,17 @@ function DeleteTeeTimesDialog({
 
   const effectiveFrom = mode === "day" ? defaultDate : from;
   const effectiveTo   = mode === "day" ? defaultDate : (to < from ? from : to);
+
+  // Detect tournament slots in the selected range (client-side, using loaded data)
+  const blockedTournaments = useMemo(() => {
+    const names = new Set<string>();
+    (teeTimes ?? []).forEach(t => {
+      if (t.event_id && t.event_name && t.date >= effectiveFrom && t.date <= effectiveTo) {
+        names.add(t.event_name);
+      }
+    });
+    return Array.from(names);
+  }, [teeTimes, effectiveFrom, effectiveTo]);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -1030,8 +1041,19 @@ function DeleteTeeTimesDialog({
             </div>
           )}
 
-          <Button onClick={handleDelete} disabled={deleting || readOnly}
-            className="w-full bg-red-600 hover:bg-red-700 gap-2">
+          {/* Tournament conflict warning */}
+          {blockedTournaments.length > 0 && (
+            <div className="rounded-md border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800 space-y-1">
+              <p className="font-semibold">⚠ Cannot delete — tournament slots in range</p>
+              <ul className="list-disc list-inside text-amber-700 space-y-0.5">
+                {blockedTournaments.map(n => <li key={n}>{n}</li>)}
+              </ul>
+              <p className="text-xs text-amber-600 mt-1">Cancel the tournament first, or change its tee times from the Events page.</p>
+            </div>
+          )}
+
+          <Button onClick={handleDelete} disabled={deleting || readOnly || blockedTournaments.length > 0}
+            className="w-full bg-red-600 hover:bg-red-700 gap-2 disabled:opacity-50">
             {deleting ? <><Loader2 className="h-4 w-4 animate-spin" /> Deleting…</> : <><Trash2 className="h-4 w-4" /> Confirm Delete</>}
           </Button>
         </div>
@@ -1442,6 +1464,7 @@ export default function Schedule() {
       <DeleteTeeTimesDialog
         open={deleteOpen} onOpenChange={setDeleteOpen}
         defaultDate={selectedDate}
+        teeTimes={teeTimes}
         onDeleted={(from, to) => {
           setTeeTimes(p => p.filter(t => t.date < from || t.date > to));
         }}

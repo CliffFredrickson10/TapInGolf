@@ -482,6 +482,18 @@ router.delete("/portal/tee-times/clear", requireClubAuth, async (req: Request, r
     const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
     await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
   } else {
+    // Block bulk delete if any tournament slots exist in the range
+    const blocking = await query<any>(
+      `SELECT DISTINCT ge.name FROM portal_tee_slots pts
+       JOIN golf_events ge ON ge.id = pts.event_id
+       WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ? AND pts.event_id IS NOT NULL`,
+      [club.id, from, to]
+    );
+    if (blocking.length > 0) {
+      const names = blocking.map((r: any) => r.name).join(", ");
+      res.status(409).json({ message: `Cannot delete: tournament slots exist in this range (${names}). Cancel the tournament first or manage its tee times from the Events page.` });
+      return;
+    }
     deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL", [club.id, from, to]);
   }
   res.json({ message: "Cleared", deleted });
@@ -490,8 +502,12 @@ router.delete("/portal/tee-times/clear", requireClubAuth, async (req: Request, r
 router.put("/portal/tee-times/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const ttId = Number(req.params.id);
-  const existing = await row<any>("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  const existing = await row<any>("SELECT id, event_id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) { res.status(404).json({ message: "Tee time not found" }); return; }
+  if (existing.event_id) {
+    res.status(409).json({ message: "This slot belongs to a tournament. Manage its tee times from the Events page." });
+    return;
+  }
   const { date, time, total_slots, active, session_type, tee_start_type, notes, blocked_slots } = req.body ?? {};
   const normStart = tee_start_type != null ? normTeeStart(tee_start_type) : null;
   const blockedJson = blocked_slots !== undefined ? JSON.stringify(blocked_slots) : null;
@@ -519,12 +535,11 @@ router.delete("/portal/tee-times/:id", requireClubAuth, async (req: Request, res
   const existing = await row<any>("SELECT id, event_id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) { res.status(404).json({ message: "Tee time not found" }); return; }
   const evId: number | null = existing.event_id ?? null;
-  await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
-  // If this was a tournament slot, recalculate max_participants
   if (evId) {
-    const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
-    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+    res.status(409).json({ message: "This slot belongs to a tournament. Cancel the tournament first or manage its tee times from the Events page." });
+    return;
   }
+  await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   res.json({ message: "Deleted" });
 });
 

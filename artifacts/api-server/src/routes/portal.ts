@@ -543,6 +543,49 @@ router.delete("/portal/tee-times/:id", requireClubAuth, async (req: Request, res
   res.json({ message: "Deleted" });
 });
 
+// PUT /portal/events/:eventId/tee-times/:id — edit an event-exclusive tee slot
+router.put("/portal/events/:eventId/tee-times/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const eventId = Number(req.params.eventId);
+  const ttId    = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  const existing = await row<any>("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ? AND event_id = ?", [ttId, club.id, eventId]);
+  if (!existing) { res.status(404).json({ message: "Slot not found in this event" }); return; }
+  const { time, total_slots, active, tee_start_type } = req.body ?? {};
+  const normStart = tee_start_type != null ? normTeeStart(tee_start_type) : null;
+  await exec(
+    `UPDATE portal_tee_slots SET
+      tee_time    = COALESCE(?, tee_time),
+      max_players = COALESCE(?, max_players),
+      is_active   = COALESCE(?, is_active),
+      tee_start_type = COALESCE(?, tee_start_type)
+     WHERE id = ? AND club_id = ?`,
+    [time ?? null, total_slots ?? null,
+     active != null ? (active ? 1 : 0) : null, normStart,
+     ttId, club.id]
+  );
+  const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [eventId]);
+  await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), eventId]);
+  const updated = await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, tee_start_type FROM portal_tee_slots WHERE id = ?", [ttId]);
+  res.json({ ...updated, active: !!updated!.active });
+});
+
+// DELETE /portal/events/:eventId/tee-times/:id — delete an event-exclusive tee slot
+router.delete("/portal/events/:eventId/tee-times/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const eventId = Number(req.params.eventId);
+  const ttId    = Number(req.params.id);
+  const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  const existing = await row<any>("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ? AND event_id = ?", [ttId, club.id, eventId]);
+  if (!existing) { res.status(404).json({ message: "Slot not found in this event" }); return; }
+  await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [eventId]);
+  await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), eventId]);
+  res.json({ message: "Deleted" });
+});
+
 // ─── BOOKINGS ────────────────────────────────────────────────────────────────
 
 router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

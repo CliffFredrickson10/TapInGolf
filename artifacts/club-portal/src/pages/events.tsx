@@ -13,7 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sh
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
-  Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight,
+  Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -271,6 +271,11 @@ export default function Events() {
   const [newSlotDate, setNewSlotDate]         = useState("");
   const [newSlotTime, setNewSlotTime]         = useState("");
   const [newSlotPlayers, setNewSlotPlayers]   = useState(4);
+  // Inline slot editing
+  const [editingSlotId, setEditingSlotId]     = useState<number | null>(null);
+  const [editSlotTime, setEditSlotTime]       = useState("");
+  const [editSlotPlayers, setEditSlotPlayers] = useState(4);
+  const [slotSaving, setSlotSaving]           = useState(false);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -344,6 +349,33 @@ export default function Events() {
   }, [detailTab, drawRound, scoreRound, detail]);
 
   // ── CRUD ──────────────────────────────────────────────────────────────────
+
+  const handleSlotUpdate = async (slot: TeeSlot) => {
+    if (slot.id < 0) {
+      // Staged (new) slot — update state only
+      setEventSlots(prev => prev.map(s => s.id === slot.id
+        ? { ...s, time: editSlotTime, total_slots: editSlotPlayers }
+        : s
+      ));
+      setEditingSlotId(null);
+      return;
+    }
+    if (!editId) return;
+    setSlotSaving(true);
+    try {
+      const updated = await api<TeeSlot>(`/api/portal/events/${editId}/tee-times/${slot.id}`, {
+        method: "PUT",
+        body: JSON.stringify({ time: editSlotTime, total_slots: editSlotPlayers }),
+      });
+      setEventSlots(prev => prev.map(s => s.id === slot.id
+        ? { ...s, time: updated.time, total_slots: updated.total_slots }
+        : s
+      ));
+      setEditingSlotId(null);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSlotSaving(false); }
+  };
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
@@ -440,10 +472,10 @@ export default function Events() {
           }).catch(() => {})
         ));
       }
-      // For existing events: delete removed slots (server auto-recalculates max_participants)
+      // For existing events: delete removed slots via the event-scoped endpoint
       if (deletedSlotIds.length > 0) {
         await Promise.all(deletedSlotIds.map(id =>
-          api(`/api/portal/tee-times/${id}`, { method: "DELETE" }).catch(() => {})
+          api(`/api/portal/events/${evId}/tee-times/${id}`, { method: "DELETE" }).catch(() => {})
         ));
       }
       toast({ title: editId ? "Tournament updated" : "Tournament created" });
@@ -1161,23 +1193,64 @@ export default function Events() {
                                     : "No tee times yet — click Add slot above."}
                                 </p>
                               ) : (
-                                <div className="space-y-0.5 max-h-40 overflow-y-auto">
-                                  {daySlots.map(slot => (
-                                    <div key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted group">
-                                      <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
-                                      <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
-                                      {slot.id < 0 && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">new</span>}
-                                      {!slot.active && slot.id > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
-                                      <button
-                                        type="button"
-                                        className="ml-auto h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        onClick={() => {
-                                          if (slot.id > 0) setDeletedSlotIds(prev => [...prev, slot.id]);
-                                          setEventSlots(prev => prev.filter(s => s.id !== slot.id));
-                                        }}
-                                      ><X className="h-3 w-3" /></button>
-                                    </div>
-                                  ))}
+                                <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                                  {daySlots.map(slot => {
+                                    const isEditing = editingSlotId === slot.id;
+                                    if (isEditing) {
+                                      return (
+                                        <div key={slot.id} className="flex items-center gap-2 py-1.5 px-2 rounded-md bg-muted/60 border border-dashed">
+                                          <Input
+                                            type="time"
+                                            className="h-6 text-xs w-24 shrink-0"
+                                            value={editSlotTime}
+                                            onChange={e => setEditSlotTime(e.target.value)}
+                                            autoFocus
+                                          />
+                                          <Input
+                                            type="number" min={1} max={4}
+                                            className="h-6 text-xs w-12 shrink-0"
+                                            value={editSlotPlayers}
+                                            onChange={e => setEditSlotPlayers(Number(e.target.value))}
+                                          />
+                                          <span className="text-xs text-muted-foreground shrink-0">players</span>
+                                          <button
+                                            type="button"
+                                            disabled={slotSaving}
+                                            className="ml-auto h-5 w-5 rounded flex items-center justify-center text-white bg-[#1a5c38] hover:bg-[#164d30] disabled:opacity-50"
+                                            onClick={() => handleSlotUpdate(slot)}
+                                          ><Check className="h-3 w-3" /></button>
+                                          <button
+                                            type="button"
+                                            className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"
+                                            onClick={() => setEditingSlotId(null)}
+                                          ><X className="h-3 w-3" /></button>
+                                        </div>
+                                      );
+                                    }
+                                    return (
+                                      <div key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted group">
+                                        <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
+                                        <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                        {slot.id < 0 && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">new</span>}
+                                        {!slot.active && slot.id > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                                        <button
+                                          type="button"
+                                          className="ml-auto h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={() => { setEditingSlotId(slot.id); setEditSlotTime(String(slot.time).slice(0, 5)); setEditSlotPlayers(slot.total_slots); }}
+                                          title="Edit slot"
+                                        ><Pencil className="h-3 w-3" /></button>
+                                        <button
+                                          type="button"
+                                          className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                          onClick={() => {
+                                            if (slot.id > 0) setDeletedSlotIds(prev => [...prev, slot.id]);
+                                            setEventSlots(prev => prev.filter(s => s.id !== slot.id));
+                                          }}
+                                          title="Remove slot"
+                                        ><X className="h-3 w-3" /></button>
+                                      </div>
+                                    );
+                                  })}
                                 </div>
                               )}
                             </CardContent>

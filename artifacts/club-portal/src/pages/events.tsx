@@ -242,13 +242,18 @@ export default function Events() {
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);
 
-  // Auto-resize description textarea when dialog opens with existing content
+  // Auto-resize description textarea when dialog opens with existing content.
+  // Radix Dialog animates in, so the ref isn't attached until after the first frame.
   useEffect(() => {
-    if (dlgOpen && descRef.current) {
-      const el = descRef.current;
-      el.style.height = "auto";
-      el.style.height = el.scrollHeight + "px";
-    }
+    if (!dlgOpen) return;
+    const timer = setTimeout(() => {
+      if (descRef.current) {
+        const el = descRef.current;
+        el.style.height = "auto";
+        el.style.height = el.scrollHeight + "px";
+      }
+    }, 50);
+    return () => clearTimeout(timer);
   }, [dlgOpen]);
 
   // Tee slot linking
@@ -364,13 +369,22 @@ export default function Events() {
     setDlgOpen(true);
   };
 
-  const openEdit = (ev: GolfEvent, e: React.MouseEvent) => {
+  const openEdit = async (ev: GolfEvent, e: React.MouseEvent) => {
     e.stopPropagation();
     // Normalize dates: PostgreSQL may return full ISO strings like "2026-05-01T00:00:00.000Z"
     // input[type=date] requires exactly "YYYY-MM-DD"
     const d = (v: any) => (v ? String(v).slice(0, 10) : "");
     const startDate = d(ev.event_date);
     const endDate   = d(ev.end_date);
+
+    // Pre-fetch the event's linked tee slots BEFORE opening the dialog so
+    // selectedSlotIds is populated when the tee schedule first renders.
+    let existingSlotIds: number[] = [];
+    try {
+      const slots = await api<{ id: number }[]>(`/api/portal/events/${ev.id}/tee-slots`);
+      existingSlotIds = slots.map(s => Number(s.id));
+    } catch {}
+
     setForm({
       name: ev.name, description: ev.description ?? "",
       event_date: startDate, end_date: endDate,
@@ -395,14 +409,13 @@ export default function Events() {
       divisions: ev.divisions ?? DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
-    setSelectedSlotIds([]);
+    setSelectedSlotIds(existingSlotIds);
     setAvailableSlots([]);
     setShowAddSlot(false);
     setNewSlotDate(startDate);
     setNewSlotTime("");
     setNewSlotPlayers(4);
     setDlgOpen(true);
-    loadEventSlots(ev.id);
   };
 
   const handleSave = async () => {

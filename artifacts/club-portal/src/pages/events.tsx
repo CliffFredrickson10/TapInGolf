@@ -259,10 +259,6 @@ export default function Events() {
     setEditId(null);
     setSelectedSlotIds([]);
     setAvailableSlots([]);
-    setShowAddSlot(false);
-    setNewSlotDate("");
-    setNewSlotTime("");
-    setNewSlotPlayers(4);
     setDlgOpen(true);
   };
 

@@ -1251,28 +1251,22 @@ export default function Events() {
               <Label>Divisions (auto-assigned from HNA handicap)</Label>
               <div className="space-y-2">
                 {form.divisions.map((d, i) => (
-                  <div key={d.key} className="grid grid-cols-6 gap-2 items-center text-xs">
-                    <span className="font-medium col-span-1">{d.label}</span>
-                    <div className="col-span-1 flex items-center gap-1">
-                      <span className="text-muted-foreground">HCP</span>
-                      <Input type="number" className="h-7 text-xs w-16" value={d.min_hcp}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
-                      <span className="text-muted-foreground">–</span>
-                      <Input type="number" className="h-7 text-xs w-16" value={d.max_hcp}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
-                    </div>
-                    <div className="col-span-2">
-                      <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
-                        <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="col-span-2">
-                      <Input className="h-7 text-xs" placeholder="Tees (e.g. championship)" value={d.tees}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
-                    </div>
+                  <div key={d.key} className="flex items-center gap-2 text-xs">
+                    <span className="font-medium w-20 shrink-0">{d.label}</span>
+                    <span className="text-muted-foreground shrink-0">HCP</span>
+                    <Input type="number" className="h-7 text-xs w-14 shrink-0" value={d.min_hcp}
+                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
+                    <span className="text-muted-foreground shrink-0">–</span>
+                    <Input type="number" className="h-7 text-xs w-14 shrink-0" value={d.max_hcp}
+                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
+                    <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
+                      <SelectTrigger className="h-7 text-xs w-44 shrink-0"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <Input className="h-7 text-xs flex-1 min-w-0" placeholder="Tees (e.g. championship)" value={d.tees}
+                      onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
                   </div>
                 ))}
               </div>

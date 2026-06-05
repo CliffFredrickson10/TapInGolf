@@ -206,15 +206,8 @@ export default function Events() {
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
 
-  // Description textarea auto-resize on open
+  // Description textarea ref (auto-resize on open — useEffect placed after dlgOpen state)
   const descRef = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => {
-    if (dlgOpen && descRef.current) {
-      const el = descRef.current;
-      el.style.height = "auto";
-      el.style.height = el.scrollHeight + "px";
-    }
-  }, [dlgOpen]);
 
   // Image upload
   const imgInputRef = useRef<HTMLInputElement>(null);
@@ -248,6 +241,15 @@ export default function Events() {
   const [form, setForm]         = useState(EMPTY_FORM);
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);
+
+  // Auto-resize description textarea when dialog opens with existing content
+  useEffect(() => {
+    if (dlgOpen && descRef.current) {
+      const el = descRef.current;
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
+  }, [dlgOpen]);
 
   // Tee slot linking
   const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);

@@ -793,135 +793,180 @@ export default function Events() {
 
             {/* ── Tee Schedule ──────────────────────────────────────────────────────── */}
             {form.event_date ? (() => {
+              // Build the ordered list of dates for this tournament
+              const getDatesInRange = (start: string, end?: string): string[] => {
+                const dates: string[] = [];
+                const cur = new Date(start + "T00:00:00");
+                const last = end ? new Date(end + "T00:00:00") : new Date(start + "T00:00:00");
+                if (isNaN(cur.getTime())) return [start];
+                const cap = new Date(cur); cap.setDate(cap.getDate() + 30); // safety cap 31 days
+                while (cur <= last && cur <= cap) {
+                  dates.push(cur.toISOString().split("T")[0]);
+                  cur.setDate(cur.getDate() + 1);
+                }
+                return dates;
+              };
+
+              const tournamentDates = getDatesInRange(form.event_date, form.end_date || undefined);
+              const isMultiDay = tournamentDates.length > 1;
+
+              // Group loaded slots by date
+              const slotsByDate = availableSlots.reduce((acc, s) => {
+                const key = String(s.date).slice(0, 10);
+                (acc[key] ||= []).push(s);
+                return acc;
+              }, {} as Record<string, TeeSlot[]>);
+
               const computedMax = availableSlots
                 .filter(s => selectedSlotIds.includes(s.id))
                 .reduce((sum, s) => sum + s.total_slots, 0);
-              const grouped = availableSlots.reduce((acc, s) => {
-                (acc[s.date] ||= []).push(s); return acc;
-              }, {} as Record<string, TeeSlot[]>);
-              return (
-                <Card className="bg-muted/30">
-                  <CardContent className="p-4 space-y-3">
-                    <div className="flex items-center justify-between gap-3">
-                      <div>
-                        <p className="text-sm font-semibold flex items-center gap-1.5">
-                          <Clock className="h-3.5 w-3.5" />Tee Schedule
-                        </p>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          Select tee slots to include in this tournament. Max participants is calculated automatically.
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        {availableSlots.length > 0 && (
-                          <button
-                            type="button"
-                            className="text-xs text-[#1a5c38] hover:underline font-medium"
-                            onClick={() =>
-                              selectedSlotIds.length === availableSlots.length
-                                ? setSelectedSlotIds([])
-                                : setSelectedSlotIds(availableSlots.map(s => s.id))
-                            }
-                          >
-                            {selectedSlotIds.length === availableSlots.length ? "Deselect all" : "Select all"}
-                          </button>
-                        )}
-                        {selectedSlotIds.length > 0 && (
-                          <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                            {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
-                          </span>
-                        )}
-                      </div>
-                    </div>
 
-                    {slotsLoading ? (
-                      <p className="text-xs text-muted-foreground">Loading tee times…</p>
-                    ) : availableSlots.length === 0 && !showAddSlot ? (
-                      <div className="space-y-2">
-                        <p className="text-xs text-amber-600">
-                          No tee times scheduled for {fmtDate(form.event_date)}{form.end_date ? ` – ${fmtDate(form.end_date)}` : ""}.
-                        </p>
-                        <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => { setShowAddSlot(true); setNewSlotDate(form.event_date); }}>
-                          <Plus className="h-3 w-3" />Create a tee time
-                        </Button>
-                      </div>
-                    ) : (
-                      <div className="space-y-1 max-h-52 overflow-y-auto pr-1">
-                        {Object.entries(grouped).map(([date, slots]) => {
-                          const allDaySelected = slots.every(s => selectedSlotIds.includes(s.id));
-                          const isMultiDay = Object.keys(grouped).length > 1;
-                          return (
-                            <div key={date}>
-                              {isMultiDay && (
-                                <div className="flex items-center justify-between mb-1 mt-2 first:mt-0">
-                                  <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">{fmtDate(date)}</p>
-                                  <button
-                                    type="button"
-                                    className="text-[10px] text-[#1a5c38] hover:underline font-medium"
-                                    onClick={() =>
-                                      allDaySelected
-                                        ? setSelectedSlotIds(prev => prev.filter(id => !slots.map(s => s.id).includes(id)))
-                                        : setSelectedSlotIds(prev => [...new Set([...prev, ...slots.map(s => s.id)])])
-                                    }
-                                  >
-                                    {allDaySelected ? "Deselect day" : "Select day"}
-                                  </button>
+              const allSelected = availableSlots.length > 0 && availableSlots.every(s => selectedSlotIds.includes(s.id));
+
+              return (
+                <div className="space-y-3">
+                  {/* Header row */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-sm font-semibold flex items-center gap-1.5">
+                        <Clock className="h-3.5 w-3.5" />Tee Schedule
+                        {isMultiDay && <span className="text-xs font-normal text-muted-foreground">({tournamentDates.length} days)</span>}
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Select tee slots for each day of the tournament. Max participants is calculated automatically.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {availableSlots.length > 0 && (
+                        <button
+                          type="button"
+                          className="text-xs text-[#1a5c38] hover:underline font-medium"
+                          onClick={() => allSelected ? setSelectedSlotIds([]) : setSelectedSlotIds(availableSlots.map(s => s.id))}
+                        >
+                          {allSelected ? "Deselect all" : "Select all"}
+                        </button>
+                      )}
+                      {selectedSlotIds.length > 0 && (
+                        <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
+                          {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  {slotsLoading ? (
+                    <div className="space-y-2">
+                      {tournamentDates.map(d => (
+                        <div key={d} className="h-20 rounded-lg border bg-muted/20 animate-pulse" />
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {tournamentDates.map((date, idx) => {
+                        const daySlots = slotsByDate[date] ?? [];
+                        const allDaySelected = daySlots.length > 0 && daySlots.every(s => selectedSlotIds.includes(s.id));
+                        const daySelectedCount = daySlots.filter(s => selectedSlotIds.includes(s.id)).length;
+                        const isAddingThisDay = showAddSlot && newSlotDate === date;
+
+                        return (
+                          <Card key={date} className="border bg-card">
+                            <CardContent className="p-3 space-y-2">
+                              {/* Day header */}
+                              <div className="flex items-center justify-between gap-2">
+                                <div className="flex items-center gap-2">
+                                  {isMultiDay && (
+                                    <span className="text-[10px] font-bold text-white bg-[#1a5c38] rounded px-1.5 py-0.5 shrink-0">
+                                      Day {idx + 1}
+                                    </span>
+                                  )}
+                                  <span className="text-sm font-semibold">{fmtDate(date)}</span>
+                                  {daySlots.length > 0 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      {daySelectedCount}/{daySlots.length} selected
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="flex items-center gap-2">
+                                  {daySlots.length > 0 && (
+                                    <button
+                                      type="button"
+                                      className="text-[11px] text-[#1a5c38] hover:underline font-medium"
+                                      onClick={() =>
+                                        allDaySelected
+                                          ? setSelectedSlotIds(prev => prev.filter(id => !daySlots.map(s => s.id).includes(id)))
+                                          : setSelectedSlotIds(prev => [...new Set([...prev, ...daySlots.map(s => s.id)])])
+                                      }
+                                    >
+                                      {allDaySelected ? "Deselect all" : "Select all"}
+                                    </button>
+                                  )}
+                                  {!isAddingThisDay && (
+                                    <button
+                                      type="button"
+                                      className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                      onClick={() => { setShowAddSlot(true); setNewSlotDate(date); setNewSlotTime(""); }}
+                                    >
+                                      <Plus className="h-3 w-3" />Add
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Slot list */}
+                              {daySlots.length === 0 && !isAddingThisDay ? (
+                                <p className="text-[11px] text-amber-600 py-1">
+                                  No tee times scheduled — click Add to create one.
+                                </p>
+                              ) : (
+                                <div className="space-y-0.5 max-h-40 overflow-y-auto">
+                                  {daySlots.map(slot => (
+                                    <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
+                                      <input
+                                        type="checkbox"
+                                        className="h-3.5 w-3.5 accent-[#1a5c38]"
+                                        checked={selectedSlotIds.includes(slot.id)}
+                                        onChange={e =>
+                                          setSelectedSlotIds(prev =>
+                                            e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
+                                          )
+                                        }
+                                      />
+                                      <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
+                                      <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                      {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                                    </label>
+                                  ))}
                                 </div>
                               )}
-                              {slots.map(slot => (
-                                <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
-                                  <input
-                                    type="checkbox"
-                                    className="h-3.5 w-3.5 accent-[#1a5c38]"
-                                    checked={selectedSlotIds.includes(slot.id)}
-                                    onChange={e =>
-                                      setSelectedSlotIds(prev =>
-                                        e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
-                                      )
-                                    }
-                                  />
-                                  <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
-                                  <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
-                                  {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
-                                </label>
-                              ))}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
 
-                    {/* Quick-add tee time */}
-                    {showAddSlot ? (
-                      <div className="border rounded-md p-3 space-y-2 bg-background">
-                        <p className="text-xs font-medium">Add a tee time to the schedule</p>
-                        <div className="grid grid-cols-3 gap-2">
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Date</label>
-                            <Input type="date" className="h-7 text-xs" value={newSlotDate} onChange={e => setNewSlotDate(e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Time</label>
-                            <Input type="time" className="h-7 text-xs" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
-                          </div>
-                          <div className="space-y-1">
-                            <label className="text-[11px] text-muted-foreground">Players</label>
-                            <Input type="number" className="h-7 text-xs" min="1" max="4" value={newSlotPlayers} onChange={e => setNewSlotPlayers(Number(e.target.value))} />
-                          </div>
-                        </div>
-                        <div className="flex gap-2">
-                          <Button size="sm" className="h-7 text-xs bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAddSlot} disabled={addingSlot || !newSlotTime || !newSlotDate}>
-                            {addingSlot ? "Adding…" : "Add & Link"}
-                          </Button>
-                          <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddSlot(false)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : availableSlots.length > 0 && (
-                      <Button variant="outline" size="sm" className="gap-1.5 h-7 text-xs" onClick={() => { setShowAddSlot(true); setNewSlotDate(form.event_date); }}>
-                        <Plus className="h-3 w-3" />Add tee time
-                      </Button>
-                    )}
-                  </CardContent>
-                </Card>
+                              {/* Inline add form for this day */}
+                              {isAddingThisDay && (
+                                <div className="border rounded-md p-2.5 space-y-2 bg-muted/30">
+                                  <div className="grid grid-cols-2 gap-2">
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] text-muted-foreground">Time</label>
+                                      <Input type="time" className="h-7 text-xs" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
+                                    </div>
+                                    <div className="space-y-1">
+                                      <label className="text-[11px] text-muted-foreground">Players</label>
+                                      <Input type="number" className="h-7 text-xs" min="1" max="4" value={newSlotPlayers} onChange={e => setNewSlotPlayers(Number(e.target.value))} />
+                                    </div>
+                                  </div>
+                                  <div className="flex gap-2">
+                                    <Button size="sm" className="h-7 text-xs bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAddSlot} disabled={addingSlot || !newSlotTime}>
+                                      {addingSlot ? "Adding…" : "Add & Link"}
+                                    </Button>
+                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddSlot(false)}>Cancel</Button>
+                                  </div>
+                                </div>
+                              )}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
               );
             })() : (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">

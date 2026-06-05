@@ -1324,7 +1324,7 @@ export default function Events() {
             <Card className="bg-muted/30">
               <CardContent className="p-4 space-y-3">
                 {[
-                  { key: "entries_required", label: "Entries / enrollment required", desc: "When off, golfers can participate without submitting an entry — open to all" },
+                  { key: "entries_required", label: "Entries / enrollment required", desc: "When off, no formal entry submission is needed — access is still governed by the Access setting above" },
                   { key: "payment_required", label: "Payment required", desc: "Golfers must pay before their spot is confirmed" },
                   { key: "scoring_enabled",  label: "Live scoring",     desc: "Enable score submission and leaderboard in the mobile app" },
                   { key: "ballot",           label: "Ballot if oversubscribed", desc: "When field is full, a ballot determines who gets a spot" },

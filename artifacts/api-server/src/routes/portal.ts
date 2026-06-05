@@ -721,8 +721,8 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
      event_type, format, (req.body?.format_custom) ?? null,
      (req.body?.format2) || null, (req.body?.format2_custom) || null,
@@ -733,7 +733,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      entries_open ?? null, entries_close ?? null,
      ballot ? 1 : 0, scoring_enabled ? 1 : 0, payment_required ? 1 : 0,
      use_tiered_pricing ? 1 : 0, allow_wallet ? 1 : 0, allow_prepaid ? 1 : 0, allow_voucher ? 1 : 0,
-     Number(rounds), status, club.id]
+     Number(rounds), (req.body?.image_url) || null, status, club.id]
   );
 
   // Notify club members + past bookers about the new event (fire-and-forget)
@@ -777,7 +777,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
     name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom, format2, format2_custom,
     restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
     ballot, scoring_enabled, payment_required,
-    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds,
+    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds, image_url,
   } = req.body ?? {};
   const updates: string[] = []; const vals: any[] = [];
   if (name !== undefined)                { updates.push("name = ?");              vals.push(name); }
@@ -791,6 +791,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (format_custom !== undefined)       { updates.push("format_custom = ?");     vals.push(format_custom ?? null); }
   if (format2 !== undefined)             { updates.push("format2 = ?");           vals.push(format2 || null); }
   if (format2_custom !== undefined)      { updates.push("format2_custom = ?");    vals.push(format2_custom || null); }
+  if (image_url !== undefined)           { updates.push("image_url = ?");         vals.push(image_url || null); }
   if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
   // NOTE: status is intentionally excluded — use /publish or DELETE to change it
   if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }
@@ -1424,6 +1425,35 @@ router.post("/portal/notifications", requireClubAuth, async (req: Request, res: 
 });
 
 // ── Club photo gallery ────────────────────────────────────────────────────────
+
+// ─── Tournament image upload ──────────────────────────────────────────────────
+router.post(
+  "/portal/events/image/upload",
+  requireClubAuth,
+  upload.single("image"),
+  async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) { res.status(400).json({ message: "No image file provided" }); return; }
+    const club = getClub(req);
+    const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
+    if (!privateDir) { res.status(500).json({ message: "Object storage not configured" }); return; }
+    const fileUuid = randomUUID();
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "") || "jpg";
+    const cleanDir = privateDir.replace(/^\/+/, "").replace(/\/+$/, "");
+    const slashIdx = cleanDir.indexOf("/");
+    const parsedBucket = slashIdx >= 0 ? cleanDir.slice(0, slashIdx) : cleanDir;
+    const basePath = slashIdx >= 0 ? cleanDir.slice(slashIdx + 1) : "";
+    const objectKey = basePath
+      ? `${basePath}/tournament-images/${club.id}/${fileUuid}.${ext}`
+      : `tournament-images/${club.id}/${fileUuid}.${ext}`;
+    const bucket = objectStorageClient.bucket(parsedBucket);
+    await bucket.file(objectKey).save(file.buffer, { contentType: file.mimetype });
+    await bucket.file(objectKey).setMetadata({ cacheControl: "public, max-age=86400" });
+    const host = req.get("host") ?? "localhost";
+    const url = `https://${host}/api/storage/objects/tournament-images/${club.id}/${fileUuid}.${ext}`;
+    res.json({ url });
+  }
+);
 
 // ─── Logo upload ─────────────────────────────────────────────────────────────
 router.post(

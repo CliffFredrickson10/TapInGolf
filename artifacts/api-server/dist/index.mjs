@@ -63569,8 +63569,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -63598,6 +63598,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       allow_prepaid ? 1 : 0,
       allow_voucher ? 1 : 0,
       Number(rounds),
+      req.body?.image_url || null,
       status,
       club.id
     ]
@@ -63669,7 +63670,8 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     allow_wallet,
     allow_prepaid,
     allow_voucher,
-    rounds
+    rounds,
+    image_url
   } = req.body ?? {};
   const updates = [];
   const vals = [];
@@ -63716,6 +63718,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (format2_custom !== void 0) {
     updates.push("format2_custom = ?");
     vals.push(format2_custom || null);
+  }
+  if (image_url !== void 0) {
+    updates.push("image_url = ?");
+    vals.push(image_url || null);
   }
   if (restriction !== void 0) {
     updates.push("restriction = ?");
@@ -64448,6 +64454,37 @@ router14.post("/portal/notifications", requireClubAuth2, async (req, res) => {
   );
   res.json(await row("SELECT * FROM club_notifications WHERE id = ?", [result.insertId]));
 });
+router14.post(
+  "/portal/events/image/upload",
+  requireClubAuth2,
+  upload.single("image"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ message: "No image file provided" });
+      return;
+    }
+    const club = getClub2(req);
+    const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
+    if (!privateDir) {
+      res.status(500).json({ message: "Object storage not configured" });
+      return;
+    }
+    const fileUuid = randomUUID2();
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "") || "jpg";
+    const cleanDir = privateDir.replace(/^\/+/, "").replace(/\/+$/, "");
+    const slashIdx = cleanDir.indexOf("/");
+    const parsedBucket = slashIdx >= 0 ? cleanDir.slice(0, slashIdx) : cleanDir;
+    const basePath = slashIdx >= 0 ? cleanDir.slice(slashIdx + 1) : "";
+    const objectKey = basePath ? `${basePath}/tournament-images/${club.id}/${fileUuid}.${ext}` : `tournament-images/${club.id}/${fileUuid}.${ext}`;
+    const bucket = objectStorageClient.bucket(parsedBucket);
+    await bucket.file(objectKey).save(file.buffer, { contentType: file.mimetype });
+    await bucket.file(objectKey).setMetadata({ cacheControl: "public, max-age=86400" });
+    const host = req.get("host") ?? "localhost";
+    const url = `https://${host}/api/storage/objects/tournament-images/${club.id}/${fileUuid}.${ext}`;
+    res.json({ url });
+  }
+);
 router14.post(
   "/portal/logo/upload",
   requireClubAuth2,
@@ -67320,6 +67357,7 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_wallet SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_status_check CHECK (status IN ('active','cancelled','completed','pending_publish'))");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");

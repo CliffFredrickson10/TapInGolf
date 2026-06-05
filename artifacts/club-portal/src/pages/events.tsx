@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight,
-  CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send,
+  CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -32,7 +32,8 @@ interface GolfEvent {
   event_date: string; end_date: string | null;
   start_time: string | null; end_time: string | null;
   event_type: string; format: string; format_custom: string | null;
-  format2: string | null; format2_custom: string | null; restriction: string;
+  format2: string | null; format2_custom: string | null;
+  image_url: string | null; restriction: string;
   entry_fee: number | null; max_participants: number | null;
   status: string; created_at: string;
   divisions: Division[];
@@ -166,7 +167,7 @@ const DEFAULT_DIVISIONS: Division[] = [
 const EMPTY_FORM = {
   name: "", description: "", event_date: "", end_date: "",
   start_time: "", end_time: "", event_type: "competition",
-  format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", restriction: "open",
+  format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", image_url: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   ballot: false, scoring_enabled: false, payment_required: false,
@@ -204,6 +205,33 @@ export default function Events() {
   const [scoreRound, setScoreRound] = useState(1);
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
+
+  // Image upload
+  const imgInputRef = useRef<HTMLInputElement>(null);
+  const [imgUploading, setImgUploading] = useState(false);
+
+  const handleImgSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImgUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const res = await fetch("/api/portal/events/image/upload", {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("portal_token") ?? ""}` },
+        body: fd,
+      });
+      if (!res.ok) throw new Error((await res.json()).message ?? "Upload failed");
+      const { url } = await res.json();
+      setForm(f => ({ ...f, image_url: url }));
+    } catch (err: any) {
+      toast({ title: "Upload failed", description: err.message, variant: "destructive" });
+    } finally {
+      setImgUploading(false);
+      if (imgInputRef.current) imgInputRef.current.value = "";
+    }
+  };
 
   // Create/Edit dialog
   const [dlgOpen, setDlgOpen]   = useState(false);
@@ -333,6 +361,7 @@ export default function Events() {
       event_type: ev.event_type, format: ev.format ?? "gross_stroke_play",
       format_custom: ev.format_custom ?? "",
       format2: ev.format2 ?? "", format2_custom: ev.format2_custom ?? "",
+      image_url: ev.image_url ?? "",
       restriction: ev.restriction,
       entry_fee: ev.entry_fee ?? "",
       max_participants: ev.max_participants ?? "",
@@ -535,8 +564,11 @@ export default function Events() {
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-[#1a5c38]/10 flex items-center justify-center flex-shrink-0 mt-0.5">
-                      <Trophy className="h-5 w-5 text-[#1a5c38]" />
+                    <div className="w-10 h-10 rounded-lg overflow-hidden flex-shrink-0 mt-0.5">
+                      {ev.image_url
+                        ? <img src={ev.image_url} alt={ev.name} className="w-full h-full object-cover" />
+                        : <div className="w-full h-full bg-[#1a5c38]/10 flex items-center justify-center"><Trophy className="h-5 w-5 text-[#1a5c38]" /></div>
+                      }
                     </div>
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -588,6 +620,11 @@ export default function Events() {
         <SheetContent className="w-full sm:max-w-2xl overflow-y-auto p-0">
           {detail && (
             <>
+              {detail.image_url && (
+                <div className="w-full h-48 overflow-hidden flex-shrink-0">
+                  <img src={detail.image_url} alt={detail.name} className="w-full h-full object-cover" />
+                </div>
+              )}
               <SheetHeader className="px-6 pt-6 pb-4 border-b">
                 <div className="flex items-start justify-between gap-4">
                   <div>
@@ -839,6 +876,36 @@ export default function Events() {
                 onInput={e => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; }}
                 placeholder="Tournament details, rules, conditions…"
               />
+            </div>
+
+            {/* Tournament image */}
+            <div className="space-y-1.5">
+              <Label>Tournament Image <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+              <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImgSelect} />
+              {form.image_url ? (
+                <div className="relative w-full h-40 rounded-lg overflow-hidden border">
+                  <img src={form.image_url} alt="Tournament" className="w-full h-full object-cover" />
+                  <button
+                    type="button"
+                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
+                    onClick={() => setForm(f => ({ ...f, image_url: "" }))}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  className="w-full h-32 rounded-lg border-2 border-dashed border-border hover:border-[#1a5c38]/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-[#1a5c38] transition-colors"
+                  onClick={() => imgInputRef.current?.click()}
+                  disabled={imgUploading}
+                >
+                  {imgUploading
+                    ? <span className="text-xs">Uploading…</span>
+                    : (<><ImageIcon className="h-6 w-6" /><span className="text-xs">Click to upload tournament image</span></>)
+                  }
+                </button>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-3">

@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, RefreshControl, TextInput,
+  ActivityIndicator, Alert, RefreshControl, TextInput, Image,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -29,6 +29,7 @@ interface EventDetail {
   event_date: string; end_date: string | null;
   start_time: string | null;
   event_type: string; format: string; restriction: string;
+  image_url: string | null;
   entry_fee: number | null; max_participants: number | null;
   status: string; approved_count: number;
   divisions: Division[];
@@ -291,6 +292,15 @@ export default function EventDetailScreen() {
         {/* ── INFO TAB ───────────────────────────────────────────────────────── */}
         {activeTab === "info" && (
           <>
+            {/* Banner image */}
+            {event.image_url ? (
+              <Image
+                source={{ uri: event.image_url }}
+                style={{ width: "100%", height: 180, borderRadius: 12, marginBottom: 12 }}
+                resizeMode="cover"
+              />
+            ) : null}
+
             {/* Event meta card */}
             <View style={[styles.metaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View style={styles.metaRow}>

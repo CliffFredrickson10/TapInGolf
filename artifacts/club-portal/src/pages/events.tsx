@@ -818,7 +818,7 @@ export default function Events() {
 
       {/* ── Create / Edit Dialog ───────────────────────────────────────────────── */}
       <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Tournament</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
 
@@ -1253,7 +1253,7 @@ export default function Events() {
                 {form.divisions.map((d, i) => (
                   <div key={d.key} className="flex items-center gap-2 text-xs">
                     <span className="font-medium w-20 shrink-0">{d.label}</span>
-                    <span className="text-muted-foreground shrink-0">HCP</span>
+                    <span className="text-muted-foreground shrink-0">WHS Index</span>
                     <Input type="number" className="h-7 text-xs w-14 shrink-0" value={d.min_hcp}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
                     <span className="text-muted-foreground shrink-0">–</span>

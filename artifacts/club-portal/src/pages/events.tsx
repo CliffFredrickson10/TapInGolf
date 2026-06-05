@@ -17,6 +17,7 @@ import {
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2,
 } from "lucide-react";
 import { format } from "date-fns";
+import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 
@@ -159,11 +160,8 @@ export default function Events() {
   const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
   const [availableSlots, setAvailableSlots]   = useState<TeeSlot[]>([]);
   const [slotsLoading, setSlotsLoading]       = useState(false);
-  const [showAddSlot, setShowAddSlot]         = useState(false);
-  const [newSlotDate, setNewSlotDate]         = useState("");
-  const [newSlotTime, setNewSlotTime]         = useState("");
-  const [newSlotPlayers, setNewSlotPlayers]   = useState(4);
-  const [addingSlot, setAddingSlot]           = useState(false);
+  const [genDialogOpen, setGenDialogOpen]     = useState(false);
+  const [genDialogDate, setGenDialogDate]     = useState("");
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -336,26 +334,6 @@ export default function Events() {
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setSaving(false); }
-  };
-
-  const handleAddSlot = async () => {
-    if (!newSlotTime || !newSlotDate) return;
-    setAddingSlot(true);
-    try {
-      const slot = await api<TeeSlot>("/api/portal/tee-times", {
-        method: "POST",
-        body: JSON.stringify({ date: newSlotDate, time: newSlotTime, total_slots: newSlotPlayers, active: 1 }),
-      });
-      setAvailableSlots(prev =>
-        [...prev, slot].sort((a, b) => (a.date + a.time < b.date + b.time ? -1 : 1))
-      );
-      setSelectedSlotIds(prev => [...prev, slot.id]);
-      setNewSlotTime("");
-      setShowAddSlot(false);
-      toast({ title: "Tee time added and linked" });
-    } catch (e: any) {
-      toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally { setAddingSlot(false); }
   };
 
   const handleCancel = async (id: number, e: React.MouseEvent) => {
@@ -866,8 +844,6 @@ export default function Events() {
                         const daySlots = slotsByDate[date] ?? [];
                         const allDaySelected = daySlots.length > 0 && daySlots.every(s => selectedSlotIds.includes(s.id));
                         const daySelectedCount = daySlots.filter(s => selectedSlotIds.includes(s.id)).length;
-                        const isAddingThisDay = showAddSlot && newSlotDate === date;
-
                         return (
                           <Card key={date} className="border bg-card">
                             <CardContent className="p-3 space-y-2">
@@ -900,22 +876,20 @@ export default function Events() {
                                       {allDaySelected ? "Deselect all" : "Select all"}
                                     </button>
                                   )}
-                                  {!isAddingThisDay && (
-                                    <button
-                                      type="button"
-                                      className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                      onClick={() => { setShowAddSlot(true); setNewSlotDate(date); setNewSlotTime(""); }}
-                                    >
-                                      <Plus className="h-3 w-3" />Add
-                                    </button>
-                                  )}
+                                  <button
+                                    type="button"
+                                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                    onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}
+                                  >
+                                    <Plus className="h-3 w-3" />Add
+                                  </button>
                                 </div>
                               </div>
 
                               {/* Slot list */}
-                              {daySlots.length === 0 && !isAddingThisDay ? (
+                              {daySlots.length === 0 ? (
                                 <p className="text-[11px] text-amber-600 py-1">
-                                  No tee times scheduled — click Add to create one.
+                                  No tee times scheduled — click Add to generate a schedule.
                                 </p>
                               ) : (
                                 <div className="space-y-0.5 max-h-40 overflow-y-auto">
@@ -936,28 +910,6 @@ export default function Events() {
                                       {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
                                     </label>
                                   ))}
-                                </div>
-                              )}
-
-                              {/* Inline add form for this day */}
-                              {isAddingThisDay && (
-                                <div className="border rounded-md p-2.5 space-y-2 bg-muted/30">
-                                  <div className="grid grid-cols-2 gap-2">
-                                    <div className="space-y-1">
-                                      <label className="text-[11px] text-muted-foreground">Time</label>
-                                      <Input type="time" className="h-7 text-xs" value={newSlotTime} onChange={e => setNewSlotTime(e.target.value)} />
-                                    </div>
-                                    <div className="space-y-1">
-                                      <label className="text-[11px] text-muted-foreground">Players</label>
-                                      <Input type="number" className="h-7 text-xs" min="1" max="4" value={newSlotPlayers} onChange={e => setNewSlotPlayers(Number(e.target.value))} />
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <Button size="sm" className="h-7 text-xs bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleAddSlot} disabled={addingSlot || !newSlotTime}>
-                                      {addingSlot ? "Adding…" : "Add & Link"}
-                                    </Button>
-                                    <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => setShowAddSlot(false)}>Cancel</Button>
-                                  </div>
                                 </div>
                               )}
                             </CardContent>
@@ -1135,6 +1087,14 @@ export default function Events() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Full schedule-generation dialog — opened from each day card's Add button */}
+      <GenerateTeeTimesDialog
+        open={genDialogOpen}
+        onOpenChange={setGenDialogOpen}
+        initialDate={genDialogDate}
+        onComplete={() => loadAvailableSlots(form.event_date, form.end_date || undefined)}
+      />
     </div>
   );
 }

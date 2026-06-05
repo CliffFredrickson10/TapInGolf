@@ -834,6 +834,9 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_wallet SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
+  // Widen status check to include pending_publish (added after initial schema)
+  await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");
+  await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_status_check CHECK (status IN ('active','cancelled','completed','pending_publish'))");
 
   // Extend event_registrations: division auto-assign, frozen handicap, payment.
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS division VARCHAR(5)");

@@ -1252,9 +1252,9 @@ export default function Events() {
               <div className="space-y-2">
                 <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
                   <span className="w-20 shrink-0">Division</span>
-                  <span style={{ width: 70 }} className="shrink-0">WHS From</span>
+                  <span style={{ width: 70 }} className="shrink-0">WHS Index From</span>
                   <span className="shrink-0 invisible">–</span>
-                  <span style={{ width: 70 }} className="shrink-0">WHS To</span>
+                  <span style={{ width: 70 }} className="shrink-0">WHS Index To</span>
                   <span style={{ width: 340 }} className="shrink-0">Format</span>
                   <span className="flex-1 min-w-0">Tees</span>
                 </div>

@@ -206,6 +206,16 @@ export default function Events() {
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
 
+  // Description textarea auto-resize on open
+  const descRef = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    if (dlgOpen && descRef.current) {
+      const el = descRef.current;
+      el.style.height = "auto";
+      el.style.height = el.scrollHeight + "px";
+    }
+  }, [dlgOpen]);
+
   // Image upload
   const imgInputRef = useRef<HTMLInputElement>(null);
   const [imgUploading, setImgUploading] = useState(false);
@@ -354,9 +364,14 @@ export default function Events() {
 
   const openEdit = (ev: GolfEvent, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Normalize dates: PostgreSQL may return full ISO strings like "2026-05-01T00:00:00.000Z"
+    // input[type=date] requires exactly "YYYY-MM-DD"
+    const d = (v: any) => (v ? String(v).slice(0, 10) : "");
+    const startDate = d(ev.event_date);
+    const endDate   = d(ev.end_date);
     setForm({
       name: ev.name, description: ev.description ?? "",
-      event_date: ev.event_date, end_date: ev.end_date ?? "",
+      event_date: startDate, end_date: endDate,
       start_time: ev.start_time ?? "", end_time: ev.end_time ?? "",
       event_type: ev.event_type, format: ev.format ?? "gross_stroke_play",
       format_custom: ev.format_custom ?? "",
@@ -365,9 +380,9 @@ export default function Events() {
       restriction: ev.restriction,
       entry_fee: ev.entry_fee ?? "",
       max_participants: ev.max_participants ?? "",
-      entries_open: ev.entries_open ?? "", entries_close: ev.entries_close ?? "",
+      entries_open: d(ev.entries_open), entries_close: d(ev.entries_close),
       rounds_per_day: (() => {
-        const days = computeDays(ev.event_date, ev.end_date);
+        const days = computeDays(startDate, endDate);
         const rpd = Math.round((ev.rounds ?? 1) / days);
         return (rpd >= 2 ? 2 : 1) as 1 | 2;
       })(),
@@ -381,7 +396,7 @@ export default function Events() {
     setSelectedSlotIds([]);
     setAvailableSlots([]);
     setShowAddSlot(false);
-    setNewSlotDate(ev.event_date);
+    setNewSlotDate(startDate);
     setNewSlotTime("");
     setNewSlotPlayers(4);
     setDlgOpen(true);
@@ -870,6 +885,7 @@ export default function Events() {
             <div className="space-y-1.5">
               <Label>Description</Label>
               <textarea
+                ref={descRef}
                 className="w-full border rounded-md px-3 py-2 text-sm min-h-[100px] bg-background resize-none overflow-hidden"
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}

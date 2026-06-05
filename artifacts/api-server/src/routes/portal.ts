@@ -718,12 +718,12 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
   ];
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
-       event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+       event_type, format, format_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
        rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
-     event_type, format, restriction,
+     event_type, format, (req.body?.format_custom) ?? null, restriction,
      entry_fee != null ? parseFloat(entry_fee) : null,
      max_participants != null ? parseInt(max_participants) : null,
      divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS),
@@ -771,7 +771,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   const existing = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) { res.status(404).json({ message: "Event not found" }); return; }
   const {
-    name, description, event_date, end_date, start_time, end_time, event_type, format,
+    name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom,
     restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
     ballot, scoring_enabled, payment_required,
     use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds,
@@ -785,6 +785,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (end_time !== undefined)            { updates.push("end_time = ?");          vals.push(end_time ?? null); }
   if (event_type !== undefined)          { updates.push("event_type = ?");        vals.push(event_type); }
   if (format !== undefined)              { updates.push("format = ?");            vals.push(format); }
+  if (format_custom !== undefined)       { updates.push("format_custom = ?");     vals.push(format_custom ?? null); }
   if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
   if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }
   if (max_participants !== undefined)    { updates.push("max_participants = ?");  vals.push(max_participants != null ? parseInt(max_participants) : null); }

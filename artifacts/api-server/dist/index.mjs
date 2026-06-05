@@ -63567,10 +63567,10 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
   ];
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
-       event_type, format, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+       event_type, format, format_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
        rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -63581,6 +63581,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       end_time ?? null,
       event_type,
       format,
+      req.body?.format_custom ?? null,
       restriction,
       entry_fee != null ? parseFloat(entry_fee) : null,
       max_participants != null ? parseInt(max_participants) : null,
@@ -63649,6 +63650,7 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     end_time,
     event_type,
     format,
+    format_custom,
     restriction,
     entry_fee,
     max_participants,
@@ -63698,6 +63700,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (format !== void 0) {
     updates.push("format = ?");
     vals.push(format);
+  }
+  if (format_custom !== void 0) {
+    updates.push("format_custom = ?");
+    vals.push(format_custom ?? null);
   }
   if (restriction !== void 0) {
     updates.push("restriction = ?");
@@ -67226,7 +67232,9 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_status ON review_reports (status, created_at)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_review_reports_review ON review_reports (review_id)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS end_date DATE");
-  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format VARCHAR(30) NOT NULL DEFAULT 'stroke_play'");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format VARCHAR(50) NOT NULL DEFAULT 'stroke_play'");
+  await ddl("ALTER TABLE golf_events ALTER COLUMN format TYPE VARCHAR(50)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format_custom VARCHAR(255)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS divisions JSONB");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_open DATE");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_close DATE");

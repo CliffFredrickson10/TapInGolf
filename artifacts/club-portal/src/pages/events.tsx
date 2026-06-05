@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -31,7 +31,7 @@ interface GolfEvent {
   id: number; name: string; description: string | null;
   event_date: string; end_date: string | null;
   start_time: string | null; end_time: string | null;
-  event_type: string; format: string; restriction: string;
+  event_type: string; format: string; format_custom: string | null; restriction: string;
   entry_fee: number | null; max_participants: number | null;
   status: string; created_at: string;
   divisions: Division[];
@@ -71,9 +71,45 @@ interface TeeSlot {
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 const FORMAT_LABELS: Record<string, string> = {
+  // Legacy keys kept for backwards compatibility
   stroke_play: "Stroke Play", stableford: "Stableford", match_play: "Match Play",
-  fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey", other: "Other",
+  fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",
+  // Individual
+  gross_stroke_play: "Gross Stroke Play (Medal Play)",
+  net_stroke_play: "Net Stroke Play",
+  singles_match_play: "Singles Match Play",
+  individual_stableford: "Individual Stableford",
+  modified_stableford: "Individual Modified Stableford",
+  par_bogey: "Par / Bogey Competition",
+  maximum_score: "Maximum Score",
+  chairman: "Chairman (The Perch)",
+  individual_bonus_bogey: "Individual Bonus Bogey",
+  individual_par: "Individual Par Competition",
+  individual_bogey: "Individual Bogey Competition",
+  eclectic: "Eclectic (Multi-Round)",
+  // Betterball / Two-Player Team
+  fourball_gross_betterball: "Four-Ball Gross Betterball",
+  fourball_net_betterball: "Four-Ball Net Betterball",
+  betterball_match_play: "Betterball Match Play",
+  fourball_stableford: "Four-Ball Stableford",
+  shamble: "Shamble",
+  best_ball_aggregate: "Best Ball Aggregate",
+  high_low: "High-Low",
+  daytona: "Daytona (Las Vegas)",
+  low_ball_total: "Low Ball / Total Score",
+  the_ghost: "The Ghost",
+  betterball_bonus_bogey: "Betterball Bonus Bogey",
+  pinehurst_points: "Multiplication Betterball (Pinehurst)",
+  // Team
+  american_scramble: "American Scramble",
+  // Other
+  other: "Other",
 };
+
+function fmtFormat(ev: { format: string; format_custom?: string | null }) {
+  if (ev.format === "other") return ev.format_custom?.trim() || "Other";
+  return FORMAT_LABELS[ev.format] ?? ev.format;
+}
 const TYPE_LABELS: Record<string, string> = {
   competition: "Competition", open_day: "Open Day", corporate: "Corporate",
   social: "Social", other: "Other",
@@ -111,7 +147,7 @@ const DEFAULT_DIVISIONS: Division[] = [
 const EMPTY_FORM = {
   name: "", description: "", event_date: "", end_date: "",
   start_time: "", end_time: "", event_type: "competition",
-  format: "stroke_play", restriction: "open",
+  format: "gross_stroke_play", format_custom: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds: 1,
   ballot: false, scoring_enabled: false, payment_required: false,
@@ -272,7 +308,8 @@ export default function Events() {
       name: ev.name, description: ev.description ?? "",
       event_date: ev.event_date, end_date: ev.end_date ?? "",
       start_time: ev.start_time ?? "", end_time: ev.end_time ?? "",
-      event_type: ev.event_type, format: ev.format ?? "stroke_play",
+      event_type: ev.event_type, format: ev.format ?? "gross_stroke_play",
+      format_custom: ev.format_custom ?? "",
       restriction: ev.restriction,
       entry_fee: ev.entry_fee ?? "",
       max_participants: ev.max_participants ?? "",
@@ -477,7 +514,7 @@ export default function Events() {
                         {ev.start_time ? ` · ${String(ev.start_time).slice(0, 5)}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {FORMAT_LABELS[ev.format] ?? ev.format} · {RESTRICT_LABELS[ev.restriction] ?? ev.restriction}
+                        {fmtFormat(ev)} · {RESTRICT_LABELS[ev.restriction] ?? ev.restriction}
                         {ev.entry_fee ? ` · R${ev.entry_fee.toFixed(2)} entry` : ""}
                         {ev.max_participants ? ` · Max ${ev.max_participants}` : ""}
                         {ev.rounds > 1 ? ` · ${ev.rounds} rounds` : ""}
@@ -513,7 +550,7 @@ export default function Events() {
                     <SheetTitle className="text-lg">{detail.name}</SheetTitle>
                     <p className="text-sm text-muted-foreground mt-1">
                       {fmtDate(detail.event_date)}{detail.end_date ? ` – ${fmtDate(detail.end_date)}` : ""}
-                      {" · "}{FORMAT_LABELS[detail.format] ?? detail.format}
+                      {" · "}{fmtFormat(detail)}
                       {" · "}{RESTRICT_LABELS[detail.restriction] ?? detail.restriction}
                     </p>
                   </div>
@@ -603,7 +640,7 @@ export default function Events() {
                             <div>
                               <p className="font-semibold text-sm">{d.label}</p>
                               <p className="text-xs text-muted-foreground mt-0.5">
-                                HCP {d.min_hcp} – {d.max_hcp} · {FORMAT_LABELS[d.format] ?? d.format} · {d.tees} tees
+                                HCP {d.min_hcp} – {d.max_hcp} · {fmtFormat(d)} · {d.tees} tees
                               </p>
                             </div>
                             <div className="text-right">
@@ -929,16 +966,62 @@ export default function Events() {
               </p>
             )}
 
+            {/* Format — full-width with grouped options */}
+            <div className="space-y-1.5">
+              <Label>Format</Label>
+              <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent className="max-h-80">
+                  <SelectGroup>
+                    <SelectLabel>Individual</SelectLabel>
+                    <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
+                    <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                    <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
+                    <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
+                    <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
+                    <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
+                    <SelectItem value="maximum_score">Maximum Score</SelectItem>
+                    <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
+                    <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
+                    <SelectItem value="individual_par">Individual Par Competition</SelectItem>
+                    <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
+                    <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Betterball / Two-Player Team</SelectLabel>
+                    <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
+                    <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
+                    <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
+                    <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                    <SelectItem value="shamble">Shamble</SelectItem>
+                    <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
+                    <SelectItem value="high_low">High-Low</SelectItem>
+                    <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
+                    <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
+                    <SelectItem value="the_ghost">The Ghost</SelectItem>
+                    <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
+                    <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Team</SelectLabel>
+                    <SelectItem value="american_scramble">American Scramble</SelectItem>
+                  </SelectGroup>
+                  <SelectGroup>
+                    <SelectLabel>Other</SelectLabel>
+                    <SelectItem value="other">Other (specify below)</SelectItem>
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
+              {form.format === "other" && (
+                <Input
+                  placeholder="Describe the format…"
+                  value={form.format_custom}
+                  onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))}
+                />
+              )}
+            </div>
+
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Format</Label>
-                <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
               <div className="space-y-1.5">
                 <Label>Tournament Type</Label>
                 <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>

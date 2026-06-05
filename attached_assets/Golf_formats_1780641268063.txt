@@ -1,0 +1,99 @@
+1. Gross Stroke Play (Medal Play)
+Type: Individual
+Mechanic: Every single raw stroke is counted over 18 holes. The lowest total score wins.
+
+2. Net Stroke Play
+Type: Individual
+Mechanic: Identical to gross stroke play, but the player's total course handicap is subtracted from their gross score at the end of the round.
+
+3. Singles Match Play
+Type: Individual
+Mechanic: A head-to-head, player-vs-player competition scored hole-by-hole. The player with the lowest score on a hole wins that hole.
+
+4. Individual Stableford
+Type: Individual
+Mechanic: Points are awarded on each hole based on the player's net score relative to par (e.g., 2 points for a par, 3 for a birdie). The highest total points win.
+
+5. Individual Modified Stableford
+Type: Individual
+Mechanic: An aggressive variation of Stableford that heavily rewards under-par scores (birdies/eagles) and penalizes over-par scores (bogeys) with negative points.
+
+6. Par / Bogey Competition
+Type: Individual
+Mechanic: The golfer plays match play against the course itself. A net birdie or better awards a plus (+), a net par awards a zero (0), and a net bogey or worse awards a minus (-).
+
+7. Maximum Score
+Type: Individual
+Mechanic: Stroke play with a hard ceiling cap on any single hole (e.g., max score of 8, or net double bogey). Once reached, the player picks up to maximize pace of play.
+
+8. Chairman (The Perch)
+Type: Individual
+Mechanic: A multi-player individual game where a player must win a hole outright to become the "Chairman." While Chairman, they accumulate points for every subsequent hole they win or tie until unseated.
+
+9. Four-Ball Gross Betterball
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball entirely. The single lowest raw (gross) score between the two partners is recorded as the team score for that hole.
+
+10. Four-Ball Net Betterball
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball entirely, applying their handicap strokes where applicable. The lowest net score between the two is recorded as the team score.
+
+11. Betterball Match Play
+Type: Betterball (Two-Player Team)
+Mechanic: Team vs. Team. All four players play their own ball. The lowest score between Team A's partners is pitted against the lowest score of Team B's partners to determine who wins the hole.
+
+12. Four-Ball Stableford
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play out the hole individually and calculate their respective Stableford points. Only the highest point total earned by a single partner is counted for the team.
+
+13. Shamble
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners tee off, select the best drive, and then drop and play their own individual balls from that spot into the hole. The lowest individual score counts as the team score.
+
+14. Best Ball Aggregate
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball all the way into the cup, and their individual scores are combined (added together) to create the team score for that hole.
+
+15. High-Low
+Type: Betterball (Two-Player Team)
+Mechanic: Two points are contested per hole. One point goes to the team with the lowest individual ball ("Low"), and the second point goes to the team with the best of the remaining two higher balls ("High").
+
+16. Daytona (Las Vegas)
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball. Their individual scores are paired together as a two-digit number to form the team score (e.g., a 4 and a 5 becomes 45). If a birdie is made, the opponents' digits are flipped to maximize their score (e.g., a 5 and a 6 becomes 65 instead of 56).
+
+17. Low Ball / Total Score
+Type: Betterball (Two-Player Team)
+Mechanic: Two points are available per hole. 1 point is awarded to the team with the lowest individual score on the hole, and 1 point is awarded to the team with the lowest combined aggregate score.
+
+18. The Ghost
+Type: Betterball (Two-Player Team Variant)
+Mechanic: Utilized when a group only has 3 players. An imaginary "Ghost" player is added as a partner to one of the golfers. The Ghost functions as a scratch player who automatically shoots a net par on every single hole.
+
+19. Individual Bonus Bogey
+Type: Individual
+Mechanic: The golfer plays a match-play format against the course's net par. A net par awards a zero (0), a net bogey or worse awards a minus (-), a net birdie awards a plus (+), and a net eagle or better awards a double plus (++). The highest net score of pluses minus minuses wins.
+
+20. Betterball Bonus Bogey
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball entirely using their net handicaps. The single best result between the two partners on each hole is selected, and the Bonus Bogey math is applied (0 for par, - for bogey, + for birdie, and ++ for eagle or better) to record a single team score.
+
+21. American Scramble
+Type: Team (Typically 4-Player, but can be 2- or 3-player)
+Mechanic: A variation of a standard scramble where all team members tee off, the best drive is selected, and all players hit their second shots from that spot. However, once the ball is on the putting green, every player putts their own ball entirely until holed out. The single lowest individual score on the green is recorded as the team's score for that hole.
+
+22. Individual Par Competition
+Type: Individual
+Mechanic: The player competes in a net match-play format directly against the course's par. Every net birdie or better awards a plus (+), every net par awards a zero (0), and every net bogey or worse awards a minus (-). The final score is calculated as the net total of pluses minus minuses (e.g., +3 or -2).
+
+23. Individual Bogey Competition
+Type: Individual
+Mechanic: A strict, traditional variant of the Par competition where the baseline target is net bogey. A net par or better awards a plus (+), a net bogey awards a zero (0), and a net double-bogey or worse awards a minus (-). The final score is the net total of pluses minus minuses.
+
+24. Multiplication Betterball (Pinehurst Points)
+Type: Betterball (Two-Player Team)
+Mechanic: Both partners play their own ball entirely and calculate their individual individual Stableford points for the hole. The team's score for the hole is calculated by multiplying the two point totals together (e.g., if Partner A gets 2 points and Partner B gets 3 points, the team score is 6). If either player scores 0 points, the team score for that hole automatically becomes 0.
+
+25. Eclectic
+Type: Individual (Multi-Round)
+Mechanic: A tournament format spanning multiple rounds over days or weeks. The app tracks the player's scorecard across all rounds and automatically selects the single lowest individual score made on each specific hole (e.g., if a player shoots a 5, a 4, and a 3 on Hole 1 across three days, the app records a 3 for the final 18-hole Eclectic card).

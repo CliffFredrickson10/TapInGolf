@@ -30,6 +30,8 @@ interface TeeTime {
   tee_start_type: "first_tee" | "two_tee" | "tenth_tee";
   crossover_enabled: boolean;
   blocked_slots: number[];
+  event_id?: number | null;
+  event_name?: string | null;
 }
 
 interface Booking {
@@ -1317,6 +1319,31 @@ export default function Schedule() {
             </div>
 
             {dayTeeTimes.map((tt, rowIdx) => {
+              const isTournament = !!tt.event_id;
+
+              // ── Tournament-exclusive slot — read-only locked row ──────────────
+              if (isTournament) {
+                return (
+                  <div key={tt.id}
+                    className={`grid grid-cols-[96px_1fr_108px] border-t text-sm ${rowIdx % 2 === 0 ? "bg-amber-50/40" : "bg-amber-50/60"}`}
+                  >
+                    <div className="px-3 py-2 flex flex-col justify-center border-r border-amber-100 gap-0.5">
+                      <span className="font-mono font-bold text-[#1a5c38] text-sm">{String(tt.time).slice(0, 5)}</span>
+                      <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-semibold w-fit">Tournament</span>
+                    </div>
+                    <div className="px-3 py-2 border-l border-amber-100 flex items-center gap-2 col-span-1">
+                      <span className="text-xs font-medium text-amber-800 truncate">
+                        {tt.event_name ?? "Tournament"} — {tt.total_slots} player slots reserved
+                      </span>
+                    </div>
+                    <div className="px-2 py-2 border-l border-amber-100 flex items-center justify-center">
+                      <span className="text-[10px] text-amber-600 font-medium">Locked</span>
+                    </div>
+                  </div>
+                );
+              }
+
+              // ── Regular slot ─────────────────────────────────────────────────
               const slots = buildSlots(tt, bForTT(tt.id));
               return (
                 <div key={tt.id}

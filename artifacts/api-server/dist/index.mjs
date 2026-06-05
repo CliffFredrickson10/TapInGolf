@@ -63306,7 +63306,13 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
 router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const { date, from, to } = req.query;
-  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ? AND event_id IS NULL";
+  let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+       pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
+       pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
+       pts.event_id, ge.name AS event_name
+     FROM portal_tee_slots pts
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
+     WHERE pts.club_id = ?`;
   const params = [club.id];
   if (date) {
     sql += " AND date = ?";

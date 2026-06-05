@@ -408,7 +408,13 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
 router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const { date, from, to } = req.query as any;
-  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ? AND event_id IS NULL";
+  let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+       pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
+       pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
+       pts.event_id, ge.name AS event_name
+     FROM portal_tee_slots pts
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
+     WHERE pts.club_id = ?`;
   const params: any[] = [club.id];
   if (date) { sql += " AND date = ?"; params.push(date); }
   else if (from && to) { sql += " AND date BETWEEN ? AND ?"; params.push(from, to); }

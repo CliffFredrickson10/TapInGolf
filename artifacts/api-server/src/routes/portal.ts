@@ -704,12 +704,13 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
   const club = getClub(req);
   const {
     name, description, event_date, end_date, start_time, end_time,
-    event_type = "competition", format = "stroke_play", restriction = "open",
+    event_type = "competition", format = "gross_stroke_play", restriction = "open",
     entry_fee, max_participants, divisions, entries_open, entries_close,
     ballot, scoring_enabled, payment_required,
     use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-    rounds = 1, status = "active",
+    rounds = 1,
   } = req.body ?? {};
+  const status = "pending_publish";
   if (!name || !event_date) { res.status(400).json({ message: "name and event_date required" }); return; }
   const DEFAULT_DIVISIONS = [
     { label: "A Division", key: "A", min_hcp: 0,  max_hcp: 9.9,  format: "stroke_play", tees: "championship" },
@@ -787,9 +788,9 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (format !== undefined)              { updates.push("format = ?");            vals.push(format); }
   if (format_custom !== undefined)       { updates.push("format_custom = ?");     vals.push(format_custom ?? null); }
   if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
+  // NOTE: status is intentionally excluded — use /publish or DELETE to change it
   if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }
   if (max_participants !== undefined)    { updates.push("max_participants = ?");  vals.push(max_participants != null ? parseInt(max_participants) : null); }
-  if (status !== undefined)              { updates.push("status = ?");            vals.push(status); }
   if (divisions !== undefined)           { updates.push("divisions = ?");         vals.push(JSON.stringify(divisions)); }
   if (entries_open !== undefined)        { updates.push("entries_open = ?");      vals.push(entries_open ?? null); }
   if (entries_close !== undefined)       { updates.push("entries_close = ?");     vals.push(entries_close ?? null); }
@@ -810,8 +811,70 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
 router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  // Notify approved registrants before cancelling (fire-and-forget)
+  const registrants = await query<any>(
+    `SELECT DISTINCT u.push_token
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL`,
+    [evId]
+  );
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  // Clear all draw entries for this event (free the tee slots)
+  await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
+
+  if (registrants.length > 0) {
+    sendPushNotifications(registrants.map((u: any) => ({
+      to: u.push_token, sound: "default",
+      title: `❌ Tournament Cancelled — ${club.name}`,
+      body:  `${String(ev.name)} has been cancelled. We're sorry for the inconvenience.`,
+      data:  { type: "event_cancelled", event_id: evId, club_id: club.id },
+    })));
+  }
   res.json({ message: "Cancelled" });
+});
+
+// POST /portal/events/:id/publish  →  move to active, notify audience
+router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+
+  // Notify club members + past bookers (fire-and-forget)
+  const audience = await query<any>(
+    `SELECT DISTINCT u.push_token
+     FROM users u
+     WHERE u.push_token IS NOT NULL
+       AND (
+         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+         OR EXISTS (
+           SELECT 1 FROM bookings b
+           JOIN tee_times tt ON tt.id = b.tee_time_id
+           WHERE tt.club_id = ? AND b.user_id = u.id
+         )
+       )
+     LIMIT 500`,
+    [club.id, club.id]
+  );
+  const fmtDate = (d: string) => {
+    try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
+    catch { return d; }
+  };
+  if (audience.length > 0) {
+    sendPushNotifications(audience.map((u: any) => ({
+      to: u.push_token, sound: "default",
+      title: `⛳ Tournament Now Open — ${club.name}`,
+      body:  `${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`,
+      data:  { type: "event_published", event_id: evId, club_id: club.id },
+    })));
+  }
+  res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
 
 // ── Tee-slot linking (portal) ────────────────────────────────────────────────

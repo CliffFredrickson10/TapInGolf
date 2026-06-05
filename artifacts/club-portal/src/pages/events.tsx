@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight,
-  CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2,
+  CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -118,9 +118,16 @@ const RESTRICT_LABELS: Record<string, string> = {
   open: "Open", members_only: "Members Only", invitation_only: "Invite Only",
 };
 const STATUS_BADGE: Record<string, string> = {
+  pending_publish: "bg-amber-100 text-amber-700",
   active: "bg-green-100 text-green-700",
   cancelled: "bg-red-100 text-red-700",
   completed: "bg-blue-100 text-blue-700",
+};
+const STATUS_LABEL: Record<string, string> = {
+  pending_publish: "Pending Publish",
+  active: "Published",
+  cancelled: "Cancelled",
+  completed: "Completed",
 };
 const PAY_BADGE: Record<string, string> = {
   unpaid: "bg-amber-100 text-amber-700",
@@ -152,7 +159,7 @@ const EMPTY_FORM = {
   entries_open: "", entries_close: "", rounds: 1,
   ballot: false, scoring_enabled: false, payment_required: false,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
-  status: "active", divisions: DEFAULT_DIVISIONS,
+  divisions: DEFAULT_DIVISIONS,
 };
 
 // ─── Main component ────────────────────────────────────────────────────────
@@ -319,7 +326,7 @@ export default function Events() {
       payment_required: !!ev.payment_required,
       use_tiered_pricing: !!ev.use_tiered_pricing,
       allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
-      status: ev.status, divisions: ev.divisions ?? DEFAULT_DIVISIONS,
+      divisions: ev.divisions ?? DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
     setSelectedSlotIds([]);
@@ -373,13 +380,23 @@ export default function Events() {
     } finally { setSaving(false); }
   };
 
+  const handlePublish = async (id: number, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!confirm("Publish this tournament? Notifications will be sent to club members and past golfers.")) return;
+    try {
+      await api(`/api/portal/events/${id}/publish`, { method: "POST" });
+      setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, status: "active" } : ev));
+      toast({ title: "Tournament published", description: "Golfers have been notified." });
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  };
+
   const handleCancel = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Cancel this tournament?")) return;
+    if (!confirm("Cancel this tournament? Registered golfers will be notified and their draw slots cleared.")) return;
     try {
       await api(`/api/portal/events/${id}`, { method: "DELETE" });
       setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, status: "cancelled" } : ev));
-      toast({ title: "Tournament cancelled" });
+      toast({ title: "Tournament cancelled", description: "Registered golfers have been notified." });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
@@ -502,7 +519,7 @@ export default function Events() {
                     <div className="space-y-1">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-sm">{ev.name}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[ev.status] ?? "bg-gray-100 text-gray-700"}`}>{ev.status}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_BADGE[ev.status] ?? "bg-gray-100 text-gray-700"}`}>{STATUS_LABEL[ev.status] ?? ev.status}</span>
                         {ev.pending_count > 0 && (
                           <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">
                             {ev.pending_count} pending
@@ -529,7 +546,12 @@ export default function Events() {
                   </div>
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(ev, e)} disabled={readOnly}><Pencil className="h-3.5 w-3.5" /></Button>
-                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={e => handleCancel(ev.id, e)} disabled={readOnly || ev.status === "cancelled"}><Trash2 className="h-3.5 w-3.5" /></Button>
+                    {ev.status === "pending_publish" && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 text-green-700" title="Publish tournament" onClick={e => handlePublish(ev.id, e)} disabled={readOnly}>
+                        <Send className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Cancel tournament" onClick={e => handleCancel(ev.id, e)} disabled={readOnly || ev.status === "cancelled"}><Trash2 className="h-3.5 w-3.5" /></Button>
                     <ChevronRight className="h-4 w-4 text-muted-foreground ml-1" />
                   </div>
                 </div>
@@ -554,7 +576,7 @@ export default function Events() {
                       {" · "}{RESTRICT_LABELS[detail.restriction] ?? detail.restriction}
                     </p>
                   </div>
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_BADGE[detail.status] ?? "bg-gray-100 text-gray-600"}`}>{detail.status}</span>
+                  <span className={`text-xs px-2.5 py-1 rounded-full font-medium flex-shrink-0 ${STATUS_BADGE[detail.status] ?? "bg-gray-100 text-gray-600"}`}>{STATUS_LABEL[detail.status] ?? detail.status}</span>
                 </div>
 
                 {/* Quick stats */}
@@ -1037,17 +1059,6 @@ export default function Events() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {Object.entries(RESTRICT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Status</Label>
-                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="active">Active</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

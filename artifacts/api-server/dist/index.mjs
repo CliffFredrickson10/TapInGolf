@@ -63539,7 +63539,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     start_time,
     end_time,
     event_type = "competition",
-    format = "stroke_play",
+    format = "gross_stroke_play",
     restriction = "open",
     entry_fee,
     max_participants,
@@ -63553,9 +63553,9 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     allow_wallet,
     allow_prepaid,
     allow_voucher,
-    rounds = 1,
-    status = "active"
+    rounds = 1
   } = req.body ?? {};
+  const status = "pending_publish";
   if (!name || !event_date) {
     res.status(400).json({ message: "name and event_date required" });
     return;
@@ -63717,10 +63717,6 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     updates.push("max_participants = ?");
     vals.push(max_participants != null ? parseInt(max_participants) : null);
   }
-  if (status !== void 0) {
-    updates.push("status = ?");
-    vals.push(status);
-  }
   if (divisions !== void 0) {
     updates.push("divisions = ?");
     vals.push(JSON.stringify(divisions));
@@ -63776,8 +63772,72 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
 router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
+  const ev = await row("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const registrants = await query(
+    `SELECT DISTINCT u.push_token
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL`,
+    [evId]
+  );
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
+  if (registrants.length > 0) {
+    sendPushNotifications(registrants.map((u) => ({
+      to: u.push_token,
+      sound: "default",
+      title: `\u274C Tournament Cancelled \u2014 ${club.name}`,
+      body: `${String(ev.name)} has been cancelled. We're sorry for the inconvenience.`,
+      data: { type: "event_cancelled", event_id: evId, club_id: club.id }
+    })));
+  }
   res.json({ message: "Cancelled" });
+});
+router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const audience = await query(
+    `SELECT DISTINCT u.push_token
+     FROM users u
+     WHERE u.push_token IS NOT NULL
+       AND (
+         EXISTS (SELECT 1 FROM club_members cm WHERE cm.club_id = ? AND cm.user_id = u.id AND cm.status = 'active')
+         OR EXISTS (
+           SELECT 1 FROM bookings b
+           JOIN tee_times tt ON tt.id = b.tee_time_id
+           WHERE tt.club_id = ? AND b.user_id = u.id
+         )
+       )
+     LIMIT 500`,
+    [club.id, club.id]
+  );
+  const fmtDate3 = (d) => {
+    try {
+      return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return d;
+    }
+  };
+  if (audience.length > 0) {
+    sendPushNotifications(audience.map((u) => ({
+      to: u.push_token,
+      sound: "default",
+      title: `\u26F3 Tournament Now Open \u2014 ${club.name}`,
+      body: `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`,
+      data: { type: "event_published", event_id: evId, club_id: club.id }
+    })));
+  }
+  res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
 });
 router14.get("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

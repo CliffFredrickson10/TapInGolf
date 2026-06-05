@@ -719,12 +719,14 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
   ];
   const eventId = await exec(
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
-       event_type, format, format_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
+       event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
        rounds, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
-     event_type, format, (req.body?.format_custom) ?? null, restriction,
+     event_type, format, (req.body?.format_custom) ?? null,
+     (req.body?.format2) || null, (req.body?.format2_custom) || null,
+     restriction,
      entry_fee != null ? parseFloat(entry_fee) : null,
      max_participants != null ? parseInt(max_participants) : null,
      divisions ? JSON.stringify(divisions) : JSON.stringify(DEFAULT_DIVISIONS),
@@ -772,7 +774,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   const existing = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) { res.status(404).json({ message: "Event not found" }); return; }
   const {
-    name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom,
+    name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom, format2, format2_custom,
     restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
     ballot, scoring_enabled, payment_required,
     use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds,
@@ -787,6 +789,8 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (event_type !== undefined)          { updates.push("event_type = ?");        vals.push(event_type); }
   if (format !== undefined)              { updates.push("format = ?");            vals.push(format); }
   if (format_custom !== undefined)       { updates.push("format_custom = ?");     vals.push(format_custom ?? null); }
+  if (format2 !== undefined)             { updates.push("format2 = ?");           vals.push(format2 || null); }
+  if (format2_custom !== undefined)      { updates.push("format2_custom = ?");    vals.push(format2_custom || null); }
   if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
   // NOTE: status is intentionally excluded — use /publish or DELETE to change it
   if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }

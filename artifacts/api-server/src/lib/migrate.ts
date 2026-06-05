@@ -820,6 +820,8 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format VARCHAR(50) NOT NULL DEFAULT 'stroke_play'");
   await ddl("ALTER TABLE golf_events ALTER COLUMN format TYPE VARCHAR(50)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format_custom VARCHAR(255)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format2 VARCHAR(50)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS format2_custom VARCHAR(255)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS divisions JSONB");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_open DATE");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_close DATE");

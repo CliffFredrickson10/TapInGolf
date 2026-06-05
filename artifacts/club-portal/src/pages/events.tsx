@@ -31,7 +31,8 @@ interface GolfEvent {
   id: number; name: string; description: string | null;
   event_date: string; end_date: string | null;
   start_time: string | null; end_time: string | null;
-  event_type: string; format: string; format_custom: string | null; restriction: string;
+  event_type: string; format: string; format_custom: string | null;
+  format2: string | null; format2_custom: string | null; restriction: string;
   entry_fee: number | null; max_participants: number | null;
   status: string; created_at: string;
   divisions: Division[];
@@ -165,7 +166,7 @@ const DEFAULT_DIVISIONS: Division[] = [
 const EMPTY_FORM = {
   name: "", description: "", event_date: "", end_date: "",
   start_time: "", end_time: "", event_type: "competition",
-  format: "gross_stroke_play", format_custom: "", restriction: "open",
+  format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   ballot: false, scoring_enabled: false, payment_required: false,
@@ -328,6 +329,7 @@ export default function Events() {
       start_time: ev.start_time ?? "", end_time: ev.end_time ?? "",
       event_type: ev.event_type, format: ev.format ?? "gross_stroke_play",
       format_custom: ev.format_custom ?? "",
+      format2: ev.format2 ?? "", format2_custom: ev.format2_custom ?? "",
       restriction: ev.restriction,
       entry_fee: ev.entry_fee ?? "",
       max_participants: ev.max_participants ?? "",
@@ -548,7 +550,7 @@ export default function Events() {
                         {ev.start_time ? ` · ${String(ev.start_time).slice(0, 5)}` : ""}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        {fmtFormat(ev)} · {RESTRICT_LABELS[ev.restriction] ?? ev.restriction}
+                        {fmtFormat(ev)}{ev.format2 ? ` + ${fmtFormat({ format: ev.format2, format_custom: ev.format2_custom })}` : ""} · {RESTRICT_LABELS[ev.restriction] ?? ev.restriction}
                         {ev.entry_fee ? ` · R${ev.entry_fee.toFixed(2)} entry` : ""}
                         {ev.max_participants ? ` · Max ${ev.max_participants}` : ""}
                         {ev.rounds > 1 ? ` · ${ev.rounds} rounds` : ""}
@@ -589,7 +591,7 @@ export default function Events() {
                     <SheetTitle className="text-lg">{detail.name}</SheetTitle>
                     <p className="text-sm text-muted-foreground mt-1">
                       {fmtDate(detail.event_date)}{detail.end_date ? ` – ${fmtDate(detail.end_date)}` : ""}
-                      {" · "}{fmtFormat(detail)}
+                      {" · "}{fmtFormat(detail)}{detail.format2 ? ` + ${fmtFormat({ format: detail.format2, format_custom: detail.format2_custom })}` : ""}
                       {" · "}{RESTRICT_LABELS[detail.restriction] ?? detail.restriction}
                     </p>
                   </div>
@@ -1027,59 +1029,118 @@ export default function Events() {
               </p>
             )}
 
-            {/* Format — full-width with grouped options */}
-            <div className="space-y-1.5">
-              <Label>Format</Label>
-              <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent className="max-h-80">
-                  <SelectGroup>
-                    <SelectLabel>Individual</SelectLabel>
-                    <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
-                    <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
-                    <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
-                    <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
-                    <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
-                    <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
-                    <SelectItem value="maximum_score">Maximum Score</SelectItem>
-                    <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
-                    <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
-                    <SelectItem value="individual_par">Individual Par Competition</SelectItem>
-                    <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
-                    <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Betterball / Two-Player Team</SelectLabel>
-                    <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
-                    <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
-                    <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
-                    <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
-                    <SelectItem value="shamble">Shamble</SelectItem>
-                    <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
-                    <SelectItem value="high_low">High-Low</SelectItem>
-                    <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
-                    <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
-                    <SelectItem value="the_ghost">The Ghost</SelectItem>
-                    <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
-                    <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Team</SelectLabel>
-                    <SelectItem value="american_scramble">American Scramble</SelectItem>
-                  </SelectGroup>
-                  <SelectGroup>
-                    <SelectLabel>Other</SelectLabel>
-                    <SelectItem value="other">Other (specify below)</SelectItem>
-                  </SelectGroup>
-                </SelectContent>
-              </Select>
-              {form.format === "other" && (
-                <Input
-                  placeholder="Describe the format…"
-                  value={form.format_custom}
-                  onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))}
-                />
-              )}
+            {/* Format selectors */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Format 1 */}
+              <div className="space-y-1.5">
+                <Label>Format 1</Label>
+                <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    <SelectGroup>
+                      <SelectLabel>Individual</SelectLabel>
+                      <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
+                      <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                      <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
+                      <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
+                      <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
+                      <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
+                      <SelectItem value="maximum_score">Maximum Score</SelectItem>
+                      <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
+                      <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
+                      <SelectItem value="individual_par">Individual Par Competition</SelectItem>
+                      <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
+                      <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Betterball / Two-Player Team</SelectLabel>
+                      <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
+                      <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
+                      <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
+                      <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                      <SelectItem value="shamble">Shamble</SelectItem>
+                      <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
+                      <SelectItem value="high_low">High-Low</SelectItem>
+                      <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
+                      <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
+                      <SelectItem value="the_ghost">The Ghost</SelectItem>
+                      <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
+                      <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Team</SelectLabel>
+                      <SelectItem value="american_scramble">American Scramble</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Other</SelectLabel>
+                      <SelectItem value="other">Other (specify below)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {form.format === "other" && (
+                  <Input
+                    placeholder="Describe the format…"
+                    value={form.format_custom}
+                    onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))}
+                  />
+                )}
+              </div>
+
+              {/* Format 2 — optional */}
+              <div className="space-y-1.5">
+                <Label>Format 2 <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                <Select value={form.format2 || "none"} onValueChange={v => setForm(f => ({ ...f, format2: v === "none" ? "" : v, format2_custom: v !== "other" ? "" : f.format2_custom }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-80">
+                    <SelectItem value="none">— No second format —</SelectItem>
+                    <SelectGroup>
+                      <SelectLabel>Individual</SelectLabel>
+                      <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
+                      <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                      <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
+                      <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
+                      <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
+                      <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
+                      <SelectItem value="maximum_score">Maximum Score</SelectItem>
+                      <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
+                      <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
+                      <SelectItem value="individual_par">Individual Par Competition</SelectItem>
+                      <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
+                      <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Betterball / Two-Player Team</SelectLabel>
+                      <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
+                      <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
+                      <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
+                      <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                      <SelectItem value="shamble">Shamble</SelectItem>
+                      <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
+                      <SelectItem value="high_low">High-Low</SelectItem>
+                      <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
+                      <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
+                      <SelectItem value="the_ghost">The Ghost</SelectItem>
+                      <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
+                      <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Team</SelectLabel>
+                      <SelectItem value="american_scramble">American Scramble</SelectItem>
+                    </SelectGroup>
+                    <SelectGroup>
+                      <SelectLabel>Other</SelectLabel>
+                      <SelectItem value="other">Other (specify below)</SelectItem>
+                    </SelectGroup>
+                  </SelectContent>
+                </Select>
+                {form.format2 === "other" && (
+                  <Input
+                    placeholder="Describe the format…"
+                    value={form.format2_custom}
+                    onChange={e => setForm(f => ({ ...f, format2_custom: e.target.value }))}
+                  />
+                )}
+              </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

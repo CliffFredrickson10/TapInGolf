@@ -1250,10 +1250,17 @@ export default function Events() {
             <div className="space-y-2">
               <Label>Divisions (auto-assigned from HNA handicap)</Label>
               <div className="space-y-2">
+                <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+                  <span className="w-20 shrink-0">Division</span>
+                  <span style={{ width: 70 }} className="shrink-0 text-center">WHS From</span>
+                  <span className="shrink-0 invisible">–</span>
+                  <span style={{ width: 70 }} className="shrink-0 text-center">WHS To</span>
+                  <span className="w-44 shrink-0">Format</span>
+                  <span className="flex-1 min-w-0">Tees</span>
+                </div>
                 {form.divisions.map((d, i) => (
                   <div key={d.key} className="flex items-center gap-2 text-xs">
                     <span className="font-medium w-20 shrink-0">{d.label}</span>
-                    <span className="text-muted-foreground shrink-0">WHS Index</span>
                     <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
                       onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
                     <span className="text-muted-foreground shrink-0">–</span>

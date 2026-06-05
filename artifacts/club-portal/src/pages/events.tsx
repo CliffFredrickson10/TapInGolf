@@ -774,13 +774,16 @@ export default function Events() {
               // Build the ordered list of dates for this tournament
               const getDatesInRange = (start: string, end?: string): string[] => {
                 const dates: string[] = [];
-                const cur = new Date(start + "T00:00:00");
-                const last = end ? new Date(end + "T00:00:00") : new Date(start + "T00:00:00");
-                if (isNaN(cur.getTime())) return [start];
-                const cap = new Date(cur); cap.setDate(cap.getDate() + 30); // safety cap 31 days
+                const [sy, sm, sd] = start.split("-").map(Number);
+                if (!sy || !sm || !sd) return [start];
+                const [ey, em, ed] = (end || start).split("-").map(Number);
+                const cur = new Date(Date.UTC(sy, sm - 1, sd));
+                const last = new Date(Date.UTC(ey || sy, (em || sm) - 1, ed || sd));
+                const cap = new Date(Date.UTC(sy, sm - 1, sd));
+                cap.setUTCDate(cap.getUTCDate() + 30); // safety cap 31 days
                 while (cur <= last && cur <= cap) {
                   dates.push(cur.toISOString().split("T")[0]);
-                  cur.setDate(cur.getDate() + 1);
+                  cur.setUTCDate(cur.getUTCDate() + 1);
                 }
                 return dates;
               };

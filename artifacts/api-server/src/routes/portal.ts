@@ -408,7 +408,7 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
 router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const { date, from, to } = req.query as any;
-  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ?";
+  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ? AND event_id IS NULL";
   const params: any[] = [club.id];
   if (date) { sql += " AND date = ?"; params.push(date); }
   else if (from && to) { sql += " AND date BETWEEN ? AND ?"; params.push(from, to); }
@@ -429,25 +429,55 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
 
 router.post("/portal/tee-times", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes } = req.body ?? {};
+  const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes, event_id } = req.body ?? {};
   if (!date || !time) { res.status(400).json({ message: "date and time required" }); return; }
-  const insertRows = await query<any>(
-    "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) DO NOTHING RETURNING id",
-    [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
-  );
-  const insertId = insertRows[0]?.id;
+  const evId: number | null = event_id ? Number(event_id) : null;
+
+  let insertId: number | undefined;
+  if (evId) {
+    // Event-exclusive slot — uses the partial unique index on (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL
+    const rows = await query<any>(
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null, evId]
+    );
+    insertId = rows[0]?.id;
+    // Auto-recalculate max_participants on the event
+    const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  } else {
+    // General slot — uses the partial unique index on (club_id, date, tee_time) WHERE event_id IS NULL
+    const rows = await query<any>(
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) WHERE event_id IS NULL DO NOTHING RETURNING id",
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
+    );
+    insertId = rows[0]?.id;
+  }
+
   const inserted = insertId
     ? await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId])
-    : await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ?", [club.id, date, time]);
+    : evId
+      ? await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ? AND event_id = ?", [club.id, date, time, evId])
+      : await row<any>("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ? AND event_id IS NULL", [club.id, date, time]);
   res.json({ ...inserted, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!inserted!.active });
 });
 
-// DELETE /portal/tee-times/clear — delete all tee times for club in a date range
+// DELETE /portal/tee-times/clear — delete tee times for club in a date range.
+// When ?event_id= is supplied, clears only that event's exclusive slots.
+// Without event_id, clears only general (non-event) slots.
 router.delete("/portal/tee-times/clear", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { from, to } = req.query as any;
+  const { from, to, event_id } = req.query as any;
   if (!from || !to) { res.status(400).json({ message: "from and to dates required" }); return; }
-  const deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ?", [club.id, from, to]);
+  let deleted: number;
+  if (event_id) {
+    const evId = Number(event_id);
+    deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id = ?", [club.id, from, to, evId]);
+    // Recalculate max_participants after clearing
+    const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  } else {
+    deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL", [club.id, from, to]);
+  }
   res.json({ message: "Cleared", deleted });
 });
 
@@ -480,9 +510,15 @@ router.put("/portal/tee-times/:id", requireClubAuth, async (req: Request, res: R
 router.delete("/portal/tee-times/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const ttId = Number(req.params.id);
-  const existing = await row<any>("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  const existing = await row<any>("SELECT id, event_id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) { res.status(404).json({ message: "Tee time not found" }); return; }
+  const evId: number | null = existing.event_id ?? null;
   await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  // If this was a tournament slot, recalculate max_participants
+  if (evId) {
+    const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  }
   res.json({ message: "Deleted" });
 });
 
@@ -886,20 +922,18 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
 
 // ── Tee-slot linking (portal) ────────────────────────────────────────────────
 
-// GET /portal/events/:id/tee-slots  → tee slots linked to this event
+// GET /portal/events/:id/tee-slots  → tee slots exclusively owned by this event
 router.get("/portal/events/:id/tee-slots", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
   const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
   const slots = await query<any>(
-    `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
-            pts.is_active AS active, pts.session_type
-     FROM event_tee_slots ets
-     JOIN portal_tee_slots pts ON pts.id = ets.tee_slot_id
-     WHERE ets.event_id = ?
-     ORDER BY pts.date, pts.tee_time`,
-    [evId]
+    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type
+     FROM portal_tee_slots
+     WHERE event_id = ? AND club_id = ?
+     ORDER BY date, tee_time`,
+    [evId, club.id]
   );
   res.json(slots.map(s => ({ ...s, active: !!s.active })));
 });

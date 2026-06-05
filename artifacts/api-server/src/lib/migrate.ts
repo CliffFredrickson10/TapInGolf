@@ -852,6 +852,17 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
 
+  // Tournament-exclusive tee slots: event_id on portal_tee_slots marks a slot as
+  // belonging exclusively to one tournament (not visible in the general booking pool).
+  await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS event_id INT REFERENCES golf_events(id) ON DELETE SET NULL");
+  // Replace the single club/date/time unique index with two partial indexes:
+  // one for general slots (event_id IS NULL) and one per event.
+  await ddl("DROP INDEX IF EXISTS uq_pts_club_date_time");
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general ON portal_tee_slots (club_id, date, tee_time) WHERE event_id IS NULL");
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_event ON portal_tee_slots (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL");
+  // Migrate existing event_tee_slots junction data → set event_id directly on the slot row
+  await ddl("UPDATE portal_tee_slots SET event_id = (SELECT ets.event_id FROM event_tee_slots ets WHERE ets.tee_slot_id = portal_tee_slots.id LIMIT 1) WHERE event_id IS NULL AND id IN (SELECT tee_slot_id FROM event_tee_slots)");
+
   // Links a tournament to specific portal_tee_slots from the club's schedule.
   // max_participants on golf_events is auto-recalculated whenever this table changes.
   await ddl(`

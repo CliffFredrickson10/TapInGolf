@@ -355,7 +355,7 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players
      FROM portal_tee_slots pts
-     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
+     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1 AND pts.event_id IS NULL
      ORDER BY pts.tee_time ASC`,
     [clubId, date]
   );

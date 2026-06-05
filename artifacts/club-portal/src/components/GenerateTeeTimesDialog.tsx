@@ -157,12 +157,13 @@ function BlockEditor({
 // generation so the caller can reload its slot list.
 
 export function GenerateTeeTimesDialog({
-  open, onOpenChange, onComplete, initialDate,
+  open, onOpenChange, onComplete, initialDate, eventId,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onComplete: (dateFrom: string) => void;
   initialDate?: string;
+  eventId?: number;
 }) {
   const lockDate = !!initialDate;
   const { toast } = useToast();
@@ -333,14 +334,17 @@ export function GenerateTeeTimesDialog({
     let errors = 0;
 
     try {
-      await api(`/api/portal/tee-times/clear?from=${dateFrom}&to=${dateTo}`, { method: "DELETE" });
+      const clearUrl = eventId
+        ? `/api/portal/tee-times/clear?from=${dateFrom}&to=${dateTo}&event_id=${eventId}`
+        : `/api/portal/tee-times/clear?from=${dateFrom}&to=${dateTo}`;
+      await api(clearUrl, { method: "DELETE" });
       const BATCH = 5;
       for (let i = 0; i < allSlots.length; i += BATCH) {
         const batch = allSlots.slice(i, i + BATCH);
         await Promise.all(batch.map(s =>
           api("/api/portal/tee-times", {
             method: "POST",
-            body: JSON.stringify({ date: s.date, time: s.time, price: 0, total_slots: slots, active: true, tee_start_type: s.tee_start_type, crossover_enabled: s.crossover_enabled }),
+            body: JSON.stringify({ date: s.date, time: s.time, price: 0, total_slots: slots, active: true, tee_start_type: s.tee_start_type, crossover_enabled: s.crossover_enabled, ...(eventId ? { event_id: eventId } : {}) }),
           }).catch(() => { errors++; })
         ));
         done = Math.min(i + BATCH, allSlots.length);

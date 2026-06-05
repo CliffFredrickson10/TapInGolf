@@ -57863,7 +57863,7 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players
      FROM portal_tee_slots pts
-     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
+     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1 AND pts.event_id IS NULL
      ORDER BY pts.tee_time ASC`,
     [clubId, date]
   );
@@ -58639,39 +58639,130 @@ router4.post("/bookings", async (req, res) => {
     }
   }
   const slotDate = slot.date instanceof Date ? slot.date.toISOString().split("T")[0] : String(slot.date).split("T")[0];
-  const restrictedEvent = await row(
-    `SELECT id, name, restriction FROM golf_events
-     WHERE club_id = ? AND event_date = ? AND status = 'active' AND restriction != 'open'
-     ORDER BY id LIMIT 1`,
-    [slot.club_id, slotDate]
-  );
-  if (restrictedEvent) {
-    if (restrictedEvent.restriction === "members_only") {
+  if (slot.event_id) {
+    const ev = await row(
+      `SELECT id, name, status, restriction, entries_required,
+              entries_open, entries_close, payment_required
+       FROM golf_events WHERE id = ?`,
+      [slot.event_id]
+    );
+    if (!ev) {
+      res.status(404).json({ message: "Tournament not found for this tee time." });
+      return;
+    }
+    if (ev.status !== "active") {
+      res.status(403).json({
+        message: `"${ev.name}" is not currently open for bookings.`,
+        error_code: "event_not_active",
+        event_id: ev.id
+      });
+      return;
+    }
+    const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+    if (ev.entries_open && today < String(ev.entries_open).slice(0, 10)) {
+      res.status(403).json({
+        message: `Bookings for "${ev.name}" don't open until ${String(ev.entries_open).slice(0, 10)}.`,
+        error_code: "entries_not_open",
+        event_id: ev.id
+      });
+      return;
+    }
+    if (ev.entries_close && today > String(ev.entries_close).slice(0, 10)) {
+      res.status(403).json({
+        message: `Bookings for "${ev.name}" closed on ${String(ev.entries_close).slice(0, 10)}.`,
+        error_code: "entries_closed",
+        event_id: ev.id
+      });
+      return;
+    }
+    if (ev.restriction === "members_only") {
       const membership = await row(
         "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
         [slot.club_id, user.id]
       );
       if (!membership) {
         res.status(403).json({
-          message: `"${restrictedEvent.name}" is a members-only event. You must be a registered member of this club to book on this day.`,
+          message: `"${ev.name}" is a members-only tournament. You must be an active member of this club to book.`,
           error_code: "event_members_only",
-          event_id: restrictedEvent.id
+          event_id: ev.id
         });
         return;
       }
-    } else if (restrictedEvent.restriction === "invitation_only") {
+    } else if (ev.restriction === "invitation_only") {
       const reg = await row(
         "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
-        [restrictedEvent.id, user.id]
+        [ev.id, user.id]
       );
       if (!reg || reg.status !== "approved") {
         res.status(403).json({
-          message: `"${restrictedEvent.name}" is an invitation-only event. Please contact the club to request access.`,
+          message: `"${ev.name}" is by invitation only. Please contact the club to request access.`,
           error_code: "event_invitation_only",
-          event_id: restrictedEvent.id,
+          event_id: ev.id,
           registration_status: reg?.status ?? null
         });
         return;
+      }
+    } else if (ev.restriction === "whs_players_only") {
+      const verified = await isHnaVerified(user.id);
+      if (!verified) {
+        res.status(403).json({
+          message: `"${ev.name}" requires a verified WHS handicap index. Please contact the club.`,
+          error_code: "event_whs_only",
+          event_id: ev.id
+        });
+        return;
+      }
+    }
+    if (ev.entries_required) {
+      const reg = await row(
+        "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+        [ev.id, user.id]
+      );
+      if (!reg || reg.status !== "approved") {
+        res.status(403).json({
+          message: `You must be registered and approved for "${ev.name}" before booking a tee time.`,
+          error_code: "event_entry_required",
+          event_id: ev.id,
+          registration_status: reg?.status ?? null
+        });
+        return;
+      }
+    }
+  } else {
+    const restrictedEvent = await row(
+      `SELECT id, name, restriction FROM golf_events
+       WHERE club_id = ? AND event_date = ? AND status = 'active' AND restriction != 'open'
+       ORDER BY id LIMIT 1`,
+      [slot.club_id, slotDate]
+    );
+    if (restrictedEvent) {
+      if (restrictedEvent.restriction === "members_only") {
+        const membership = await row(
+          "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+          [slot.club_id, user.id]
+        );
+        if (!membership) {
+          res.status(403).json({
+            message: `"${restrictedEvent.name}" is a members-only event. You must be a registered member of this club to book on this day.`,
+            error_code: "event_members_only",
+            event_id: restrictedEvent.id
+          });
+          return;
+        }
+      } else if (restrictedEvent.restriction === "invitation_only") {
+        const reg = await row(
+          "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+          [restrictedEvent.id, user.id]
+        );
+        if (!reg || reg.status !== "approved") {
+          res.status(403).json({
+            message: `"${restrictedEvent.name}" is an invitation-only event. Please contact the club to request access.`,
+            error_code: "event_invitation_only",
+            event_id: restrictedEvent.id,
+            registration_status: reg?.status ?? null
+          });
+          return;
+        }
       }
     }
   }
@@ -63215,7 +63306,7 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
 router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const { date, from, to } = req.query;
-  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ?";
+  let sql = "SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type, notes, weekday_rate_code, weekend_rate_code, COALESCE(blocked_slots,'[]') AS blocked_slots FROM portal_tee_slots WHERE club_id = ? AND event_id IS NULL";
   const params = [club.id];
   if (date) {
     sql += " AND date = ?";
@@ -63241,27 +63332,47 @@ router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
 });
 router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes } = req.body ?? {};
+  const { date, time, total_slots = 4, active = 1, session_type = "AM", tee_start_type, notes, event_id } = req.body ?? {};
   if (!date || !time) {
     res.status(400).json({ message: "date and time required" });
     return;
   }
-  const insertRows = await query(
-    "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) DO NOTHING RETURNING id",
-    [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
-  );
-  const insertId = insertRows[0]?.id;
-  const inserted = insertId ? await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId]) : await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ?", [club.id, date, time]);
+  const evId = event_id ? Number(event_id) : null;
+  let insertId;
+  if (evId) {
+    const rows = await query(
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null, evId]
+    );
+    insertId = rows[0]?.id;
+    const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  } else {
+    const rows = await query(
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) WHERE event_id IS NULL DO NOTHING RETURNING id",
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
+    );
+    insertId = rows[0]?.id;
+  }
+  const inserted = insertId ? await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE id = ?", [insertId]) : evId ? await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ? AND event_id = ?", [club.id, date, time, evId]) : await row("SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type FROM portal_tee_slots WHERE club_id = ? AND date = ? AND tee_time = ? AND event_id IS NULL", [club.id, date, time]);
   res.json({ ...inserted, price: 0, price_9: null, promotional_price: null, crossover_enabled: false, active: !!inserted.active });
 });
 router14.delete("/portal/tee-times/clear", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { from, to } = req.query;
+  const { from, to, event_id } = req.query;
   if (!from || !to) {
     res.status(400).json({ message: "from and to dates required" });
     return;
   }
-  const deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ?", [club.id, from, to]);
+  let deleted;
+  if (event_id) {
+    const evId = Number(event_id);
+    deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id = ?", [club.id, from, to, evId]);
+    const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  } else {
+    deleted = await run("DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL", [club.id, from, to]);
+  }
   res.json({ message: "Cleared", deleted });
 });
 router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
@@ -63303,12 +63414,17 @@ router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
 router14.delete("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const ttId = Number(req.params.id);
-  const existing = await row("SELECT id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  const existing = await row("SELECT id, event_id FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
   if (!existing) {
     res.status(404).json({ message: "Tee time not found" });
     return;
   }
+  const evId = existing.event_id ?? null;
   await exec("DELETE FROM portal_tee_slots WHERE id = ? AND club_id = ?", [ttId, club.id]);
+  if (evId) {
+    const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
+  }
   res.json({ message: "Deleted" });
 });
 router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
@@ -63873,13 +63989,11 @@ router14.get("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) 
     return;
   }
   const slots = await query(
-    `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
-            pts.is_active AS active, pts.session_type
-     FROM event_tee_slots ets
-     JOIN portal_tee_slots pts ON pts.id = ets.tee_slot_id
-     WHERE ets.event_id = ?
-     ORDER BY pts.date, pts.tee_time`,
-    [evId]
+    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type
+     FROM portal_tee_slots
+     WHERE event_id = ? AND club_id = ?
+     ORDER BY date, tee_time`,
+    [evId, club.id]
   );
   res.json(slots.map((s) => ({ ...s, active: !!s.active })));
 });
@@ -67377,6 +67491,11 @@ async function createSchema() {
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_url TEXT");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS paid_at TIMESTAMP");
   await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS payment_method VARCHAR(30)");
+  await ddl("ALTER TABLE portal_tee_slots ADD COLUMN IF NOT EXISTS event_id INT REFERENCES golf_events(id) ON DELETE SET NULL");
+  await ddl("DROP INDEX IF EXISTS uq_pts_club_date_time");
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general ON portal_tee_slots (club_id, date, tee_time) WHERE event_id IS NULL");
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_event ON portal_tee_slots (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL");
+  await ddl("UPDATE portal_tee_slots SET event_id = (SELECT ets.event_id FROM event_tee_slots ets WHERE ets.tee_slot_id = portal_tee_slots.id LIMIT 1) WHERE event_id IS NULL AND id IN (SELECT tee_slot_id FROM event_tee_slots)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_tee_slots (
       id          SERIAL PRIMARY KEY,

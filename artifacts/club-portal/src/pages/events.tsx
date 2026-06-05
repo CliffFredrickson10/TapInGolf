@@ -257,14 +257,13 @@ export default function Events() {
     return () => clearTimeout(timer);
   }, [dlgOpen]);
 
-  // Tee slot linking
-  const skipNextSlotLoad = useRef(false); // set true when openEdit pre-loads slots itself
-  const [selectedSlotIds, setSelectedSlotIds] = useState<number[]>([]);
-  const [availableSlots, setAvailableSlots]   = useState<TeeSlot[]>([]);
+  // Tournament-exclusive tee slot management
+  const [eventSlots, setEventSlots]           = useState<TeeSlot[]>([]);
+  const [deletedSlotIds, setDeletedSlotIds]   = useState<number[]>([]);
   const [slotsLoading, setSlotsLoading]       = useState(false);
   const [genDialogOpen, setGenDialogOpen]     = useState(false);
   const [genDialogDate, setGenDialogDate]     = useState("");
-  const [showAddSlot, setShowAddSlot]         = useState(false);
+  const tempSlotCounter                       = useRef(-1);
   const [newSlotDate, setNewSlotDate]         = useState("");
   const [newSlotTime, setNewSlotTime]         = useState("");
   const [newSlotPlayers, setNewSlotPlayers]   = useState(4);
@@ -299,34 +298,12 @@ export default function Events() {
     } catch {} finally { setDrawLoading(false); }
   }, []);
 
-  const slotAbortRef = useRef<AbortController | null>(null);
-
-  const loadAvailableSlots = useCallback(async (date: string, endDate?: string, autoSelectAll = false) => {
-    if (!date) { setAvailableSlots([]); return; }
-    // Cancel any in-flight request so stale day-1-only results don't overwrite day-range results
-    slotAbortRef.current?.abort();
-    const controller = new AbortController();
-    slotAbortRef.current = controller;
+  const loadEventSlots = useCallback(async (eventId: number) => {
     setSlotsLoading(true);
     try {
-      const params = endDate ? `from=${date}&to=${endDate}` : `date=${date}`;
-      const data = await api<TeeSlot[]>(`/api/portal/tee-times?${params}&_t=${Date.now()}`, { signal: controller.signal });
-      if (!controller.signal.aborted) {
-        setAvailableSlots(data);
-        if (autoSelectAll) setSelectedSlotIds(data.map(s => s.id));
-      }
-    } catch (e: any) {
-      if (e?.name !== "AbortError") { /* ignore cancellation */ }
-    } finally {
-      if (!controller.signal.aborted) setSlotsLoading(false);
-    }
-  }, []);
-
-  const loadEventSlots = useCallback(async (eventId: number) => {
-    try {
       const data = await api<TeeSlot[]>(`/api/portal/events/${eventId}/tee-slots`);
-      setSelectedSlotIds(data.map(s => s.id));
-    } catch {}
+      setEventSlots(data);
+    } catch {} finally { setSlotsLoading(false); }
   }, []);
 
   const loadScores = useCallback(async (ev: GolfEvent, round: number) => {
@@ -355,21 +332,17 @@ export default function Events() {
     if (detail && detailTab === "scores")      loadScores(detail, scoreRound);
   }, [detailTab, drawRound, scoreRound, detail]);
 
-  // Load available tee slots whenever the dialog is open and the event date changes.
-  // Skipped when openEdit pre-populates both available slots and selections itself.
-  useEffect(() => {
-    if (!dlgOpen || !form.event_date) { setAvailableSlots([]); return; }
-    if (skipNextSlotLoad.current) { skipNextSlotLoad.current = false; return; }
-    loadAvailableSlots(form.event_date, form.end_date || undefined);
-  }, [dlgOpen, form.event_date, form.end_date, loadAvailableSlots]);
-
   // ── CRUD ──────────────────────────────────────────────────────────────────
 
   const openAdd = () => {
     setForm(EMPTY_FORM);
     setEditId(null);
-    setSelectedSlotIds([]);
-    setAvailableSlots([]);
+    setEventSlots([]);
+    setDeletedSlotIds([]);
+    tempSlotCounter.current = -1;
+    setNewSlotDate("");
+    setNewSlotTime("");
+    setNewSlotPlayers(4);
     setDlgOpen(true);
   };
 
@@ -378,19 +351,6 @@ export default function Events() {
     const d = (v: any) => (v ? String(v).slice(0, 10) : "");
     const startDate = d(ev.event_date);
     const endDate   = d(ev.end_date);
-
-    // Fetch available slots and linked slots in parallel BEFORE opening the dialog.
-    // Using cache:"no-store" to guarantee a fresh response (avoids stale 304 cache).
-    const slotParams = endDate ? `from=${startDate}&to=${endDate}` : `date=${startDate}`;
-    const [availSlots, linkedSlots] = await Promise.all([
-      api<TeeSlot[]>(`/api/portal/tee-times?${slotParams}&_t=${Date.now()}`).catch(() => [] as TeeSlot[]),
-      fetch(`/api/portal/events/${ev.id}/tee-slots`, {
-        cache: "no-store",
-        headers: { Authorization: `Bearer ${localStorage.getItem("club_token") ?? ""}`, "Content-Type": "application/json" },
-      }).then(r => r.ok ? r.json() : []).catch(() => []) as Promise<{ id: number }[]>,
-    ]);
-
-    const existingSlotIds = linkedSlots.map((s: { id: number }) => Number(s.id));
 
     setForm({
       name: ev.name, description: ev.description ?? "",
@@ -418,14 +378,14 @@ export default function Events() {
       divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
     });
     setEditId(ev.id);
-    setAvailableSlots(availSlots);      // pre-populated — no further load needed on open
-    setSelectedSlotIds(existingSlotIds); // pre-selected — stable, no race with useEffect
-    skipNextSlotLoad.current = true;    // tell the useEffect to skip its redundant fetch
-    setShowAddSlot(false);
-    setNewSlotDate(startDate);
+    setDeletedSlotIds([]);
+    tempSlotCounter.current = -1;
+    setNewSlotDate("");
     setNewSlotTime("");
     setNewSlotPlayers(4);
     setDlgOpen(true);
+    // Load exclusive event slots after opening (existing events only)
+    loadEventSlots(ev.id);
   };
 
   const handleSave = async () => {
@@ -447,7 +407,7 @@ export default function Events() {
         entries_open:     form.entries_open || null,
         entries_close:    form.entries_close || null,
         entry_fee:        form.entry_fee === "" ? null : Number(form.entry_fee),
-        max_participants: null,   // auto-computed from tee slots
+        max_participants: null,   // auto-computed server-side from tee slots
         rounds:           numDays * form.rounds_per_day,
         divisions:        form.use_divisions ? form.divisions : [],
       };
@@ -459,11 +419,22 @@ export default function Events() {
         const saved = await api<{ id: number }>("/api/portal/events", { method: "POST", body: JSON.stringify(body) });
         evId = saved.id;
       }
-      // Link the selected tee slots (server recalculates max_participants)
-      await api(`/api/portal/events/${evId}/tee-slots`, {
-        method: "PUT",
-        body: JSON.stringify({ slot_ids: selectedSlotIds }),
-      });
+      // For new events: persist any staged tee slots (temp ids < 0) as exclusive event slots
+      const newSlots = eventSlots.filter(s => s.id < 0);
+      if (newSlots.length > 0) {
+        await Promise.all(newSlots.map(s =>
+          api("/api/portal/tee-times", {
+            method: "POST",
+            body: JSON.stringify({ date: String(s.date).slice(0, 10), time: String(s.time).slice(0, 5), total_slots: s.total_slots, active: true, event_id: evId }),
+          }).catch(() => {})
+        ));
+      }
+      // For existing events: delete removed slots (server auto-recalculates max_participants)
+      if (deletedSlotIds.length > 0) {
+        await Promise.all(deletedSlotIds.map(id =>
+          api(`/api/portal/tee-times/${id}`, { method: "DELETE" }).catch(() => {})
+        ));
+      }
       toast({ title: editId ? "Tournament updated" : "Tournament created" });
       setDlgOpen(false);
       loadEvents();
@@ -989,7 +960,6 @@ export default function Events() {
 
             {/* ── Tee Schedule ──────────────────────────────────────────────────────── */}
             {form.event_date ? (() => {
-              // Build the ordered list of dates for this tournament
               const getDatesInRange = (start: string, end?: string): string[] => {
                 const dates: string[] = [];
                 const [sy, sm, sd] = start.split("-").map(Number);
@@ -998,7 +968,7 @@ export default function Events() {
                 const cur = new Date(Date.UTC(sy, sm - 1, sd));
                 const last = new Date(Date.UTC(ey || sy, (em || sm) - 1, ed || sd));
                 const cap = new Date(Date.UTC(sy, sm - 1, sd));
-                cap.setUTCDate(cap.getUTCDate() + 30); // safety cap 31 days
+                cap.setUTCDate(cap.getUTCDate() + 30);
                 while (cur <= last && cur <= cap) {
                   dates.push(cur.toISOString().split("T")[0]);
                   cur.setUTCDate(cur.getUTCDate() + 1);
@@ -1009,22 +979,16 @@ export default function Events() {
               const tournamentDates = getDatesInRange(form.event_date, form.end_date || undefined);
               const isMultiDay = tournamentDates.length > 1;
 
-              // Group loaded slots by date
-              const slotsByDate = availableSlots.reduce((acc, s) => {
+              const slotsByDate = eventSlots.reduce((acc, s) => {
                 const key = String(s.date).slice(0, 10);
                 (acc[key] ||= []).push(s);
                 return acc;
               }, {} as Record<string, TeeSlot[]>);
 
-              const computedMax = availableSlots
-                .filter(s => selectedSlotIds.includes(s.id))
-                .reduce((sum, s) => sum + s.total_slots, 0);
-
-              const allSelected = availableSlots.length > 0 && availableSlots.every(s => selectedSlotIds.includes(s.id));
+              const totalSpots = eventSlots.reduce((sum, s) => sum + s.total_slots, 0);
 
               return (
                 <div className="space-y-3">
-                  {/* Header row */}
                   <div className="flex items-center justify-between gap-3">
                     <div>
                       <p className="text-sm font-semibold flex items-center gap-1.5">
@@ -1032,25 +996,14 @@ export default function Events() {
                         {isMultiDay && <span className="text-xs font-normal text-muted-foreground">({tournamentDates.length} days)</span>}
                       </p>
                       <p className="text-xs text-muted-foreground mt-0.5">
-                        Select tee slots for each day of the tournament. Max participants is calculated automatically.
+                        These tee slots are exclusive to this tournament.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      {availableSlots.length > 0 && (
-                        <button
-                          type="button"
-                          className="text-xs text-[#1a5c38] hover:underline font-medium"
-                          onClick={() => allSelected ? setSelectedSlotIds([]) : setSelectedSlotIds(availableSlots.map(s => s.id))}
-                        >
-                          {allSelected ? "Deselect all" : "Select all"}
-                        </button>
-                      )}
-                      {selectedSlotIds.length > 0 && (
-                        <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                          {selectedSlotIds.length} slot{selectedSlotIds.length !== 1 ? "s" : ""} · {computedMax} spots
-                        </span>
-                      )}
-                    </div>
+                    {eventSlots.length > 0 && (
+                      <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
+                        {eventSlots.length} slot{eventSlots.length !== 1 ? "s" : ""} · {totalSpots} spots
+                      </span>
+                    )}
                   </div>
 
                   {slotsLoading ? (
@@ -1063,12 +1016,9 @@ export default function Events() {
                     <div className="space-y-2">
                       {tournamentDates.map((date, idx) => {
                         const daySlots = slotsByDate[date] ?? [];
-                        const allDaySelected = daySlots.length > 0 && daySlots.every(s => selectedSlotIds.includes(s.id));
-                        const daySelectedCount = daySlots.filter(s => selectedSlotIds.includes(s.id)).length;
                         return (
                           <Card key={date} className="border bg-card">
                             <CardContent className="p-3 space-y-2">
-                              {/* Day header */}
                               <div className="flex items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                   {isMultiDay && (
@@ -1077,59 +1027,84 @@ export default function Events() {
                                     </span>
                                   )}
                                   <span className="text-sm font-semibold">{fmtDate(date)}</span>
-                                  {daySlots.length > 0 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      {daySelectedCount}/{daySlots.length} selected
-                                    </span>
-                                  )}
+                                  <span className="text-[10px] text-muted-foreground">{daySlots.length} slot{daySlots.length !== 1 ? "s" : ""}</span>
                                 </div>
-                                <div className="flex items-center gap-2">
-                                  {daySlots.length > 0 && (
-                                    <button
-                                      type="button"
-                                      className="text-[11px] text-[#1a5c38] hover:underline font-medium"
-                                      onClick={() =>
-                                        allDaySelected
-                                          ? setSelectedSlotIds(prev => prev.filter(id => !daySlots.map(s => s.id).includes(id)))
-                                          : setSelectedSlotIds(prev => [...new Set([...prev, ...daySlots.map(s => s.id)])])
-                                      }
-                                    >
-                                      {allDaySelected ? "Deselect all" : "Select all"}
-                                    </button>
-                                  )}
+                                {editId ? (
                                   <button
                                     type="button"
                                     className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
                                     onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}
                                   >
-                                    <Plus className="h-3 w-3" />Add
+                                    <Plus className="h-3 w-3" />Generate
                                   </button>
-                                </div>
+                                ) : (
+                                  <button
+                                    type="button"
+                                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                    onClick={() => setNewSlotDate(date)}
+                                  >
+                                    <Plus className="h-3 w-3" />Add slot
+                                  </button>
+                                )}
                               </div>
 
-                              {/* Slot list */}
+                              {/* Quick-add inline form (new events only) */}
+                              {!editId && newSlotDate === date && (
+                                <div className="flex items-center gap-2 border border-dashed rounded-md px-2 py-1.5">
+                                  <Input
+                                    type="time"
+                                    className="h-7 text-xs w-28 shrink-0"
+                                    value={newSlotTime}
+                                    onChange={e => setNewSlotTime(e.target.value)}
+                                    autoFocus
+                                  />
+                                  <Input
+                                    type="number" min={1} max={4}
+                                    className="h-7 text-xs w-16 shrink-0"
+                                    value={newSlotPlayers}
+                                    onChange={e => setNewSlotPlayers(Number(e.target.value))}
+                                  />
+                                  <span className="text-xs text-muted-foreground shrink-0">players</span>
+                                  <button
+                                    type="button"
+                                    className="ml-auto text-xs px-2 py-1 rounded bg-[#1a5c38] text-white hover:bg-[#164d30]"
+                                    onClick={() => {
+                                      if (!newSlotTime) return;
+                                      const tempId = tempSlotCounter.current--;
+                                      setEventSlots(prev => [...prev, { id: tempId, date, time: newSlotTime, total_slots: newSlotPlayers, active: true }]);
+                                      setNewSlotTime("");
+                                      setNewSlotDate("");
+                                    }}
+                                  >Add</button>
+                                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setNewSlotDate("")}>
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </div>
+                              )}
+
                               {daySlots.length === 0 ? (
                                 <p className="text-[11px] text-amber-600 py-1">
-                                  No tee times scheduled — click Add to generate a schedule.
+                                  {editId
+                                    ? "No tee times yet — click Generate to build a schedule for this day."
+                                    : "No tee times yet — click Add slot above."}
                                 </p>
                               ) : (
                                 <div className="space-y-0.5 max-h-40 overflow-y-auto">
                                   {daySlots.map(slot => (
-                                    <label key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted cursor-pointer select-none">
-                                      <input
-                                        type="checkbox"
-                                        className="h-3.5 w-3.5 accent-[#1a5c38]"
-                                        checked={selectedSlotIds.includes(slot.id)}
-                                        onChange={e =>
-                                          setSelectedSlotIds(prev =>
-                                            e.target.checked ? [...prev, slot.id] : prev.filter(id => id !== slot.id)
-                                          )
-                                        }
-                                      />
+                                    <div key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted group">
                                       <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
                                       <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
-                                      {!slot.active && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
-                                    </label>
+                                      {slot.id < 0 && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">new</span>}
+                                      {!slot.active && slot.id > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                                      <button
+                                        type="button"
+                                        className="ml-auto h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        onClick={() => {
+                                          if (slot.id > 0) setDeletedSlotIds(prev => [...prev, slot.id]);
+                                          setEventSlots(prev => prev.filter(s => s.id !== slot.id));
+                                        }}
+                                      ><X className="h-3 w-3" /></button>
+                                    </div>
                                   ))}
                                 </div>
                               )}
@@ -1139,11 +1114,17 @@ export default function Events() {
                       })}
                     </div>
                   )}
+
+                  {!editId && (
+                    <p className="text-[11px] text-muted-foreground">
+                      After saving, use the Generate button on each day to quickly build a full tee schedule.
+                    </p>
+                  )}
                 </div>
               );
             })() : (
               <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />Set a start date to link tee times from your schedule.
+                <Clock className="h-3.5 w-3.5" />Set a start date to configure the tee schedule.
               </p>
             )}
 
@@ -1313,8 +1294,8 @@ export default function Events() {
                 <Label>Max Participants</Label>
                 <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm text-muted-foreground h-10">
                   <Users className="h-3.5 w-3.5 flex-shrink-0" />
-                  {selectedSlotIds.length > 0
-                    ? `${availableSlots.filter(s => selectedSlotIds.includes(s.id)).reduce((sum, s) => sum + s.total_slots, 0)} spots (${selectedSlotIds.length} tee slot${selectedSlotIds.length !== 1 ? "s" : ""})`
+                  {eventSlots.length > 0
+                    ? `${eventSlots.reduce((sum, s) => sum + s.total_slots, 0)} spots (${eventSlots.length} tee slot${eventSlots.length !== 1 ? "s" : ""})`
                     : "Auto-calculated from tee schedule"}
                 </div>
               </div>
@@ -1418,12 +1399,13 @@ export default function Events() {
         </DialogContent>
       </Dialog>
 
-      {/* Full schedule-generation dialog — opened from each day card's Add button */}
+      {/* Tee schedule generation dialog — for existing events, generates exclusive event slots */}
       <GenerateTeeTimesDialog
         open={genDialogOpen}
         onOpenChange={setGenDialogOpen}
         initialDate={genDialogDate}
-        onComplete={() => loadAvailableSlots(form.event_date, form.end_date || undefined, true)}
+        eventId={editId ?? undefined}
+        onComplete={() => { if (editId) loadEventSlots(editId); }}
       />
     </div>
   );

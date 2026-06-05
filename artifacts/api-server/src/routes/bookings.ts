@@ -454,46 +454,116 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
   // ─────────────────────────────────────────────────────────────────
 
-  // ── Event restriction check ──────────────────────────────────────
-  // If this date has a restricted event, verify the user is eligible
+  // ── Tournament slot enforcement ───────────────────────────────────
+  // If this tee slot is exclusively assigned to a tournament, enforce all
+  // of that tournament's rules before allowing a booking.
   const slotDate = slot.date instanceof Date
     ? slot.date.toISOString().split("T")[0]
     : String(slot.date).split("T")[0];
 
-  const restrictedEvent = await row<any>(
-    `SELECT id, name, restriction FROM golf_events
-     WHERE club_id = ? AND event_date = ? AND status = 'active' AND restriction != 'open'
-     ORDER BY id LIMIT 1`,
-    [slot.club_id, slotDate]
-  );
-
-  if (restrictedEvent) {
-    if (restrictedEvent.restriction === "members_only") {
+  if (slot.event_id) {
+    const ev = await row<any>(
+      `SELECT id, name, status, restriction, entries_required,
+              entries_open, entries_close, payment_required
+       FROM golf_events WHERE id = ?`,
+      [slot.event_id]
+    );
+    if (!ev) {
+      res.status(404).json({ message: "Tournament not found for this tee time." }); return;
+    }
+    if (ev.status !== "active") {
+      res.status(403).json({
+        message: `"${ev.name}" is not currently open for bookings.`,
+        error_code: "event_not_active", event_id: ev.id,
+      }); return;
+    }
+    const today = new Date().toISOString().split("T")[0];
+    if (ev.entries_open && today < String(ev.entries_open).slice(0, 10)) {
+      res.status(403).json({
+        message: `Bookings for "${ev.name}" don't open until ${String(ev.entries_open).slice(0, 10)}.`,
+        error_code: "entries_not_open", event_id: ev.id,
+      }); return;
+    }
+    if (ev.entries_close && today > String(ev.entries_close).slice(0, 10)) {
+      res.status(403).json({
+        message: `Bookings for "${ev.name}" closed on ${String(ev.entries_close).slice(0, 10)}.`,
+        error_code: "entries_closed", event_id: ev.id,
+      }); return;
+    }
+    if (ev.restriction === "members_only") {
       const membership = await row<any>(
         "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
         [slot.club_id, user.id]
       );
       if (!membership) {
         res.status(403).json({
-          message: `"${restrictedEvent.name}" is a members-only event. You must be a registered member of this club to book on this day.`,
-          error_code: "event_members_only",
-          event_id:   restrictedEvent.id,
-        });
-        return;
+          message: `"${ev.name}" is a members-only tournament. You must be an active member of this club to book.`,
+          error_code: "event_members_only", event_id: ev.id,
+        }); return;
       }
-    } else if (restrictedEvent.restriction === "invitation_only") {
+    } else if (ev.restriction === "invitation_only") {
       const reg = await row<any>(
         "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
-        [restrictedEvent.id, user.id]
+        [ev.id, user.id]
       );
       if (!reg || reg.status !== "approved") {
         res.status(403).json({
-          message: `"${restrictedEvent.name}" is an invitation-only event. Please contact the club to request access.`,
-          error_code:        "event_invitation_only",
-          event_id:          restrictedEvent.id,
-          registration_status: reg?.status ?? null,
-        });
-        return;
+          message: `"${ev.name}" is by invitation only. Please contact the club to request access.`,
+          error_code: "event_invitation_only", event_id: ev.id, registration_status: reg?.status ?? null,
+        }); return;
+      }
+    } else if (ev.restriction === "whs_players_only") {
+      const verified = await isHnaVerified(user.id);
+      if (!verified) {
+        res.status(403).json({
+          message: `"${ev.name}" requires a verified WHS handicap index. Please contact the club.`,
+          error_code: "event_whs_only", event_id: ev.id,
+        }); return;
+      }
+    }
+    if (ev.entries_required) {
+      const reg = await row<any>(
+        "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+        [ev.id, user.id]
+      );
+      if (!reg || reg.status !== "approved") {
+        res.status(403).json({
+          message: `You must be registered and approved for "${ev.name}" before booking a tee time.`,
+          error_code: "event_entry_required", event_id: ev.id, registration_status: reg?.status ?? null,
+        }); return;
+      }
+    }
+  } else {
+    // ── General slot: date-based event restriction check ─────────────
+    const restrictedEvent = await row<any>(
+      `SELECT id, name, restriction FROM golf_events
+       WHERE club_id = ? AND event_date = ? AND status = 'active' AND restriction != 'open'
+       ORDER BY id LIMIT 1`,
+      [slot.club_id, slotDate]
+    );
+    if (restrictedEvent) {
+      if (restrictedEvent.restriction === "members_only") {
+        const membership = await row<any>(
+          "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+          [slot.club_id, user.id]
+        );
+        if (!membership) {
+          res.status(403).json({
+            message: `"${restrictedEvent.name}" is a members-only event. You must be a registered member of this club to book on this day.`,
+            error_code: "event_members_only", event_id: restrictedEvent.id,
+          }); return;
+        }
+      } else if (restrictedEvent.restriction === "invitation_only") {
+        const reg = await row<any>(
+          "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
+          [restrictedEvent.id, user.id]
+        );
+        if (!reg || reg.status !== "approved") {
+          res.status(403).json({
+            message: `"${restrictedEvent.name}" is an invitation-only event. Please contact the club to request access.`,
+            error_code: "event_invitation_only", event_id: restrictedEvent.id, registration_status: reg?.status ?? null,
+          }); return;
+        }
       }
     }
   }

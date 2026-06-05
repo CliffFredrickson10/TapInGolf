@@ -164,6 +164,7 @@ export function GenerateTeeTimesDialog({
   onComplete: (dateFrom: string) => void;
   initialDate?: string;
 }) {
+  const lockDate = !!initialDate;
   const { toast } = useToast();
   const readOnly = useReadOnly();
   const [tab, setTab] = useState<"A" | "B">("A");
@@ -441,16 +442,28 @@ export function GenerateTeeTimesDialog({
         </div>
 
         {/* Date range */}
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <Label className="text-xs mb-1 block">From Date</Label>
-            <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+        {lockDate ? (
+          <div className="rounded-lg border border-[#1a5c38]/30 bg-[#1a5c38]/5 px-4 py-2.5 flex items-center gap-2.5">
+            <CalendarCog className="h-4 w-4 text-[#1a5c38] shrink-0" />
+            <div>
+              <p className="text-xs font-semibold text-[#1a5c38]">Generating for</p>
+              <p className="text-sm font-bold text-[#1a5c38]">
+                {dateFrom ? format(new Date(dateFrom + "T12:00:00"), "EEEE, d MMMM yyyy") : dateFrom}
+              </p>
+            </div>
           </div>
-          <div>
-            <Label className="text-xs mb-1 block">To Date</Label>
-            <Input type="date" value={dateTo} min={dateFrom} onChange={e => setDateTo(e.target.value)} />
+        ) : (
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label className="text-xs mb-1 block">From Date</Label>
+              <Input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)} />
+            </div>
+            <div>
+              <Label className="text-xs mb-1 block">To Date</Label>
+              <Input type="date" value={dateTo} min={dateFrom} onChange={e => setDateTo(e.target.value)} />
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Config A blocks */}
         {tab === "A" && (

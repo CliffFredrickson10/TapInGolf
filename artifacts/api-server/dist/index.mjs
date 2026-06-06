@@ -58177,6 +58177,87 @@ router3.get("/clubs/:id/prepaid-balance", async (req, res) => {
   const used = parseInt(membership.prepaid_rounds_used) || 0;
   res.json({ is_member: true, total, used, remaining: Math.max(0, total - used) });
 });
+router3.get("/events/feed", async (req, res) => {
+  const user = await getUser(req).catch(() => null);
+  const userId = user?.id ?? null;
+  const baseCols = `
+    ge.id, ge.name, ge.event_date, ge.end_date, ge.event_type, ge.format,
+    ge.format_custom, ge.restriction, ge.entry_fee, ge.payment_required,
+    ge.image_url,
+    (SELECT COUNT(*) FROM event_registrations WHERE event_id = ge.id AND status = 'approved') AS approved_count,
+    ge.max_participants,
+    c.id AS club_id, c.name AS club_name, c.logo_url AS club_logo_url
+  `;
+  let homeClubEvents = [];
+  if (userId) {
+    homeClubEvents = await query(
+      `SELECT ${baseCols}
+       FROM golf_events ge
+       JOIN clubs c ON c.id = ge.club_id
+       WHERE ge.status = 'active'
+         AND ge.event_date >= CURRENT_DATE
+         AND ge.club_id IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
+         AND (
+           ge.restriction IN ('open', 'members_only', 'whs_players_only')
+           OR (ge.restriction = 'invitation_only' AND EXISTS (
+             SELECT 1 FROM event_invites WHERE event_id = ge.id AND user_id = ?
+           ))
+         )
+       ORDER BY ge.event_date ASC
+       LIMIT 20`,
+      [userId, userId]
+    );
+  }
+  let openEvents = [];
+  if (userId) {
+    openEvents = await query(
+      `SELECT ${baseCols}
+       FROM golf_events ge
+       JOIN clubs c ON c.id = ge.club_id
+       WHERE ge.status = 'active'
+         AND ge.event_date >= CURRENT_DATE
+         AND ge.restriction = 'open'
+         AND ge.club_id NOT IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
+       ORDER BY ge.event_date ASC
+       LIMIT 20`,
+      [userId]
+    );
+  } else {
+    openEvents = await query(
+      `SELECT ${baseCols}
+       FROM golf_events ge
+       JOIN clubs c ON c.id = ge.club_id
+       WHERE ge.status = 'active'
+         AND ge.event_date >= CURRENT_DATE
+         AND ge.restriction = 'open'
+       ORDER BY ge.event_date ASC
+       LIMIT 20`,
+      []
+    );
+  }
+  for (const ev of [...homeClubEvents, ...openEvents]) {
+    ev.approved_count = parseInt(ev.approved_count ?? "0");
+    ev.max_participants = ev.max_participants ? parseInt(ev.max_participants) : null;
+    ev.entry_fee = ev.entry_fee != null ? parseFloat(ev.entry_fee) : null;
+    ev.payment_required = Number(ev.payment_required ?? 0);
+    ev.user_registration = null;
+  }
+  if (userId) {
+    const allEvents = [...homeClubEvents, ...openEvents];
+    if (allEvents.length > 0) {
+      const ids = allEvents.map((e) => e.id);
+      const placeholders = ids.map(() => "?").join(",");
+      const regs = await query(
+        `SELECT event_id, id, status FROM event_registrations WHERE user_id = ? AND event_id IN (${placeholders})`,
+        [userId, ...ids]
+      );
+      const regMap = {};
+      for (const r of regs) regMap[r.event_id] = r;
+      for (const ev of allEvents) ev.user_registration = regMap[ev.id] ?? null;
+    }
+  }
+  res.json({ home_club: homeClubEvents, open: openEvents });
+});
 router3.get("/clubs/:id/events", async (req, res) => {
   const clubId = parseInt(req.params.id, 10);
   const user = await getUser(req);

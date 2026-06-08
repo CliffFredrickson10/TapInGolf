@@ -584,6 +584,20 @@ export default function EventDetailScreen() {
                 </View>
               )}
 
+              {roundDraw.length > 0 && (() => {
+                const metric = roundDraw.find(d => d.seed_metric)?.seed_metric ?? null;
+                const label = !metric ? "Random Draw"
+                  : metric === "handicap" ? "Seeded Draw · Handicap"
+                  : metric === "points"   ? "Seeded Draw · Stableford Points"
+                  : metric === "gross"    ? "Seeded Draw · Gross Score"
+                  :                        "Seeded Draw · Net Score";
+                return (
+                  <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 10, marginTop: -4 }}>
+                    {label}
+                  </Text>
+                );
+              })()}
+
               {roundDraw.length === 0 ? (
                 <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
                   <Ionicons name="list-outline" size={32} color={colors.mutedForeground} style={{ marginBottom: 8 }} />

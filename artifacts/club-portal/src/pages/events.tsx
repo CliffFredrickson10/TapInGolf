@@ -1401,6 +1401,21 @@ export default function Events() {
                     </div>
                   </div>
 
+                  {/* Draw type label */}
+                  {!drawLoading && draw.length > 0 && (() => {
+                    const metric = draw.find(d => d.seed_metric)?.seed_metric ?? null;
+                    const label = !metric ? "Random Draw"
+                      : metric === "handicap" ? "Seeded Draw · Handicap"
+                      : metric === "points"   ? "Seeded Draw · Stableford Points"
+                      : metric === "gross"    ? "Seeded Draw · Gross Score"
+                      :                        "Seeded Draw · Net Score";
+                    return (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 mb-2">
+                        <Shuffle className="h-3 w-3 opacity-60" />{label}
+                      </p>
+                    );
+                  })()}
+
                   {/* Draw list — grouped by four-ball */}
                   {drawLoading ? <Skeleton className="h-32 w-full" /> : draw.length === 0 ? (
                     <div className="text-center py-10 space-y-3">

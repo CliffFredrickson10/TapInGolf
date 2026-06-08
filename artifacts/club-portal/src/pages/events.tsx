@@ -1676,8 +1676,8 @@ export default function Events() {
                               <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
                                 <span className="col-span-2">Team</span>
                                 <span className="text-center">Gross</span>
-                                <span className="text-center">Net</span>
-                                <span className="text-center">Points</span>
+                                <span className="text-center">Nett</span>
+                                <span className="text-center">Stableford Pts</span>
                               </div>
                               {teams.map(s => (
                                 <Card key={s.team_id}>
@@ -1737,8 +1737,8 @@ export default function Events() {
                             <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
                               <span className="col-span-2">Player</span>
                               <span className="text-center">Gross</span>
-                              <span className="text-center">Net</span>
-                              <span className="text-center">Points</span>
+                              <span className="text-center">Nett</span>
+                              <span className="text-center">Stableford Pts</span>
                             </div>
                             {regs.filter(r => r.status === "approved").map(r => {
                               const submitted = scores.find(s => s.user_id === r.user_id);

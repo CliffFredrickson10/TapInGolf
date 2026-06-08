@@ -245,7 +245,7 @@ export default function EventDetailScreen() {
     }));
   };
 
-  const handleSubmitScore = async () => {
+  const doSubmitScore = async () => {
     if (!user || !event) return;
     const rounds = event.rounds ?? 1;
     const toSubmit = Array.from({ length: rounds }, (_, i) => i + 1).filter(r => {
@@ -277,6 +277,24 @@ export default function EventDetailScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally { setSubmittingScore(false); }
+  };
+
+  const handleSubmitScore = () => {
+    if (!user || !event) return;
+    const rounds = event.rounds ?? 1;
+    const hasScores = Array.from({ length: rounds }, (_, i) => i + 1).some(r => {
+      const s = roundScores[r];
+      return s && (s.gross || s.net || s.points);
+    });
+    if (!hasScores) { doSubmitScore(); return; }
+    Alert.alert(
+      "Confirm Score Submission",
+      "Submitted scores cannot be edited or deleted.\n\nBy submitting you confirm that this score is correct and has been verified by your marker.\n\nIncorrect scores may result in disqualification.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Submit", style: "destructive", onPress: doSubmitScore },
+      ]
+    );
   };
 
   // ── UI ─────────────────────────────────────────────────────────────────────

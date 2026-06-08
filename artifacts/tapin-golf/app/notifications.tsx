@@ -67,6 +67,12 @@ function handleTap(notif: AppNotification) {
     case "new_message":
       if (d.conversation_id) router.push({ pathname: "/chat/[id]", params: { id: d.conversation_id } });
       break;
+    case "event_created":
+    case "event_published":
+    case "event_cancelled":
+    case "event_draw_published":
+      if (d.event_id) router.push({ pathname: "/event/[id]", params: { id: d.event_id } });
+      break;
     case "club_broadcast":
       if (d.club_id) router.push({ pathname: "/club/[id]", params: { id: d.club_id } });
       break;

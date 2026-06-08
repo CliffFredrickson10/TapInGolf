@@ -81,6 +81,8 @@ function RootLayoutNav() {
           }
           break;
         case "event_created":
+        case "event_published":
+        case "event_cancelled":
           if (data.event_id) {
             router.push({ pathname: "/event/[id]", params: { id: data.event_id } });
           }

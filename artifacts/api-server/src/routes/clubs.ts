@@ -985,12 +985,12 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
 
   // Individual leaderboard — aggregate across rounds
   const scores = await query<any>(
-    `SELECT es.user_id, u.name AS player_name, es.division,
+    `SELECT es.user_id, u.name AS player_name, er.division,
        SUM(es.gross)  AS gross,
        SUM(es.net)    AS net,
        SUM(es.points) AS points,
        er.frozen_handicap, MAX(es.verified) AS verified,
-       RANK() OVER (PARTITION BY es.division ORDER BY
+       RANK() OVER (PARTITION BY er.division ORDER BY
          CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
          CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
          CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
@@ -999,10 +999,10 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
      JOIN users u ON u.id = es.user_id
      JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
      WHERE es.event_id = ? AND es.team_id IS NULL
-     GROUP BY es.user_id, u.name, es.division, er.frozen_handicap
-     ORDER BY es.division, position`,
+     GROUP BY es.user_id, u.name, er.division, er.frozen_handicap
+     ORDER BY er.division, position`,
     [evId]
-  ).catch(() => [] as any[]);
+  );
 
   const grouped: Record<string, any[]> = {};
   for (const s of scores) {

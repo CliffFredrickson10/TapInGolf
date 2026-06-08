@@ -99,18 +99,15 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
     );
     if (Number(generalExisting?.cnt ?? 0) > 0) continue;
 
-    // Fetch all occupied times for this date — both general slots AND active tournament slots.
-    // Auto-generated slots will only be inserted for times not already taken.
-    const occupiedRows = await query<{ tee_time: string }>(
-      "SELECT tee_time FROM portal_tee_slots WHERE club_id = ? AND date = ?",
+    // Skip the whole day if there are any active tournament slots — clubs add extra tee times manually on those days
+    const tournamentSlots = await row<{ cnt: string }>(
+      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
       [club_id, date]
     );
-    const occupiedTimes = new Set(occupiedRows.map(r => String(r.tee_time).slice(0, 5)));
+    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
 
     datesProcessed++;
     for (const s of slotTemplate) {
-      const slotTime = s.time.slice(0, 5);
-      if (occupiedTimes.has(slotTime)) continue; // tournament or other slot already owns this time
       try {
         await exec(
           "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",

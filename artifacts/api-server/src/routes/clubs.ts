@@ -804,8 +804,9 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
   const existing = await row<any>("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
   if (existing) { res.status(409).json({ message: "You are already registered for this event", status: existing.status }); return; }
 
+  // Block only if the paid field is already full (capacity is enforced at payment, not registration)
   if (ev.max_participants) {
-    const cnt = await row<any>("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('pending','approved')", [evId]);
+    const cnt = await row<any>("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND payment_status = 'paid'", [evId]);
     if (parseInt(cnt?.n ?? "0") >= parseInt(ev.max_participants)) { res.status(400).json({ message: "This event is full" }); return; }
   }
 
@@ -819,12 +820,28 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
     }
   }
 
-  const status = Number(ev.ballot) ? "pending" : "approved";
+  // Always auto-approve — no manual club approval required. Payment confirms the spot.
+  const status = "approved";
   await exec(
     "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
     [evId, user.id, status, division, frozenHcp]
   );
-  // Return shape the existing event screen expects: { status, division, frozen_handicap }
+
+  // Notify player: spot is reserved, pending payment (or confirmed if free)
+  const needsPayment = ev.payment_required && ev.entry_fee;
+  const notifTitle = "Entry Received ⛳";
+  const notifBody  = needsPayment
+    ? `Your entry for "${ev.name}" is reserved. Open the app to complete payment of R${parseFloat(ev.entry_fee).toFixed(2)}.`
+    : `You're in! Your entry for "${ev.name}" is confirmed.`;
+  await exec(
+    "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+    [user.id, "event_registration_update", notifTitle, notifBody, JSON.stringify({ type: "event_registration_update", event_id: evId, status: "approved" })]
+  );
+  if (user.push_token) {
+    const { sendPushNotifications } = await import("../lib/notifications");
+    sendPushNotifications([{ to: user.push_token, sound: "default", title: notifTitle, body: notifBody, data: { type: "event_registration_update", event_id: evId } }]);
+  }
+
   res.json({ status, division, frozen_handicap: frozenHcp });
 });
 

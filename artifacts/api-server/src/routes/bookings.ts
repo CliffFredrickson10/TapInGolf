@@ -1231,20 +1231,64 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     const eventId = parseInt(parts[1] ?? "", 10);
     const userId  = parseInt(parts[3] ?? "", 10);
     if (!isNaN(eventId) && !isNaN(userId)) {
-      const claimed = await run(
-        "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
-        [eventId, userId]
-      );
-      if (claimed === 1) {
-        const ev = await row<any>("SELECT name FROM golf_events WHERE id = ?", [eventId]);
-        const u  = await row<any>("SELECT push_token FROM users WHERE id = ?", [userId]);
-        if (u?.push_token && ev) {
-          sendPushNotifications([{
-            to: u.push_token, sound: "default",
-            title: "Payment Confirmed ⛳",
-            body:  `Your entry fee for "${ev.name}" has been received. You're in!`,
-            data:  { type: "event_payment_confirmed", event_id: eventId },
-          }]);
+      const ev = await row<any>("SELECT id, name, max_participants FROM golf_events WHERE id = ?", [eventId]);
+      const u  = await row<any>("SELECT id, push_token FROM users WHERE id = ?", [userId]);
+
+      // Check if field is full (first to pay = confirmed spot)
+      let fieldFull = false;
+      if (ev?.max_participants) {
+        const paid = await row<any>(
+          "SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND payment_status = 'paid' AND user_id != ?",
+          [eventId, userId]
+        );
+        fieldFull = parseInt(paid?.n ?? "0") >= parseInt(ev.max_participants);
+      }
+
+      if (fieldFull) {
+        // Field is full — reject this player and notify them
+        await run(
+          "UPDATE event_registrations SET status = 'rejected' WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+          [eventId, userId]
+        );
+        if (ev && u) {
+          await run(
+            "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+            [userId, "event_registration_update",
+             "Field Full — Entry Not Confirmed",
+             `Sorry, the field for "${ev.name}" filled up before your payment was processed. Your payment will be refunded.`,
+             JSON.stringify({ type: "event_registration_update", event_id: eventId, status: "rejected" })]
+          );
+          if (u.push_token) {
+            sendPushNotifications([{
+              to: u.push_token, sound: "default",
+              title: "Field Full — Entry Not Confirmed",
+              body: `Sorry, the field for "${ev.name}" filled up before your payment was processed. Your payment will be refunded.`,
+              data: { type: "event_registration_update", event_id: eventId },
+            }]);
+          }
+        }
+      } else {
+        // Spot available — confirm payment
+        const claimed = await run(
+          "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
+          [eventId, userId]
+        );
+        if (claimed === 1 && ev && u) {
+          await run(
+            "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+            [userId, "event_payment_confirmed",
+             "Payment Confirmed ⛳",
+             `Your entry fee for "${ev.name}" has been received. Your spot is confirmed!`,
+             JSON.stringify({ type: "event_payment_confirmed", event_id: eventId })]
+          );
+          if (u.push_token) {
+            sendPushNotifications([{
+              to: u.push_token, sound: "default",
+              title: "Payment Confirmed ⛳",
+              body: `Your entry fee for "${ev.name}" has been received. Your spot is confirmed!`,
+              data: { type: "event_payment_confirmed", event_id: eventId },
+            }]);
+          }
         }
       }
     }

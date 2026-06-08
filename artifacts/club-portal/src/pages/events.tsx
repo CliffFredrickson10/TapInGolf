@@ -1174,23 +1174,20 @@ export default function Events() {
 
                 {/* REGISTRATIONS TAB */}
                 <TabsContent value="registrations" className="pb-8">
-                  {/* Toolbar */}
-                  {!readOnly && regs.some(r => r.status === "pending") && (
-                    <div className="flex items-center justify-between mb-3">
-                      <span className="text-xs text-muted-foreground">
-                        {regs.filter(r => r.status === "pending").length} pending
-                        {detail.max_participants ? ` · ${detail.max_participants} spot field` : ""}
-                      </span>
-                      <Button
-                        size="sm"
-                        className="h-8 bg-green-600 hover:bg-green-700 gap-1.5 text-xs"
-                        onClick={approveAll}
-                        disabled={approvingAll}
-                      >
-                        {approvingAll
-                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Approving…</>
-                          : <><CheckCircle className="h-3.5 w-3.5" />Approve All</>}
-                      </Button>
+                  {/* Summary bar */}
+                  {regs.length > 0 && (
+                    <div className="flex items-center gap-4 mb-3 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground">{regs.length} registered</span>
+                      {detail.max_participants ? <span>· {detail.max_participants} spot field</span> : null}
+                      {detail.payment_required && (
+                        <>
+                          <span className="text-green-700 font-medium">· {regs.filter(r => r.payment_status === "paid").length} paid</span>
+                          <span>· {regs.filter(r => r.status === "approved" && r.payment_status !== "paid").length} awaiting payment</span>
+                        </>
+                      )}
+                      {regs.some(r => r.status === "rejected") && (
+                        <span className="text-red-600">· {regs.filter(r => r.status === "rejected").length} rejected</span>
+                      )}
                     </div>
                   )}
                   {regsLoading ? (
@@ -1199,40 +1196,59 @@ export default function Events() {
                     <p className="text-sm text-muted-foreground py-8 text-center">No registrations yet.</p>
                   ) : (
                     <div className="space-y-2">
-                      {regs.map(r => (
-                        <Card key={r.id}>
-                          <CardContent className="p-3">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <span className="font-medium text-sm">{r.user_name}</span>
-                                  {r.division && <span className="text-xs bg-[#1a5c38]/10 text-[#1a5c38] px-2 py-0.5 rounded-full font-medium">{r.division} Div</span>}
-                                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${REG_BADGE[r.status] ?? "bg-gray-100 text-gray-600"}`}>{r.status}</span>
-                                  {detail.payment_required && (
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${PAY_BADGE[r.payment_status] ?? "bg-gray-100"}`}>
-                                      <CreditCard className="h-3 w-3 inline mr-1" />{r.payment_status}
+                      {regs.map(r => {
+                        // Derive a single human-readable entry state
+                        const entryState: "confirmed" | "awaiting_payment" | "registered" | "rejected" =
+                          r.status === "rejected" ? "rejected"
+                          : r.payment_status === "paid" ? "confirmed"
+                          : detail.payment_required ? "awaiting_payment"
+                          : "registered";
+                        const stateBadge: Record<string, string> = {
+                          confirmed:        "bg-green-100 text-green-700",
+                          awaiting_payment: "bg-amber-100 text-amber-700",
+                          registered:       "bg-blue-100 text-blue-700",
+                          rejected:         "bg-red-100 text-red-700",
+                        };
+                        const stateLabel: Record<string, string> = {
+                          confirmed:        "Confirmed",
+                          awaiting_payment: "Awaiting Payment",
+                          registered:       "Registered",
+                          rejected:         "Rejected",
+                        };
+                        return (
+                          <Card key={r.id} className={entryState === "rejected" ? "opacity-60" : ""}>
+                            <CardContent className="p-3">
+                              <div className="flex items-center justify-between gap-3">
+                                <div className="min-w-0">
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <span className="font-medium text-sm">{r.user_name}</span>
+                                    {r.division && <span className="text-xs bg-[#1a5c38]/10 text-[#1a5c38] px-2 py-0.5 rounded-full font-medium">{r.division} Div</span>}
+                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stateBadge[entryState]}`}>
+                                      {entryState === "confirmed" && <CheckCircle className="h-3 w-3 inline mr-1" />}
+                                      {stateLabel[entryState]}
                                     </span>
-                                  )}
+                                  </div>
+                                  <p className="text-xs text-muted-foreground mt-0.5">
+                                    {r.user_email}
+                                    {r.frozen_handicap != null ? ` · HCP ${r.frozen_handicap}` : ""}
+                                    {r.registered_at ? ` · Entered ${new Date(r.registered_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+                                  </p>
                                 </div>
-                                <p className="text-xs text-muted-foreground mt-0.5">
-                                  {r.user_email}
-                                  {r.frozen_handicap != null ? ` · HCP ${r.frozen_handicap}` : ""}
-                                </p>
+                                {/* Staff can manually remove an entry if needed */}
+                                {!readOnly && r.status !== "rejected" && (
+                                  <Button
+                                    size="sm" variant="ghost"
+                                    className="h-7 gap-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
+                                    onClick={() => updateReg(r.user_id, "rejected")}
+                                  >
+                                    <XCircle className="h-3.5 w-3.5" />Remove
+                                  </Button>
+                                )}
                               </div>
-                              {r.status === "pending" && !readOnly && (
-                                <div className="flex gap-1.5 flex-shrink-0">
-                                  <Button size="sm" className="h-7 bg-green-600 hover:bg-green-700 gap-1 text-xs" onClick={() => updateReg(r.user_id, "approved")}>
-                                    <CheckCircle className="h-3.5 w-3.5" />Approve
-                                  </Button>
-                                  <Button size="sm" variant="outline" className="h-7 gap-1 text-xs border-red-300 text-red-700 hover:bg-red-50" onClick={() => updateReg(r.user_id, "rejected")}>
-                                    <XCircle className="h-3.5 w-3.5" />Reject
-                                  </Button>
-                                </div>
-                              )}
-                            </div>
-                          </CardContent>
-                        </Card>
-                      ))}
+                            </CardContent>
+                          </Card>
+                        );
+                      })}
                     </div>
                   )}
                 </TabsContent>

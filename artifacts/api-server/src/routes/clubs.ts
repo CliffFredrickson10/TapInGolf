@@ -699,6 +699,23 @@ router.get("/clubs/:id/events", async (req, res): Promise<void> => {
   res.json({ events });
 });
 
+// ─── Team-format helpers ───────────────────────────────────────────────────
+// Formats where 2 players form a permanent partnership (betterball variants)
+const PAIR_FORMATS = new Set([
+  "betterball", "fourball", "fourball_gross_betterball", "fourball_net_betterball",
+  "betterball_match_play", "fourball_stableford", "shamble", "best_ball_aggregate",
+  "high_low", "daytona", "low_ball_total", "the_ghost", "betterball_bonus_bogey",
+  "pinehurst_points",
+]);
+// Formats where the whole draw group (up to 4) is one team
+const GROUP_FORMATS = new Set(["american_scramble", "scramble", "alliance"]);
+
+function teamSize(format: string): "pair" | "group" | "individual" {
+  if (PAIR_FORMATS.has(format)) return "pair";
+  if (GROUP_FORMATS.has(format)) return "group";
+  return "individual";
+}
+
 // GET /events/:id  — returns event object directly (screen uses data directly, not data.event)
 router.get("/events/:id", async (req, res): Promise<void> => {
   const evId = parseInt(req.params.id, 10);
@@ -731,10 +748,20 @@ router.get("/events/:id", async (req, res): Promise<void> => {
 
   if (userId) {
     const reg = await row<any>(
-      "SELECT id, status, payment_status, payment_url, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+      `SELECT er.id, er.status, er.payment_status, er.payment_url, er.division, er.frozen_handicap,
+              er.team_id, et.name AS team_name,
+              (SELECT json_agg(json_build_object('user_id', er2.user_id, 'name', u2.name))
+               FROM event_registrations er2
+               JOIN users u2 ON u2.id = er2.user_id
+               WHERE er2.team_id = er.team_id AND er2.user_id <> er.user_id AND er.team_id IS NOT NULL
+              ) AS teammates
+       FROM event_registrations er
+       LEFT JOIN event_teams et ON et.id = er.team_id
+       WHERE er.event_id = ? AND er.user_id = ?`,
       [evId, userId]
     );
     ev.user_registration = reg ?? null;
+    ev.team_format = teamSize(ev.format ?? "");
 
     // Preview which division they'd be assigned based on handicap
     if (!reg && ev.divisions?.length && user?.handicap_index != null) {
@@ -820,11 +847,42 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
     }
   }
 
+  // ── Team pairing (betterball/scramble formats) ────────────────────────────
+  const ts = teamSize(ev.format ?? "");
+  let teamId: number | null = null;
+  const { partner_id } = req.body ?? {};
+
+  if (ts === "pair" && partner_id) {
+    const partnerId = parseInt(partner_id, 10);
+    // Verify partner is already registered and approved for this event
+    const partnerReg = await row<any>(
+      "SELECT id, team_id FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+      [evId, partnerId]
+    );
+    if (!partnerReg) {
+      res.status(400).json({ message: "Selected partner is not yet registered for this event. Both players must register separately — you can link up once they have entered." }); return;
+    }
+    if (partnerReg.team_id) {
+      // Partner already has a team — join it
+      teamId = partnerReg.team_id;
+    } else {
+      // Create a new team and assign the partner to it
+      const partnerUser = await row<any>("SELECT name FROM users WHERE id = ?", [partnerId]);
+      const teamName = `${user.name} / ${partnerUser?.name ?? "Partner"}`;
+      const newTeam = await row<any>(
+        "INSERT INTO event_teams (event_id, name) VALUES (?, ?) RETURNING id",
+        [evId, teamName]
+      );
+      teamId = newTeam!.id;
+      await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, partnerId]);
+    }
+  }
+
   // Always auto-approve — no manual club approval required. Payment confirms the spot.
   const status = "approved";
   await exec(
-    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
-    [evId, user.id, status, division, frozenHcp]
+    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap, team_id) VALUES (?, ?, ?, ?, ?, ?)",
+    [evId, user.id, status, division, frozenHcp, teamId]
   );
 
   // Notify player: spot is reserved, pending payment (or confirmed if free)
@@ -880,25 +938,69 @@ router.delete("/events/:id/register", async (req, res): Promise<void> => {
   res.json({ message: "Registration cancelled successfully" });
 });
 
-// GET /events/:id/leaderboard  — returns leaderboard grouped by division
+// GET /events/:id/leaderboard  — returns leaderboard grouped by division (team-aware)
 router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   const evId = parseInt(req.params.id, 10);
-  const ev = await row<any>("SELECT id, scoring_enabled FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row<any>("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ?", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
   if (!ev.scoring_enabled) { res.json({ leaderboard: [] }); return; }
 
+  const ts = teamSize(ev.format ?? "");
+
+  if (ts !== "individual") {
+    // Team leaderboard — one row per team per round (aggregate rounds)
+    const scores = await query<any>(
+      `SELECT es.team_id, et.name AS team_name, es.division, es.verified,
+         SUM(es.gross)  AS gross,
+         SUM(es.net)    AS net,
+         SUM(es.points) AS points,
+         RANK() OVER (PARTITION BY es.division ORDER BY
+           CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+           CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+           CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
+         ) AS position
+       FROM event_scores es
+       JOIN event_teams et ON et.id = es.team_id
+       WHERE es.event_id = ? AND es.team_id IS NOT NULL
+       GROUP BY es.team_id, et.name, es.division, es.verified`,
+      [evId]
+    ).catch(() => [] as any[]);
+
+    const grouped: Record<string, any[]> = {};
+    for (const s of scores) {
+      const d = s.division ?? "Open";
+      if (!grouped[d]) grouped[d] = [];
+      grouped[d].push({
+        team_id: s.team_id, team_name: s.team_name,
+        player_name: s.team_name,
+        position: parseInt(s.position), division: d,
+        gross:  s.gross  != null ? parseInt(s.gross)     : null,
+        net:    s.net    != null ? parseInt(s.net)        : null,
+        points: s.points != null ? parseFloat(s.points)  : null,
+        verified: parseInt(s.verified ?? "0"),
+      });
+    }
+    res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
+    return;
+  }
+
+  // Individual leaderboard — aggregate across rounds
   const scores = await query<any>(
-    `SELECT es.user_id, u.name AS player_name, es.division, es.gross, es.net, es.points,
-       er.frozen_handicap, es.verified,
+    `SELECT es.user_id, u.name AS player_name, es.division,
+       SUM(es.gross)  AS gross,
+       SUM(es.net)    AS net,
+       SUM(es.points) AS points,
+       er.frozen_handicap, MAX(es.verified) AS verified,
        RANK() OVER (PARTITION BY es.division ORDER BY
-         CASE WHEN es.points IS NOT NULL THEN es.points END DESC,
-         CASE WHEN es.net   IS NOT NULL THEN es.net   END ASC,
-         CASE WHEN es.gross IS NOT NULL THEN es.gross END ASC
+         CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+         CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+         CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
        ) AS position
      FROM event_scores es
      JOIN users u ON u.id = es.user_id
      JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
-     WHERE es.event_id = ?
+     WHERE es.event_id = ? AND es.team_id IS NULL
+     GROUP BY es.user_id, u.name, es.division, er.frozen_handicap
      ORDER BY es.division, position`,
     [evId]
   ).catch(() => [] as any[]);
@@ -910,29 +1012,53 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
     grouped[d].push({
       user_id: s.user_id, player_name: s.player_name,
       position: parseInt(s.position), division: d,
-      gross: s.gross != null ? parseInt(s.gross) : null,
-      net:   s.net   != null ? parseInt(s.net)   : null,
+      gross:  s.gross  != null ? parseInt(s.gross)    : null,
+      net:    s.net    != null ? parseInt(s.net)       : null,
       points: s.points != null ? parseFloat(s.points) : null,
       frozen_handicap: s.frozen_handicap != null ? parseFloat(s.frozen_handicap) : null,
       verified: parseInt(s.verified ?? "0"),
     });
   }
 
-  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })) });
+  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
 });
 
-// POST /events/:id/scores  — submit a player's scorecard (gross, net, points per round)
+// GET /events/:id/partner-search  — search registered players to pick a partner
+router.get("/events/:id/partner-search", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required" }); return; }
+  const evId = parseInt(req.params.id, 10);
+  const q = String(req.query.q ?? "").trim();
+  if (!q || q.length < 2) { res.json({ players: [] }); return; }
+  const players = await query<any>(
+    `SELECT u.id, u.name, u.handicap_index, er.team_id
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved' AND er.user_id <> ?
+       AND (LOWER(u.name) LIKE LOWER(?) OR CAST(u.handicap_index AS TEXT) LIKE ?)
+     ORDER BY u.name
+     LIMIT 20`,
+    [evId, user.id, `%${q}%`, `%${q}%`]
+  );
+  res.json({ players: players.map((p: any) => ({
+    id: p.id, name: p.name,
+    handicap_index: p.handicap_index != null ? parseFloat(p.handicap_index) : null,
+    has_partner: !!p.team_id,
+  })) });
+});
+
+// POST /events/:id/scores  — submit a player's/team's scorecard (gross, net, points per round)
 router.post("/events/:id/scores", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Login required" }); return; }
 
   const evId = parseInt(req.params.id, 10);
-  const ev = await row<any>("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  const ev = await row<any>("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found or not active" }); return; }
   if (!ev.scoring_enabled) { res.status(400).json({ message: "Scoring is not enabled for this event" }); return; }
 
   const reg = await row<any>(
-    "SELECT id, status, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    "SELECT id, status, division, frozen_handicap, team_id FROM event_registrations WHERE event_id = ? AND user_id = ?",
     [evId, user.id]
   );
   if (!reg || reg.status !== "approved") { res.status(403).json({ message: "You must be a confirmed participant to submit scores" }); return; }
@@ -943,19 +1069,36 @@ router.post("/events/:id/scores", async (req, res): Promise<void> => {
   const totalGross = gross != null ? Number(gross) : Object.values(hole_scores ?? {}).reduce((s: any, v: any) => s + Number(v), 0);
   const totalNet   = net    != null ? Number(net)   : null;
   const totalPts   = points != null ? Number(points) : null;
+  const ts = teamSize(ev.format ?? "");
 
-  // Upsert score row (one per player per event per round)
-  const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?", [evId, user.id, round]);
-  if (existing) {
-    await exec(
-      "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
-      [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), existing.id]
-    );
+  if (ts !== "individual" && reg.team_id) {
+    // Team format: upsert one score row per team per round
+    const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = ?", [evId, reg.team_id, round]);
+    if (existing) {
+      await exec(
+        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, user_id = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), user.id, existing.id]
+      );
+    } else {
+      await exec(
+        "INSERT INTO event_scores (event_id, team_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [evId, reg.team_id, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+      );
+    }
   } else {
-    await exec(
-      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
-      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
-    );
+    // Individual: upsert one row per player per round
+    const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ? AND team_id IS NULL", [evId, user.id, round]);
+    if (existing) {
+      await exec(
+        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), existing.id]
+      );
+    } else {
+      await exec(
+        "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+      );
+    }
   }
   res.json({ message: "Score submitted. A club official will verify your scorecard." });
 });

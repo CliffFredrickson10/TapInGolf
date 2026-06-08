@@ -927,6 +927,21 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_event ON event_scores (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_user  ON event_scores (user_id)");
 
+  // ── Event teams (betterball pairs, scramble groups) ───────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_teams (
+      id         SERIAL PRIMARY KEY,
+      event_id   INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      name       VARCHAR(200),
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_teams_event ON event_teams (event_id)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS team_id INT REFERENCES event_teams(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS partner_search_name VARCHAR(200)");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS team_id INT REFERENCES event_teams(id) ON DELETE SET NULL");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_team ON event_scores (team_id)");
+
   // ── Event invites (invitation_only events) ────────────────────────────────
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_invites (

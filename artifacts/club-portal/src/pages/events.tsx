@@ -66,6 +66,7 @@ interface Score {
   gross: number | null; net: number | null; points: number | null;
   division: string | null; frozen_handicap: number | null;
   hole_scores: Record<string, number> | null; verified: number;
+  team_id: number | null; team_name: string | null;
 }
 
 interface TeeSlot {
@@ -1657,41 +1658,121 @@ export default function Events() {
                     <div className="space-y-2">
                       {regs.filter(r => r.status === "approved").length === 0 ? (
                         <p className="text-sm text-muted-foreground py-6 text-center">No confirmed players yet.</p>
-                      ) : (
-                        <>
-                          {/* header */}
-                          <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
-                            <span className="col-span-2">Player</span>
-                            <span className="text-center">Gross</span>
-                            <span className="text-center">Net</span>
-                            <span className="text-center">Points</span>
-                          </div>
-                          {regs.filter(r => r.status === "approved").map(r => (
-                            <Card key={r.user_id}>
-                              <CardContent className="p-2.5">
-                                <div className="grid grid-cols-5 gap-2 items-center text-sm">
-                                  <div className="col-span-2">
-                                    <p className="font-medium text-xs">{r.user_name}</p>
-                                    <p className="text-[11px] text-muted-foreground">{r.division ? `${r.division} Div` : "—"}</p>
-                                  </div>
-                                  {(["gross","net","points"] as const).map(field => (
-                                    <Input
-                                      key={field} type="number" min="0"
-                                      className="h-7 text-xs text-center"
-                                      placeholder="—"
-                                      value={editScores[r.user_id]?.[field] ?? ""}
-                                      onChange={e => setEditScores(prev => ({
-                                        ...prev,
-                                        [r.user_id]: { ...(prev[r.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value },
-                                      }))}
-                                    />
+                      ) : (() => {
+                        // Check if this event has any team scores submitted
+                        const hasTeamScores = scores.some(s => s.team_id);
+                        const hasIndividualScores = scores.some(s => !s.team_id);
+
+                        if (hasTeamScores) {
+                          // Group scores by team for team-format events
+                          const teamMap = new Map<number, Score>();
+                          scores.filter(s => s.team_id).forEach(s => {
+                            if (!teamMap.has(s.team_id!)) teamMap.set(s.team_id!, s);
+                          });
+                          const teams = Array.from(teamMap.values());
+                          return (
+                            <>
+                              <p className="text-xs text-muted-foreground mb-2">Team scores — one submission per partnership/group.</p>
+                              <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
+                                <span className="col-span-2">Team</span>
+                                <span className="text-center">Gross</span>
+                                <span className="text-center">Net</span>
+                                <span className="text-center">Points</span>
+                              </div>
+                              {teams.map(s => (
+                                <Card key={s.team_id}>
+                                  <CardContent className="p-2.5">
+                                    <div className="grid grid-cols-5 gap-2 items-center text-sm">
+                                      <div className="col-span-2">
+                                        <p className="font-medium text-xs">{s.team_name ?? "Team"}</p>
+                                        <p className="text-[11px] text-muted-foreground">{s.division ? `${s.division} Div` : "—"} {s.verified ? "· ✓ Verified" : "· Unverified"}</p>
+                                      </div>
+                                      {(["gross","net","points"] as const).map(field => (
+                                        <Input
+                                          key={field} type="number" min="0"
+                                          className="h-7 text-xs text-center"
+                                          placeholder="—"
+                                          value={editScores[s.user_id]?.[field] ?? (s[field] != null ? String(s[field]) : "")}
+                                          onChange={e => setEditScores(prev => ({
+                                            ...prev,
+                                            [s.user_id]: { ...(prev[s.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value },
+                                          }))}
+                                        />
+                                      ))}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              ))}
+                              {/* Players without a team score */}
+                              {regs.filter(r => r.status === "approved" && !scores.find(s => s.user_id === r.user_id && s.team_id)).length > 0 && (
+                                <>
+                                  <p className="text-xs text-amber-600 mt-3 mb-1">Players without a team score yet:</p>
+                                  {regs.filter(r => r.status === "approved" && !scores.find(s => s.user_id === r.user_id && s.team_id)).map(r => (
+                                    <Card key={r.user_id} className="border-amber-200">
+                                      <CardContent className="p-2.5">
+                                        <div className="grid grid-cols-5 gap-2 items-center text-sm">
+                                          <div className="col-span-2">
+                                            <p className="font-medium text-xs">{r.user_name}</p>
+                                            <p className="text-[11px] text-muted-foreground">{r.division ? `${r.division} Div` : "—"} · No team</p>
+                                          </div>
+                                          {(["gross","net","points"] as const).map(field => (
+                                            <Input key={field} type="number" min="0" className="h-7 text-xs text-center" placeholder="—"
+                                              value={editScores[r.user_id]?.[field] ?? ""}
+                                              onChange={e => setEditScores(prev => ({ ...prev, [r.user_id]: { ...(prev[r.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value } }))}
+                                            />
+                                          ))}
+                                        </div>
+                                      </CardContent>
+                                    </Card>
                                   ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          ))}
-                        </>
-                      )}
+                                </>
+                              )}
+                            </>
+                          );
+                        }
+
+                        // Individual scoring (default)
+                        return (
+                          <>
+                            <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
+                              <span className="col-span-2">Player</span>
+                              <span className="text-center">Gross</span>
+                              <span className="text-center">Net</span>
+                              <span className="text-center">Points</span>
+                            </div>
+                            {regs.filter(r => r.status === "approved").map(r => {
+                              const submitted = scores.find(s => s.user_id === r.user_id);
+                              return (
+                                <Card key={r.user_id}>
+                                  <CardContent className="p-2.5">
+                                    <div className="grid grid-cols-5 gap-2 items-center text-sm">
+                                      <div className="col-span-2">
+                                        <p className="font-medium text-xs">{r.user_name}</p>
+                                        <p className="text-[11px] text-muted-foreground">
+                                          {r.division ? `${r.division} Div` : "—"}
+                                          {submitted ? (submitted.verified ? " · ✓ Verified" : " · Submitted") : ""}
+                                        </p>
+                                      </div>
+                                      {(["gross","net","points"] as const).map(field => (
+                                        <Input
+                                          key={field} type="number" min="0"
+                                          className="h-7 text-xs text-center"
+                                          placeholder="—"
+                                          value={editScores[r.user_id]?.[field] ?? ""}
+                                          onChange={e => setEditScores(prev => ({
+                                            ...prev,
+                                            [r.user_id]: { ...(prev[r.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value },
+                                          }))}
+                                        />
+                                      ))}
+                                    </div>
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
                 </TabsContent>

@@ -1765,13 +1765,15 @@ router.get("/portal/events/:id/scores", requireClubAuth, async (req: Request, re
   const params: any[] = round != null ? [evId, round] : [evId];
   const scores = await query<any>(
     `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            s.team_id, et.name as team_name,
             u.id as user_id, u.name as user_name,
-            r.division, r.frozen_handicap
+            COALESCE(r.division, s.division) as division, COALESCE(r.frozen_handicap, s.frozen_handicap) as frozen_handicap
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
-     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN event_teams et ON et.id = s.team_id
      WHERE s.event_id = ? ${roundFilter}
-     ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
+     ORDER BY COALESCE(r.division, s.division) ASC, s.gross ASC NULLS LAST`,
     params
   );
   res.json(scores);

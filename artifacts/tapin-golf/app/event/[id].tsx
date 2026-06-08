@@ -21,6 +21,12 @@ interface UserRegistration {
   status: string; division: string | null;
   frozen_handicap: number | null;
   payment_status: string; payment_url: string | null;
+  team_id: number | null; team_name: string | null;
+  teammates: Array<{ user_id: number; name: string }> | null;
+}
+
+interface PartnerResult {
+  id: number; name: string; handicap_index: number | null; has_partner: boolean;
 }
 
 interface EventDetail {
@@ -41,6 +47,7 @@ interface EventDetail {
   user_registration: UserRegistration | null;
   user_eligible: boolean | null;
   user_division_preview: string | null;
+  team_format: "pair" | "group" | "individual";
 }
 
 interface DrawEntry {
@@ -132,6 +139,12 @@ export default function EventDetailScreen() {
   const [roundScores, setRoundScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [submittingScore, setSubmittingScore] = useState(false);
 
+  // Partner picker (betterball / team formats)
+  const [partnerQuery, setPartnerQuery] = useState("");
+  const [partnerResults, setPartnerResults] = useState<PartnerResult[]>([]);
+  const [selectedPartner, setSelectedPartner] = useState<PartnerResult | null>(null);
+  const [partnerSearching, setPartnerSearching] = useState(false);
+
   // ── Loaders ────────────────────────────────────────────────────────────────
 
   const loadEvent = useCallback(async (quiet = false) => {
@@ -179,11 +192,23 @@ export default function EventDetailScreen() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  const searchPartners = async (q: string) => {
+    if (!user || !event || q.length < 2) { setPartnerResults([]); return; }
+    setPartnerSearching(true);
+    try {
+      const res = await apiFetch(`/events/${event.id}/partner-search?q=${encodeURIComponent(q)}`, user.token);
+      setPartnerResults(res.players ?? []);
+    } catch { setPartnerResults([]); }
+    finally { setPartnerSearching(false); }
+  };
+
   const handleRegister = async () => {
     if (!user) { router.push("/(auth)/login"); return; }
     setRegistering(true);
     try {
-      const res = await apiFetch(`/events/${id}/register`, user.token, { method: "POST", body: JSON.stringify({}) });
+      const body: Record<string, any> = {};
+      if (selectedPartner) body.partner_id = selectedPartner.id;
+      const res = await apiFetch(`/events/${id}/register`, user.token, { method: "POST", body: JSON.stringify(body) });
       await loadEvent(true);
       const msg = res.status === "pending"
         ? `Your entry has been submitted. The club will review and confirm your spot.`
@@ -449,6 +474,46 @@ export default function EventDetailScreen() {
                       Based on your handicap you'll be placed in <Text style={{ color: colors.primary, fontWeight: "700" }}>{division} Division</Text>
                     </Text>
                   )}
+
+                  {/* Partner picker — betterball / pair formats */}
+                  {event.team_format === "pair" && (
+                    <View style={{ marginBottom: 8 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 6 }}>
+                        Select your partner <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(optional — can link later)</Text>
+                      </Text>
+                      {selectedPartner ? (
+                        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10 }}>
+                          <Ionicons name="people-outline" size={16} color={colors.primary} />
+                          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.primary }}>{selectedPartner.name}</Text>
+                          <TouchableOpacity onPress={() => { setSelectedPartner(null); setPartnerQuery(""); }}>
+                            <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <>
+                          <TextInput
+                            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.foreground, backgroundColor: colors.card }}
+                            placeholder="Search by name…"
+                            placeholderTextColor={colors.mutedForeground}
+                            value={partnerQuery}
+                            onChangeText={q => { setPartnerQuery(q); searchPartners(q); }}
+                          />
+                          {partnerSearching && <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>Searching…</Text>}
+                          {partnerResults.map(p => (
+                            <TouchableOpacity key={p.id}
+                              style={{ flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: colors.border, gap: 8 }}
+                              onPress={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerQuery(""); }}
+                            >
+                              <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
+                              <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
+                              {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Has partner</Text>}
+                            </TouchableOpacity>
+                          ))}
+                        </>
+                      )}
+                    </View>
+                  )}
+
                   <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={handleRegister} disabled={registering}>
                     {registering ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Enter This Event</Text>}
                   </TouchableOpacity>
@@ -722,8 +787,30 @@ export default function EventDetailScreen() {
               </View>
             ) : (
               <>
+                {/* Team banner */}
+                {reg?.team_name && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: colors.primary + "14", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <Ionicons name="people" size={16} color={colors.primary} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>{reg.team_name}</Text>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                        {event.team_format === "pair" ? "Betterball pair — one shared score" : "Team — one shared score for the group"}
+                      </Text>
+                    </View>
+                  </View>
+                )}
+                {event.team_format !== "individual" && !reg?.team_name && (
+                  <View style={{ backgroundColor: "#fef3c7", borderRadius: 10, padding: 12, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: "#92400e" }}>
+                      ⚠️ You haven't been linked to a partner/team yet. Submit your score individually and the club can group teams later.
+                    </Text>
+                  </View>
+                )}
+
                 <Text style={[styles.sectionSub, { color: colors.mutedForeground, marginBottom: 12 }]}>
-                  Enter your scores for each round. A club official will verify your scorecard.
+                  {reg?.team_name
+                    ? "Any team member can submit — the score is shared for your team."
+                    : "Enter your scores for each round. A club official will verify your scorecard."}
                 </Text>
 
                 {Array.from({ length: event.rounds ?? 1 }, (_, i) => {
@@ -732,7 +819,7 @@ export default function EventDetailScreen() {
                   return (
                     <View key={r} style={[styles.metaCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 }]}>
                       <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
-                        Day {r}{event.rounds === 1 ? "" : ""}
+                        Day {r}
                       </Text>
                       <View style={{ flexDirection: "row", gap: 10 }}>
                         <ScoreField label="Gross" value={s.gross} onChange={v => setRoundField(r, "gross", v)} colors={colors} />

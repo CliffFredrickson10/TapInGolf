@@ -58520,6 +58520,28 @@ router3.get("/clubs/:id/events", async (req, res) => {
   }
   res.json({ events });
 });
+var PAIR_FORMATS = /* @__PURE__ */ new Set([
+  "betterball",
+  "fourball",
+  "fourball_gross_betterball",
+  "fourball_net_betterball",
+  "betterball_match_play",
+  "fourball_stableford",
+  "shamble",
+  "best_ball_aggregate",
+  "high_low",
+  "daytona",
+  "low_ball_total",
+  "the_ghost",
+  "betterball_bonus_bogey",
+  "pinehurst_points"
+]);
+var GROUP_FORMATS = /* @__PURE__ */ new Set(["american_scramble", "scramble", "alliance"]);
+function teamSize(format) {
+  if (PAIR_FORMATS.has(format)) return "pair";
+  if (GROUP_FORMATS.has(format)) return "group";
+  return "individual";
+}
 router3.get("/events/:id", async (req, res) => {
   const evId = parseInt(req.params.id, 10);
   const user = await getUser(req);
@@ -58551,10 +58573,20 @@ router3.get("/events/:id", async (req, res) => {
   ev.rounds = Number(ev.rounds ?? 1);
   if (userId) {
     const reg = await row(
-      "SELECT id, status, payment_status, payment_url, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+      `SELECT er.id, er.status, er.payment_status, er.payment_url, er.division, er.frozen_handicap,
+              er.team_id, et.name AS team_name,
+              (SELECT json_agg(json_build_object('user_id', er2.user_id, 'name', u2.name))
+               FROM event_registrations er2
+               JOIN users u2 ON u2.id = er2.user_id
+               WHERE er2.team_id = er.team_id AND er2.user_id <> er.user_id AND er.team_id IS NOT NULL
+              ) AS teammates
+       FROM event_registrations er
+       LEFT JOIN event_teams et ON et.id = er.team_id
+       WHERE er.event_id = ? AND er.user_id = ?`,
       [evId, userId]
     );
     ev.user_registration = reg ?? null;
+    ev.team_format = teamSize(ev.format ?? "");
     if (!reg && ev.divisions?.length && user?.handicap_index != null) {
       const hcp = parseFloat(user.handicap_index);
       for (const d of ev.divisions) {
@@ -58653,10 +58685,36 @@ router3.post("/events/:id/register", async (req, res) => {
       }
     }
   }
+  const ts = teamSize(ev.format ?? "");
+  let teamId = null;
+  const { partner_id } = req.body ?? {};
+  if (ts === "pair" && partner_id) {
+    const partnerId = parseInt(partner_id, 10);
+    const partnerReg = await row(
+      "SELECT id, team_id FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+      [evId, partnerId]
+    );
+    if (!partnerReg) {
+      res.status(400).json({ message: "Selected partner is not yet registered for this event. Both players must register separately \u2014 you can link up once they have entered." });
+      return;
+    }
+    if (partnerReg.team_id) {
+      teamId = partnerReg.team_id;
+    } else {
+      const partnerUser = await row("SELECT name FROM users WHERE id = ?", [partnerId]);
+      const teamName = `${user.name} / ${partnerUser?.name ?? "Partner"}`;
+      const newTeam = await row(
+        "INSERT INTO event_teams (event_id, name) VALUES (?, ?) RETURNING id",
+        [evId, teamName]
+      );
+      teamId = newTeam.id;
+      await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, partnerId]);
+    }
+  }
   const status = "approved";
   await exec(
-    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
-    [evId, user.id, status, division, frozenHcp]
+    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap, team_id) VALUES (?, ?, ?, ?, ?, ?)",
+    [evId, user.id, status, division, frozenHcp, teamId]
   );
   const needsPayment = ev.payment_required && ev.entry_fee;
   const notifTitle = "Entry Received \u26F3";
@@ -58712,7 +58770,7 @@ router3.delete("/events/:id/register", async (req, res) => {
 });
 router3.get("/events/:id/leaderboard", async (req, res) => {
   const evId = parseInt(req.params.id, 10);
-  const ev = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ?", [evId]);
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
     return;
@@ -58721,18 +58779,59 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
     res.json({ leaderboard: [] });
     return;
   }
+  const ts = teamSize(ev.format ?? "");
+  if (ts !== "individual") {
+    const scores2 = await query(
+      `SELECT es.team_id, et.name AS team_name, es.division, es.verified,
+         SUM(es.gross)  AS gross,
+         SUM(es.net)    AS net,
+         SUM(es.points) AS points,
+         RANK() OVER (PARTITION BY es.division ORDER BY
+           CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+           CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+           CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
+         ) AS position
+       FROM event_scores es
+       JOIN event_teams et ON et.id = es.team_id
+       WHERE es.event_id = ? AND es.team_id IS NOT NULL
+       GROUP BY es.team_id, et.name, es.division, es.verified`,
+      [evId]
+    ).catch(() => []);
+    const grouped2 = {};
+    for (const s of scores2) {
+      const d = s.division ?? "Open";
+      if (!grouped2[d]) grouped2[d] = [];
+      grouped2[d].push({
+        team_id: s.team_id,
+        team_name: s.team_name,
+        player_name: s.team_name,
+        position: parseInt(s.position),
+        division: d,
+        gross: s.gross != null ? parseInt(s.gross) : null,
+        net: s.net != null ? parseInt(s.net) : null,
+        points: s.points != null ? parseFloat(s.points) : null,
+        verified: parseInt(s.verified ?? "0")
+      });
+    }
+    res.json({ leaderboard: Object.entries(grouped2).map(([division, players]) => ({ division, players })), team_format: ts });
+    return;
+  }
   const scores = await query(
-    `SELECT es.user_id, u.name AS player_name, es.division, es.gross, es.net, es.points,
-       er.frozen_handicap, es.verified,
+    `SELECT es.user_id, u.name AS player_name, es.division,
+       SUM(es.gross)  AS gross,
+       SUM(es.net)    AS net,
+       SUM(es.points) AS points,
+       er.frozen_handicap, MAX(es.verified) AS verified,
        RANK() OVER (PARTITION BY es.division ORDER BY
-         CASE WHEN es.points IS NOT NULL THEN es.points END DESC,
-         CASE WHEN es.net   IS NOT NULL THEN es.net   END ASC,
-         CASE WHEN es.gross IS NOT NULL THEN es.gross END ASC
+         CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+         CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+         CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
        ) AS position
      FROM event_scores es
      JOIN users u ON u.id = es.user_id
      JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
-     WHERE es.event_id = ?
+     WHERE es.event_id = ? AND es.team_id IS NULL
+     GROUP BY es.user_id, u.name, es.division, er.frozen_handicap
      ORDER BY es.division, position`,
     [evId]
   ).catch(() => []);
@@ -58752,7 +58851,36 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
       verified: parseInt(s.verified ?? "0")
     });
   }
-  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })) });
+  res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
+});
+router3.get("/events/:id/partner-search", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Login required" });
+    return;
+  }
+  const evId = parseInt(req.params.id, 10);
+  const q = String(req.query.q ?? "").trim();
+  if (!q || q.length < 2) {
+    res.json({ players: [] });
+    return;
+  }
+  const players = await query(
+    `SELECT u.id, u.name, u.handicap_index, er.team_id
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved' AND er.user_id <> ?
+       AND (LOWER(u.name) LIKE LOWER(?) OR CAST(u.handicap_index AS TEXT) LIKE ?)
+     ORDER BY u.name
+     LIMIT 20`,
+    [evId, user.id, `%${q}%`, `%${q}%`]
+  );
+  res.json({ players: players.map((p) => ({
+    id: p.id,
+    name: p.name,
+    handicap_index: p.handicap_index != null ? parseFloat(p.handicap_index) : null,
+    has_partner: !!p.team_id
+  })) });
 });
 router3.post("/events/:id/scores", async (req, res) => {
   const user = await getUser(req);
@@ -58761,7 +58889,7 @@ router3.post("/events/:id/scores", async (req, res) => {
     return;
   }
   const evId = parseInt(req.params.id, 10);
-  const ev = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
+  const ev = await row("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
   if (!ev) {
     res.status(404).json({ message: "Event not found or not active" });
     return;
@@ -58771,30 +58899,48 @@ router3.post("/events/:id/scores", async (req, res) => {
     return;
   }
   const reg = await row(
-    "SELECT id, status, division, frozen_handicap FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    "SELECT id, status, division, frozen_handicap, team_id FROM event_registrations WHERE event_id = ? AND user_id = ?",
     [evId, user.id]
   );
   if (!reg || reg.status !== "approved") {
     res.status(403).json({ message: "You must be a confirmed participant to submit scores" });
     return;
   }
-  const { round = 1, hole_scores, gross } = req.body ?? {};
-  if (!gross && !hole_scores) {
-    res.status(400).json({ message: "hole_scores or gross required" });
+  const { round = 1, hole_scores, gross, net, points } = req.body ?? {};
+  if (gross == null && !hole_scores) {
+    res.status(400).json({ message: "gross or hole_scores required" });
     return;
   }
-  const totalGross = gross ?? Object.values(hole_scores ?? {}).reduce((s, v) => s + Number(v), 0);
-  const existing = await row("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?", [evId, user.id, round]);
-  if (existing) {
-    await exec(
-      "UPDATE event_scores SET gross = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
-      [totalGross, JSON.stringify(hole_scores ?? {}), existing.id]
-    );
+  const totalGross = gross != null ? Number(gross) : Object.values(hole_scores ?? {}).reduce((s, v) => s + Number(v), 0);
+  const totalNet = net != null ? Number(net) : null;
+  const totalPts = points != null ? Number(points) : null;
+  const ts = teamSize(ev.format ?? "");
+  if (ts !== "individual" && reg.team_id) {
+    const existing = await row("SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = ?", [evId, reg.team_id, round]);
+    if (existing) {
+      await exec(
+        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, user_id = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), user.id, existing.id]
+      );
+    } else {
+      await exec(
+        "INSERT INTO event_scores (event_id, team_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [evId, reg.team_id, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+      );
+    }
   } else {
-    await exec(
-      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, JSON.stringify(hole_scores ?? {})]
-    );
+    const existing = await row("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ? AND team_id IS NULL", [evId, user.id, round]);
+    if (existing) {
+      await exec(
+        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), existing.id]
+      );
+    } else {
+      await exec(
+        "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+        [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+      );
+    }
   }
   res.json({ message: "Score submitted. A club official will verify your scorecard." });
 });
@@ -65113,13 +65259,15 @@ router14.get("/portal/events/:id/scores", requireClubAuth2, async (req, res) => 
   const params = round != null ? [evId, round] : [evId];
   const scores = await query(
     `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            s.team_id, et.name as team_name,
             u.id as user_id, u.name as user_name,
-            r.division, r.frozen_handicap
+            COALESCE(r.division, s.division) as division, COALESCE(r.frozen_handicap, s.frozen_handicap) as frozen_handicap
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
-     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN event_teams et ON et.id = s.team_id
      WHERE s.event_id = ? ${roundFilter}
-     ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
+     ORDER BY COALESCE(r.division, s.division) ASC, s.gross ASC NULLS LAST`,
     params
   );
   res.json(scores);
@@ -68661,6 +68809,19 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_event ON event_scores (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_user  ON event_scores (user_id)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_teams (
+      id         SERIAL PRIMARY KEY,
+      event_id   INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      name       VARCHAR(200),
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_teams_event ON event_teams (event_id)");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS team_id INT REFERENCES event_teams(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE event_registrations ADD COLUMN IF NOT EXISTS partner_search_name VARCHAR(200)");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS team_id INT REFERENCES event_teams(id) ON DELETE SET NULL");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_team ON event_scores (team_id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_invites (
       id         SERIAL PRIMARY KEY,

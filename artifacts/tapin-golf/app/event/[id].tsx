@@ -260,8 +260,8 @@ export default function EventDetailScreen() {
     : "confirmed";
 
   const today = new Date().toISOString().split("T")[0];
-  const entriesOpen   = !event.entries_open   || today >= event.entries_open;
-  const entriesOpen2  = !event.entries_close  || today <= event.entries_close;
+  const entriesOpen   = !event.entries_open   || today >= String(event.entries_open).slice(0, 10);
+  const entriesOpen2  = !event.entries_close  || today <= String(event.entries_close).slice(0, 10);
   const canRegister   = ctaState === "register" && entriesOpen && entriesOpen2;
 
   return (

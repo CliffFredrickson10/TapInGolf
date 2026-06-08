@@ -98,31 +98,28 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   let slotsCreated   = 0;
 
   for (const date of dates) {
-    // Skip this date entirely if general tee slots already exist (rule already ran for this date)
-    const generalExisting = await row<{ cnt: string }>(
-      "SELECT COUNT(*) AS cnt FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
-      [club_id, date]
-    );
-    if (Number(generalExisting?.cnt ?? 0) > 0) continue;
-
-    // Skip the whole day if there are any active tournament slots — clubs add extra tee times manually on those days
+    // Skip the whole day if there are any active tournament slots
     const tournamentSlots = await row<{ cnt: string }>(
       "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
       [club_id, date]
     );
     if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
 
-    datesProcessed++;
+    let newForDay = 0;
     for (const s of slotTemplate) {
       try {
-        await exec(
+        const result = await run(
           "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
           [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type, s.crossover_enabled ? 1 : 0]
         );
-        slotsCreated++;
+        if (result && (result as any).rowCount > 0) newForDay++;
       } catch {
-        // skip duplicate or constraint error silently
+        // skip constraint errors silently
       }
+    }
+    if (newForDay > 0) {
+      datesProcessed++;
+      slotsCreated += newForDay;
     }
   }
 

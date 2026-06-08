@@ -1282,64 +1282,19 @@ export default function Events() {
                                   <span className="text-sm font-semibold">{fmtDate(date)}</span>
                                   <span className="text-[10px] text-muted-foreground">{daySlots.length} slot{daySlots.length !== 1 ? "s" : ""}</span>
                                 </div>
-                                {editId ? (
-                                  <button
-                                    type="button"
-                                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                    onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}
-                                  >
-                                    <Plus className="h-3 w-3" />Generate
-                                  </button>
-                                ) : (
-                                  <button
-                                    type="button"
-                                    className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                    onClick={() => setNewSlotDate(date)}
-                                  >
-                                    <Plus className="h-3 w-3" />Add slot
-                                  </button>
-                                )}
+                                <button
+                                  type="button"
+                                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                  onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}
+                                >
+                                  <Plus className="h-3 w-3" />Generate
+                                </button>
                               </div>
 
-                              {/* Quick-add inline form (new events only) */}
-                              {!editId && newSlotDate === date && (
-                                <div className="flex items-center gap-2 border border-dashed rounded-md px-2 py-1.5">
-                                  <Input
-                                    type="time"
-                                    className="h-7 text-xs w-28 shrink-0"
-                                    value={newSlotTime}
-                                    onChange={e => setNewSlotTime(e.target.value)}
-                                    autoFocus
-                                  />
-                                  <Input
-                                    type="number" min={1} max={4}
-                                    className="h-7 text-xs w-16 shrink-0"
-                                    value={newSlotPlayers}
-                                    onChange={e => setNewSlotPlayers(Number(e.target.value))}
-                                  />
-                                  <span className="text-xs text-muted-foreground shrink-0">players</span>
-                                  <button
-                                    type="button"
-                                    className="ml-auto text-xs px-2 py-1 rounded bg-[#1a5c38] text-white hover:bg-[#164d30]"
-                                    onClick={() => {
-                                      if (!newSlotTime) return;
-                                      const tempId = tempSlotCounter.current--;
-                                      setEventSlots(prev => [...prev, { id: tempId, date, time: newSlotTime, total_slots: newSlotPlayers, active: true }]);
-                                      setNewSlotTime("");
-                                      setNewSlotDate("");
-                                    }}
-                                  >Add</button>
-                                  <button type="button" className="text-xs text-muted-foreground hover:text-foreground" onClick={() => setNewSlotDate("")}>
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </div>
-                              )}
 
                               {daySlots.length === 0 ? (
                                 <p className="text-[11px] text-amber-600 py-1">
-                                  {editId
-                                    ? "No tee times yet — click Generate to build a schedule for this day."
-                                    : "No tee times yet — click Add slot above."}
+                                  No tee times yet — click Generate to build a schedule for this day.
                                 </p>
                               ) : (
                                 <div className="space-y-0.5 max-h-48 overflow-y-auto">
@@ -1693,13 +1648,23 @@ export default function Events() {
         </DialogContent>
       </Dialog>
 
-      {/* Tee schedule generation dialog — for existing events, generates exclusive event slots */}
+      {/* Tee schedule generation dialog — works for both new and existing events */}
       <GenerateTeeTimesDialog
         open={genDialogOpen}
         onOpenChange={setGenDialogOpen}
         initialDate={genDialogDate}
         eventId={editId ?? undefined}
         onComplete={() => { if (editId) loadEventSlots(editId); }}
+        onStagedSlots={!editId ? (slots) => {
+          const newDates = new Set(slots.map(s => s.date));
+          setEventSlots(prev => [
+            ...prev.filter(s => !newDates.has(String(s.date).slice(0, 10))),
+            ...slots.map(s => {
+              const id = tempSlotCounter.current--;
+              return { id, date: s.date, time: s.time, total_slots: s.total_slots, active: true };
+            }),
+          ]);
+        } : undefined}
       />
     </div>
   );

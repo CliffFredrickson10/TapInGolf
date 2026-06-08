@@ -157,13 +157,14 @@ function BlockEditor({
 // generation so the caller can reload its slot list.
 
 export function GenerateTeeTimesDialog({
-  open, onOpenChange, onComplete, initialDate, eventId,
+  open, onOpenChange, onComplete, initialDate, eventId, onStagedSlots,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onComplete: (dateFrom: string) => void;
   initialDate?: string;
   eventId?: number;
+  onStagedSlots?: (slots: Array<{ date: string; time: string; total_slots: number }>) => void;
 }) {
   const lockDate = !!initialDate;
   const { toast } = useToast();
@@ -345,6 +346,19 @@ export function GenerateTeeTimesDialog({
           });
         addBlock(cfgB.morning); addBlock(cfgB.midday);
       }
+    }
+
+    // Staged mode: no event ID yet (new tournament) — return slots to caller in memory
+    if (!eventId && onStagedSlots) {
+      onStagedSlots(allSlots.map(s => ({ date: s.date, time: s.time, total_slots: slots })));
+      const skippedNote = skipped > 0 ? ` (${skipped} conflict${skipped > 1 ? "s" : ""} skipped)` : "";
+      toast({
+        title: "Schedule ready",
+        description: `${allSlots.length} tee slot${allSlots.length !== 1 ? "s" : ""} staged${skippedNote} — saved when you create the tournament.`,
+      });
+      onOpenChange(false);
+      onComplete(dateFrom);
+      return;
     }
 
     setProgress({ done: 0, total: allSlots.length });

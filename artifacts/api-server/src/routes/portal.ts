@@ -428,7 +428,7 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
     price: 0,
     price_9: null,
     promotional_price: null,
-    tee_start_type: r.tee_start_type ?? "1st Tee",
+    tee_start_type: ({ "1st Tee": "first_tee", "10th Tee": "tenth_tee", "Two-Tee Start": "two_tee" } as Record<string, string>)[r.tee_start_type] ?? r.tee_start_type ?? "first_tee",
     crossover_enabled: false,
     active: !!r.active,
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]"),
@@ -453,9 +453,9 @@ router.post("/portal/tee-times", requireClubAuth, async (req: Request, res: Resp
     const cap = await row<any>("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
     await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
   } else {
-    // General slot — uses the partial unique index on (club_id, date, tee_time) WHERE event_id IS NULL
+    // General slot — uses the partial unique index on (club_id, date, tee_time, tee_start_type) WHERE event_id IS NULL
     const rows = await query<any>(
-      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) WHERE event_id IS NULL DO NOTHING RETURNING id",
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, tee_start_type) WHERE event_id IS NULL DO NOTHING RETURNING id",
       [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
     );
     insertId = rows[0]?.id;

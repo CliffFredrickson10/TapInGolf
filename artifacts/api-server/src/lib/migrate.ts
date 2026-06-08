@@ -1259,6 +1259,15 @@ async function seedData(): Promise<void> {
     credCount++;
   }
   if (credCount > 0) logger.info({ count: credCount }, "Club portal credentials seeded");
+
+  // ── Two-Tee Start: allow both 1st Tee + 10th Tee rows at the same time ───────────────
+  // The previous uq_pts_general index covered (club_id, date, tee_time) and silently
+  // dropped the 10th Tee slot on INSERT … ON CONFLICT DO NOTHING.
+  // Replace it with a constraint that includes tee_start_type so both rows coexist.
+  await ddl("DROP INDEX IF EXISTS uq_pts_general");
+  await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general
+    ON portal_tee_slots (club_id, date, tee_time, tee_start_type)
+    WHERE event_id IS NULL`);
 }
 
 // Recompute portal_tee_slots.player_count from active (non-cancelled) bookings.

@@ -63624,7 +63624,7 @@ router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
     price: 0,
     price_9: null,
     promotional_price: null,
-    tee_start_type: r.tee_start_type ?? "1st Tee",
+    tee_start_type: { "1st Tee": "first_tee", "10th Tee": "tenth_tee", "Two-Tee Start": "two_tee" }[r.tee_start_type] ?? r.tee_start_type ?? "first_tee",
     crossover_enabled: false,
     active: !!r.active,
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]")
@@ -63649,7 +63649,7 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
     await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
   } else {
     const rows = await query(
-      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) WHERE event_id IS NULL DO NOTHING RETURNING id",
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, tee_start_type) WHERE event_id IS NULL DO NOTHING RETURNING id",
       [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart2(tee_start_type), notes ?? null]
     );
     insertId = rows[0]?.id;
@@ -68640,6 +68640,10 @@ async function seedData() {
     credCount++;
   }
   if (credCount > 0) logger.info({ count: credCount }, "Club portal credentials seeded");
+  await ddl("DROP INDEX IF EXISTS uq_pts_general");
+  await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general
+    ON portal_tee_slots (club_id, date, tee_time, tee_start_type)
+    WHERE event_id IS NULL`);
 }
 async function reconcileSlotPlayerCounts() {
   await exec(

@@ -43,12 +43,12 @@ function dateInSeason(dateStr: string, seasonStart: string, seasonEnd: string): 
 }
 
 const TEE_START_MAP: Record<string, string> = {
-  first_tee:  "1st Tee",
-  tenth_tee:  "10th Tee",
-  two_tee:    "Two-Tee Start",
-  "1st Tee":  "1st Tee",
-  "10th Tee": "10th Tee",
-  "Two-Tee Start": "Two-Tee Start",
+  first_tee:        "1st Tee",
+  tenth_tee:        "10th Tee",
+  two_tee:          "Two-Tee Start",
+  "1st Tee":        "1st Tee",
+  "10th Tee":       "10th Tee",
+  "Two-Tee Start":  "Two-Tee Start",
 };
 function normTeeStart(v: string | undefined | null): string {
   return TEE_START_MAP[v ?? ""] ?? "1st Tee";

@@ -36,7 +36,7 @@ interface EventDetail {
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
-  rounds: number;
+  rounds: number; holes: number;
   user_registration: UserRegistration | null;
   user_eligible: boolean | null;
   user_division_preview: string | null;
@@ -390,7 +390,7 @@ export default function EventDetailScreen() {
                   </Text>
                   <TouchableOpacity
                     style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => router.push({ pathname: "/club/[id]", params: { id: event.club_id, date: String(event.event_date).slice(0, 10) } })}
+                    onPress={() => router.push({ pathname: "/club/[id]", params: { id: event.club_id, date: String(event.event_date).slice(0, 10), event_holes: String(event.holes ?? 18) } })}
                   >
                     <Text style={styles.primaryBtnText}>Book Your Spot</Text>
                   </TouchableOpacity>

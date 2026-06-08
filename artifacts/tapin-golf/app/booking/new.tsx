@@ -86,6 +86,7 @@ export default function NewBookingScreen() {
     cart_price?: string;
     event_id?: string;
     event_name?: string;
+    event_holes?: string;
   }>();
 
   const maxPlayers      = Math.min(parseInt(params.available ?? "4"), 4);
@@ -135,7 +136,8 @@ export default function NewBookingScreen() {
   }, [isJunior, isStudent, user?.date_of_birth]);
 
   // ── Holes selection ─────────────────────────────────────────────────────────
-  const [holes, setHoles] = useState<9 | 18>(18);
+  const eventHolesLock = params.event_holes === "9" ? 9 : params.event_holes === "18" ? 18 : null;
+  const [holes, setHoles] = useState<9 | 18>(eventHolesLock ?? 18);
 
   // ── HNA membership number (must be declared before effectivePrice refs below) ─
   const [hnaNumber, setHnaNumber]       = useState(user?.hna_number && user.hna_number !== "null" ? user.hna_number : "");
@@ -518,30 +520,40 @@ export default function NewBookingScreen() {
             )}
           </View>
 
-          {/* Holes selection — only when all spots available and 9-hole price is set */}
-          {has9 && allAvailable && (
+          {/* Holes selection — shown when 9-hole price is set, or when an event locks the holes */}
+          {(has9 || eventHolesLock) && allAvailable && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Number of Holes</Text>
               <View style={styles.ballRow}>
-                {([9, 18] as const).map((h) => (
-                  <TouchableOpacity
-                    key={h}
-                    onPress={() => { Haptics.selectionAsync(); setHoles(h); setAppliedVoucher(null); setVoucherError(null); }}
-                    style={[
-                      styles.ballBtn,
-                      { flex: 1,
-                        backgroundColor: holes === h ? colors.primary : colors.card,
-                        borderColor:     holes === h ? colors.primary : colors.border,
-                      },
-                    ]}
-                    activeOpacity={0.8}
-                  >
-                    <Text style={[styles.ballNum, { color: holes === h ? "#fff" : colors.foreground }]}>{h}</Text>
-                    <Text style={[styles.ballLabel, { color: holes === h ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
-                      {h === 9 ? (price9Raw! > 0 ? `R${price9Raw!.toFixed(0)}/p` : "Tier") : (price18 > 0 ? `R${price18.toFixed(0)}/p` : "Tier")}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                {([9, 18] as const).map((h) => {
+                  const locked = eventHolesLock !== null && h !== eventHolesLock;
+                  return (
+                    <TouchableOpacity
+                      key={h}
+                      onPress={() => {
+                        if (locked) return;
+                        Haptics.selectionAsync();
+                        setHoles(h);
+                        setAppliedVoucher(null);
+                        setVoucherError(null);
+                      }}
+                      style={[
+                        styles.ballBtn,
+                        { flex: 1,
+                          backgroundColor: holes === h ? colors.primary : colors.card,
+                          borderColor:     holes === h ? colors.primary : colors.border,
+                          opacity: locked ? 0.35 : 1,
+                        },
+                      ]}
+                      activeOpacity={locked ? 1 : 0.8}
+                    >
+                      <Text style={[styles.ballNum, { color: holes === h ? "#fff" : colors.foreground }]}>{h}</Text>
+                      <Text style={[styles.ballLabel, { color: holes === h ? "rgba(255,255,255,0.8)" : colors.mutedForeground }]}>
+                        {locked ? "N/A" : h === 9 ? (price9Raw! > 0 ? `R${price9Raw!.toFixed(0)}/p` : "Tier") : (price18 > 0 ? `R${price18.toFixed(0)}/p` : "Tier")}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </>
           )}

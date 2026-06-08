@@ -95,7 +95,7 @@ export default function ClubDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { id, date: dateParam } = useLocalSearchParams<{ id: string; date?: string }>();
+  const { id, date: dateParam, event_holes: eventHolesParam } = useLocalSearchParams<{ id: string; date?: string; event_holes?: string }>();
 
   const DAYS = useMemo(() => buildDays(), []);
 
@@ -492,6 +492,7 @@ export default function ClubDetailScreen() {
                   cart_price:      club.cart_price ? String(club.cart_price) : "",
                   event_id:        selectedSlot.event_id ? String(selectedSlot.event_id) : "",
                   event_name:      selectedSlot.event_name ?? "",
+                  event_holes:     eventHolesParam ?? "",
                 },
               });
             }}

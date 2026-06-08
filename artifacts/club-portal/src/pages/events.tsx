@@ -41,7 +41,7 @@ interface GolfEvent {
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
-  rounds: number;
+  rounds: number; holes: number;
   total_registrations: number; approved_count: number; pending_count: number;
 }
 
@@ -181,6 +181,7 @@ const EMPTY_FORM = {
   format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", image_url: "", restriction: "open",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
+  holes: 18 as 9 | 18,
   ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
   use_divisions: true,
@@ -483,6 +484,7 @@ export default function Events() {
         const rpd = Math.round((ev.rounds ?? 1) / days);
         return (rpd >= 2 ? 2 : 1) as 1 | 2;
       })(),
+      holes: (ev.holes === 9 ? 9 : 18) as 9 | 18,
       ballot: !!ev.ballot, scoring_enabled: !!ev.scoring_enabled,
       payment_required: !!ev.payment_required,
       entries_required: ev.entries_required !== 0,
@@ -1235,6 +1237,26 @@ export default function Events() {
                 <Label>End Date (multi-day)</Label>
                 <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
               </div>
+              <div className="space-y-1.5">
+                <Label>Holes</Label>
+                <div className="flex gap-2">
+                  {([9, 18] as const).map(h => (
+                    <button
+                      key={h}
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, holes: h }))}
+                      className={`flex-1 py-2 rounded-md border text-sm font-semibold transition-colors ${
+                        form.holes === h
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-background text-foreground border-border hover:border-primary/50"
+                      }`}
+                    >
+                      {h} holes
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <div className="space-y-1.5 col-span-2">
                 <Label>Rounds per Day</Label>
                 <div className="flex items-center gap-3">

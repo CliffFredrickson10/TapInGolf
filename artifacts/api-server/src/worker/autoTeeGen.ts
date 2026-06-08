@@ -42,7 +42,19 @@ function dateInSeason(dateStr: string, seasonStart: string, seasonEnd: string): 
   return mmdd >= seasonStart || mmdd <= seasonEnd;
 }
 
-type SlotEntry = { time: string; tee_start_type: string; crossover_enabled: boolean; session_type: string };
+const TEE_START_MAP: Record<string, string> = {
+  first_tee:  "1st Tee",
+  tenth_tee:  "10th Tee",
+  two_tee:    "Two-Tee Start",
+  "1st Tee":  "1st Tee",
+  "10th Tee": "10th Tee",
+  "Two-Tee Start": "Two-Tee Start",
+};
+function normTeeStart(v: string | undefined | null): string {
+  return TEE_START_MAP[v ?? ""] ?? "1st Tee";
+}
+
+type SlotEntry = { time: string; tee_start_type: string; session_type: string };
 
 function buildSlotsForDay(configType: string, configData: any): SlotEntry[] {
   const slots: SlotEntry[] = [];
@@ -52,11 +64,11 @@ function buildSlotsForDay(configType: string, configData: any): SlotEntry[] {
     const times = generateBlockTimes(b.start, b.end, b.interval);
     if (b.tee_start_type === "two_tee") {
       times.forEach(t => {
-        slots.push({ time: t, tee_start_type: "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
-        slots.push({ time: t, tee_start_type: "tenth_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "1st Tee",  session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "10th Tee", session_type: sessionType });
       });
     } else {
-      times.forEach(t => slots.push({ time: t, tee_start_type: b.tee_start_type ?? "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType }));
+      times.forEach(t => slots.push({ time: t, tee_start_type: normTeeStart(b.tee_start_type), session_type: sessionType }));
     }
   };
 
@@ -109,8 +121,8 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
     for (const s of slotTemplate) {
       try {
         const inserted = await run(
-          "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
-          [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type, s.crossover_enabled ? 1 : 0]
+          "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING",
+          [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type]
         );
         if (inserted > 0) newForDay++;
       } catch {

@@ -52460,6 +52460,9 @@ function dateInSeason(dateStr, seasonStart, seasonEnd) {
   }
   return mmdd >= seasonStart || mmdd <= seasonEnd;
 }
+function normTeeStart(v) {
+  return TEE_START_MAP[v ?? ""] ?? "1st Tee";
+}
 function buildSlotsForDay(configType, configData) {
   const slots = [];
   const addBlock = (b, sessionType) => {
@@ -52467,11 +52470,11 @@ function buildSlotsForDay(configType, configData) {
     const times = generateBlockTimes(b.start, b.end, b.interval);
     if (b.tee_start_type === "two_tee") {
       times.forEach((t) => {
-        slots.push({ time: t, tee_start_type: "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
-        slots.push({ time: t, tee_start_type: "tenth_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "1st Tee", session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "10th Tee", session_type: sessionType });
       });
     } else {
-      times.forEach((t) => slots.push({ time: t, tee_start_type: b.tee_start_type ?? "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType }));
+      times.forEach((t) => slots.push({ time: t, tee_start_type: normTeeStart(b.tee_start_type), session_type: sessionType }));
     }
   };
   if (configType === "A") {
@@ -52511,8 +52514,8 @@ async function runAutoRuleNow(rule) {
     for (const s of slotTemplate) {
       try {
         const inserted = await run(
-          "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
-          [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type, s.crossover_enabled ? 1 : 0]
+          "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING",
+          [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type]
         );
         if (inserted > 0) newForDay++;
       } catch {
@@ -52550,13 +52553,21 @@ function startAutoTeeGenWorker() {
     runAllActiveRules().catch((err) => logger.warn({ err }, "Auto tee-gen: interval run error"));
   }, POLL_INTERVAL_MS);
 }
-var POLL_INTERVAL_MS;
+var POLL_INTERVAL_MS, TEE_START_MAP;
 var init_autoTeeGen = __esm({
   "src/worker/autoTeeGen.ts"() {
     "use strict";
     init_pg();
     init_logger();
     POLL_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+    TEE_START_MAP = {
+      first_tee: "1st Tee",
+      tenth_tee: "10th Tee",
+      two_tee: "Two-Tee Start",
+      "1st Tee": "1st Tee",
+      "10th Tee": "10th Tee",
+      "Two-Tee Start": "Two-Tee Start"
+    };
   }
 });
 
@@ -63114,14 +63125,14 @@ async function signObjectURL({
 // src/routes/portal.ts
 init_logger();
 init_notifications();
-var TEE_START_MAP = {
+var TEE_START_MAP2 = {
   first_tee: "1st Tee",
   tenth_tee: "10th Tee",
   two_tee: "Two-Tee Start"
 };
-function normTeeStart(raw) {
+function normTeeStart2(raw) {
   if (!raw) return "1st Tee";
-  return TEE_START_MAP[raw] ?? raw;
+  return TEE_START_MAP2[raw] ?? raw;
 }
 var upload = (0, import_multer.default)({
   storage: import_multer.default.memoryStorage(),
@@ -63630,7 +63641,7 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
   if (evId) {
     const rows = await query(
       "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
-      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null, evId]
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart2(tee_start_type), notes ?? null, evId]
     );
     insertId = rows[0]?.id;
     const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
@@ -63638,7 +63649,7 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
   } else {
     const rows = await query(
       "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time) WHERE event_id IS NULL DO NOTHING RETURNING id",
-      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null]
+      [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart2(tee_start_type), notes ?? null]
     );
     insertId = rows[0]?.id;
   }
@@ -63694,7 +63705,7 @@ router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
     return;
   }
   const { date, time, total_slots, active, session_type, tee_start_type, notes, blocked_slots } = req.body ?? {};
-  const normStart = tee_start_type != null ? normTeeStart(tee_start_type) : null;
+  const normStart = tee_start_type != null ? normTeeStart2(tee_start_type) : null;
   const blockedJson = blocked_slots !== void 0 ? JSON.stringify(blocked_slots) : null;
   await exec(
     `UPDATE portal_tee_slots SET
@@ -63752,7 +63763,7 @@ router14.put("/portal/events/:eventId/tee-times/:id", requireClubAuth2, async (r
     return;
   }
   const { time, total_slots, active, tee_start_type } = req.body ?? {};
-  const normStart = tee_start_type != null ? normTeeStart(tee_start_type) : null;
+  const normStart = tee_start_type != null ? normTeeStart2(tee_start_type) : null;
   await exec(
     `UPDATE portal_tee_slots SET
       tee_time    = COALESCE(?, tee_time),

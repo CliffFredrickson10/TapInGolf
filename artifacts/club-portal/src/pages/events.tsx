@@ -1437,7 +1437,7 @@ export default function Events() {
                             </Button>
                             <Button size="sm" variant={genMode === "seeded" ? "default" : "outline"}
                               className={genMode === "seeded" ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
-                              onClick={() => setGenMode("seeded")}>
+                              onClick={() => { setGenMode("seeded"); if (drawRound <= 1) setGenMetric("handicap"); }}>
                               <Trophy className="h-3.5 w-3.5 mr-1.5" />Seeded Draw
                             </Button>
                           </div>
@@ -1461,29 +1461,44 @@ export default function Events() {
                         {genMode === "seeded" && (
                           <>
                             <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Seed Metric <span className="text-[10px]">(best score = last group)</span></Label>
-                              <div className="flex gap-2">
-                                {(["points", "gross", "net"] as const).map(m => (
-                                  <Button key={m} size="sm" variant={genMetric === m ? "default" : "outline"}
-                                    className={genMetric === m ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
-                                    onClick={() => setGenMetric(m)}>
-                                    {m === "points" ? "Stableford Pts" : m === "gross" ? "Gross Score" : "Nett Score"}
+                              <Label className="text-xs text-muted-foreground mb-1.5 block">Seed Metric <span className="text-[10px]">(best = last group)</span></Label>
+                              <div className="flex gap-2 flex-wrap">
+                                {([
+                                  { value: "handicap", label: "Handicap" },
+                                  { value: "points",   label: "Stableford Pts" },
+                                  { value: "gross",    label: "Gross Score" },
+                                  { value: "net",      label: "Nett Score" },
+                                ] as const).map(({ value, label }) => (
+                                  <Button key={value} size="sm"
+                                    variant={genMetric === value ? "default" : "outline"}
+                                    className={genMetric === value ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
+                                    onClick={() => setGenMetric(value)}>
+                                    {label}
                                   </Button>
                                 ))}
                               </div>
+                              {genMetric === "handicap" && (
+                                <p className="text-[11px] text-muted-foreground mt-1">Highest handicap (weakest) → first groups. Scratch/plus → last group.</p>
+                              )}
                             </div>
-                            <div>
-                              <Label className="text-xs text-muted-foreground mb-1.5 block">Use Scores from Round</Label>
-                              <Select value={String(genSeedRound)} onValueChange={v => setGenSeedRound(Number(v))}>
-                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-                                <SelectContent>
-                                  {Array.from({ length: Math.max(1, drawRound - 1) }, (_, i) => (
-                                    <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <p className="text-[11px] text-muted-foreground mt-1">Players without a score are placed in the first groups.</p>
-                            </div>
+                            {genMetric !== "handicap" && (
+                              <div>
+                                <Label className="text-xs text-muted-foreground mb-1.5 block">Use Scores from Round</Label>
+                                <Select value={String(genSeedRound)} onValueChange={v => setGenSeedRound(Number(v))}>
+                                  <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {Array.from({ length: Math.max(1, drawRound - 1) }, (_, i) => (
+                                      <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                                {drawRound <= 1 ? (
+                                  <p className="text-[11px] text-amber-600 mt-1">No previous round scores yet — switch to Handicap or Random.</p>
+                                ) : (
+                                  <p className="text-[11px] text-muted-foreground mt-1">Players without a score are placed in the first groups.</p>
+                                )}
+                              </div>
+                            )}
                           </>
                         )}
 
@@ -1503,13 +1518,10 @@ export default function Events() {
                           <Button
                             className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]"
                             onClick={handleGenerateDraw}
-                            disabled={generating || (genMode === "seeded" && drawRound <= 1)}>
+                            disabled={generating || (genMode === "seeded" && genMetric !== "handicap" && drawRound <= 1)}>
                             {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating…</> : genAllRounds ? `Generate & Publish All ${detail.rounds} Rounds` : "Generate"}
                           </Button>
                         </div>
-                        {genMode === "seeded" && drawRound <= 1 && (
-                          <p className="text-xs text-amber-600 text-center -mt-2">Seeded draw requires scores from a previous round.</p>
-                        )}
                       </div>
                     </DialogContent>
                   </Dialog>

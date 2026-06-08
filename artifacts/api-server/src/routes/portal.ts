@@ -1424,30 +1424,40 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
   let players = [...approved];
 
   if (mode === "seeded") {
-    const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
-    const prevScores = await query<any>(
-      "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
-      [evId, sr]
-    );
-    const scoreMap = new Map(prevScores.map((s: any) => [Number(s.user_id), s]));
+    if (seed_metric === "handicap") {
+      // Seed by frozen handicap: highest handicap (weakest) first, scratch/plus (best) last group.
+      // Players with no handicap go first.
+      players.sort((a, b) => {
+        const ha = a.frozen_handicap ?? 999;
+        const hb = b.frozen_handicap ?? 999;
+        return hb - ha; // descending — highest hcp first
+      });
+    } else {
+      const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
+      const prevScores = await query<any>(
+        "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
+        [evId, sr]
+      );
+      const scoreMap = new Map(prevScores.map((s: any) => [Number(s.user_id), s]));
 
-    // Sort: players with no score go first (arbitrary), then worst→best so best score = last group.
-    // Gross/Net: lower = better, so sort descending (high = worst = first).
-    // Points:    higher = better, so sort ascending  (low  = worst = first).
-    players.sort((a, b) => {
-      const sa = scoreMap.get(a.user_id);
-      const sb = scoreMap.get(b.user_id);
-      if (!sa && !sb) return 0;
-      if (!sa) return -1;
-      if (!sb) return 1;
-      if (seed_metric === "points") {
-        return (sa.points ?? 0) - (sb.points ?? 0);
-      } else if (seed_metric === "gross") {
-        return (sb.gross ?? 999) - (sa.gross ?? 999);
-      } else {
-        return (sb.net ?? 999) - (sa.net ?? 999);
-      }
-    });
+      // Sort: players with no score go first, then worst→best so best score = last group.
+      // Gross/Net: lower = better, so sort descending (high = worst = first).
+      // Points:    higher = better, so sort ascending  (low  = worst = first).
+      players.sort((a, b) => {
+        const sa = scoreMap.get(a.user_id);
+        const sb = scoreMap.get(b.user_id);
+        if (!sa && !sb) return 0;
+        if (!sa) return -1;
+        if (!sb) return 1;
+        if (seed_metric === "points") {
+          return (sa.points ?? 0) - (sb.points ?? 0);
+        } else if (seed_metric === "gross") {
+          return (sb.gross ?? 999) - (sa.gross ?? 999);
+        } else {
+          return (sb.net ?? 999) - (sa.net ?? 999);
+        }
+      });
+    }
   } else {
     // Fisher-Yates shuffle
     for (let i = players.length - 1; i > 0; i--) {

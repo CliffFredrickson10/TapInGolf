@@ -64712,6 +64712,116 @@ router14.put("/portal/events/:id/registrations/:userId", requireClubAuth2, async
   }
   res.json({ success: true });
 });
+router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const {
+    round = 1,
+    date: reqDate,
+    mode = "random",
+    players_per_group = 4,
+    seed_metric = "points",
+    seed_round
+  } = req.body ?? {};
+  const event = await row(
+    "SELECT id, event_date, end_date, rounds FROM golf_events WHERE id = ? AND club_id = ?",
+    [evId, club.id]
+  );
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const teeDate = reqDate ? String(reqDate).slice(0, 10) : String(event.event_date).slice(0, 10);
+  const slots = await query(
+    "SELECT id, tee_time, tee_start_type, max_players FROM portal_tee_slots WHERE event_id = ? AND date = ? AND is_active = 1 ORDER BY tee_time",
+    [evId, teeDate]
+  );
+  const approved = await query(
+    `SELECT er.user_id, u.name AS user_name, er.division, er.frozen_handicap
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved'
+     ORDER BY u.name`,
+    [evId]
+  );
+  let players = [...approved];
+  if (mode === "seeded") {
+    if (seed_metric === "handicap") {
+      players.sort((a, b) => {
+        const ha = a.frozen_handicap ?? 999;
+        const hb = b.frozen_handicap ?? 999;
+        return hb - ha;
+      });
+    } else {
+      const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
+      const prevScores = await query(
+        "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
+        [evId, sr]
+      );
+      const scoreMap = new Map(prevScores.map((s) => [Number(s.user_id), s]));
+      players.sort((a, b) => {
+        const sa = scoreMap.get(a.user_id);
+        const sb = scoreMap.get(b.user_id);
+        if (!sa && !sb) return 0;
+        if (!sa) return -1;
+        if (!sb) return 1;
+        if (seed_metric === "points") {
+          return (sa.points ?? 0) - (sb.points ?? 0);
+        } else if (seed_metric === "gross") {
+          return (sb.gross ?? 999) - (sa.gross ?? 999);
+        } else {
+          return (sb.net ?? 999) - (sa.net ?? 999);
+        }
+      });
+    }
+  } else {
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+  }
+  const pgSize = Math.max(1, Math.min(4, Number(players_per_group)));
+  const entries = [];
+  let playerIdx = 0;
+  let groupNum = 1;
+  const assignGroup = (teeTime, startingTee) => {
+    const count = Math.min(pgSize, players.length - playerIdx);
+    for (let i = 0; i < count; i++) {
+      const p = players[playerIdx++];
+      entries.push({
+        id: Date.now() + entries.length,
+        round: Number(round),
+        tee_date: teeDate,
+        tee_time: teeTime,
+        draw_group: groupNum,
+        starting_tee: startingTee,
+        user_id: p.user_id,
+        user_name: p.user_name,
+        division: p.division,
+        frozen_handicap: p.frozen_handicap,
+        notes: null
+      });
+    }
+    groupNum++;
+  };
+  if (slots.length > 0) {
+    for (const slot of slots) {
+      if (playerIdx >= players.length) break;
+      const teeTime = String(slot.tee_time).slice(0, 5);
+      const startingTee = slot.tee_start_type === "10th Tee" || slot.tee_start_type === "tenth_tee" ? 10 : 1;
+      assignGroup(teeTime, startingTee);
+    }
+    if (playerIdx < players.length) {
+      const last = slots[slots.length - 1];
+      const teeTime = String(last.tee_time).slice(0, 5);
+      const startingTee = last.tee_start_type === "10th Tee" || last.tee_start_type === "tenth_tee" ? 10 : 1;
+      while (playerIdx < players.length) assignGroup(teeTime, startingTee);
+    }
+  } else {
+    while (playerIdx < players.length) assignGroup("08:00", 1);
+  }
+  res.json({ entries });
+});
 router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);

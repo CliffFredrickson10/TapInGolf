@@ -74,12 +74,12 @@ function buildSlotsForDay(configType: string, configData: any): SlotEntry[] {
 
 // ── Run a single rule ─────────────────────────────────────────────────────────
 
-export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: number; slotsCreated: number }> {
+export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: number; slotsCreated: number; no_config?: boolean }> {
   const { club_id, season_start, season_end, lookahead_days, players_per_slot, config_type } = rule;
   const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : (rule.config_data ?? {});
   const slotTemplate = buildSlotsForDay(config_type, configData);
 
-  if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0 };
+  if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0, no_config: true };
 
   // Build list of dates in the lookahead window that fall within the season
   const dates: string[] = [];

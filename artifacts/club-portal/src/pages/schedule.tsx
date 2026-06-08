@@ -1274,9 +1274,17 @@ export default function Schedule() {
   const handleRunNow = async (rule: AutoRule) => {
     setRuleRunning(rule.id);
     try {
-      const result = await api<{ dates_processed: number; slots_created: number }>(`/api/portal/tee-auto-rules/${rule.id}/run-now`, { method: "POST" });
+      const result = await api<{ dates_processed: number; slots_created: number; no_config: boolean }>(`/api/portal/tee-auto-rules/${rule.id}/run-now`, { method: "POST" });
       setAutoRules(prev => prev.map(r => r.id === rule.id ? { ...r, last_run_at: new Date().toISOString() } : r));
-      toast({ title: "Rule executed", description: result.slots_created > 0 ? `Generated ${result.slots_created} slots across ${result.dates_processed} date${result.dates_processed !== 1 ? "s" : ""}.` : "No new dates needed generation — all dates already have tee times." });
+      toast({
+        title: "Rule executed",
+        description: result.no_config
+          ? "No time config set on this rule — edit the rule and load a saved schedule template first."
+          : result.slots_created > 0
+            ? `Generated ${result.slots_created} slots across ${result.dates_processed} date${result.dates_processed !== 1 ? "s" : ""}.`
+            : "No new slots needed — all dates in the lookahead window already have tee times.",
+        variant: result.no_config ? "destructive" : "default",
+      });
       if (result.slots_created > 0) load();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setRuleRunning(null); }
@@ -1917,7 +1925,7 @@ export default function Schedule() {
               </div>
             ) : (
               <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
-                No time config selected — choose a saved template above, or the rule will use your default Generate Schedule settings when first run.
+                No time config loaded — you must choose a saved schedule template above before the rule can generate tee times.
               </div>
             )}
 

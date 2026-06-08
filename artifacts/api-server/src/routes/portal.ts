@@ -2067,9 +2067,9 @@ router.post("/portal/tee-auto-rules/:id/run-now", requireClubAuth, async (req: R
   const rule = await row<any>("SELECT * FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
   if (!rule) { res.status(404).json({ message: "Rule not found" }); return; }
   const { runAutoRuleNow } = await import("../worker/autoTeeGen");
-  const { datesProcessed, slotsCreated } = await runAutoRuleNow(rule);
-  await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
-  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated });
+  const { datesProcessed, slotsCreated, no_config } = await runAutoRuleNow(rule);
+  if (!no_config) await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
+  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated, no_config: no_config ?? false });
 });
 
 // ── Tournament Templates ───────────────────────────────────────────────────────

@@ -1219,7 +1219,7 @@ router.get("/portal/events/:id/tee-slots", requireClubAuth, async (req: Request,
   const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
   const slots = await query<any>(
-    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type
+    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type
      FROM portal_tee_slots
      WHERE event_id = ? AND club_id = ?
      ORDER BY date, tee_time`,

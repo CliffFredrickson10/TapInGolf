@@ -70,6 +70,20 @@ interface Score {
 interface TeeSlot {
   id: number; date: string; time: string;
   total_slots: number; active: boolean;
+  tee_start_type?: string;
+}
+
+function startingHoleFromSlots(slots: TeeSlot[], teeDate: string, teeTime: string): number {
+  // Match the tee slot by date+time to derive the starting hole
+  const dateStr = String(teeDate).slice(0, 10);
+  const timeStr = String(teeTime).slice(0, 5);
+  const match = slots.find(s =>
+    String(s.date).slice(0, 10) === dateStr &&
+    String(s.time).slice(0, 5) === timeStr
+  );
+  const tst = match?.tee_start_type ?? slots[0]?.tee_start_type ?? "1st Tee";
+  if (tst === "10th Tee" || tst === "tenth_tee") return 10;
+  return 1;
 }
 
 interface ConflictBooking {
@@ -657,7 +671,7 @@ export default function Events() {
     const today = detail?.event_date ?? new Date().toISOString().split("T")[0];
     setDraw(prev => [...prev, {
       id: Date.now(), round: drawRound, tee_date: today,
-      tee_time: "08:00", draw_group: lastGroup + 1, starting_tee: 1,
+      tee_time: "08:00", draw_group: lastGroup + 1, starting_tee: startingHoleFromSlots(detailTeeSlots, today, "08:00"),
       user_id: player.user_id, user_name: player.user_name,
       division: player.division, frozen_handicap: player.frozen_handicap, notes: null,
     }]);
@@ -1001,7 +1015,11 @@ export default function Events() {
                                 <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                                 <Input
                                   type="time" value={d.tee_time} className="h-7 text-xs"
-                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? { ...x, tee_time: e.target.value } : x))}
+                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? {
+                                    ...x,
+                                    tee_time: e.target.value,
+                                    starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value),
+                                  } : x))}
                                 />
                               </div>
                               <div className="flex items-center gap-1.5">

@@ -901,6 +901,8 @@ async function createSchema(): Promise<void> {
     )
   `);
   await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS starting_tee INT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS seed_metric VARCHAR(10) NULL");
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS seed_value  DECIMAL(7,2) NULL");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
 

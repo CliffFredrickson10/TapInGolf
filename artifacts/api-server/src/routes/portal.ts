@@ -1525,6 +1525,9 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
 
   let players = [...approved];
 
+  // seedValueMap: user_id → { value, metric } for display in the draw
+  const seedValueMap = new Map<number, { value: number | null; metric: string }>();
+
   if (mode === "seeded") {
     if (seed_metric === "handicap") {
       // Seed by frozen handicap: highest handicap (weakest) first, scratch/plus (best) last group.
@@ -1534,6 +1537,9 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
         const hb = b.frozen_handicap ?? 999;
         return hb - ha; // descending — highest hcp first
       });
+      for (const p of players) {
+        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+      }
     } else {
       const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
       const prevScores = await query<any>(
@@ -1559,6 +1565,11 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
           return (sb.net ?? 999) - (sa.net ?? 999);
         }
       });
+      for (const p of players) {
+        const s = scoreMap.get(p.user_id);
+        const val = s ? (seed_metric === "points" ? s.points : seed_metric === "gross" ? s.gross : s.net) : null;
+        seedValueMap.set(p.user_id, { value: val ?? null, metric: seed_metric });
+      }
     }
   } else {
     // Fisher-Yates shuffle
@@ -1577,6 +1588,7 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     const count = Math.min(pgSize, players.length - playerIdx);
     for (let i = 0; i < count; i++) {
       const p = players[playerIdx++]!;
+      const seed = seedValueMap.get(p.user_id);
       entries.push({
         id: Date.now() + entries.length,
         round: Number(round),
@@ -1588,6 +1600,8 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
         user_name: p.user_name,
         division: p.division,
         frozen_handicap: p.frozen_handicap,
+        seed_metric: seed?.metric ?? null,
+        seed_value: seed?.value ?? null,
         notes: null,
       });
     }
@@ -1624,6 +1638,7 @@ router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
   const draws = await query<any>(
     `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee, d.notes,
+            d.seed_metric, d.seed_value,
             u.id as user_id, u.name as user_name, u.email as user_email,
             r.division, r.frozen_handicap
      FROM event_draws d
@@ -1633,7 +1648,10 @@ router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
      ORDER BY d.draw_group ASC, d.tee_time ASC`,
     [evId, round]
   );
-  res.json(draws);
+  res.json(draws.map((d: any) => ({
+    ...d,
+    seed_value: d.seed_value != null ? parseFloat(d.seed_value) : null,
+  })));
 });
 
 router.put("/portal/events/:id/draw", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
@@ -1651,8 +1669,8 @@ router.put("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
   for (const entry of entries) {
     if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
     await exec(
-      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null]
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes, seed_metric, seed_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null, entry.seed_metric ?? null, entry.seed_value ?? null]
     );
     drawUserIds.push(Number(entry.user_id));
   }

@@ -64889,6 +64889,7 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     [evId]
   );
   let players = [...approved];
+  const seedValueMap = /* @__PURE__ */ new Map();
   if (mode === "seeded") {
     if (seed_metric === "handicap") {
       players.sort((a, b) => {
@@ -64896,6 +64897,9 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
         const hb = b.frozen_handicap ?? 999;
         return hb - ha;
       });
+      for (const p of players) {
+        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+      }
     } else {
       const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
       const prevScores = await query(
@@ -64917,6 +64921,11 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
           return (sb.net ?? 999) - (sa.net ?? 999);
         }
       });
+      for (const p of players) {
+        const s = scoreMap.get(p.user_id);
+        const val = s ? seed_metric === "points" ? s.points : seed_metric === "gross" ? s.gross : s.net : null;
+        seedValueMap.set(p.user_id, { value: val ?? null, metric: seed_metric });
+      }
     }
   } else {
     for (let i = players.length - 1; i > 0; i--) {
@@ -64932,6 +64941,7 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     const count = Math.min(pgSize, players.length - playerIdx);
     for (let i = 0; i < count; i++) {
       const p = players[playerIdx++];
+      const seed = seedValueMap.get(p.user_id);
       entries.push({
         id: Date.now() + entries.length,
         round: Number(round),
@@ -64943,6 +64953,8 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
         user_name: p.user_name,
         division: p.division,
         frozen_handicap: p.frozen_handicap,
+        seed_metric: seed?.metric ?? null,
+        seed_value: seed?.value ?? null,
         notes: null
       });
     }
@@ -64977,6 +64989,7 @@ router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   }
   const draws = await query(
     `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee, d.notes,
+            d.seed_metric, d.seed_value,
             u.id as user_id, u.name as user_name, u.email as user_email,
             r.division, r.frozen_handicap
      FROM event_draws d
@@ -64986,7 +64999,10 @@ router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
      ORDER BY d.draw_group ASC, d.tee_time ASC`,
     [evId, round]
   );
-  res.json(draws);
+  res.json(draws.map((d) => ({
+    ...d,
+    seed_value: d.seed_value != null ? parseFloat(d.seed_value) : null
+  })));
 });
 router14.put("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -65005,8 +65021,8 @@ router14.put("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   for (const entry of entries) {
     if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
     await exec(
-      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null]
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes, seed_metric, seed_value) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null, entry.seed_metric ?? null, entry.seed_value ?? null]
     );
     drawUserIds.push(Number(entry.user_id));
   }
@@ -68581,6 +68597,8 @@ async function createSchema() {
     )
   `);
   await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS starting_tee INT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS seed_metric VARCHAR(10) NULL");
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS seed_value  DECIMAL(7,2) NULL");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
   await ddl(`

@@ -58,6 +58,7 @@ interface DrawEntry {
   id: number; round: number; tee_date: string; tee_time: string;
   draw_group: number; starting_tee: number; user_id: number; user_name: string;
   division: string | null; frozen_handicap: number | null; notes: string | null;
+  seed_metric: string | null; seed_value: number | null;
 }
 
 interface Score {
@@ -909,6 +910,7 @@ export default function Events() {
       tee_time: "08:00", draw_group: lastGroup + idx + 1, starting_tee: 1,
       user_id: p.user_id, user_name: p.user_name,
       division: p.division, frozen_handicap: p.frozen_handicap, notes: null,
+      seed_metric: null, seed_value: null,
     }));
     setDraw(prev => [...prev, ...newEntries]);
     toast({ title: `${eligible.length} players added to draw` });
@@ -974,6 +976,7 @@ export default function Events() {
       tee_time: "08:00", draw_group: lastGroup + 1, starting_tee: startingHoleFromSlots(detailTeeSlots, today, "08:00"),
       user_id: player.user_id, user_name: player.user_name,
       division: player.division, frozen_handicap: player.frozen_handicap, notes: null,
+      seed_metric: null, seed_value: null,
     }]);
   };
 
@@ -1457,9 +1460,14 @@ export default function Events() {
                                     return (
                                       <div key={d.id ?? d.user_id} className="flex items-center gap-2 py-1.5 text-sm">
                                         <span className="flex-1 font-medium">{d.user_name}</span>
-                                        <span className="text-xs text-muted-foreground">
+                                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
                                           {d.division ? `${d.division}` : "—"}
                                           {d.frozen_handicap != null ? ` · HCP ${d.frozen_handicap}` : ""}
+                                          {d.seed_metric && d.seed_value != null && d.seed_metric !== "handicap" && (
+                                            <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 font-mono text-[10px] leading-none ml-1">
+                                              {d.seed_metric === "points" ? `${d.seed_value} pts` : d.seed_metric === "gross" ? `${d.seed_value} gross` : `${d.seed_value} net`}
+                                            </span>
+                                          )}
                                         </span>
                                         {!readOnly && (
                                           <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive flex-shrink-0"

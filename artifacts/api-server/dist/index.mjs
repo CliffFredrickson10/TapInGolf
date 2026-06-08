@@ -58595,6 +58595,9 @@ router3.post("/events/:id/pay", async (req, res) => {
   } else {
     fee = parseFloat(ev.entry_fee ?? "0");
   }
+  const additionalFees = Array.isArray(ev.additional_fees) ? ev.additional_fees : typeof ev.additional_fees === "string" ? JSON.parse(ev.additional_fees || "[]") : [];
+  const additionalTotal = additionalFees.reduce((s, f) => s + (Number(f.amount) || 0), 0);
+  fee = fee + additionalTotal;
   if (payment_method === "voucher") {
     if (!voucher_code) {
       res.status(400).json({ message: "Voucher code required" });
@@ -68321,6 +68324,7 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS holes SMALLINT NOT NULL DEFAULT 18");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS additional_fees JSONB NOT NULL DEFAULT '[]'");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS use_tiered_pricing SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_wallet SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_prepaid SMALLINT NOT NULL DEFAULT 0");

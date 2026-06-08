@@ -986,6 +986,13 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
     fee = parseFloat(ev.entry_fee ?? "0");
   }
 
+  // ── Add any additional event fees (competition fee, two-club fee, etc.) ───
+  const additionalFees: { name: string; amount: number }[] = Array.isArray(ev.additional_fees)
+    ? ev.additional_fees
+    : (typeof ev.additional_fees === "string" ? JSON.parse(ev.additional_fees || "[]") : []);
+  const additionalTotal = additionalFees.reduce((s, f) => s + (Number(f.amount) || 0), 0);
+  fee = fee + additionalTotal;
+
   // ── Voucher ───────────────────────────────────────────────────────────────
   if (payment_method === "voucher") {
     if (!voucher_code) { res.status(400).json({ message: "Voucher code required" }); return; }

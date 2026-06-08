@@ -37,6 +37,7 @@ interface EventDetail {
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number; holes: number;
+  additional_fees: { name: string; amount: number }[] | null;
   user_registration: UserRegistration | null;
   user_eligible: boolean | null;
   user_division_preview: string | null;
@@ -327,13 +328,22 @@ export default function EventDetailScreen() {
                   {" · "}{event.approved_count} confirmed
                 </Text>
               </View>
-              {event.entry_fee != null && (
+              {(event.entry_fee != null || (event.additional_fees && event.additional_fees.length > 0)) && (
                 <View style={styles.metaRow}>
                   <Ionicons name="card-outline" size={15} color={colors.mutedForeground} />
-                  <Text style={[styles.metaText, { color: colors.foreground }]}>
-                    Entry fee: R{event.entry_fee.toFixed(2)}
-                    {event.payment_required ? " (payment required via app)" : ""}
-                  </Text>
+                  <View style={{ flex: 1 }}>
+                    {event.entry_fee != null && (
+                      <Text style={[styles.metaText, { color: colors.foreground }]}>
+                        {event.use_tiered_pricing ? "Greens fee (club rate applies)" : `Entry fee: R${event.entry_fee.toFixed(2)}`}
+                        {event.payment_required ? " · payment via app" : ""}
+                      </Text>
+                    )}
+                    {(event.additional_fees ?? []).map((f, i) => (
+                      <Text key={i} style={[styles.metaText, { color: colors.foreground }]}>
+                        {`+ ${f.name}: R${f.amount.toFixed(2)}`}
+                      </Text>
+                    ))}
+                  </View>
                 </View>
               )}
               {(event.entries_open || event.entries_close) && (

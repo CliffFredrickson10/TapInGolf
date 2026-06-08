@@ -42,6 +42,7 @@ interface GolfEvent {
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number; holes: number;
+  additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
 }
 
@@ -182,6 +183,7 @@ const EMPTY_FORM = {
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   holes: 18 as 9 | 18,
+  additional_fees: [] as { name: string; amount: number }[],
   ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
   use_divisions: true,
@@ -485,6 +487,7 @@ export default function Events() {
         return (rpd >= 2 ? 2 : 1) as 1 | 2;
       })(),
       holes: (ev.holes === 9 ? 9 : 18) as 9 | 18,
+      additional_fees: Array.isArray(ev.additional_fees) ? ev.additional_fees : [],
       ballot: !!ev.ballot, scoring_enabled: !!ev.scoring_enabled,
       payment_required: !!ev.payment_required,
       entries_required: ev.entries_required !== 0,
@@ -523,6 +526,7 @@ export default function Events() {
         entries_open:     form.entries_open || null,
         entries_close:    form.entries_close || null,
         entry_fee:        form.entry_fee === "" ? null : Number(form.entry_fee),
+        additional_fees:  (form.additional_fees ?? []).filter(f => f.name.trim() && f.amount > 0),
         max_participants: null,   // auto-computed server-side from tee slots
         rounds:           numDays * form.rounds_per_day,
         divisions:        form.use_divisions ? form.divisions : [],
@@ -1623,6 +1627,81 @@ export default function Events() {
                 </div>
               </div>
             </div>
+
+            {/* ── Additional Fees ──────────────────────────────────────────────────── */}
+            {form.payment_required && (
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <Label className="text-sm font-semibold">Additional Fees</Label>
+                    <p className="text-xs text-muted-foreground mt-0.5">Charged on top of greens fee / entry fee. Each golfer pays these.</p>
+                  </div>
+                  <Button
+                    type="button" variant="outline" size="sm"
+                    onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: "", amount: 0 }] }))}
+                  >
+                    + Add Fee
+                  </Button>
+                </div>
+
+                {/* Quick-add presets */}
+                {(form.additional_fees ?? []).length === 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {["Competition Fee", "Two-Club Fee", "Longest Drive Fee", "Nearest the Pin Fee", "Hole-in-One Pool"].map(preset => (
+                      <button
+                        key={preset} type="button"
+                        onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: preset, amount: 0 }] }))}
+                        className="px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {(form.additional_fees ?? []).map((fee, idx) => (
+                  <div key={idx} className="flex items-center gap-2">
+                    <Input
+                      className="flex-1"
+                      placeholder="Fee name (e.g. Competition Fee)"
+                      value={fee.name}
+                      onChange={e => setForm(f => {
+                        const fees = [...(f.additional_fees ?? [])];
+                        fees[idx] = { ...fees[idx], name: e.target.value };
+                        return { ...f, additional_fees: fees };
+                      })}
+                    />
+                    <div className="relative w-32">
+                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R</span>
+                      <Input
+                        type="number" min="0" step="0.01"
+                        className="pl-7"
+                        placeholder="0.00"
+                        value={fee.amount || ""}
+                        onChange={e => setForm(f => {
+                          const fees = [...(f.additional_fees ?? [])];
+                          fees[idx] = { ...fees[idx], amount: parseFloat(e.target.value) || 0 };
+                          return { ...f, additional_fees: fees };
+                        })}
+                      />
+                    </div>
+                    <Button
+                      type="button" variant="ghost" size="icon"
+                      className="text-muted-foreground hover:text-destructive flex-shrink-0"
+                      onClick={() => setForm(f => ({ ...f, additional_fees: (f.additional_fees ?? []).filter((_, i) => i !== idx) }))}
+                    >
+                      ×
+                    </Button>
+                  </div>
+                ))}
+
+                {(form.additional_fees ?? []).length > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Total additional: R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(2)} per golfer
+                  </p>
+                )}
+              </div>
+            )}
 
             {/* Toggles */}
             <Card className="bg-muted/30">

@@ -64249,7 +64249,6 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       `SELECT DISTINCT u.id, u.push_token
        FROM users u
        JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-       WHERE u.push_token IS NOT NULL
        LIMIT 500`,
       [club.id]
     );
@@ -64261,13 +64260,16 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
           return d;
         }
       };
-      sendPushNotifications(audience.map((u) => ({
-        to: u.push_token,
-        sound: "default",
-        title: `\u26F3 New Event \u2014 ${club.name}`,
-        body: `${String(name)} \xB7 ${fmtDate3(event_date)}. Tap to view & enter.`,
-        data: { type: "event_created", event_id: eventId, club_id: club.id }
-      })));
+      const pushAudience = audience.filter((u) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u) => ({
+          to: u.push_token,
+          sound: "default",
+          title: `\u26F3 New Event \u2014 ${club.name}`,
+          body: `${String(name)} \xB7 ${fmtDate3(event_date)}. Tap to view & enter.`,
+          data: { type: "event_created", event_id: eventId, club_id: club.id }
+        })));
+      }
       for (const u of audience) {
         saveUserNotification(
           u.id,
@@ -64486,24 +64488,25 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
     isInviteOnly ? `SELECT DISTINCT u.id, u.push_token
          FROM users u
          JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
-         WHERE u.push_token IS NOT NULL
          LIMIT 500` : `SELECT DISTINCT u.id, u.push_token
          FROM users u
          JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-         WHERE u.push_token IS NOT NULL
          LIMIT 500`,
     isInviteOnly ? [evId] : [club.id]
   );
   if (audience.length > 0) {
     const title = isInviteOnly ? `\u{1F4E9} You've been invited \u2014 ${club.name}` : `\u26F3 Tournament Now Open \u2014 ${club.name}`;
     const body = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`;
-    sendPushNotifications(audience.map((u) => ({
-      to: u.push_token,
-      sound: "default",
-      title,
-      body,
-      data: { type: "event_published", event_id: evId, club_id: club.id }
-    })));
+    const pushAudience = audience.filter((u) => u.push_token);
+    if (pushAudience.length > 0) {
+      sendPushNotifications(pushAudience.map((u) => ({
+        to: u.push_token,
+        sound: "default",
+        title,
+        body,
+        data: { type: "event_published", event_id: evId, club_id: club.id }
+      })));
+    }
     for (const u of audience) {
       saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
     }

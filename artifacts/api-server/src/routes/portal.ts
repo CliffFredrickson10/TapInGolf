@@ -849,7 +849,6 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
       `SELECT DISTINCT u.id, u.push_token
        FROM users u
        JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-       WHERE u.push_token IS NOT NULL
        LIMIT 500`,
       [club.id]
     );
@@ -858,12 +857,15 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
         try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
         catch { return d; }
       };
-      sendPushNotifications(audience.map((u: any) => ({
-        to: u.push_token, sound: "default",
-        title: `⛳ New Event — ${club.name}`,
-        body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
-        data:  { type: "event_created", event_id: eventId, club_id: club.id },
-      })));
+      const pushAudience = audience.filter((u: any) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u: any) => ({
+          to: u.push_token, sound: "default",
+          title: `⛳ New Event — ${club.name}`,
+          body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
+          data:  { type: "event_created", event_id: eventId, club_id: club.id },
+        })));
+      }
       for (const u of audience) {
         saveUserNotification(u.id, "event_created",
           `⛳ New Event — ${club.name}`,
@@ -975,12 +977,10 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
       ? `SELECT DISTINCT u.id, u.push_token
          FROM users u
          JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
-         WHERE u.push_token IS NOT NULL
          LIMIT 500`
       : `SELECT DISTINCT u.id, u.push_token
          FROM users u
          JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-         WHERE u.push_token IS NOT NULL
          LIMIT 500`,
     isInviteOnly ? [evId] : [club.id]
   );
@@ -992,10 +992,13 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
     const body = isInviteOnly
       ? `${String(ev.name)} · ${fmtDate(ev.event_date)}. You have been invited — tap to register.`
       : `${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`;
-    sendPushNotifications(audience.map((u: any) => ({
-      to: u.push_token, sound: "default", title, body,
-      data: { type: "event_published", event_id: evId, club_id: club.id },
-    })));
+    const pushAudience = audience.filter((u: any) => u.push_token);
+    if (pushAudience.length > 0) {
+      sendPushNotifications(pushAudience.map((u: any) => ({
+        to: u.push_token, sound: "default", title, body,
+        data: { type: "event_published", event_id: evId, club_id: club.id },
+      })));
+    }
     for (const u of audience) {
       saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
     }

@@ -390,7 +390,7 @@ export default function EventDetailScreen() {
                   </Text>
                   <TouchableOpacity
                     style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
-                    onPress={() => router.push({ pathname: "/club/[id]", params: { id: event.club_id } })}
+                    onPress={() => router.push({ pathname: "/club/[id]", params: { id: event.club_id, date: String(event.event_date).slice(0, 10) } })}
                   >
                     <Text style={styles.primaryBtnText}>Book Your Spot</Text>
                   </TouchableOpacity>

@@ -95,12 +95,18 @@ export default function ClubDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, date: dateParam } = useLocalSearchParams<{ id: string; date?: string }>();
 
   const DAYS = useMemo(() => buildDays(), []);
 
+  const initialDay = useMemo(() => {
+    if (!dateParam) return 0;
+    const idx = DAYS.findIndex(d => formatDate(d) === dateParam);
+    return idx >= 0 ? idx : 0;
+  }, [DAYS, dateParam]);
+
   const [club, setClub] = useState<Club | null>(null);
-  const [selectedDay, setSelectedDay] = useState(0);
+  const [selectedDay, setSelectedDay] = useState(initialDay);
   const [teeTimes, setTeeTimes] = useState<TeeTime[]>([]);
   const [selectedSlot, setSelectedSlot] = useState<TeeTime | null>(null);
   const [loading, setLoading] = useState(true);

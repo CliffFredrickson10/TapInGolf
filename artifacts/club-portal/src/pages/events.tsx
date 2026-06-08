@@ -959,26 +959,89 @@ export default function Events() {
                 <TabsContent value="divisions" className="pb-8">
                   <div className="space-y-3">
                     <p className="text-sm text-muted-foreground">Divisions are auto-assigned from the golfer's HNA handicap at time of registration.</p>
-                    {(detail.divisions ?? DEFAULT_DIVISIONS).map(d => (
-                      <Card key={d.key}>
-                        <CardContent className="p-4">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <p className="font-semibold text-sm">{d.label}</p>
-                              <p className="text-xs text-muted-foreground mt-0.5">
-                                HCP {d.min_hcp} – {d.max_hcp} · {fmtFormat(d)} · {d.tees} tees
-                              </p>
-                            </div>
-                            <div className="text-right">
-                              <p className="text-lg font-bold text-[#1a5c38]">
-                                {regs.filter(r => r.division === d.key && r.status === "approved").length}
-                              </p>
-                              <p className="text-xs text-muted-foreground">confirmed</p>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    ))}
+                    {(() => {
+                      const divList = (detail.divisions && detail.divisions.length > 0) ? detail.divisions : DEFAULT_DIVISIONS;
+                      const unassigned = regs.filter(r => !r.division);
+                      return (
+                        <>
+                          {divList.map(d => {
+                            const players = regs.filter(r => r.division === d.key);
+                            return (
+                              <Card key={d.key}>
+                                <CardContent className="p-4">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <div>
+                                      <p className="font-semibold text-sm">{d.label}</p>
+                                      <p className="text-xs text-muted-foreground mt-0.5">
+                                        HCP {d.min_hcp} – {d.max_hcp} · {fmtFormat(d)} · {d.tees} tees
+                                      </p>
+                                    </div>
+                                    <div className="text-right">
+                                      <p className="text-lg font-bold text-[#1a5c38]">{players.filter(r => r.status === "approved").length}</p>
+                                      <p className="text-xs text-muted-foreground">confirmed</p>
+                                    </div>
+                                  </div>
+                                  {players.length === 0 ? (
+                                    <p className="text-xs text-muted-foreground italic pt-1">No players in this division yet.</p>
+                                  ) : (
+                                    <div className="divide-y border-t mt-2">
+                                      {players.map(r => (
+                                        <div key={r.user_id} className="flex items-center justify-between py-1.5">
+                                          <div>
+                                            <p className="text-sm font-medium">{r.user_name}</p>
+                                            <p className="text-xs text-muted-foreground">
+                                              HCP {r.frozen_handicap ?? r.handicap ?? "—"}
+                                              {r.phone ? ` · ${r.phone}` : ""}
+                                            </p>
+                                          </div>
+                                          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                            r.status === "approved"
+                                              ? "bg-green-100 text-green-700"
+                                              : r.status === "rejected"
+                                              ? "bg-red-100 text-red-700"
+                                              : "bg-yellow-100 text-yellow-700"
+                                          }`}>{r.status}</span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                          {unassigned.length > 0 && (
+                            <Card>
+                              <CardContent className="p-4">
+                                <div className="flex items-center justify-between mb-2">
+                                  <div>
+                                    <p className="font-semibold text-sm">Unassigned</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">No handicap index on file — division not yet determined</p>
+                                  </div>
+                                  <p className="text-lg font-bold text-muted-foreground">{unassigned.length}</p>
+                                </div>
+                                <div className="divide-y border-t mt-2">
+                                  {unassigned.map(r => (
+                                    <div key={r.user_id} className="flex items-center justify-between py-1.5">
+                                      <div>
+                                        <p className="text-sm font-medium">{r.user_name}</p>
+                                        <p className="text-xs text-muted-foreground">{r.user_email}</p>
+                                      </div>
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                                        r.status === "approved"
+                                          ? "bg-green-100 text-green-700"
+                                          : r.status === "rejected"
+                                          ? "bg-red-100 text-red-700"
+                                          : "bg-yellow-100 text-yellow-700"
+                                      }`}>{r.status}</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          )}
+                        </>
+                      );
+                    })()}
                   </div>
                 </TabsContent>
 

@@ -921,7 +921,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })) });
 });
 
-// POST /events/:id/scores  — submit a player's hole-by-hole scorecard
+// POST /events/:id/scores  — submit a player's scorecard (gross, net, points per round)
 router.post("/events/:id/scores", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Login required" }); return; }
@@ -937,20 +937,24 @@ router.post("/events/:id/scores", async (req, res): Promise<void> => {
   );
   if (!reg || reg.status !== "approved") { res.status(403).json({ message: "You must be a confirmed participant to submit scores" }); return; }
 
-  const { round = 1, hole_scores, gross } = req.body ?? {};
-  if (!gross && !hole_scores) { res.status(400).json({ message: "hole_scores or gross required" }); return; }
+  const { round = 1, hole_scores, gross, net, points } = req.body ?? {};
+  if (gross == null && !hole_scores) { res.status(400).json({ message: "gross or hole_scores required" }); return; }
 
-  const totalGross = gross ?? Object.values(hole_scores ?? {}).reduce((s: any, v: any) => s + Number(v), 0);
+  const totalGross = gross != null ? Number(gross) : Object.values(hole_scores ?? {}).reduce((s: any, v: any) => s + Number(v), 0);
+  const totalNet   = net    != null ? Number(net)   : null;
+  const totalPts   = points != null ? Number(points) : null;
 
   // Upsert score row (one per player per event per round)
   const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?", [evId, user.id, round]);
   if (existing) {
-    await exec("UPDATE event_scores SET gross = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
-      [totalGross, JSON.stringify(hole_scores ?? {}), existing.id]);
+    await exec(
+      "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
+      [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), existing.id]
+    );
   } else {
     await exec(
-      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, 0)",
-      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, JSON.stringify(hole_scores ?? {})]
+      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
     );
   }
   res.json({ message: "Score submitted. A club official will verify your scorecard." });

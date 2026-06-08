@@ -78,19 +78,19 @@ function fmtDate(d: string | null | undefined) {
   } catch { return d; }
 }
 
-// ─── Score Entry ──────────────────────────────────────────────────────────────
+// ─── Score Field ──────────────────────────────────────────────────────────────
 
-function ScoreRow({
-  hole, value, onChange, colors,
-}: { hole: number; value: string; onChange: (v: string) => void; colors: ReturnType<typeof useColors> }) {
+function ScoreField({
+  label, value, onChange, colors,
+}: { label: string; value: string; onChange: (v: string) => void; colors: ReturnType<typeof useColors> }) {
   return (
-    <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 4 }}>
-      <Text style={{ width: 60, fontSize: 13, color: colors.mutedForeground }}>Hole {hole}</Text>
+    <View style={{ flex: 1 }}>
+      <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 4, textAlign: "center" }}>{label}</Text>
       <TextInput
         style={{
-          flex: 1, borderWidth: 1, borderColor: colors.border, borderRadius: 6,
-          paddingHorizontal: 10, paddingVertical: 5, fontSize: 14,
-          color: colors.foreground, backgroundColor: colors.card, textAlign: "center",
+          borderWidth: 1, borderColor: colors.border, borderRadius: 8,
+          paddingHorizontal: 8, paddingVertical: 9, fontSize: 16, fontWeight: "600",
+          color: colors.foreground, backgroundColor: colors.background, textAlign: "center",
         }}
         keyboardType="numeric" value={value} onChangeText={onChange} placeholder="—"
         placeholderTextColor={colors.mutedForeground}
@@ -128,10 +128,9 @@ export default function EventDetailScreen() {
   const [payError, setPayError]       = useState<string | null>(null);
   const [voucherCode, setVoucherCode] = useState("");
 
-  // Score submission (18 holes)
-  const [holeScores, setHoleScores]   = useState<Record<number, string>>({});
+  // Score submission — one card per round: { gross, net, points }
+  const [roundScores, setRoundScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [submittingScore, setSubmittingScore] = useState(false);
-  const [scoreRound, setScoreRound]   = useState(1);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
 
@@ -214,23 +213,40 @@ export default function EventDetailScreen() {
     } finally { setPaying(false); }
   };
 
+  const setRoundField = (round: number, field: "gross" | "net" | "points", value: string) => {
+    setRoundScores(prev => ({
+      ...prev,
+      [round]: { gross: "", net: "", points: "", ...prev[round], [field]: value },
+    }));
+  };
+
   const handleSubmitScore = async () => {
     if (!user || !event) return;
-    const filled = Object.values(holeScores).filter(v => v && v !== "");
-    if (filled.length === 0) { Alert.alert("No scores entered", "Enter at least one hole score."); return; }
-    const scoreArr = Object.entries(holeScores).map(([h, s]) => ({ hole: Number(h), score: Number(s) }));
-    const gross = scoreArr.reduce((sum, s) => sum + (s.score || 0), 0);
-    const holeScoresObj: Record<string, number> = {};
-    scoreArr.forEach(s => { holeScoresObj[`h${s.hole}`] = s.score; });
-
+    const rounds = event.rounds ?? 1;
+    const toSubmit = Array.from({ length: rounds }, (_, i) => i + 1).filter(r => {
+      const s = roundScores[r];
+      return s && (s.gross || s.net || s.points);
+    });
+    if (toSubmit.length === 0) {
+      Alert.alert("No scores entered", "Enter at least one score field.");
+      return;
+    }
     setSubmittingScore(true);
     try {
-      await apiFetch(`/events/${event.id}/scores`, user.token, {
-        method: "POST",
-        body: JSON.stringify({ round: scoreRound, hole_scores: holeScoresObj, gross }),
-      });
-      Alert.alert("Score Submitted", "Your score has been submitted and is awaiting verification.");
-      setHoleScores({});
+      for (const r of toSubmit) {
+        const s = roundScores[r];
+        await apiFetch(`/events/${event.id}/scores`, user.token, {
+          method: "POST",
+          body: JSON.stringify({
+            round: r,
+            gross:  s.gross  ? Number(s.gross)  : undefined,
+            net:    s.net    ? Number(s.net)    : undefined,
+            points: s.points ? Number(s.points) : undefined,
+          }),
+        });
+      }
+      Alert.alert("Score Submitted", "Your scores have been submitted and are awaiting verification.");
+      setRoundScores({});
       setActiveTab("scores");
       loadLeaderboard();
     } catch (e: any) {
@@ -707,30 +723,33 @@ export default function EventDetailScreen() {
             ) : (
               <>
                 <Text style={[styles.sectionSub, { color: colors.mutedForeground, marginBottom: 12 }]}>
-                  Enter your gross score for each hole. A club official will verify your scorecard.
+                  Enter your scores for each round. A club official will verify your scorecard.
                 </Text>
-                {/* Round selector (multi-round events) */}
-                {event.rounds > 1 && (
-                  <View style={{ flexDirection: "row", gap: 8, marginBottom: 12 }}>
-                    {Array.from({ length: event.rounds }, (_, i) => (
-                      <TouchableOpacity key={i + 1} style={[styles.roundBtn, { backgroundColor: scoreRound === i + 1 ? colors.primary : colors.card, borderColor: scoreRound === i + 1 ? colors.primary : colors.border }]} onPress={() => setScoreRound(i + 1)}>
-                        <Text style={{ fontSize: 13, color: scoreRound === i + 1 ? "#fff" : colors.foreground }}>R{i + 1}</Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-                )}
-                {Array.from({ length: 18 }, (_, i) => (
-                  <ScoreRow key={i + 1} hole={i + 1} value={holeScores[i + 1] ?? ""}
-                    onChange={v => setHoleScores(prev => ({ ...prev, [i + 1]: v }))}
-                    colors={colors} />
-                ))}
+
+                {Array.from({ length: event.rounds ?? 1 }, (_, i) => {
+                  const r = i + 1;
+                  const s = roundScores[r] ?? { gross: "", net: "", points: "" };
+                  return (
+                    <View key={r} style={[styles.metaCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 }]}>
+                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
+                        Day {r}{event.rounds === 1 ? "" : ""}
+                      </Text>
+                      <View style={{ flexDirection: "row", gap: 10 }}>
+                        <ScoreField label="Gross" value={s.gross} onChange={v => setRoundField(r, "gross", v)} colors={colors} />
+                        <ScoreField label="Nett" value={s.net} onChange={v => setRoundField(r, "net", v)} colors={colors} />
+                        <ScoreField label="Stableford Pts" value={s.points} onChange={v => setRoundField(r, "points", v)} colors={colors} />
+                      </View>
+                    </View>
+                  );
+                })}
+
                 <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 16 }]}
+                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]}
                   onPress={handleSubmitScore} disabled={submittingScore}
                 >
                   {submittingScore
                     ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={styles.primaryBtnText}>Submit Scorecard</Text>}
+                    : <Text style={styles.primaryBtnText}>Submit Scores</Text>}
                 </TouchableOpacity>
               </>
             )}

@@ -64136,6 +64136,7 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     allow_prepaid,
     allow_voucher,
     rounds,
+    holes,
     image_url
   } = req.body ?? {};
   const updates = [];
@@ -64247,6 +64248,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (rounds !== void 0) {
     updates.push("rounds = ?");
     vals.push(Number(rounds));
+  }
+  if (holes !== void 0) {
+    updates.push("holes = ?");
+    vals.push(Number(holes));
   }
   if (existing.status === "active") {
     updates.push("status = ?");

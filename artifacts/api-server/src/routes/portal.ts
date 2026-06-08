@@ -860,7 +860,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
     name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom, format2, format2_custom,
     restriction, entry_fee, max_participants, status, divisions, entries_open, entries_close,
     ballot, scoring_enabled, payment_required, entries_required,
-    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds, image_url,
+    use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher, rounds, holes, image_url,
   } = req.body ?? {};
   const updates: string[] = []; const vals: any[] = [];
   if (name !== undefined)                { updates.push("name = ?");              vals.push(name); }
@@ -890,6 +890,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (allow_prepaid !== undefined)       { updates.push("allow_prepaid = ?");      vals.push(allow_prepaid ? 1 : 0); }
   if (allow_voucher !== undefined)       { updates.push("allow_voucher = ?");      vals.push(allow_voucher ? 1 : 0); }
   if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
+  if (holes !== undefined)               { updates.push("holes = ?");             vals.push(Number(holes)); }
   // Editing a published tournament requires republishing — reset to pending_publish
   // so the portal shows "Publish Changes" and notifications go out on republish.
   if (existing.status === "active") {

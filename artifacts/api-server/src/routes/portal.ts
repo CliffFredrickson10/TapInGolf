@@ -411,7 +411,8 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
   let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
        pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
        pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
-       pts.event_id, ge.name AS event_name
+       CASE WHEN ge.status = 'cancelled' THEN NULL ELSE pts.event_id END AS event_id,
+       CASE WHEN ge.status = 'cancelled' THEN NULL ELSE ge.name END AS event_name
      FROM portal_tee_slots pts
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ?`;

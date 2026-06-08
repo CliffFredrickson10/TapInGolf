@@ -1868,7 +1868,7 @@ export default function Schedule() {
                 <Select value={String(ruleForm.lookahead_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookahead_days: Number(v) }))}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {[7, 14, 21, 28].map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} days</SelectItem>)}
+                    {Array.from({ length: 28 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} day{d !== 1 ? "s" : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>

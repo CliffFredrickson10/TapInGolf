@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
   CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X, TicketX,
-  Zap, Play, Clock, ChevronDown, ChevronUp,
+  Zap, Play, Clock, ChevronDown, ChevronUp, AlertTriangle,
 } from "lucide-react";
 import { format, addDays, parseISO, subDays } from "date-fns";
 
@@ -1196,6 +1196,8 @@ export default function Schedule() {
   const [ruleForm, setRuleForm] = useState<RuleForm>({ ...DEFAULT_RULE_FORM });
   const [ruleRunning, setRuleRunning] = useState<number | null>(null);
   const [ruleSavedConfigs, setRuleSavedConfigs] = useState<Array<{ id: number; name: string; config_type: string; config_data: any }>>([]);
+  const [ruleConfirm, setRuleConfirm] = useState<{ type: "delete" | "toggle_off"; rule: AutoRule } | null>(null);
+  const [ruleConfirmBusy, setRuleConfirmBusy] = useState(false);
 
   // ── Auto-rule handlers ─────────────────────────────────────────────────────
 
@@ -1254,25 +1256,54 @@ export default function Schedule() {
         setAutoRules(prev => [...prev, created]);
       }
       setRuleDlgOpen(false);
-      toast({ title: ruleEditId ? "Rule updated" : "Auto-rule created", description: "Tee times will be generated automatically." });
+      toast({
+        title: ruleEditId ? "Rule updated" : "Auto-rule created",
+        description: ruleEditId
+          ? "Changes saved. Click Run Now to apply them immediately, or wait for the daily worker."
+          : "Rule created. Click Run Now to fill the upcoming window immediately.",
+      });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setRuleDlgSaving(false); }
   };
 
-  const handleDeleteRule = async (id: number, name: string) => {
-    if (!confirm(`Delete rule "${name}"? Tee times that were already generated will remain.`)) return;
-    try {
-      await api(`/api/portal/tee-auto-rules/${id}`, { method: "DELETE" });
-      setAutoRules(prev => prev.filter(r => r.id !== id));
-      toast({ title: "Rule deleted" });
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  const handleDeleteRule = (rule: AutoRule) => {
+    setRuleConfirm({ type: "delete", rule });
   };
 
-  const handleToggleRule = async (rule: AutoRule) => {
+  const handleToggleRule = (rule: AutoRule) => {
+    if (rule.active) {
+      // Turning OFF — show warning dialog
+      setRuleConfirm({ type: "toggle_off", rule });
+    } else {
+      // Turning ON — safe, do immediately
+      doToggleRule(rule);
+    }
+  };
+
+  const doToggleRule = async (rule: AutoRule) => {
     try {
       const updated = await api<AutoRule>(`/api/portal/tee-auto-rules/${rule.id}`, { method: "PUT", body: JSON.stringify({ active: !rule.active }) });
       setAutoRules(prev => prev.map(r => r.id === rule.id ? updated : r));
+      if (!rule.active) toast({ title: "Rule enabled", description: "Use Run Now to immediately fill the upcoming window." });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  };
+
+  const handleRuleConfirmAction = async () => {
+    if (!ruleConfirm) return;
+    setRuleConfirmBusy(true);
+    try {
+      if (ruleConfirm.type === "delete") {
+        await api(`/api/portal/tee-auto-rules/${ruleConfirm.rule.id}`, { method: "DELETE" });
+        setAutoRules(prev => prev.filter(r => r.id !== ruleConfirm.rule.id));
+        toast({ title: "Rule deleted", description: "Already-generated tee times remain in the schedule." });
+      } else {
+        const updated = await api<AutoRule>(`/api/portal/tee-auto-rules/${ruleConfirm.rule.id}`, { method: "PUT", body: JSON.stringify({ active: false }) });
+        setAutoRules(prev => prev.map(r => r.id === ruleConfirm.rule.id ? updated : r));
+        toast({ title: "Rule paused", description: "No new tee times will be generated until you re-enable it." });
+      }
+      setRuleConfirm(null);
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setRuleConfirmBusy(false); }
   };
 
   const handleRunNow = async (rule: AutoRule) => {
@@ -1511,7 +1542,7 @@ export default function Schedule() {
                         <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditRule(rule)}>
                           <Pencil className="h-3.5 w-3.5" />
                         </Button>
-                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteRule(rule.id, rule.name)}>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteRule(rule)}>
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
                       </div>
@@ -1822,6 +1853,39 @@ export default function Schedule() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Rule Confirm Dialog (toggle off / delete) */}
+      <Dialog open={!!ruleConfirm} onOpenChange={open => { if (!open && !ruleConfirmBusy) setRuleConfirm(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              {ruleConfirm?.type === "delete" ? <Trash2 className="h-4 w-4" /> : <AlertTriangle className="h-4 w-4" />}
+              {ruleConfirm?.type === "delete" ? "Delete auto-rule?" : "Pause auto-rule?"}
+            </DialogTitle>
+            <DialogDescription className="pt-1 space-y-2 text-left">
+              {ruleConfirm?.type === "delete" ? (
+                <>
+                  <p>You are about to permanently delete <strong>"{ruleConfirm.rule.name}"</strong>.</p>
+                  <p>Tee times that have already been generated will remain in the schedule, but <strong>no new tee times will ever be created by this rule</strong>. You will need to recreate it to resume auto-generation.</p>
+                </>
+              ) : (
+                <>
+                  <p>You are about to pause <strong>"{ruleConfirm?.rule.name}"</strong>.</p>
+                  <p>The daily worker will stop generating tee times for this rule. <strong>Dates beyond the already-generated window will have no tee times</strong>, leaving gaps that golfers cannot book.</p>
+                  <p className="text-amber-700 font-medium">Keep rules active year-round — the season window controls which dates get slots, not when the rule runs.</p>
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" size="sm" disabled={ruleConfirmBusy} onClick={() => setRuleConfirm(null)}>Cancel</Button>
+            <Button variant="destructive" size="sm" disabled={ruleConfirmBusy} onClick={handleRuleConfirmAction}>
+              {ruleConfirmBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" /> : null}
+              {ruleConfirm?.type === "delete" ? "Yes, delete rule" : "Yes, pause rule"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
 

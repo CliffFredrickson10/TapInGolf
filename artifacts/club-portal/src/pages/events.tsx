@@ -677,9 +677,15 @@ export default function Events() {
         const saved = await api<{ id: number }>("/api/portal/events", { method: "POST", body: JSON.stringify(body) });
         evId = saved.id;
       }
-      // For new events: persist any staged tee slots (temp ids < 0) as exclusive event slots
+      // For new events: persist any staged tee slots (temp ids < 0) as exclusive event slots.
+      // First, clear any general (non-event) slots on those same dates so there are no
+      // orphaned public slots sitting alongside the tournament-exclusive ones.
       const newSlots = eventSlots.filter(s => s.id < 0);
       if (newSlots.length > 0) {
+        const dateSet = [...new Set(newSlots.map(s => String(s.date).slice(0, 10)))].sort();
+        const clearFrom = dateSet[0];
+        const clearTo   = dateSet[dateSet.length - 1];
+        await api(`/api/portal/tee-times/clear?from=${clearFrom}&to=${clearTo}`, { method: "DELETE" }).catch(() => {});
         await Promise.all(newSlots.map(s =>
           api("/api/portal/tee-times", {
             method: "POST",

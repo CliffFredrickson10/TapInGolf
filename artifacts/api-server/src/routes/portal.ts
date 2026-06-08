@@ -896,7 +896,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
 router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
-  const ev = await row<any>("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row<any>("SELECT id, name, event_date, end_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
 
   // Build notification audience BEFORE cancelling:
@@ -913,10 +913,20 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
     [evId, club.id]
   );
 
-  // Cancel the event, delete draw entries, and delete all event-exclusive tee slots
+  // Cancel the event, delete draw entries, delete event-exclusive AND general tee slots
+  // for the tournament's date range.  General slots are included because they may have
+  // been generated on the schedule page for this tournament's date and were never linked
+  // to the event directly (event_id = NULL).  Both sets are owned by this tournament date.
+  const dateFrom = String(ev.event_date).slice(0, 10);
+  const dateTo   = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
   const slotDel = await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
+  // Also remove any general (non-event) slots on those same dates so the schedule is clean
+  await run(
+    "DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL",
+    [club.id, dateFrom, dateTo]
+  );
 
   // Notify audience
   const title = `❌ Tournament Cancelled — ${club.name}`;

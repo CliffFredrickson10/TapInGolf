@@ -1046,6 +1046,32 @@ router.get("/events/:id/partner-search", async (req, res): Promise<void> => {
   })) });
 });
 
+// GET /events/:id/my-scores  — fetch the authenticated user's own submitted scores for this event
+router.get("/events/:id/my-scores", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Login required" }); return; }
+  const evId = parseInt(req.params.id, 10);
+  const reg = await row<any>(
+    "SELECT team_id FROM event_registrations WHERE event_id = ? AND user_id = ?",
+    [evId, user.id]
+  );
+  if (!reg) { res.json({ scores: [] }); return; }
+
+  let scores: any[];
+  if (reg.team_id) {
+    scores = await query<any>(
+      "SELECT round, gross, net, points FROM event_scores WHERE event_id = ? AND team_id = ?",
+      [evId, reg.team_id]
+    );
+  } else {
+    scores = await query<any>(
+      "SELECT round, gross, net, points FROM event_scores WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+      [evId, user.id]
+    );
+  }
+  res.json({ scores });
+});
+
 // POST /events/:id/scores  — submit a player's/team's scorecard (gross, net, points per round)
 router.post("/events/:id/scores", async (req, res): Promise<void> => {
   const user = await getUser(req);
@@ -1071,33 +1097,27 @@ router.post("/events/:id/scores", async (req, res): Promise<void> => {
   const ts = teamSize(ev.format ?? "");
 
   if (ts !== "individual" && reg.team_id) {
-    // Team format: upsert one score row per team per round
+    // Team format: one score row per team per round — block re-submission
     const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = ?", [evId, reg.team_id, round]);
     if (existing) {
-      await exec(
-        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, user_id = ?, verified = 0, updated_at = NOW() WHERE id = ?",
-        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), user.id, existing.id]
-      );
-    } else {
-      await exec(
-        "INSERT INTO event_scores (event_id, team_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
-        [evId, reg.team_id, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
-      );
+      res.status(409).json({ message: "A score for this round has already been submitted and cannot be changed." });
+      return;
     }
+    await exec(
+      "INSERT INTO event_scores (event_id, team_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+      [evId, reg.team_id, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+    );
   } else {
-    // Individual: upsert one row per player per round
+    // Individual: one row per player per round — block re-submission
     const existing = await row<any>("SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ? AND team_id IS NULL", [evId, user.id, round]);
     if (existing) {
-      await exec(
-        "UPDATE event_scores SET gross = ?, net = ?, points = ?, hole_scores = ?, verified = 0, updated_at = NOW() WHERE id = ?",
-        [totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {}), existing.id]
-      );
-    } else {
-      await exec(
-        "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
-        [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
-      );
+      res.status(409).json({ message: "A score for this round has already been submitted and cannot be changed." });
+      return;
     }
+    await exec(
+      "INSERT INTO event_scores (event_id, user_id, division, frozen_handicap, round, gross, net, points, hole_scores, verified) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)",
+      [evId, user.id, reg.division, reg.frozen_handicap, round, totalGross, totalNet, totalPts, JSON.stringify(hole_scores ?? {})]
+    );
   }
   res.json({ message: "Score submitted. A club official will verify your scorecard." });
 });

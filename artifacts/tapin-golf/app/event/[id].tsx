@@ -139,6 +139,8 @@ export default function EventDetailScreen() {
   const [roundScores, setRoundScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [submittingScore, setSubmittingScore] = useState(false);
   const [confirmScoreVisible, setConfirmScoreVisible] = useState(false);
+  const [myScores, setMyScores] = useState<Record<number, { gross: number | null; net: number | null; points: number | null }>>({});
+  const [myScoresLoaded, setMyScoresLoaded] = useState(false);
 
   // Partner picker (betterball / team formats)
   const [partnerQuery, setPartnerQuery] = useState("");
@@ -190,6 +192,19 @@ export default function EventDetailScreen() {
   useEffect(() => {
     if (activeTab === "scores") loadLeaderboard();
   }, [activeTab, lbLoaded]);
+
+  useEffect(() => {
+    if (activeTab === "submit" && !myScoresLoaded && user && event) {
+      apiFetch(`/events/${event.id}/my-scores`, user.token)
+        .then((res: any) => {
+          const map: Record<number, any> = {};
+          for (const s of res.scores ?? []) map[s.round] = s;
+          setMyScores(map);
+          setMyScoresLoaded(true);
+        })
+        .catch(() => setMyScoresLoaded(true));
+    }
+  }, [activeTab, myScoresLoaded, user, event]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
@@ -852,29 +867,63 @@ export default function EventDetailScreen() {
 
                 {Array.from({ length: event.rounds ?? 1 }, (_, i) => {
                   const r = i + 1;
+                  const submitted = myScores[r];
                   const s = roundScores[r] ?? { gross: "", net: "", points: "" };
                   return (
-                    <View key={r} style={[styles.metaCard, { backgroundColor: colors.card, borderColor: colors.border, marginBottom: 12 }]}>
-                      <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground, marginBottom: 12 }}>
-                        Day {r}
-                      </Text>
-                      <View style={{ flexDirection: "row", gap: 10 }}>
-                        <ScoreField label="Gross" value={s.gross} onChange={v => setRoundField(r, "gross", v)} colors={colors} />
-                        <ScoreField label="Nett" value={s.net} onChange={v => setRoundField(r, "net", v)} colors={colors} />
-                        <ScoreField label="Stableford Pts" value={s.points} onChange={v => setRoundField(r, "points", v)} colors={colors} />
+                    <View key={r} style={[styles.metaCard, { backgroundColor: submitted ? colors.muted + "80" : colors.card, borderColor: submitted ? colors.primary + "40" : colors.border, marginBottom: 12 }]}>
+                      <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>Day {r}</Text>
+                        {submitted && (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
+                            <Ionicons name="lock-closed" size={12} color={colors.primary} />
+                            <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>Submitted</Text>
+                          </View>
+                        )}
                       </View>
+                      {submitted ? (
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          {[["Gross", submitted.gross], ["Nett", submitted.net], ["Stableford Pts", submitted.points]].map(([label, val]) => (
+                            <View key={String(label)} style={{ flex: 1, alignItems: "center" }}>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground, marginBottom: 4 }}>{label}</Text>
+                              <Text style={{ fontSize: 18, fontWeight: "700", color: colors.foreground }}>{val ?? "—"}</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ) : (
+                        <View style={{ flexDirection: "row", gap: 10 }}>
+                          <ScoreField label="Gross" value={s.gross} onChange={v => setRoundField(r, "gross", v)} colors={colors} />
+                          <ScoreField label="Nett" value={s.net} onChange={v => setRoundField(r, "net", v)} colors={colors} />
+                          <ScoreField label="Stableford Pts" value={s.points} onChange={v => setRoundField(r, "points", v)} colors={colors} />
+                        </View>
+                      )}
                     </View>
                   );
                 })}
 
-                <TouchableOpacity
-                  style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]}
-                  onPress={handleSubmitScore} disabled={submittingScore}
-                >
-                  {submittingScore
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Text style={styles.primaryBtnText}>Submit Scores</Text>}
-                </TouchableOpacity>
+                {(() => {
+                  const totalRounds = event.rounds ?? 1;
+                  const allSubmitted = Array.from({ length: totalRounds }, (_, i) => i + 1).every(r => myScores[r]);
+                  if (allSubmitted) {
+                    return (
+                      <View style={[styles.emptyCard, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "30" }]}>
+                        <Ionicons name="checkmark-circle" size={24} color={colors.primary} style={{ marginBottom: 6 }} />
+                        <Text style={{ fontSize: 13, color: colors.primary, fontWeight: "600", textAlign: "center" }}>
+                          All scores submitted. Contact the club if there is an error.
+                        </Text>
+                      </View>
+                    );
+                  }
+                  return (
+                    <TouchableOpacity
+                      style={[styles.primaryBtn, { backgroundColor: colors.primary, marginTop: 8 }]}
+                      onPress={handleSubmitScore} disabled={submittingScore}
+                    >
+                      {submittingScore
+                        ? <ActivityIndicator color="#fff" size="small" />
+                        : <Text style={styles.primaryBtnText}>Submit Scores</Text>}
+                    </TouchableOpacity>
+                  );
+                })()}
               </>
             )}
           </>

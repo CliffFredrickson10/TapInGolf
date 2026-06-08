@@ -20,6 +20,44 @@ import {
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
 
+// ─── Official DQ Rules ─────────────────────────────────────────────────────
+
+const DQ_RULES: { category: string; rules: string[] }[] = [
+  {
+    category: "Misconduct & Sportsmanship",
+    rules: [
+      "Substance Use — consuming alcohol or banned substances during a competitive round",
+      "Vandalism / Safety Risk — deliberate damage to the green, throwing clubs, or endangering others",
+      "Cheating — deliberately ignoring a rule to gain an advantage, or agreeing to waive a rule",
+      "Disruptive Behaviour — vulgar language, intentionally distracting competitors, or altering course setup without permission",
+    ],
+  },
+  {
+    category: "Scoring & Eligibility",
+    rules: [
+      "Handicap Manipulation — using an inaccurate or manipulated handicap index in a net-score event",
+      "Incorrect Scorecard — scorecard returned with handicap too high, or hole score lower than actually taken",
+      "Ineligible Entry — does not meet entry criteria or club affiliation requirements for this event",
+    ],
+  },
+  {
+    category: "Equipment & Transport",
+    rules: [
+      "Non-Conforming Club — stroke made with a club that does not meet official equipment specifications",
+      "Non-Conforming Ball — ball played is not on the official list of approved conforming balls",
+      "Unauthorised Transport — motorised cart used without prior written authorisation or medical dispensation",
+    ],
+  },
+  {
+    category: "Timeliness & Weather",
+    rules: [
+      "Late Start — failed to start at the scheduled tee time (more than 5 minutes late = automatic DQ)",
+      "Ignoring Emergency Siren — failed to stop play immediately when suspension siren sounded",
+      "Refused Official Test — refused to submit to a required administrative or wellness screening",
+    ],
+  },
+];
+
 // ─── Types ─────────────────────────────────────────────────────────────────
 
 interface Division {
@@ -257,6 +295,7 @@ export default function Events() {
   // DQ dialog
   const [dqDialog, setDqDialog] = useState<{ userId: number; userName: string; submitted: Score | null } | null>(null);
   const [dqReason, setDqReason] = useState("");
+  const [dqNotes, setDqNotes]   = useState("");
   const [dqGross, setDqGross]   = useState("");
   const [dqNet, setDqNet]       = useState("");
   const [dqPoints, setDqPoints] = useState("");
@@ -1008,18 +1047,20 @@ export default function Events() {
     setDqNet(submitted?.net != null ? String(submitted.net) : "");
     setDqPoints(submitted?.points != null ? String(submitted.points) : "");
     setDqReason("");
+    setDqNotes("");
     setDqDialog({ userId, userName, submitted });
   };
 
   const confirmDq = async () => {
     if (!detail || !dqDialog) return;
     setDqSaving(true);
+    const fullReason = [dqReason, dqNotes].filter(Boolean).join(" — ") || undefined;
     try {
       await api(`/api/portal/events/${detail.id}/scores/${dqDialog.userId}/dq`, {
         method: "POST",
         body: JSON.stringify({
           round: scoreRound,
-          reason: dqReason || undefined,
+          reason: fullReason,
           corrected_gross:  dqGross  ? Number(dqGross)  : undefined,
           corrected_net:    dqNet    ? Number(dqNet)    : undefined,
           corrected_points: dqPoints ? Number(dqPoints) : undefined,
@@ -1778,27 +1819,75 @@ export default function Events() {
                             {/* DQ Dialog */}
                             {dqDialog && (
                               <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-4">
-                                  <div>
+                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-lg flex flex-col max-h-[90vh]">
+                                  {/* Header */}
+                                  <div className="p-5 pb-3 border-b flex-shrink-0">
                                     <h3 className="font-semibold text-base">Disqualify — {dqDialog.userName}</h3>
-                                    <p className="text-xs text-muted-foreground mt-0.5">Round {scoreRound}. You can correct the score before disqualifying.</p>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Round {scoreRound}. Select the applicable DQ rule and optionally correct scores.</p>
                                   </div>
-                                  <div className="grid grid-cols-3 gap-2">
-                                    {([["Gross", dqGross, setDqGross], ["Nett", dqNet, setDqNet], ["Stableford Pts", dqPoints, setDqPoints]] as const).map(([label, val, setter]) => (
-                                      <div key={label}>
-                                        <Label className="text-[11px] text-muted-foreground">{label}</Label>
-                                        <Input type="number" min="0" className="h-8 text-xs text-center mt-0.5" placeholder="—"
-                                          value={val} onChange={e => (setter as any)(e.target.value)} />
+
+                                  {/* Scrollable body */}
+                                  <div className="overflow-y-auto flex-1 p-5 space-y-5">
+                                    {/* Rule picker */}
+                                    <div>
+                                      <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">DQ Rule</Label>
+                                      <div className="mt-2 space-y-3">
+                                        {DQ_RULES.map(cat => (
+                                          <div key={cat.category}>
+                                            <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wide mb-1.5">{cat.category}</p>
+                                            <div className="space-y-1">
+                                              {cat.rules.map(rule => {
+                                                const selected = dqReason === rule;
+                                                return (
+                                                  <button
+                                                    key={rule}
+                                                    type="button"
+                                                    onClick={() => setDqReason(selected ? "" : rule)}
+                                                    className={`w-full text-left text-xs px-3 py-2 rounded-lg border transition-colors ${
+                                                      selected
+                                                        ? "bg-red-50 border-red-400 text-red-700 font-medium"
+                                                        : "border-gray-200 hover:border-gray-300 hover:bg-gray-50 text-gray-700"
+                                                    }`}
+                                                  >
+                                                    <span className="font-semibold">{rule.split(" — ")[0]}</span>
+                                                    <span className="text-[11px] font-normal"> — {rule.split(" — ").slice(1).join(" — ")}</span>
+                                                  </button>
+                                                );
+                                              })}
+                                            </div>
+                                          </div>
+                                        ))}
                                       </div>
-                                    ))}
+                                    </div>
+
+                                    {/* Additional notes */}
+                                    <div>
+                                      <Label className="text-[11px] text-muted-foreground">Additional notes (optional)</Label>
+                                      <Input className="mt-1 text-xs h-8" placeholder="Any specifics for the record…"
+                                        value={dqNotes} onChange={e => setDqNotes(e.target.value)} />
+                                    </div>
+
+                                    {/* Corrected scores */}
+                                    <div>
+                                      <Label className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wide">Corrected Scores (optional)</Label>
+                                      <div className="grid grid-cols-3 gap-2 mt-2">
+                                        {([["Gross", dqGross, setDqGross], ["Nett", dqNet, setDqNet], ["Stableford Pts", dqPoints, setDqPoints]] as const).map(([label, val, setter]) => (
+                                          <div key={label}>
+                                            <Label className="text-[11px] text-muted-foreground">{label}</Label>
+                                            <Input type="number" min="0" className="h-8 text-xs text-center mt-0.5" placeholder="—"
+                                              value={val} onChange={e => (setter as any)(e.target.value)} />
+                                          </div>
+                                        ))}
+                                      </div>
+                                    </div>
+
+                                    <p className="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2.5">
+                                      The player will be notified immediately and removed from the leaderboard standings.
+                                    </p>
                                   </div>
-                                  <div>
-                                    <Label className="text-[11px] text-muted-foreground">Reason (optional)</Label>
-                                    <Input className="mt-0.5 text-xs h-8" placeholder="e.g. Incorrect scorecard, wrong ball…"
-                                      value={dqReason} onChange={e => setDqReason(e.target.value)} />
-                                  </div>
-                                  <p className="text-[11px] text-amber-600 bg-amber-50 rounded p-2">The player will be notified immediately and removed from the leaderboard standings.</p>
-                                  <div className="flex gap-2">
+
+                                  {/* Footer */}
+                                  <div className="p-4 border-t flex gap-2 flex-shrink-0">
                                     <Button variant="outline" size="sm" className="flex-1" onClick={() => setDqDialog(null)}>Cancel</Button>
                                     <Button size="sm" className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={confirmDq} disabled={dqSaving}>
                                       {dqSaving ? "Saving…" : "Confirm DQ"}

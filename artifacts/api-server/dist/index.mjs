@@ -65286,13 +65286,13 @@ router14.get("/portal/events/:id/scores", requireClubAuth2, async (req, res) => 
             s.team_id, et.name as team_name,
             s.dq, s.dq_reason, s.original_gross, s.original_net, s.original_points, s.corrected_at,
             u.id as user_id, u.name as user_name,
-            COALESCE(r.division, s.division) as division, COALESCE(r.frozen_handicap, s.frozen_handicap) as frozen_handicap
+            r.division, r.frozen_handicap
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
      LEFT JOIN event_teams et ON et.id = s.team_id
      WHERE s.event_id = ? ${roundFilter}
-     ORDER BY COALESCE(r.division, s.division) ASC, s.gross ASC NULLS LAST`,
+     ORDER BY r.division ASC NULLS LAST, s.gross ASC NULLS LAST`,
     params
   );
   res.json(scores);

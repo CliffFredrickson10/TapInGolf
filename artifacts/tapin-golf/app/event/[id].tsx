@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  ActivityIndicator, Alert, RefreshControl, TextInput, Image,
+  ActivityIndicator, Alert, RefreshControl, TextInput, Image, Modal,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
@@ -138,6 +138,7 @@ export default function EventDetailScreen() {
   // Score submission — one card per round: { gross, net, points }
   const [roundScores, setRoundScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [submittingScore, setSubmittingScore] = useState(false);
+  const [confirmScoreVisible, setConfirmScoreVisible] = useState(false);
 
   // Partner picker (betterball / team formats)
   const [partnerQuery, setPartnerQuery] = useState("");
@@ -287,14 +288,7 @@ export default function EventDetailScreen() {
       return s && (s.gross || s.net || s.points);
     });
     if (!hasScores) { doSubmitScore(); return; }
-    Alert.alert(
-      "Confirm Score Submission",
-      "Submitted scores cannot be edited or deleted.\n\nBy submitting you confirm that this score is correct and has been verified by your marker.\n\nIncorrect scores may result in disqualification.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Submit", style: "destructive", onPress: doSubmitScore },
-      ]
-    );
+    setConfirmScoreVisible(true);
   };
 
   // ── UI ─────────────────────────────────────────────────────────────────────
@@ -333,6 +327,31 @@ export default function EventDetailScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+
+      {/* Score submission confirmation modal */}
+      <Modal transparent animationType="fade" visible={confirmScoreVisible} onRequestClose={() => setConfirmScoreVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalBox, { backgroundColor: colors.card }]}>
+            <Text style={[styles.modalTitle, { color: colors.foreground }]}>Confirm Score Submission</Text>
+            <Text style={[styles.modalBody, { color: colors.mutedForeground }]}>
+              Submitted scores <Text style={{ fontWeight: "700", color: colors.foreground }}>cannot be edited or deleted</Text> once submitted.{"\n\n"}
+              By submitting you confirm that this score is correct and has been verified by your marker.{"\n\n"}
+              <Text style={{ color: "#c0392b", fontWeight: "600" }}>Incorrect scores may result in disqualification.</Text>
+            </Text>
+            <View style={styles.modalBtns}>
+              <TouchableOpacity style={[styles.modalBtn, { borderColor: colors.border, borderWidth: 1 }]} onPress={() => setConfirmScoreVisible(false)}>
+                <Text style={[styles.modalBtnText, { color: colors.foreground }]}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalBtn, { backgroundColor: "#c0392b" }]}
+                onPress={() => { setConfirmScoreVisible(false); doSubmitScore(); }}
+              >
+                <Text style={[styles.modalBtnText, { color: "#fff" }]}>Submit</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.primary }]}>
@@ -869,6 +888,13 @@ export default function EventDetailScreen() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
+  modalOverlay:  { flex: 1, backgroundColor: "rgba(0,0,0,0.55)", justifyContent: "center", alignItems: "center", padding: 24 },
+  modalBox:      { borderRadius: 16, padding: 24, width: "100%", maxWidth: 400, shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 12, elevation: 8 },
+  modalTitle:    { fontSize: 17, fontWeight: "700", marginBottom: 12 },
+  modalBody:     { fontSize: 14, lineHeight: 21, marginBottom: 20 },
+  modalBtns:     { flexDirection: "row", gap: 10 },
+  modalBtn:      { flex: 1, borderRadius: 10, paddingVertical: 12, alignItems: "center" },
+  modalBtnText:  { fontSize: 15, fontWeight: "600" },
   container:     { flex: 1 },
   centered:      { flex: 1, justifyContent: "center", alignItems: "center" },
   header:        { paddingTop: 52, paddingBottom: 16, paddingHorizontal: 16, flexDirection: "row", alignItems: "flex-start", gap: 12 },

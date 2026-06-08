@@ -411,11 +411,12 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
   let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
        pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
        pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
-       CASE WHEN ge.status = 'cancelled' THEN NULL ELSE pts.event_id END AS event_id,
-       CASE WHEN ge.status = 'cancelled' THEN NULL ELSE ge.name END AS event_name
+       pts.event_id,
+       ge.name AS event_name
      FROM portal_tee_slots pts
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
-     WHERE pts.club_id = ?`;
+     WHERE pts.club_id = ?
+       AND (pts.event_id IS NULL OR ge.status != 'cancelled')`;
   const params: any[] = [club.id];
   if (date) { sql += " AND date = ?"; params.push(date); }
   else if (from && to) { sql += " AND date BETWEEN ? AND ?"; params.push(from, to); }
@@ -932,8 +933,21 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
 
   if (slotsMode === "open") {
-    // Convert event-exclusive slots back to general open public slots (remove the event link).
-    // General slots for those dates are left untouched.
+    // Convert event-exclusive slots back to general open public slots.
+    // If a general slot already exists at that date/time, delete the event slot instead
+    // (to avoid creating a duplicate alongside the existing general slot).
+    await run(
+      `DELETE FROM portal_tee_slots
+       WHERE event_id = ?
+         AND EXISTS (
+           SELECT 1 FROM portal_tee_slots g
+           WHERE g.club_id = portal_tee_slots.club_id
+             AND g.date     = portal_tee_slots.date
+             AND g.tee_time = portal_tee_slots.tee_time
+             AND g.event_id IS NULL
+         )`,
+      [evId]
+    );
     await run("UPDATE portal_tee_slots SET event_id = NULL WHERE event_id = ?", [evId]);
   } else {
     // Delete mode: remove event-exclusive slots AND any general slots on those dates

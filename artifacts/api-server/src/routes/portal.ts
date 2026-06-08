@@ -898,6 +898,9 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
   const evId = Number(req.params.id);
   const ev = await row<any>("SELECT id, name, event_date, end_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  // "delete" removes all tee slots for the date range; "open" (default) converts
+  // event-exclusive slots to general public slots instead of deleting them.
+  const slotsMode: "delete" | "open" = req.query["slots"] === "delete" ? "delete" : "open";
 
   // Build notification audience BEFORE cancelling:
   // Union of all registrants (any status) + all active club members so nobody who
@@ -913,20 +916,25 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
     [evId, club.id]
   );
 
-  // Cancel the event, delete draw entries, delete event-exclusive AND general tee slots
-  // for the tournament's date range.  General slots are included because they may have
-  // been generated on the schedule page for this tournament's date and were never linked
-  // to the event directly (event_id = NULL).  Both sets are owned by this tournament date.
   const dateFrom = String(ev.event_date).slice(0, 10);
   const dateTo   = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
-  const slotDel = await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
-  // Also remove any general (non-event) slots on those same dates so the schedule is clean
-  await run(
-    "DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL",
-    [club.id, dateFrom, dateTo]
-  );
+
+  if (slotsMode === "open") {
+    // Convert event-exclusive slots back to general open public slots (remove the event link).
+    // General slots for those dates are left untouched.
+    await run("UPDATE portal_tee_slots SET event_id = NULL WHERE event_id = ?", [evId]);
+  } else {
+    // Delete mode: remove event-exclusive slots AND any general slots on those dates
+    // (handles the case where slots were generated on the Schedule page for the same dates
+    //  and were never linked to the tournament directly).
+    await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await run(
+      "DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL",
+      [club.id, dateFrom, dateTo]
+    );
+  }
 
   // Notify audience
   const title = `❌ Tournament Cancelled — ${club.name}`;

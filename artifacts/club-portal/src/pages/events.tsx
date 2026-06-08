@@ -257,6 +257,12 @@ export default function Events() {
     resolving: boolean;
   }>({ open: false, eventId: null, bookings: [], events: [], resolving: false });
 
+  // Cancel tournament dialog
+  const [cancelDlg, setCancelDlg] = useState<{ open: boolean; eventId: number | null; eventName: string; cancelling: boolean }>({
+    open: false, eventId: null, eventName: "", cancelling: false,
+  });
+  const [cancelSlotsChoice, setCancelSlotsChoice] = useState<"delete" | "open">("open");
+
   // Description textarea ref (auto-resize on open — useEffect placed after dlgOpen state)
   const descRef = useRef<HTMLTextAreaElement>(null);
 
@@ -749,14 +755,25 @@ export default function Events() {
     }
   };
 
-  const handleCancel = async (id: number, e: React.MouseEvent) => {
+  const handleCancel = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm("Cancel this tournament? Registered golfers will be notified and their draw slots cleared.")) return;
+    const ev = events.find(ev => ev.id === id);
+    setCancelDlg({ open: true, eventId: id, eventName: ev?.name ?? "this tournament", cancelling: false });
+    setCancelSlotsChoice("open");
+  };
+
+  const executeCancelTournament = async () => {
+    if (!cancelDlg.eventId) return;
+    setCancelDlg(prev => ({ ...prev, cancelling: true }));
     try {
-      await api(`/api/portal/events/${id}`, { method: "DELETE" });
-      setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, status: "cancelled" } : ev));
+      await api(`/api/portal/events/${cancelDlg.eventId}?slots=${cancelSlotsChoice}`, { method: "DELETE" });
+      setEvents(prev => prev.map(ev => ev.id === cancelDlg.eventId ? { ...ev, status: "cancelled" } : ev));
+      setCancelDlg({ open: false, eventId: null, eventName: "", cancelling: false });
       toast({ title: "Tournament cancelled", description: "Registered golfers have been notified." });
-    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    } catch (e: any) {
+      setCancelDlg(prev => ({ ...prev, cancelling: false }));
+      toast({ title: "Error", description: (e as any).message, variant: "destructive" });
+    }
   };
 
   // ── Registrations ─────────────────────────────────────────────────────────
@@ -2136,6 +2153,79 @@ export default function Events() {
           ]);
         } : undefined}
       />
+
+      {/* ── Cancel Tournament Dialog ──────────────────────────────────────────── */}
+      <Dialog open={cancelDlg.open} onOpenChange={o => { if (!o && !cancelDlg.cancelling) setCancelDlg(prev => ({ ...prev, open: false })); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-700">
+              <XCircle className="h-5 w-5" />
+              Cancel Tournament
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">{cancelDlg.eventName}</span> will be cancelled and all registered golfers will be notified. Their draw slots will be cleared.
+          </p>
+
+          <p className="text-sm font-medium">What should happen to the scheduled tee times?</p>
+
+          <div className="space-y-2">
+            {/* Option: Keep as open tee times */}
+            <button
+              type="button"
+              onClick={() => setCancelSlotsChoice("open")}
+              className={`w-full text-left rounded-lg border p-3 transition-colors ${cancelSlotsChoice === "open" ? "border-[#1a5c38] bg-[#1a5c38]/5 ring-1 ring-[#1a5c38]" : "border-border hover:border-muted-foreground/50"}`}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${cancelSlotsChoice === "open" ? "border-[#1a5c38]" : "border-muted-foreground/40"}`}>
+                  {cancelSlotsChoice === "open" && <div className="h-2 w-2 rounded-full bg-[#1a5c38]" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Keep as open tee times</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Tee slots stay on the schedule as regular public slots — golfers can still book them.</p>
+                </div>
+              </div>
+            </button>
+
+            {/* Option: Delete tee times */}
+            <button
+              type="button"
+              onClick={() => setCancelSlotsChoice("delete")}
+              className={`w-full text-left rounded-lg border p-3 transition-colors ${cancelSlotsChoice === "delete" ? "border-red-500 bg-red-50 ring-1 ring-red-500" : "border-border hover:border-muted-foreground/50"}`}
+            >
+              <div className="flex items-start gap-2.5">
+                <div className={`mt-0.5 h-4 w-4 shrink-0 rounded-full border-2 flex items-center justify-center ${cancelSlotsChoice === "delete" ? "border-red-500" : "border-muted-foreground/40"}`}>
+                  {cancelSlotsChoice === "delete" && <div className="h-2 w-2 rounded-full bg-red-500" />}
+                </div>
+                <div>
+                  <p className="text-sm font-medium">Delete tee times</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">Remove all tee slots from the schedule entirely — no bookings will be possible for these times.</p>
+                </div>
+              </div>
+            </button>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={cancelDlg.cancelling}
+              onClick={() => setCancelDlg(prev => ({ ...prev, open: false }))}
+            >
+              Go Back
+            </Button>
+            <Button
+              variant="destructive"
+              className="flex-1"
+              disabled={cancelDlg.cancelling}
+              onClick={executeCancelTournament}
+            >
+              {cancelDlg.cancelling ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Cancelling…</> : "Cancel Tournament"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Conflict Resolution Dialog ──────────────────────────────────────── */}
       <Dialog open={conflictDialog.open} onOpenChange={o => { if (!o && !conflictDialog.resolving) setConflictDialog(prev => ({ ...prev, open: false })); }}>

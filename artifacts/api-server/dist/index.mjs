@@ -64110,6 +64110,7 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
+  const slotsMode = req.query["slots"] === "delete" ? "delete" : "open";
   const audience = await query(
     `SELECT DISTINCT u.id, u.push_token
      FROM users u
@@ -64124,11 +64125,15 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const dateTo = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
-  const slotDel = await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
-  await run(
-    "DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL",
-    [club.id, dateFrom, dateTo]
-  );
+  if (slotsMode === "open") {
+    await run("UPDATE portal_tee_slots SET event_id = NULL WHERE event_id = ?", [evId]);
+  } else {
+    await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
+    await run(
+      "DELETE FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ? AND event_id IS NULL",
+      [club.id, dateFrom, dateTo]
+    );
+  }
   const title = `\u274C Tournament Cancelled \u2014 ${club.name}`;
   const body = `${String(ev.name)} has been cancelled. We're sorry for the inconvenience.`;
   const data = { type: "event_cancelled", event_id: evId, club_id: club.id };

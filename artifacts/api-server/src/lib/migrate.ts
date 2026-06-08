@@ -561,6 +561,18 @@ async function createSchema(): Promise<void> {
     )
   `);
 
+  // ── Tournament templates ──────────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS tournament_templates (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(100) NOT NULL,
+      template_data JSONB NOT NULL,
+      created_at    TIMESTAMP DEFAULT NOW(),
+      updated_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
   // ── updated_at trigger function ───────────────────────────────────────────
   await ddl(`
     CREATE OR REPLACE FUNCTION set_updated_at()
@@ -571,6 +583,7 @@ async function createSchema(): Promise<void> {
 
   const triggerTables = [
     "tee_time_schedule_configs",
+    "tournament_templates",
     "platform_settings",
     "wallets",
     "ad_removal_config",

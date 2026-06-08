@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
-  AlertTriangle,
+  AlertTriangle, BookmarkPlus, Loader2,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -293,6 +293,17 @@ export default function Events() {
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);
 
+  // Tournament templates
+  const [templates, setTemplates]         = useState<Array<{ id: number; name: string; template_data: any }>>([]);
+  const [templatesLoading, setTemplatesLoading] = useState(false);
+  const [showTplSave, setShowTplSave]     = useState(false);
+  const [tplSaveName, setTplSaveName]     = useState("");
+  const [savingTpl, setSavingTpl]         = useState(false);
+  const [renamingTplId, setRenamingTplId] = useState<number | null>(null);
+  const [renameTplVal, setRenameTplVal]   = useState("");
+  const [teeConfigSnapshot, setTeeConfigSnapshot] = useState<{ config_type: "A" | "B"; config_data: any } | null>(null);
+  const [pendingTeeConfig, setPendingTeeConfig]   = useState<{ config_type: "A" | "B"; config_data: any } | null>(null);
+
   // Auto-resize description textarea when dialog opens with existing content.
   // Radix Dialog animates in, so the ref isn't attached until after the first frame.
   useEffect(() => {
@@ -465,6 +476,67 @@ export default function Events() {
     } finally { setSlotSaving(false); }
   };
 
+  // ── Tournament template handlers ──────────────────────────────────────────
+
+  useEffect(() => {
+    if (!dlgOpen) { setShowTplSave(false); setTplSaveName(""); return; }
+    setTemplatesLoading(true);
+    api<Array<{ id: number; name: string; template_data: any }>>("/api/portal/tournament-templates")
+      .then(setTemplates)
+      .catch(() => {})
+      .finally(() => setTemplatesLoading(false));
+  }, [dlgOpen]);
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = tplSaveName.trim();
+    if (!name) return;
+    setSavingTpl(true);
+    try {
+      const { event_date, end_date, entries_open, entries_close, ...rest } = form;
+      const template_data = { ...rest, ...(teeConfigSnapshot ? { tee_config: teeConfigSnapshot } : {}) };
+      const saved = await api<{ id: number; name: string; template_data: any }>("/api/portal/tournament-templates", {
+        method: "POST",
+        body: JSON.stringify({ name, template_data }),
+      });
+      setTemplates(prev => [...prev, saved]);
+      setTplSaveName("");
+      setShowTplSave(false);
+      toast({ title: "Template saved", description: `"${name}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally { setSavingTpl(false); }
+  };
+
+  const handleLoadTemplate = (tpl: { id: number; name: string; template_data: any }) => {
+    const { tee_config, ...fields } = tpl.template_data;
+    setForm(f => ({ ...EMPTY_FORM, ...f, ...fields, event_date: f.event_date, end_date: f.end_date, entries_open: f.entries_open, entries_close: f.entries_close }));
+    if (tee_config) { setPendingTeeConfig(tee_config); setTeeConfigSnapshot(tee_config); }
+    toast({ title: `Template "${tpl.name}" loaded`, description: tee_config ? "Tee schedule config ready in the generator." : "Form pre-filled — set the dates to continue." });
+  };
+
+  const handleRenameTpl = async (id: number) => {
+    const name = renameTplVal.trim();
+    if (!name) return;
+    try {
+      await api(`/api/portal/tournament-templates/${id}`, { method: "PUT", body: JSON.stringify({ name }) });
+      setTemplates(prev => prev.map(t => t.id === id ? { ...t, name } : t));
+      setRenamingTplId(null);
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const handleDeleteTemplate = async (id: number, name: string) => {
+    if (!confirm(`Delete template "${name}"?`)) return;
+    try {
+      await api(`/api/portal/tournament-templates/${id}`, { method: "DELETE" });
+      setTemplates(prev => prev.filter(t => t.id !== id));
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  };
+
   const openAdd = () => {
     setForm(EMPTY_FORM);
     setEditId(null);
@@ -474,6 +546,8 @@ export default function Events() {
     setNewSlotDate("");
     setNewSlotTime("");
     setNewSlotPlayers(4);
+    setTeeConfigSnapshot(null);
+    setPendingTeeConfig(null);
     setDlgOpen(true);
   };
 
@@ -1242,6 +1316,85 @@ export default function Events() {
           <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Tournament</DialogTitle></DialogHeader>
           <div className="space-y-4 py-2">
 
+            {/* ── Templates ────────────────────────────────────────────────── */}
+            <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />
+                  <span className="text-sm font-semibold text-[#1a5c38]">Templates</span>
+                  {teeConfigSnapshot && (
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
+                  )}
+                </div>
+                {!readOnly && !showTplSave && (
+                  <Button size="sm" variant="outline"
+                    className="h-6 px-2 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                    onClick={() => setShowTplSave(true)}>
+                    <BookmarkPlus className="h-3 w-3 mr-1" />Save as Template
+                  </Button>
+                )}
+              </div>
+
+              {showTplSave && (
+                <form className="flex gap-2" onSubmit={handleSaveTemplate}>
+                  <Input
+                    className="h-7 text-xs flex-1"
+                    placeholder="Template name e.g. Club Championship Setup…"
+                    value={tplSaveName}
+                    onChange={e => setTplSaveName(e.target.value)}
+                    autoFocus
+                  />
+                  <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
+                    {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                  </Button>
+                  <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                    onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </form>
+              )}
+
+              {templatesLoading ? (
+                <p className="text-xs text-muted-foreground italic">Loading templates…</p>
+              ) : templates.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No templates yet — configure below and save for quick reuse.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {templates.map(tpl => (
+                    <div key={tpl.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5">
+                      {tpl.template_data?.tee_config && (
+                        <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700" title="Includes tee schedule config">tee</span>
+                      )}
+                      {renamingTplId === tpl.id ? (
+                        <form className="flex items-center gap-1.5 flex-1 min-w-0" onSubmit={e => { e.preventDefault(); handleRenameTpl(tpl.id); }}>
+                          <Input className="h-6 text-xs flex-1 min-w-0" value={renameTplVal}
+                            onChange={e => setRenameTplVal(e.target.value)} autoFocus onBlur={() => setRenamingTplId(null)} />
+                          <Button type="submit" size="sm" className="h-6 px-2 text-xs bg-[#1a5c38] hover:bg-[#164d30]">Save</Button>
+                        </form>
+                      ) : (
+                        <>
+                          <span
+                            className="flex-1 text-sm font-medium truncate cursor-pointer hover:text-[#1a5c38]"
+                            title="Double-click to rename"
+                            onDoubleClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}>
+                            {tpl.name}
+                          </span>
+                          <Button size="sm" variant="outline"
+                            className="h-6 px-2 text-xs flex-shrink-0 border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                            onClick={() => handleLoadTemplate(tpl)}>Load</Button>
+                          <Button size="sm" variant="ghost"
+                            className="h-6 w-6 p-0 flex-shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}>
+                            <X className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Basic info */}
             <div className="space-y-1.5">
               <Label>Tournament Name *</Label>
@@ -1870,6 +2023,8 @@ export default function Events() {
         onOpenChange={setGenDialogOpen}
         initialDate={genDialogDate}
         eventId={editId ?? undefined}
+        initialConfig={pendingTeeConfig}
+        onConfigSnapshot={cfg => setTeeConfigSnapshot(cfg)}
         onComplete={() => { if (editId) loadEventSlots(editId); }}
         onStagedSlots={!editId ? (slots) => {
           const newDates = new Set(slots.map(s => s.date));

@@ -65221,6 +65221,48 @@ router14.delete("/portal/schedule-configs/:id", requireClubAuth2, async (req, re
   await run("DELETE FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
   res.json({ message: "Deleted" });
 });
+router14.get("/portal/tournament-templates", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const rows = await query(
+    "SELECT id, name, template_data, created_at FROM tournament_templates WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json(rows.map((r) => ({ ...r, template_data: typeof r.template_data === "string" ? JSON.parse(r.template_data) : r.template_data })));
+});
+router14.post("/portal/tournament-templates", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { name, template_data } = req.body ?? {};
+  if (!name || !template_data) {
+    res.status(400).json({ message: "name and template_data are required" });
+    return;
+  }
+  const id = await exec(
+    "INSERT INTO tournament_templates (club_id, name, template_data) VALUES (?, ?, ?)",
+    [club.id, String(name).trim(), JSON.stringify(template_data)]
+  );
+  res.status(201).json({ id, name, template_data });
+});
+router14.put("/portal/tournament-templates/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const tplId = Number(req.params.id);
+  const existing = await row("SELECT id FROM tournament_templates WHERE id = ? AND club_id = ?", [tplId, club.id]);
+  if (!existing) {
+    res.status(404).json({ message: "Template not found" });
+    return;
+  }
+  const { name } = req.body ?? {};
+  await exec(
+    "UPDATE tournament_templates SET name = COALESCE(?, name) WHERE id = ? AND club_id = ?",
+    [name ? String(name).trim() : null, tplId, club.id]
+  );
+  res.json({ message: "Updated" });
+});
+router14.delete("/portal/tournament-templates/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const tplId = Number(req.params.id);
+  await run("DELETE FROM tournament_templates WHERE id = ? AND club_id = ?", [tplId, club.id]);
+  res.json({ message: "Deleted" });
+});
 router14.get("/portal/pricing-tiers", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   let rows;
@@ -67702,6 +67744,16 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS tournament_templates (
+      id            SERIAL PRIMARY KEY,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(100) NOT NULL,
+      template_data JSONB NOT NULL,
+      created_at    TIMESTAMP DEFAULT NOW(),
+      updated_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
     CREATE OR REPLACE FUNCTION set_updated_at()
     RETURNS TRIGGER AS $$
     BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
@@ -67709,6 +67761,7 @@ async function createSchema() {
   `);
   const triggerTables = [
     "tee_time_schedule_configs",
+    "tournament_templates",
     "platform_settings",
     "wallets",
     "ad_removal_config",

@@ -1991,6 +1991,47 @@ router.delete("/portal/schedule-configs/:id", requireClubAuth, async (req: Reque
   res.json({ message: "Deleted" });
 });
 
+// ── Tournament Templates ───────────────────────────────────────────────────────
+router.get("/portal/tournament-templates", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const rows = await query<any>(
+    "SELECT id, name, template_data, created_at FROM tournament_templates WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json(rows.map(r => ({ ...r, template_data: typeof r.template_data === "string" ? JSON.parse(r.template_data) : r.template_data })));
+});
+
+router.post("/portal/tournament-templates", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { name, template_data } = req.body ?? {};
+  if (!name || !template_data) { res.status(400).json({ message: "name and template_data are required" }); return; }
+  const id = await exec(
+    "INSERT INTO tournament_templates (club_id, name, template_data) VALUES (?, ?, ?)",
+    [club.id, String(name).trim(), JSON.stringify(template_data)]
+  );
+  res.status(201).json({ id, name, template_data });
+});
+
+router.put("/portal/tournament-templates/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const tplId = Number(req.params.id);
+  const existing = await row<any>("SELECT id FROM tournament_templates WHERE id = ? AND club_id = ?", [tplId, club.id]);
+  if (!existing) { res.status(404).json({ message: "Template not found" }); return; }
+  const { name } = req.body ?? {};
+  await exec(
+    "UPDATE tournament_templates SET name = COALESCE(?, name) WHERE id = ? AND club_id = ?",
+    [name ? String(name).trim() : null, tplId, club.id]
+  );
+  res.json({ message: "Updated" });
+});
+
+router.delete("/portal/tournament-templates/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const tplId = Number(req.params.id);
+  await run("DELETE FROM tournament_templates WHERE id = ? AND club_id = ?", [tplId, club.id]);
+  res.json({ message: "Deleted" });
+});
+
 router.get("/portal/pricing-tiers", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   // Try to include the hidden column; fall back gracefully if migration hasn't run yet

@@ -157,7 +157,7 @@ function BlockEditor({
 // generation so the caller can reload its slot list.
 
 export function GenerateTeeTimesDialog({
-  open, onOpenChange, onComplete, initialDate, eventId, onStagedSlots,
+  open, onOpenChange, onComplete, initialDate, eventId, onStagedSlots, onConfigSnapshot, initialConfig,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
@@ -165,6 +165,8 @@ export function GenerateTeeTimesDialog({
   initialDate?: string;
   eventId?: number;
   onStagedSlots?: (slots: Array<{ date: string; time: string; total_slots: number }>) => void;
+  onConfigSnapshot?: (cfg: { config_type: "A" | "B"; config_data: any }) => void;
+  initialConfig?: { config_type: "A" | "B"; config_data: any } | null;
 }) {
   const lockDate = !!initialDate;
   const { toast } = useToast();
@@ -194,6 +196,18 @@ export function GenerateTeeTimesDialog({
   const [cfgB, setCfgB] = useState({ ...CFG_B_DEFAULT });
   const updateB = (key: "morning" | "midday") => (patch: Partial<Block>) =>
     setCfgB(prev => ({ ...prev, [key]: { ...prev[key], ...patch } }));
+
+  // Apply an externally-supplied config (e.g. loaded from a tournament template)
+  useEffect(() => {
+    if (!initialConfig) return;
+    if (initialConfig.config_type === "A") {
+      setCfgA(prev => ({ ...CFG_A_DEFAULT, ...initialConfig.config_data, morning: { ...CFG_A_DEFAULT.morning, ...initialConfig.config_data.morning }, midday: { ...CFG_A_DEFAULT.midday, ...initialConfig.config_data.midday }, twilight: { ...CFG_A_DEFAULT.twilight, ...initialConfig.config_data.twilight } }));
+      setTab("A");
+    } else {
+      setCfgB(prev => ({ ...CFG_B_DEFAULT, ...initialConfig.config_data, morning: { ...CFG_B_DEFAULT.morning, ...initialConfig.config_data.morning }, midday: { ...CFG_B_DEFAULT.midday, ...initialConfig.config_data.midday } }));
+      setTab("B");
+    }
+  }, [initialConfig]);
 
   // Sync dates when initialDate changes (dialog may be re-used for different days)
   useEffect(() => {
@@ -317,6 +331,7 @@ export function GenerateTeeTimesDialog({
 
   const handleGenerate = async () => {
     if (preview.perDay === 0) { toast({ title: "No tee times to generate", variant: "destructive" }); return; }
+    onConfigSnapshot?.({ config_type: tab, config_data: tab === "A" ? { ...cfgA } : { ...cfgB } });
     setGenerating(true);
     const dates = datesInRange(dateFrom, dateTo);
 

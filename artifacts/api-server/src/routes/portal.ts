@@ -786,9 +786,12 @@ router.delete("/portal/ads/:id", requireClubAuth, async (req: Request, res: Resp
 
 router.get("/portal/events", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club     = getClub(req);
-  const upcoming = req.query.upcoming !== "false";
+  const upcoming = req.query.upcoming;
   const today    = new Date().toISOString().split("T")[0];
-  const filter   = upcoming ? `AND e.event_date >= '${today}'` : `AND e.event_date < '${today}'`;
+  // upcoming=all → no date filter (client handles splitting); otherwise legacy behaviour
+  const filter   = upcoming === "all"   ? "" :
+                   upcoming === "false" ? `AND e.event_date < '${today}'` :
+                                          `AND e.event_date >= '${today}'`;
   const events   = await query<any>(
     `SELECT e.*,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) as total_registrations,

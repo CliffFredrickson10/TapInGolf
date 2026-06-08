@@ -212,7 +212,7 @@ export default function Events() {
 
   const [events, setEvents]     = useState<GolfEvent[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [showPast, setShowPast] = useState(false);
+  const [eventsTab, setEventsTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
 
   // Detail sheet
   const [detail, setDetail]     = useState<GolfEvent | null>(null);
@@ -349,14 +349,31 @@ export default function Events() {
   const loadEvents = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<GolfEvent[]>(`/api/portal/events?upcoming=${!showPast}`);
+      const data = await api<GolfEvent[]>(`/api/portal/events?upcoming=all`);
       setEvents(data);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
-  }, [showPast]);
+  }, []);
 
   useEffect(() => { loadEvents(); }, [loadEvents]);
+
+  // ── Derived lists ──────────────────────────────────────────────────────────
+  const today = new Date().toISOString().slice(0, 10);
+
+  const upcomingEvents = events
+    .filter(ev => ev.status !== "cancelled" && ev.event_date >= today)
+    .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.start_time ?? "").localeCompare(b.start_time ?? ""));
+
+  const pastEvents = events
+    .filter(ev => ev.status !== "cancelled" && ev.event_date < today)
+    .sort((a, b) => b.event_date.localeCompare(a.event_date) || (b.start_time ?? "").localeCompare(a.start_time ?? ""));
+
+  const cancelledEvents = events
+    .filter(ev => ev.status === "cancelled")
+    .sort((a, b) => b.event_date.localeCompare(a.event_date));
+
+  const activeList = eventsTab === "upcoming" ? upcomingEvents : eventsTab === "past" ? pastEvents : cancelledEvents;
 
   const loadRegs = useCallback(async (ev: GolfEvent) => {
     setRegsLoading(true);
@@ -858,32 +875,48 @@ export default function Events() {
           <h1 className="text-3xl font-bold tracking-tight">Tournaments</h1>
           <p className="text-muted-foreground mt-1">Manage club tournaments and competitions.</p>
         </div>
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Switch checked={showPast} onCheckedChange={setShowPast} id="past-toggle" />
-            <Label htmlFor="past-toggle">Show past</Label>
-          </div>
-          <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
-            <Plus className="h-4 w-4" />New Tournament
-          </Button>
-        </div>
+        <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
+          <Plus className="h-4 w-4" />New Tournament
+        </Button>
+      </div>
+
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b mb-4">
+        {(["upcoming", "past", "cancelled"] as const).map(tab => {
+          const count = tab === "upcoming" ? upcomingEvents.length : tab === "past" ? pastEvents.length : cancelledEvents.length;
+          const active = eventsTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setEventsTab(tab)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 capitalize ${active ? "border-[#1a5c38] text-[#1a5c38]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              {tab}
+              {!loading && count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${tab === "cancelled" ? "bg-red-100 text-red-600" : tab === "upcoming" ? "bg-[#1a5c38]/10 text-[#1a5c38]" : "bg-gray-100 text-gray-600"}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
       {/* List */}
       {loading ? (
         <Skeleton className="h-48 w-full" />
-      ) : events.length === 0 ? (
+      ) : activeList.length === 0 ? (
         <Card>
           <CardContent className="py-14 text-center text-muted-foreground">
-            {showPast ? "No past tournaments." : "No upcoming tournaments. Create your first one."}
+            {eventsTab === "upcoming" ? "No upcoming tournaments. Create your first one." : eventsTab === "past" ? "No past tournaments." : "No cancelled tournaments."}
           </CardContent>
         </Card>
       ) : (
         <div className="space-y-3">
-          {events.map(ev => (
+          {activeList.map(ev => (
             <Card
               key={ev.id}
-              className="cursor-pointer hover:border-[#1a5c38]/40 hover:bg-green-50/20 transition-colors"
+              className={`cursor-pointer hover:border-[#1a5c38]/40 hover:bg-green-50/20 transition-colors ${ev.status === "cancelled" ? "opacity-70" : ""}`}
               onClick={() => openDetail(ev)}
             >
               <CardContent className="p-4">

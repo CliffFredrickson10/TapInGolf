@@ -1867,7 +1867,7 @@ export default function Schedule() {
                 <Label className="text-xs font-medium mb-1 block">Lookahead window</Label>
                 <Select value={String(ruleForm.lookahead_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookahead_days: Number(v) }))}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent>
+                  <SelectContent side="bottom" className="max-h-48 overflow-y-auto">
                     {Array.from({ length: 28 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} day{d !== 1 ? "s" : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>

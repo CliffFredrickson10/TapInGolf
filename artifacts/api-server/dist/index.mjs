@@ -58775,10 +58775,6 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  if (!ev.scoring_enabled) {
-    res.json({ leaderboard: [] });
-    return;
-  }
   const ts = teamSize(ev.format ?? "");
   if (ts !== "individual") {
     const scores2 = await query(

@@ -943,7 +943,6 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   const evId = parseInt(req.params.id, 10);
   const ev = await row<any>("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ?", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
-  if (!ev.scoring_enabled) { res.json({ leaderboard: [] }); return; }
 
   const ts = teamSize(ev.format ?? "");
 

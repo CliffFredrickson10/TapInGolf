@@ -356,6 +356,7 @@ export function GenerateTeeTimesDialog({
         title: "Schedule ready",
         description: `${allSlots.length} tee slot${allSlots.length !== 1 ? "s" : ""} staged${skippedNote} — saved when you create the tournament.`,
       });
+      setGenerating(false);
       onOpenChange(false);
       onComplete(dateFrom);
       return;

@@ -1606,7 +1606,7 @@ export default function Events() {
             <Card className="bg-muted/30">
               <CardContent className="p-4 space-y-3">
                 {[
-                  { key: "entries_required", label: "Entries / enrollment required", desc: "Golfers must formally enter — entries open/close dates apply. When off, a normal tee time booking is all that's needed." },
+                  { key: "entries_required", label: "Entries required (ballot if oversubscribed)", desc: "Golfers must formally enter — entries open/close dates apply, and a ballot is used if the field is full. When off, a normal tee time booking is all that's needed." },
                   { key: "payment_required", label: "Payment required", desc: "Golfers must pay before their spot is confirmed" },
                   { key: "scoring_enabled",  label: "Live scoring",     desc: "Enable score submission and leaderboard in the mobile app" },
                 ].map(opt => (
@@ -1621,27 +1621,13 @@ export default function Events() {
                         setForm(f => ({
                           ...f,
                           [opt.key]: v,
-                          // clear ballot when enrollment is turned off
-                          ...(opt.key === "entries_required" && !v ? { ballot: false } : {}),
+                          // ballot always mirrors entries_required
+                          ...(opt.key === "entries_required" ? { ballot: v } : {}),
                         }));
                       }}
                     />
                   </div>
                 ))}
-
-                {/* Ballot — sub-option, only relevant when enrollment is required */}
-                {form.entries_required && (
-                  <div className="flex items-center justify-between gap-4 pl-4 border-l-2 border-muted-foreground/20">
-                    <div>
-                      <p className="text-sm font-medium">Ballot if oversubscribed</p>
-                      <p className="text-xs text-muted-foreground">When the field is full, a ballot determines who gets a spot</p>
-                    </div>
-                    <Switch
-                      checked={!!form.ballot}
-                      onCheckedChange={v => setForm(f => ({ ...f, ballot: v }))}
-                    />
-                  </div>
-                )}
 
                 {/* Payment method options — shown when payment is required */}
                 {form.payment_required && (

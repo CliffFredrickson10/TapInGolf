@@ -1382,6 +1382,108 @@ router.put("/portal/events/:id/registrations/:userId", requireClubAuth, async (r
   res.json({ success: true });
 });
 
+// ── Approve all pending registrations (ballot-aware) ──────────────────────────
+router.post("/portal/events/:id/registrations/approve-all", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+
+  const event = await row<any>(
+    `SELECT e.id, e.name, e.payment_required, e.entry_fee, e.max_participants,
+            c.name as club_name
+     FROM golf_events e JOIN clubs c ON c.id = e.club_id
+     WHERE e.id = ? AND e.club_id = ?`,
+    [evId, club.id]
+  );
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  // All pending registrations — oldest first (by registered_at) so early registrants get priority
+  const pending = await query<any>(
+    `SELECT er.id, er.user_id, u.push_token, u.name as user_name
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'pending'
+     ORDER BY er.registered_at ASC`,
+    [evId]
+  );
+
+  if (pending.length === 0) {
+    res.json({ approved: 0, rejected: 0, message: "No pending registrations" });
+    return;
+  }
+
+  // How many spots remain?
+  const cap = Number(event.max_participants ?? 0);
+  let toApprove: any[];
+  let toReject:  any[];
+
+  if (cap > 0) {
+    const { n: alreadyApproved } = (await row<any>(
+      "SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status = 'approved'",
+      [evId]
+    ))!;
+    const remaining = Math.max(0, cap - Number(alreadyApproved));
+    toApprove = pending.slice(0, remaining);
+    toReject  = pending.slice(remaining);
+  } else {
+    // No cap — approve everyone
+    toApprove = pending;
+    toReject  = [];
+  }
+
+  const needsPayment = event.payment_required && event.entry_fee;
+  const { sendPushNotifications } = await import("../lib/notifications");
+
+  // Approve
+  if (toApprove.length > 0) {
+    const placeholders = toApprove.map(() => "?").join(",");
+    await run(
+      `UPDATE event_registrations SET status = 'approved' WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'pending'`,
+      [evId, ...toApprove.map((p: any) => p.user_id)]
+    );
+    const approveTitle = "Spot Confirmed ⛳";
+    const approveBody  = needsPayment
+      ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.`
+      : `Your entry for "${event.name}" is confirmed.`;
+    const approveData  = { type: "event_registration_update", event_id: evId, status: "approved" };
+    const pushTokens: string[] = [];
+    for (const p of toApprove) {
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [p.user_id, "event_registration_update", approveTitle, approveBody, JSON.stringify(approveData)]
+      );
+      if (p.push_token) pushTokens.push(p.push_token);
+    }
+    if (pushTokens.length > 0) {
+      sendPushNotifications(pushTokens.map(to => ({ to, sound: "default", title: approveTitle, body: approveBody, data: approveData })));
+    }
+  }
+
+  // Reject overflow (ballot)
+  if (toReject.length > 0) {
+    const placeholders = toReject.map(() => "?").join(",");
+    await run(
+      `UPDATE event_registrations SET status = 'rejected' WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'pending'`,
+      [evId, ...toReject.map((p: any) => p.user_id)]
+    );
+    const rejectTitle = "Registration Update";
+    const rejectBody  = `Your entry for "${event.name}" was not accepted — the field is full.`;
+    const rejectData  = { type: "event_registration_update", event_id: evId, status: "rejected" };
+    const pushTokens: string[] = [];
+    for (const p of toReject) {
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [p.user_id, "event_registration_update", rejectTitle, rejectBody, JSON.stringify(rejectData)]
+      );
+      if (p.push_token) pushTokens.push(p.push_token);
+    }
+    if (pushTokens.length > 0) {
+      sendPushNotifications(pushTokens.map(to => ({ to, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData })));
+    }
+  }
+
+  res.json({ approved: toApprove.length, rejected: toReject.length });
+});
+
 // ── Generate draw (returns entries without saving — staff reviews then publishes) ──
 router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club  = getClub(req);

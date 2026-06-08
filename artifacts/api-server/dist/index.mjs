@@ -64712,6 +64712,93 @@ router14.put("/portal/events/:id/registrations/:userId", requireClubAuth2, async
   }
   res.json({ success: true });
 });
+router14.post("/portal/events/:id/registrations/approve-all", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const event = await row(
+    `SELECT e.id, e.name, e.payment_required, e.entry_fee, e.max_participants,
+            c.name as club_name
+     FROM golf_events e JOIN clubs c ON c.id = e.club_id
+     WHERE e.id = ? AND e.club_id = ?`,
+    [evId, club.id]
+  );
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const pending = await query(
+    `SELECT er.id, er.user_id, u.push_token, u.name as user_name
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'pending'
+     ORDER BY er.registered_at ASC`,
+    [evId]
+  );
+  if (pending.length === 0) {
+    res.json({ approved: 0, rejected: 0, message: "No pending registrations" });
+    return;
+  }
+  const cap = Number(event.max_participants ?? 0);
+  let toApprove;
+  let toReject;
+  if (cap > 0) {
+    const { n: alreadyApproved } = await row(
+      "SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status = 'approved'",
+      [evId]
+    );
+    const remaining = Math.max(0, cap - Number(alreadyApproved));
+    toApprove = pending.slice(0, remaining);
+    toReject = pending.slice(remaining);
+  } else {
+    toApprove = pending;
+    toReject = [];
+  }
+  const needsPayment = event.payment_required && event.entry_fee;
+  const { sendPushNotifications: sendPushNotifications2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+  if (toApprove.length > 0) {
+    const placeholders = toApprove.map(() => "?").join(",");
+    await run(
+      `UPDATE event_registrations SET status = 'approved' WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'pending'`,
+      [evId, ...toApprove.map((p) => p.user_id)]
+    );
+    const approveTitle = "Spot Confirmed \u26F3";
+    const approveBody = needsPayment ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.` : `Your entry for "${event.name}" is confirmed.`;
+    const approveData = { type: "event_registration_update", event_id: evId, status: "approved" };
+    const pushTokens = [];
+    for (const p of toApprove) {
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [p.user_id, "event_registration_update", approveTitle, approveBody, JSON.stringify(approveData)]
+      );
+      if (p.push_token) pushTokens.push(p.push_token);
+    }
+    if (pushTokens.length > 0) {
+      sendPushNotifications2(pushTokens.map((to) => ({ to, sound: "default", title: approveTitle, body: approveBody, data: approveData })));
+    }
+  }
+  if (toReject.length > 0) {
+    const placeholders = toReject.map(() => "?").join(",");
+    await run(
+      `UPDATE event_registrations SET status = 'rejected' WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'pending'`,
+      [evId, ...toReject.map((p) => p.user_id)]
+    );
+    const rejectTitle = "Registration Update";
+    const rejectBody = `Your entry for "${event.name}" was not accepted \u2014 the field is full.`;
+    const rejectData = { type: "event_registration_update", event_id: evId, status: "rejected" };
+    const pushTokens = [];
+    for (const p of toReject) {
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [p.user_id, "event_registration_update", rejectTitle, rejectBody, JSON.stringify(rejectData)]
+      );
+      if (p.push_token) pushTokens.push(p.push_token);
+    }
+    if (pushTokens.length > 0) {
+      sendPushNotifications2(pushTokens.map((to) => ({ to, sound: "default", title: rejectTitle, body: rejectBody, data: rejectData })));
+    }
+  }
+  res.json({ approved: toApprove.length, rejected: toReject.length });
+});
 router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);

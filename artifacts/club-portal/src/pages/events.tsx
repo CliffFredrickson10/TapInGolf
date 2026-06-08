@@ -856,6 +856,31 @@ export default function Events() {
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
+  const [approvingAll, setApprovingAll] = useState(false);
+  const approveAll = async () => {
+    if (!detail) return;
+    const pendingCount = regs.filter(r => r.status === "pending").length;
+    if (pendingCount === 0) { toast({ title: "No pending registrations" }); return; }
+    setApprovingAll(true);
+    try {
+      const result = await api<{ approved: number; rejected: number; message?: string }>(
+        `/api/portal/events/${detail.id}/registrations/approve-all`,
+        { method: "POST" }
+      );
+      // Reload registrations to reflect new statuses
+      await loadRegs(detail);
+      if (result.rejected > 0) {
+        toast({
+          title: `${result.approved} approved, ${result.rejected} rejected`,
+          description: "Field is full — latest registrants were removed from the ballot.",
+        });
+      } else {
+        toast({ title: `${result.approved} player${result.approved !== 1 ? "s" : ""} approved` });
+      }
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setApprovingAll(false); }
+  };
+
   // ── Draw ──────────────────────────────────────────────────────────────────
 
   const saveDraw = async () => {
@@ -1149,6 +1174,25 @@ export default function Events() {
 
                 {/* REGISTRATIONS TAB */}
                 <TabsContent value="registrations" className="pb-8">
+                  {/* Toolbar */}
+                  {!readOnly && regs.some(r => r.status === "pending") && (
+                    <div className="flex items-center justify-between mb-3">
+                      <span className="text-xs text-muted-foreground">
+                        {regs.filter(r => r.status === "pending").length} pending
+                        {detail.max_participants ? ` · ${detail.max_participants} spot field` : ""}
+                      </span>
+                      <Button
+                        size="sm"
+                        className="h-8 bg-green-600 hover:bg-green-700 gap-1.5 text-xs"
+                        onClick={approveAll}
+                        disabled={approvingAll}
+                      >
+                        {approvingAll
+                          ? <><Loader2 className="h-3.5 w-3.5 animate-spin" />Approving…</>
+                          : <><CheckCircle className="h-3.5 w-3.5" />Approve All</>}
+                      </Button>
+                    </div>
+                  )}
                   {regsLoading ? (
                     <Skeleton className="h-32 w-full" />
                   ) : regs.length === 0 ? (

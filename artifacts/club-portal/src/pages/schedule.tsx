@@ -25,6 +25,7 @@ interface AutoRule {
   season_start: string;
   season_end: string;
   lookahead_days: number;
+  lookback_days: number;
   players_per_slot: number;
   config_type: string;
   config_data: any;
@@ -39,6 +40,7 @@ interface RuleForm {
   season_end_month: string;
   season_end_day: string;
   lookahead_days: number;
+  lookback_days: number;
   players_per_slot: number;
   config_type: string;
   config_data: any;
@@ -56,7 +58,7 @@ const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0")
 const DEFAULT_RULE_FORM: RuleForm = {
   name: "", season_start_month: "09", season_start_day: "01",
   season_end_month: "04", season_end_day: "30",
-  lookahead_days: 14, players_per_slot: 4,
+  lookahead_days: 14, lookback_days: 0, players_per_slot: 4,
   config_type: "A", config_data: {}, active: true,
 };
 
@@ -1220,7 +1222,8 @@ export default function Schedule() {
     setRuleForm({
       name: r.name, season_start_month: sm, season_start_day: sd,
       season_end_month: em, season_end_day: ed,
-      lookahead_days: r.lookahead_days, players_per_slot: r.players_per_slot,
+      lookahead_days: r.lookahead_days, lookback_days: r.lookback_days ?? 0,
+      players_per_slot: r.players_per_slot,
       config_type: r.config_type, config_data: r.config_data, active: r.active,
     });
     setRuleSavedConfigs([]);
@@ -1237,6 +1240,7 @@ export default function Schedule() {
         season_start: `${ruleForm.season_start_month}-${ruleForm.season_start_day}`,
         season_end: `${ruleForm.season_end_month}-${ruleForm.season_end_day}`,
         lookahead_days: ruleForm.lookahead_days,
+        lookback_days: ruleForm.lookback_days,
         players_per_slot: ruleForm.players_per_slot,
         config_type: ruleForm.config_type,
         config_data: ruleForm.config_data,
@@ -1872,10 +1876,20 @@ export default function Schedule() {
               </div>
             </div>
 
-            {/* Lookahead + players */}
-            <div className="grid grid-cols-2 gap-3">
+            {/* Lookback + Lookahead + players */}
+            <div className="grid grid-cols-3 gap-3">
               <div>
-                <Label className="text-xs font-medium mb-1 block">Lookahead window</Label>
+                <Label className="text-xs font-medium mb-1 block">Past days (lookback)</Label>
+                <Select value={String(ruleForm.lookback_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookback_days: Number(v) }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent side="bottom" className="max-h-48 overflow-y-auto">
+                    <SelectItem value="0" className="text-xs">Today only</SelectItem>
+                    {Array.from({ length: 30 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} day{d !== 1 ? "s" : ""} back</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1 block">Future days (lookahead)</Label>
                 <Select value={String(ruleForm.lookahead_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookahead_days: Number(v) }))}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
                   <SelectContent side="bottom" className="max-h-48 overflow-y-auto">

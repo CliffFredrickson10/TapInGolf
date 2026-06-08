@@ -570,6 +570,7 @@ async function createSchema(): Promise<void> {
       season_start     VARCHAR(5)  NOT NULL,  -- 'MM-DD'
       season_end       VARCHAR(5)  NOT NULL,  -- 'MM-DD' (may cross year boundary)
       lookahead_days   INT         NOT NULL DEFAULT 14,
+      lookback_days    INT         NOT NULL DEFAULT 0,
       players_per_slot INT         NOT NULL DEFAULT 4,
       config_type      VARCHAR(1)  NOT NULL DEFAULT 'A',
       config_data      JSONB       NOT NULL DEFAULT '{}',
@@ -578,6 +579,7 @@ async function createSchema(): Promise<void> {
       created_at       TIMESTAMP   DEFAULT NOW()
     )
   `);
+  await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS lookback_days INT NOT NULL DEFAULT 0`);
 
   // ── Tournament templates ──────────────────────────────────────────────────
   await ddl(`

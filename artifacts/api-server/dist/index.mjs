@@ -52489,8 +52489,10 @@ async function runAutoRuleNow(rule) {
   const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : rule.config_data ?? {};
   const slotTemplate = buildSlotsForDay(config_type, configData);
   if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0, no_config: true };
+  const lookback = Number(rule.lookback_days ?? 0);
+  const lookahead = Number(lookahead_days ?? 14);
   const dates = [];
-  for (let i = 0; i < Number(lookahead_days ?? 14); i++) {
+  for (let i = -lookback; i < lookahead; i++) {
     const d = formatDate(addDaysToDate(/* @__PURE__ */ new Date(), i));
     if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
   }
@@ -65377,23 +65379,23 @@ router14.delete("/portal/schedule-configs/:id", requireClubAuth2, async (req, re
 router14.get("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
-    "SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
+    "SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
     [club.id]
   );
   res.json(rows.map((r) => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
 });
 router14.post("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
   if (!name || !season_start || !season_end) {
     res.status(400).json({ message: "name, season_start and season_end are required" });
     return;
   }
   const id = await exec(
-    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), active !== false]
+    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(lookback_days ?? 0), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), active !== false]
   );
-  const created = await row("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
+  const created = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
   res.status(201).json({ ...created, config_data: typeof created?.config_data === "string" ? JSON.parse(created.config_data) : created?.config_data });
 });
 router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
@@ -65404,7 +65406,7 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
     res.status(404).json({ message: "Rule not found" });
     return;
   }
-  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
   const updates = [];
   const vals = [];
   if (name !== void 0) {
@@ -65422,6 +65424,10 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
   if (lookahead_days !== void 0) {
     updates.push("lookahead_days = ?");
     vals.push(Number(lookahead_days));
+  }
+  if (lookback_days !== void 0) {
+    updates.push("lookback_days = ?");
+    vals.push(Number(lookback_days));
   }
   if (players_per_slot !== void 0) {
     updates.push("players_per_slot = ?");
@@ -65445,7 +65451,7 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
   }
   vals.push(ruleId, club.id);
   await run(`UPDATE tee_auto_rules SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
-  const updated = await row("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
+  const updated = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
   res.json({ ...updated, config_data: typeof updated?.config_data === "string" ? JSON.parse(updated.config_data) : updated?.config_data });
 });
 router14.delete("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
@@ -67997,6 +68003,7 @@ async function createSchema() {
       season_start     VARCHAR(5)  NOT NULL,  -- 'MM-DD'
       season_end       VARCHAR(5)  NOT NULL,  -- 'MM-DD' (may cross year boundary)
       lookahead_days   INT         NOT NULL DEFAULT 14,
+      lookback_days    INT         NOT NULL DEFAULT 0,
       players_per_slot INT         NOT NULL DEFAULT 4,
       config_type      VARCHAR(1)  NOT NULL DEFAULT 'A',
       config_data      JSONB       NOT NULL DEFAULT '{}',
@@ -68005,6 +68012,7 @@ async function createSchema() {
       created_at       TIMESTAMP   DEFAULT NOW()
     )
   `);
+  await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS lookback_days INT NOT NULL DEFAULT 0`);
   await ddl(`
     CREATE TABLE IF NOT EXISTS tournament_templates (
       id            SERIAL PRIMARY KEY,

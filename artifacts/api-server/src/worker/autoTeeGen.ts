@@ -81,9 +81,11 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
 
   if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0, no_config: true };
 
-  // Build list of dates in the lookahead window that fall within the season
+  // Build list of dates in the window (lookback_days before today through lookahead_days ahead)
+  const lookback = Number(rule.lookback_days ?? 0);
+  const lookahead = Number(lookahead_days ?? 14);
   const dates: string[] = [];
-  for (let i = 0; i < Number(lookahead_days ?? 14); i++) {
+  for (let i = -lookback; i < lookahead; i++) {
     const d = formatDate(addDaysToDate(new Date(), i));
     if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
   }

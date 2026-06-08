@@ -74,7 +74,7 @@ function buildSlotsForDay(configType: string, configData: any): SlotEntry[] {
 
 // ── Run a single rule ─────────────────────────────────────────────────────────
 
-export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: number; slotsCreated: number; no_config?: boolean }> {
+export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: number; slotsCreated: number; no_config?: boolean; out_of_season?: boolean; season_start?: string; season_end?: string }> {
   const { club_id, season_start, season_end, lookahead_days, players_per_slot, config_type } = rule;
   const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : (rule.config_data ?? {});
   const slotTemplate = buildSlotsForDay(config_type, configData);
@@ -86,6 +86,10 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   for (let i = 0; i < Number(lookahead_days ?? 14); i++) {
     const d = formatDate(addDaysToDate(new Date(), i));
     if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
+  }
+
+  if (!dates.length) {
+    return { datesProcessed: 0, slotsCreated: 0, out_of_season: true, season_start: String(season_start), season_end: String(season_end) };
   }
 
   let datesProcessed = 0;

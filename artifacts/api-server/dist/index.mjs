@@ -52494,6 +52494,9 @@ async function runAutoRuleNow(rule) {
     const d = formatDate(addDaysToDate(/* @__PURE__ */ new Date(), i));
     if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
   }
+  if (!dates.length) {
+    return { datesProcessed: 0, slotsCreated: 0, out_of_season: true, season_start: String(season_start), season_end: String(season_end) };
+  }
   let datesProcessed = 0;
   let slotsCreated = 0;
   for (const date of dates) {
@@ -65460,9 +65463,9 @@ router14.post("/portal/tee-auto-rules/:id/run-now", requireClubAuth2, async (req
     return;
   }
   const { runAutoRuleNow: runAutoRuleNow2 } = await Promise.resolve().then(() => (init_autoTeeGen(), autoTeeGen_exports));
-  const { datesProcessed, slotsCreated, no_config } = await runAutoRuleNow2(rule);
-  if (!no_config) await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
-  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated, no_config: no_config ?? false });
+  const { datesProcessed, slotsCreated, no_config, out_of_season, season_start, season_end } = await runAutoRuleNow2(rule);
+  if (!no_config && !out_of_season) await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
+  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated, no_config: no_config ?? false, out_of_season: out_of_season ?? false, season_start, season_end });
 });
 router14.get("/portal/tournament-templates", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

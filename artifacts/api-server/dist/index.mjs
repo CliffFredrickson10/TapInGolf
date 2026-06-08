@@ -63701,7 +63701,7 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
   let insertId;
   if (evId) {
     const rows = await query(
-      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id, tee_start_type) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
       [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart2(tee_start_type), notes ?? null, evId]
     );
     insertId = rows[0]?.id;
@@ -68965,6 +68965,10 @@ async function seedData() {
   await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general
     ON portal_tee_slots (club_id, date, tee_time, tee_start_type)
     WHERE event_id IS NULL`);
+  await ddl("DROP INDEX IF EXISTS uq_pts_event");
+  await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_event
+    ON portal_tee_slots (club_id, date, tee_time, event_id, tee_start_type)
+    WHERE event_id IS NOT NULL`);
 }
 async function reconcileSlotPlayerCounts() {
   await exec(

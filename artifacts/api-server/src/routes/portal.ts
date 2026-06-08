@@ -443,9 +443,9 @@ router.post("/portal/tee-times", requireClubAuth, async (req: Request, res: Resp
 
   let insertId: number | undefined;
   if (evId) {
-    // Event-exclusive slot — uses the partial unique index on (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL
+    // Event-exclusive slot — uses the partial unique index on (club_id, date, tee_time, event_id, tee_start_type) WHERE event_id IS NOT NULL
     const rows = await query<any>(
-      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
+      "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes, event_id) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, event_id, tee_start_type) WHERE event_id IS NOT NULL DO NOTHING RETURNING id",
       [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart(tee_start_type), notes ?? null, evId]
     );
     insertId = rows[0]?.id;

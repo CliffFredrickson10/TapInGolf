@@ -1279,6 +1279,13 @@ async function seedData(): Promise<void> {
   await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general
     ON portal_tee_slots (club_id, date, tee_time, tee_start_type)
     WHERE event_id IS NULL`);
+
+  // ── Same fix for event slots: uq_pts_event was missing tee_start_type, so the ─────
+  // 10th Tee slot was silently dropped when inserting a two-tee-start tournament.
+  await ddl("DROP INDEX IF EXISTS uq_pts_event");
+  await ddl(`CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_event
+    ON portal_tee_slots (club_id, date, tee_time, event_id, tee_start_type)
+    WHERE event_id IS NOT NULL`);
 }
 
 // Recompute portal_tee_slots.player_count from active (non-cancelled) bookings.

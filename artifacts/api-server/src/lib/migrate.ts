@@ -877,6 +877,8 @@ async function createSchema(): Promise<void> {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_tee_slots_event ON event_tee_slots (event_id)");
+  // event_tee_slots was a junction table superseded by portal_tee_slots.event_id — drop it
+  await ddl("DROP TABLE IF EXISTS event_tee_slots CASCADE");
 
   // Tee-time draw for a tournament round: groups players onto tee slots.
   await ddl(`

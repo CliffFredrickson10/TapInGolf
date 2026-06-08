@@ -1248,11 +1248,6 @@ router.put("/portal/events/:id/tee-slots", requireClubAuth, async (req: Request,
     }
   }
 
-  await exec("DELETE FROM event_tee_slots WHERE event_id = ?", [evId]);
-  for (const slotId of ids) {
-    await exec("INSERT INTO event_tee_slots (event_id, tee_slot_id) VALUES (?, ?)", [evId, slotId]);
-  }
-
   let maxParticipants: number | null = null;
   if (ids.length > 0) {
     const cap = await row<any>(

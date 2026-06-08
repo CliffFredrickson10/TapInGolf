@@ -64823,7 +64823,7 @@ router14.get("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) 
     return;
   }
   const slots = await query(
-    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type
+    `SELECT id, date, tee_time AS time, max_players AS total_slots, is_active AS active, session_type, tee_start_type
      FROM portal_tee_slots
      WHERE event_id = ? AND club_id = ?
      ORDER BY date, tee_time`,
@@ -64850,10 +64850,6 @@ router14.put("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) 
       res.status(400).json({ message: "One or more tee slots not found for this club" });
       return;
     }
-  }
-  await exec("DELETE FROM event_tee_slots WHERE event_id = ?", [evId]);
-  for (const slotId of ids) {
-    await exec("INSERT INTO event_tee_slots (event_id, tee_slot_id) VALUES (?, ?)", [evId, slotId]);
   }
   let maxParticipants = null;
   if (ids.length > 0) {
@@ -68378,6 +68374,7 @@ async function createSchema() {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_tee_slots_event ON event_tee_slots (event_id)");
+  await ddl("DROP TABLE IF EXISTS event_tee_slots CASCADE");
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_draws (
       id            SERIAL PRIMARY KEY,

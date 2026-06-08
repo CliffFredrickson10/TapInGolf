@@ -1506,20 +1506,35 @@ export default function Schedule() {
             ) : (
               <div className="space-y-2">
                 {autoRules.map(rule => (
-                  <div key={rule.id} className="bg-white border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
+                  <div key={rule.id} className={`bg-white border rounded-lg px-4 py-3 flex items-center gap-3 transition-opacity ${rule.active ? "border-green-200" : "border-gray-200 opacity-60"}`}>
                     <Switch
                       checked={rule.active}
                       onCheckedChange={() => !readOnly && handleToggleRule(rule)}
                       disabled={readOnly}
-                      className="data-[state=checked]:bg-amber-500 flex-shrink-0"
+                      className="data-[state=checked]:bg-green-600 flex-shrink-0"
                     />
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{rule.name}</p>
-                      <p className="text-xs text-muted-foreground">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="text-sm font-medium truncate">{rule.name}</p>
+                        {ruleRunning === rule.id ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                            <Loader2 className="h-2.5 w-2.5 animate-spin" /> Generating…
+                          </span>
+                        ) : rule.active ? (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-green-100 text-green-700">
+                            <Zap className="h-2.5 w-2.5" /> Running daily
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                            <X className="h-2.5 w-2.5" /> Paused
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5">
                         Season: <span className="font-medium">{rule.season_start} → {rule.season_end}</span>
-                        &nbsp;·&nbsp;{rule.lookahead_days}d window
+                        &nbsp;·&nbsp;{rule.lookahead_days}d ahead
+                        {rule.lookback_days > 0 && <>&nbsp;·&nbsp;{rule.lookback_days}d back</>}
                         &nbsp;·&nbsp;{rule.players_per_slot} players/slot
-                        &nbsp;·&nbsp;Config {rule.config_type}
                       </p>
                       {rule.last_run_at && (
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -1533,8 +1548,8 @@ export default function Schedule() {
                         <Button
                           size="icon" variant="ghost"
                           className="h-7 w-7 text-amber-600 hover:bg-amber-100"
-                          title="Run now"
-                          disabled={ruleRunning === rule.id}
+                          title={rule.active ? "Run now" : "Enable rule to run"}
+                          disabled={ruleRunning === rule.id || !rule.active}
                           onClick={() => handleRunNow(rule)}
                         >
                           {ruleRunning === rule.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}

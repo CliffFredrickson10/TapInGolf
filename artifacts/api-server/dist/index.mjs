@@ -52497,18 +52497,20 @@ async function runAutoRuleNow(rule) {
   let datesProcessed = 0;
   let slotsCreated = 0;
   for (const date of dates) {
-    const existing = await row(
+    const generalExisting = await row(
       "SELECT COUNT(*) AS cnt FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
       [club_id, date]
     );
-    if (Number(existing?.cnt ?? 0) > 0) continue;
-    const tournamentSlots = await row(
-      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
+    if (Number(generalExisting?.cnt ?? 0) > 0) continue;
+    const occupiedRows = await query(
+      "SELECT tee_time FROM portal_tee_slots WHERE club_id = ? AND date = ?",
       [club_id, date]
     );
-    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
+    const occupiedTimes = new Set(occupiedRows.map((r) => String(r.tee_time).slice(0, 5)));
     datesProcessed++;
     for (const s of slotTemplate) {
+      const slotTime = s.time.slice(0, 5);
+      if (occupiedTimes.has(slotTime)) continue;
       try {
         await exec(
           "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",

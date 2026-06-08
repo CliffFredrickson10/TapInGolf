@@ -938,13 +938,100 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
   if (!reg || reg.status !== "approved") { res.status(403).json({ message: "You must have an approved entry to pay" }); return; }
   if (reg.payment_status === "paid") { res.json({ paid: true, message: "Already paid" }); return; }
 
-  const { payment_method = "stitch" } = req.body ?? {};
+  const { payment_method = "stitch", voucher_code } = req.body ?? {};
 
+  // ── Resolve the entry fee ─────────────────────────────────────────────────
+  // Tiered pricing: look up the user's club rate. Fixed fee otherwise.
+  let fee: number;
+  if (Number(ev.use_tiered_pricing)) {
+    const holes    = ev.holes === 9 ? 9 : 18;
+    const priceCol = holes === 9 ? "price_9h" : "price_18h";
+    const [memberRow, userRow] = await Promise.all([
+      row<any>("SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, user.id]).catch(() => null),
+      row<any>("SELECT date_of_birth FROM users WHERE id = ?", [user.id]).catch(() => null),
+    ]);
+    const dob         = userRow?.date_of_birth ?? null;
+    const hasHna      = await isHnaVerified(user.id);
+    const memberType  = memberRow?.membership_type ?? null;
+    const isHonorary  = memberType === "honorary";
+    const isJuniorAge = !isHonorary && ageIsJunior(dob);
+    const isStudentAge = !isHonorary && !isJuniorAge && ageIsStudent(dob);
+    const isPensionerAge = ageIsPensioner(dob);
+    const tierCandidates: string[] = [];
+    if (isHonorary) {
+      tierCandidates.push("honorary");
+      if (isPensionerAge) tierCandidates.push("pensioner_full");
+    } else if (isJuniorAge) {
+      tierCandidates.push(memberRow ? "junior_member" : "junior_visitor");
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isStudentAge) {
+      tierCandidates.push(memberRow ? "student_member" : "student_visitor");
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isPensionerAge) {
+      tierCandidates.push(memberRow ? pensionerMemberTierType(memberType ?? "") : (hasHna ? "affiliated_pensioner" : "non_affiliated_pensioner"));
+    } else {
+      tierCandidates.push(memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor"));
+    }
+    const candidateRows = await Promise.all(
+      tierCandidates.map(t => row<any>(`SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`, [ev.club_id, t]).catch(() => null))
+    );
+    let tierPrice: number | null = null;
+    for (const tr of candidateRows) {
+      if (!tr) continue;
+      const p = tr[priceCol] != null ? parseFloat(tr[priceCol]) : null;
+      if (p !== null && (tierPrice === null || p < tierPrice)) tierPrice = p;
+    }
+    fee = tierPrice ?? 0;
+  } else {
+    fee = parseFloat(ev.entry_fee ?? "0");
+  }
+
+  // ── Voucher ───────────────────────────────────────────────────────────────
+  if (payment_method === "voucher") {
+    if (!voucher_code) { res.status(400).json({ message: "Voucher code required" }); return; }
+    const codeUpper = String(voucher_code).toUpperCase().trim();
+    let discountAmount = 0;
+    if (codeUpper.startsWith("CV-")) {
+      const cv = await row<any>("SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ?", [codeUpper, user.id]);
+      const cvRemaining = cv ? (cv.value_remaining != null ? parseFloat(cv.value_remaining) : (cv.value_rands ? parseFloat(cv.value_rands) : 0)) : 0;
+      if (!cv || cv.redeemed_at || cvRemaining <= 0 || (cv.expires_at && new Date(cv.expires_at) < new Date())) {
+        res.status(400).json({ message: "Invalid or expired voucher" }); return;
+      }
+      discountAmount = Math.min(cvRemaining, fee);
+    } else {
+      const voucher = await row<any>("SELECT * FROM vouchers WHERE code = ? AND active = 1", [codeUpper]);
+      if (!voucher || (voucher.expires_at && new Date(voucher.expires_at) < new Date()) || (voucher.max_uses !== null && voucher.uses_count >= voucher.max_uses)) {
+        res.status(400).json({ message: "Invalid or expired voucher" }); return;
+      }
+      discountAmount = voucher.discount_type === "percentage"
+        ? Math.round(fee * parseFloat(voucher.discount_value) / 100 * 100) / 100
+        : Math.min(parseFloat(voucher.discount_value), fee);
+      await exec("UPDATE vouchers SET uses_count = uses_count + 1 WHERE id = ?", [voucher.id]);
+    }
+    await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'voucher', paid_at = NOW() WHERE id = ?", [reg.id]);
+    res.json({ paid: true, discount: discountAmount, final_fee: Math.max(0, fee - discountAmount) });
+    return;
+  }
+
+  // ── Prepaid round ─────────────────────────────────────────────────────────
+  if (payment_method === "prepaid") {
+    const membership = await row<any>(
+      "SELECT id, prepaid_rounds, prepaid_rounds_used FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+      [ev.club_id, user.id]
+    );
+    if (!membership) { res.status(403).json({ message: "Prepaid rounds can only be used at your home club as an active member." }); return; }
+    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
+    if (remaining <= 0) { res.status(400).json({ message: "You have no prepaid rounds remaining at this club." }); return; }
+    await exec("UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1 WHERE id = ?", [membership.id]);
+    await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'prepaid', paid_at = NOW() WHERE id = ?", [reg.id]);
+    res.json({ paid: true });
+    return;
+  }
+
+  // ── Wallet ────────────────────────────────────────────────────────────────
   if (payment_method === "wallet") {
-    // Deduct from user wallet
     const walletRow = await row<any>("SELECT balance FROM user_wallets WHERE user_id = ?", [user.id]);
     const balance = parseFloat(walletRow?.balance ?? "0");
-    const fee = parseFloat(ev.entry_fee ?? "0");
     if (balance < fee) { res.status(400).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${fee.toFixed(2)} required)` }); return; }
     await exec("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?", [fee, user.id]);
     await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'wallet', paid_at = NOW() WHERE id = ?", [reg.id]);
@@ -952,13 +1039,19 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
     return;
   }
 
-  // Stitch — create a payment link
+  // ── Stitch ────────────────────────────────────────────────────────────────
+  if (fee <= 0) {
+    // Free entry (honorary member, complimentary tier, etc.) — mark paid immediately
+    await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'free', paid_at = NOW() WHERE id = ?", [reg.id]);
+    res.json({ paid: true });
+    return;
+  }
   const { createStitchPayment } = await import("../lib/stitch");
   const host = process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080";
   const merchantReference = `event-${evId}-user-${user.id}`;
   try {
     const paymentUrl = await createStitchPayment({
-      amount: parseFloat(ev.entry_fee ?? "0"),
+      amount: fee,
       currency: "ZAR",
       merchantReference,
       redirectUrl: `https://${host}/booking/success`,

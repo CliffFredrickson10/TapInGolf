@@ -333,6 +333,10 @@ export default function Events() {
   const [editSlotTime, setEditSlotTime]       = useState("");
   const [editSlotPlayers, setEditSlotPlayers] = useState(4);
   const [slotSaving, setSlotSaving]           = useState(false);
+  // Existing-slots import banner (new tournament only)
+  const [existingGeneralSlots, setExistingGeneralSlots] = useState<TeeSlot[]>([]);
+  const [checkingExistingSlots, setCheckingExistingSlots] = useState(false);
+  const [importBannerDismissed, setImportBannerDismissed] = useState(false);
 
   // ── Loaders ──────────────────────────────────────────────────────────────
 
@@ -476,6 +480,50 @@ export default function Events() {
     } finally { setSlotSaving(false); }
   };
 
+  // ── Detect existing general tee slots for the chosen date (new tournament only) ──
+
+  useEffect(() => {
+    if (editId || !dlgOpen || !form.event_date) {
+      setExistingGeneralSlots([]);
+      return;
+    }
+    const from = form.event_date;
+    const to   = form.end_date || form.event_date;
+    setCheckingExistingSlots(true);
+    setImportBannerDismissed(false);
+    api<TeeSlot[]>(`/api/portal/tee-times?from=${from}&to=${to}`)
+      .then(slots => {
+        const general = (slots as any[]).filter(s => !s.event_id).map(s => ({
+          id:          s.id,
+          date:        String(s.date).slice(0, 10),
+          time:        String(s.time).slice(0, 5),
+          total_slots: s.total_slots,
+          active:      !!s.active,
+          tee_start_type: s.tee_start_type ?? "first_tee",
+        }));
+        setExistingGeneralSlots(general);
+      })
+      .catch(() => setExistingGeneralSlots([]))
+      .finally(() => setCheckingExistingSlots(false));
+  }, [editId, dlgOpen, form.event_date, form.end_date]);
+
+  const handleImportExistingSlots = () => {
+    const staged = existingGeneralSlots.map(s => ({
+      ...s,
+      id: tempSlotCounter.current--,
+    }));
+    const importedDates = new Set(staged.map(s => s.date));
+    setEventSlots(prev => [
+      ...prev.filter(s => !importedDates.has(String(s.date).slice(0, 10))),
+      ...staged,
+    ]);
+    setImportBannerDismissed(true);
+    toast({
+      title: "Tee times imported",
+      description: `${staged.length} slot${staged.length !== 1 ? "s" : ""} loaded from the existing schedule — they'll become exclusive to this tournament on save.`,
+    });
+  };
+
   // ── Tournament template handlers ──────────────────────────────────────────
 
   useEffect(() => {
@@ -548,6 +596,8 @@ export default function Events() {
     setNewSlotPlayers(4);
     setTeeConfigSnapshot(null);
     setPendingTeeConfig(null);
+    setExistingGeneralSlots([]);
+    setImportBannerDismissed(false);
     setDlgOpen(true);
   };
 
@@ -1546,6 +1596,49 @@ export default function Events() {
                       </span>
                     )}
                   </div>
+
+                  {/* Existing-slots import banner */}
+                  {!editId && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="flex-1 min-w-0">
+                        {checkingExistingSlots ? (
+                          <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                            <Loader2 className="h-3 w-3 animate-spin" />Checking for existing tee slots on this date…
+                          </p>
+                        ) : (
+                          <>
+                            <p className="text-xs font-semibold text-amber-800">
+                              {existingGeneralSlots.length} existing tee slot{existingGeneralSlots.length !== 1 ? "s" : ""} found across{" "}
+                              {[...new Set(existingGeneralSlots.map(s => s.date))].length} date{[...new Set(existingGeneralSlots.map(s => s.date))].length !== 1 ? "s" : ""}
+                            </p>
+                            <p className="text-xs text-amber-700 mt-0.5">
+                              These are public tee slots already on the schedule. Import them as this tournament's exclusive tee times, or leave them as-is.
+                            </p>
+                            <div className="flex gap-2 mt-2">
+                              <Button
+                                type="button"
+                                size="sm"
+                                className="h-6 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                onClick={handleImportExistingSlots}
+                              >
+                                Import as tournament tee times
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="h-6 px-2 text-xs text-amber-700 hover:bg-amber-100"
+                                onClick={() => setImportBannerDismissed(true)}
+                              >
+                                Leave as public slots
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  )}
 
                   {slotsLoading ? (
                     <div className="space-y-2">

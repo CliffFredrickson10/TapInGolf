@@ -64442,30 +64442,41 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
 router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const ev = await row("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row("SELECT id, name, event_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  const registrants = await query(
-    `SELECT DISTINCT u.push_token
-     FROM event_registrations er
-     JOIN users u ON u.id = er.user_id
-     WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL`,
-    [evId]
+  const audience = await query(
+    `SELECT DISTINCT u.id, u.push_token
+     FROM users u
+     WHERE u.id IN (
+       SELECT er.user_id FROM event_registrations er WHERE er.event_id = ?
+       UNION
+       SELECT cm.user_id FROM club_members cm WHERE cm.club_id = ? AND cm.status = 'active'
+     )`,
+    [evId, club.id]
   );
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
-  if (registrants.length > 0) {
-    sendPushNotifications(registrants.map((u) => ({
+  const slotDel = await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [evId]);
+  const title = `\u274C Tournament Cancelled \u2014 ${club.name}`;
+  const body = `${String(ev.name)} has been cancelled. We're sorry for the inconvenience.`;
+  const data = { type: "event_cancelled", event_id: evId, club_id: club.id };
+  const pushAudience = audience.filter((u) => u.push_token);
+  if (pushAudience.length > 0) {
+    sendPushNotifications(pushAudience.map((u) => ({
       to: u.push_token,
       sound: "default",
-      title: `\u274C Tournament Cancelled \u2014 ${club.name}`,
-      body: `${String(ev.name)} has been cancelled. We're sorry for the inconvenience.`,
-      data: { type: "event_cancelled", event_id: evId, club_id: club.id }
+      title,
+      body,
+      data
     })));
   }
-  res.json({ message: "Cancelled" });
+  for (const u of audience) {
+    saveUserNotification(u.id, "event_cancelled", title, body, data);
+  }
+  res.json({ message: "Cancelled", slots_deleted: slotDel.rowCount ?? 0 });
 });
 router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

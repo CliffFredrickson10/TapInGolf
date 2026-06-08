@@ -1202,6 +1202,7 @@ export default function Schedule() {
   const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
   const [autoRulesLoading, setAutoRulesLoading] = useState(false);
   const [autoRulesOpen, setAutoRulesOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [ruleDlgOpen, setRuleDlgOpen] = useState(false);
   const [ruleDlgSaving, setRuleDlgSaving] = useState(false);
   const [ruleEditId, setRuleEditId] = useState<number | null>(null);
@@ -1461,39 +1462,55 @@ export default function Schedule() {
     <div className="flex flex-col h-full">
 
       {/* Header */}
-      <div className="px-8 pt-8 pb-4 flex items-center justify-between flex-shrink-0">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Tee Schedule</h1>
-          <p className="text-muted-foreground mt-1">Tee times and bookings in one view.</p>
-        </div>
-        <div className="flex gap-2 items-center">
-          <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
-            <RefreshCw className="h-3.5 w-3.5" /> Refresh
-          </Button>
-          <Button variant="outline" size="sm" onClick={openAdd} className="gap-1.5">
-            <Plus className="h-3.5 w-3.5" /> Add Single Slot
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-400">
-            <Trash2 className="h-3.5 w-3.5" /> Delete Tee Times
-          </Button>
+      <div className="px-8 pt-8 pb-4 flex-shrink-0">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">Tee Schedule</h1>
+            <p className="text-muted-foreground mt-1">Tee times and bookings in one view.</p>
+          </div>
           <Button
             variant="outline" size="sm"
-            onClick={() => setAutoRulesOpen(p => !p)}
-            className={`gap-1.5 ${autoRulesOpen ? "bg-amber-50 border-amber-300 text-amber-700" : ""}`}
+            onClick={() => setToolsOpen(p => !p)}
+            className={`gap-1.5 ${toolsOpen ? "bg-gray-100 border-gray-400" : ""}`}
           >
-            <Zap className="h-3.5 w-3.5" />
-            Auto-Rules
-            {autoRules.length > 0 && (
-              <span className="ml-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center">
-                {autoRules.filter(r => r.active).length}
-              </span>
-            )}
-            {autoRulesOpen ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
-          </Button>
-          <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setGenOpen(true)}>
-            <CalendarCog className="h-4 w-4" /> Generate Schedule
+            <CalendarCog className="h-3.5 w-3.5" />
+            Manage
+            {toolsOpen ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
           </Button>
         </div>
+
+        {/* Collapsible tools toolbar */}
+        {toolsOpen && (
+          <div className="mt-3 flex gap-2 items-center flex-wrap border border-gray-200 bg-gray-50 rounded-xl px-4 py-3">
+            <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            </Button>
+            <Button variant="outline" size="sm" onClick={openAdd} className="gap-1.5">
+              <Plus className="h-3.5 w-3.5" /> Add Single Slot
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-400">
+              <Trash2 className="h-3.5 w-3.5" /> Delete Tee Times
+            </Button>
+            <div className="w-px h-5 bg-gray-300 mx-1" />
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setAutoRulesOpen(p => !p)}
+              className={`gap-1.5 ${autoRulesOpen ? "bg-amber-50 border-amber-300 text-amber-700" : ""}`}
+            >
+              <Zap className="h-3.5 w-3.5" />
+              Auto-Rules
+              {autoRules.length > 0 && (
+                <span className="ml-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center">
+                  {autoRules.filter(r => r.active).length}
+                </span>
+              )}
+              {autoRulesOpen ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
+            </Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setGenOpen(true)}>
+              <CalendarCog className="h-4 w-4" /> Generate Schedule
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Auto-Rules panel */}

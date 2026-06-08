@@ -108,11 +108,11 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
     let newForDay = 0;
     for (const s of slotTemplate) {
       try {
-        const result = await run(
+        const inserted = await run(
           "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
           [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type, s.crossover_enabled ? 1 : 0]
         );
-        if (result && (result as any).rowCount > 0) newForDay++;
+        if (inserted > 0) newForDay++;
       } catch {
         // skip constraint errors silently
       }

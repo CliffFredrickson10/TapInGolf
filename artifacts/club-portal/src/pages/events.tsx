@@ -961,7 +961,6 @@ export default function Events() {
                     <p className="text-sm text-muted-foreground">Divisions are auto-assigned from the golfer's HNA handicap at time of registration.</p>
                     {(() => {
                       const divList = (detail.divisions && detail.divisions.length > 0) ? detail.divisions : DEFAULT_DIVISIONS;
-                      const unassigned = regs.filter(r => !r.division);
                       return (
                         <>
                           {divList.map(d => {
@@ -1009,36 +1008,6 @@ export default function Events() {
                               </Card>
                             );
                           })}
-                          {unassigned.length > 0 && (
-                            <Card>
-                              <CardContent className="p-4">
-                                <div className="flex items-center justify-between mb-2">
-                                  <div>
-                                    <p className="font-semibold text-sm">Unassigned</p>
-                                    <p className="text-xs text-muted-foreground mt-0.5">No handicap index on file — division not yet determined</p>
-                                  </div>
-                                  <p className="text-lg font-bold text-muted-foreground">{unassigned.length}</p>
-                                </div>
-                                <div className="divide-y border-t mt-2">
-                                  {unassigned.map(r => (
-                                    <div key={r.user_id} className="flex items-center justify-between py-1.5">
-                                      <div>
-                                        <p className="text-sm font-medium">{r.user_name}</p>
-                                        <p className="text-xs text-muted-foreground">{r.user_email}</p>
-                                      </div>
-                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                                        r.status === "approved"
-                                          ? "bg-green-100 text-green-700"
-                                          : r.status === "rejected"
-                                          ? "bg-red-100 text-red-700"
-                                          : "bg-yellow-100 text-yellow-700"
-                                      }`}>{r.status}</span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </CardContent>
-                            </Card>
-                          )}
                         </>
                       );
                     })()}

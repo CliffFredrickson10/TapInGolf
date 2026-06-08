@@ -138,7 +138,7 @@ function EventCard({ ev, colors }: { ev: TournamentEvent; colors: ReturnType<typ
           {ev.payment_required ? (
             <View style={[styles.badge, { backgroundColor: "#c8a84b18" }]}>
               <Text style={[styles.badgeText, { color: "#b8971f" }]}>
-                {ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Paid"}
+                {ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Fee Applies"}
               </Text>
             </View>
           ) : (

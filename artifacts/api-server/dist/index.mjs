@@ -66130,13 +66130,25 @@ router16.get("/payments/memberships", async (req, res) => {
     return;
   }
   const memberships = await query(
-    `SELECT m.id, m.plan_name, m.plan_details, m.start_date, m.expiry_date,
-            m.status, m.notes, m.created_at,
+    `SELECT cm.id,
+            cm.membership_type AS plan_name,
+            cm.benefits        AS plan_details,
+            cm.start_date,
+            cm.renewal_date    AS expiry_date,
+            cm.status,
+            NULL               AS notes,
+            cm.created_at,
             c.name AS club_name, c.id AS club_id, c.location AS club_location, c.province
-     FROM club_memberships m
-     JOIN clubs c ON m.club_id = c.id
-     WHERE m.user_id = ?
-     ORDER BY FIELD(m.status,'active','suspended','expired','cancelled'), m.created_at DESC`,
+     FROM club_members cm
+     JOIN clubs c ON cm.club_id = c.id
+     WHERE cm.user_id = ?
+     ORDER BY CASE cm.status
+       WHEN 'active'    THEN 1
+       WHEN 'suspended' THEN 2
+       WHEN 'expired'   THEN 3
+       WHEN 'cancelled' THEN 4
+       ELSE 5
+     END, cm.created_at DESC`,
     [user.id]
   );
   res.json({ memberships });

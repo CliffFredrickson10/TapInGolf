@@ -942,6 +942,15 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS team_id INT REFERENCES event_teams(id) ON DELETE SET NULL");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_scores_team ON event_scores (team_id)");
 
+  // ── DQ support on event_scores ────────────────────────────────────────────
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS dq BOOLEAN NOT NULL DEFAULT FALSE");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS dq_reason TEXT");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS original_gross INT");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS original_net INT");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS original_points INT");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS corrected_by INT REFERENCES clubs(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS corrected_at TIMESTAMP");
+
   // ── Event invites (invitation_only events) ────────────────────────────────
   await ddl(`
     CREATE TABLE IF NOT EXISTS event_invites (

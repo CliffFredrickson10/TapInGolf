@@ -983,24 +983,26 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
     return;
   }
 
-  // Individual leaderboard — aggregate across rounds
+  // Individual leaderboard — aggregate across rounds; DQ players ranked separately
   const scores = await query<any>(
     `SELECT es.user_id, u.name AS player_name, er.division,
        SUM(es.gross)  AS gross,
        SUM(es.net)    AS net,
        SUM(es.points) AS points,
        er.frozen_handicap, MAX(es.verified) AS verified,
+       BOOL_OR(es.dq) AS dq,
+       MAX(es.dq_reason) AS dq_reason,
        RANK() OVER (PARTITION BY er.division ORDER BY
-         CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
-         CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
-         CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
+         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
        ) AS position
      FROM event_scores es
      JOIN users u ON u.id = es.user_id
      JOIN event_registrations er ON er.event_id = es.event_id AND er.user_id = es.user_id
      WHERE es.event_id = ? AND es.team_id IS NULL
      GROUP BY es.user_id, u.name, er.division, er.frozen_handicap
-     ORDER BY er.division, position`,
+     ORDER BY er.division, BOOL_OR(es.dq) ASC, position`,
     [evId]
   );
 
@@ -1008,14 +1010,16 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   for (const s of scores) {
     const d = s.division ?? "Open";
     if (!grouped[d]) grouped[d] = [];
+    const isDQ = s.dq === true || s.dq === "true" || s.dq === 1;
     grouped[d].push({
       user_id: s.user_id, player_name: s.player_name,
-      position: parseInt(s.position), division: d,
+      position: isDQ ? "DQ" : parseInt(s.position), division: d,
       gross:  s.gross  != null ? parseInt(s.gross)    : null,
       net:    s.net    != null ? parseInt(s.net)       : null,
       points: s.points != null ? parseFloat(s.points) : null,
       frozen_handicap: s.frozen_handicap != null ? parseFloat(s.frozen_handicap) : null,
       verified: parseInt(s.verified ?? "0"),
+      dq: isDQ, dq_reason: s.dq_reason ?? null,
     });
   }
 
@@ -1060,12 +1064,12 @@ router.get("/events/:id/my-scores", async (req, res): Promise<void> => {
   let scores: any[];
   if (reg.team_id) {
     scores = await query<any>(
-      "SELECT round, gross, net, points FROM event_scores WHERE event_id = ? AND team_id = ?",
+      "SELECT round, gross, net, points, dq, dq_reason, original_gross, original_net, original_points, corrected_at FROM event_scores WHERE event_id = ? AND team_id = ?",
       [evId, reg.team_id]
     );
   } else {
     scores = await query<any>(
-      "SELECT round, gross, net, points FROM event_scores WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+      "SELECT round, gross, net, points, dq, dq_reason, original_gross, original_net, original_points, corrected_at FROM event_scores WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
       [evId, user.id]
     );
   }

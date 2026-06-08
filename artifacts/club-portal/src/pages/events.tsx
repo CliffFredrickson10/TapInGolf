@@ -67,6 +67,9 @@ interface Score {
   division: string | null; frozen_handicap: number | null;
   hole_scores: Record<string, number> | null; verified: number;
   team_id: number | null; team_name: string | null;
+  dq: boolean; dq_reason: string | null;
+  original_gross: number | null; original_net: number | null; original_points: number | null;
+  corrected_at: string | null;
 }
 
 interface TeeSlot {
@@ -250,6 +253,14 @@ export default function Events() {
   const [scoreRound, setScoreRound] = useState(1);
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
+
+  // DQ dialog
+  const [dqDialog, setDqDialog] = useState<{ userId: number; userName: string; submitted: Score | null } | null>(null);
+  const [dqReason, setDqReason] = useState("");
+  const [dqGross, setDqGross]   = useState("");
+  const [dqNet, setDqNet]       = useState("");
+  const [dqPoints, setDqPoints] = useState("");
+  const [dqSaving, setDqSaving] = useState(false);
 
   // Invite list (invitation_only events)
   const [invites, setInvites]               = useState<{ id: number; user_id: number; name: string; email: string; handicap_index: number | null }[]>([]);
@@ -990,6 +1001,36 @@ export default function Events() {
   };
 
   // ── Scores ────────────────────────────────────────────────────────────────
+
+  const openDqDialog = (userId: number, userName: string) => {
+    const submitted = scores.find(s => s.user_id === userId && s.round === scoreRound) ?? null;
+    setDqGross(submitted?.gross != null ? String(submitted.gross) : "");
+    setDqNet(submitted?.net != null ? String(submitted.net) : "");
+    setDqPoints(submitted?.points != null ? String(submitted.points) : "");
+    setDqReason("");
+    setDqDialog({ userId, userName, submitted });
+  };
+
+  const confirmDq = async () => {
+    if (!detail || !dqDialog) return;
+    setDqSaving(true);
+    try {
+      await api(`/api/portal/events/${detail.id}/scores/${dqDialog.userId}/dq`, {
+        method: "POST",
+        body: JSON.stringify({
+          round: scoreRound,
+          reason: dqReason || undefined,
+          corrected_gross:  dqGross  ? Number(dqGross)  : undefined,
+          corrected_net:    dqNet    ? Number(dqNet)    : undefined,
+          corrected_points: dqPoints ? Number(dqPoints) : undefined,
+        }),
+      });
+      toast({ title: `${dqDialog.userName} disqualified`, description: "Player notified." });
+      setDqDialog(null);
+      loadScores(detail, scoreRound);
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setDqSaving(false); }
+  };
 
   const saveScores = async () => {
     if (!detail) return;
@@ -1734,24 +1775,66 @@ export default function Events() {
                         // Individual scoring (default)
                         return (
                           <>
-                            <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
+                            {/* DQ Dialog */}
+                            {dqDialog && (
+                              <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                                <div className="bg-white dark:bg-gray-900 rounded-xl shadow-2xl w-full max-w-sm p-5 space-y-4">
+                                  <div>
+                                    <h3 className="font-semibold text-base">Disqualify — {dqDialog.userName}</h3>
+                                    <p className="text-xs text-muted-foreground mt-0.5">Round {scoreRound}. You can correct the score before disqualifying.</p>
+                                  </div>
+                                  <div className="grid grid-cols-3 gap-2">
+                                    {([["Gross", dqGross, setDqGross], ["Nett", dqNet, setDqNet], ["Stableford Pts", dqPoints, setDqPoints]] as const).map(([label, val, setter]) => (
+                                      <div key={label}>
+                                        <Label className="text-[11px] text-muted-foreground">{label}</Label>
+                                        <Input type="number" min="0" className="h-8 text-xs text-center mt-0.5" placeholder="—"
+                                          value={val} onChange={e => (setter as any)(e.target.value)} />
+                                      </div>
+                                    ))}
+                                  </div>
+                                  <div>
+                                    <Label className="text-[11px] text-muted-foreground">Reason (optional)</Label>
+                                    <Input className="mt-0.5 text-xs h-8" placeholder="e.g. Incorrect scorecard, wrong ball…"
+                                      value={dqReason} onChange={e => setDqReason(e.target.value)} />
+                                  </div>
+                                  <p className="text-[11px] text-amber-600 bg-amber-50 rounded p-2">The player will be notified immediately and removed from the leaderboard standings.</p>
+                                  <div className="flex gap-2">
+                                    <Button variant="outline" size="sm" className="flex-1" onClick={() => setDqDialog(null)}>Cancel</Button>
+                                    <Button size="sm" className="flex-1 bg-red-600 hover:bg-red-700 text-white" onClick={confirmDq} disabled={dqSaving}>
+                                      {dqSaving ? "Saving…" : "Confirm DQ"}
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
+
+                            <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
                               <span className="col-span-2">Player</span>
                               <span className="text-center">Gross</span>
                               <span className="text-center">Nett</span>
                               <span className="text-center">Stableford Pts</span>
+                              <span></span>
                             </div>
                             {regs.filter(r => r.status === "approved").map(r => {
-                              const submitted = scores.find(s => s.user_id === r.user_id);
+                              const submitted = scores.find(s => s.user_id === r.user_id && s.round === scoreRound);
+                              const isDQ = submitted?.dq;
                               return (
-                                <Card key={r.user_id}>
+                                <Card key={r.user_id} className={isDQ ? "border-red-300 bg-red-50/30" : ""}>
                                   <CardContent className="p-2.5">
-                                    <div className="grid grid-cols-5 gap-2 items-center text-sm">
+                                    <div className="grid grid-cols-6 gap-2 items-center text-sm">
                                       <div className="col-span-2">
-                                        <p className="font-medium text-xs">{r.user_name}</p>
+                                        <div className="flex items-center gap-1.5">
+                                          <p className="font-medium text-xs">{r.user_name}</p>
+                                          {isDQ && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded">DQ</span>}
+                                        </div>
                                         <p className="text-[11px] text-muted-foreground">
                                           {r.division ? `${r.division} Div` : "—"}
-                                          {submitted ? (submitted.verified ? " · ✓ Verified" : " · Submitted") : ""}
+                                          {submitted && !isDQ ? (submitted.verified ? " · ✓ Verified" : " · Submitted") : ""}
+                                          {isDQ && submitted?.dq_reason ? ` · ${submitted.dq_reason}` : ""}
                                         </p>
+                                        {isDQ && submitted?.original_gross != null && (
+                                          <p className="text-[10px] text-muted-foreground">Was: {submitted.original_gross}{submitted.original_net != null ? ` / ${submitted.original_net}` : ""}{submitted.original_points != null ? ` / ${submitted.original_points}pts` : ""}</p>
+                                        )}
                                       </div>
                                       {(["gross","net","points"] as const).map(field => (
                                         <Input
@@ -1765,6 +1848,13 @@ export default function Events() {
                                           }))}
                                         />
                                       ))}
+                                      <Button size="sm" variant="ghost"
+                                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                        title="Disqualify player"
+                                        disabled={readOnly}
+                                        onClick={() => openDqDialog(r.user_id, r.user_name)}>
+                                        <span className="text-xs font-bold">DQ</span>
+                                      </Button>
                                     </div>
                                   </CardContent>
                                 </Card>

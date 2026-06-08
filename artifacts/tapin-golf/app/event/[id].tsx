@@ -811,12 +811,12 @@ export default function EventDetailScreen() {
                     <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Pts</Text>
                   </View>
                   {div.players.map(p => (
-                    <View key={p.user_id} style={[styles.lbRow, { borderColor: colors.border, backgroundColor: p.user_id === user?.id ? colors.primaryLight + "30" : "transparent" }]}>
-                      <Text style={[styles.lbPos, { color: p.position <= 3 ? colors.accent : colors.mutedForeground }]}>{p.position}</Text>
-                      <Text style={[styles.lbName, { color: colors.foreground }]} numberOfLines={1}>{p.player_name}{p.user_id === user?.id ? " (you)" : ""}</Text>
-                      <Text style={[styles.lbStat, { color: colors.foreground }]}>{p.gross ?? "—"}</Text>
-                      <Text style={[styles.lbStat, { color: colors.foreground }]}>{p.net ?? "—"}</Text>
-                      <Text style={[styles.lbStat, { color: colors.foreground }]}>{p.points ?? "—"}</Text>
+                    <View key={p.user_id} style={[styles.lbRow, { borderColor: colors.border, backgroundColor: p.dq ? "#fee2e2" : p.user_id === user?.id ? colors.primaryLight + "30" : "transparent" }]}>
+                      <Text style={[styles.lbPos, { color: p.dq ? "#dc2626" : p.position <= 3 ? colors.accent : colors.mutedForeground }]}>{p.dq ? "DQ" : p.position}</Text>
+                      <Text style={[styles.lbName, { color: p.dq ? "#dc2626" : colors.foreground }]} numberOfLines={1}>{p.player_name}{p.user_id === user?.id ? " (you)" : ""}</Text>
+                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
+                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
+                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.points ?? "—")}</Text>
                     </View>
                   ))}
                 </View>
@@ -869,18 +869,46 @@ export default function EventDetailScreen() {
                   const r = i + 1;
                   const submitted = myScores[r];
                   const s = roundScores[r] ?? { gross: "", net: "", points: "" };
+                  const isDQ = submitted?.dq === true || submitted?.dq === 1;
                   return (
-                    <View key={r} style={[styles.metaCard, { backgroundColor: submitted ? colors.muted + "80" : colors.card, borderColor: submitted ? colors.primary + "40" : colors.border, marginBottom: 12 }]}>
+                    <View key={r} style={[styles.metaCard, { backgroundColor: isDQ ? "#fee2e2" : submitted ? colors.muted + "80" : colors.card, borderColor: isDQ ? "#fca5a5" : submitted ? colors.primary + "40" : colors.border, marginBottom: 12 }]}>
                       <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                        <Text style={{ fontSize: 13, fontWeight: "700", color: colors.foreground }}>Day {r}</Text>
-                        {submitted && (
+                        <Text style={{ fontSize: 13, fontWeight: "700", color: isDQ ? "#dc2626" : colors.foreground }}>Day {r}</Text>
+                        {isDQ ? (
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 4, backgroundColor: "#fca5a5", borderRadius: 6, paddingHorizontal: 8, paddingVertical: 3 }}>
+                            <Ionicons name="ban" size={12} color="#dc2626" />
+                            <Text style={{ fontSize: 11, color: "#dc2626", fontWeight: "700" }}>DISQUALIFIED</Text>
+                          </View>
+                        ) : submitted ? (
                           <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
                             <Ionicons name="lock-closed" size={12} color={colors.primary} />
                             <Text style={{ fontSize: 11, color: colors.primary, fontWeight: "600" }}>Submitted</Text>
                           </View>
-                        )}
+                        ) : null}
                       </View>
-                      {submitted ? (
+                      {isDQ ? (
+                        <>
+                          {submitted?.dq_reason ? (
+                            <Text style={{ fontSize: 12, color: "#dc2626", marginBottom: 8 }}>Reason: {submitted.dq_reason}</Text>
+                          ) : (
+                            <Text style={{ fontSize: 12, color: "#dc2626", marginBottom: 8 }}>You have been disqualified. Contact the club for details.</Text>
+                          )}
+                          {submitted?.original_gross != null && (
+                            <View style={{ backgroundColor: "#fef2f2", borderRadius: 8, padding: 10, marginBottom: 4 }}>
+                              <Text style={{ fontSize: 11, color: "#9ca3af", marginBottom: 6, fontWeight: "600" }}>Submitted scores (corrected by club)</Text>
+                              <View style={{ flexDirection: "row", gap: 10 }}>
+                                {[["Gross", submitted.original_gross, submitted.gross], ["Nett", submitted.original_net, submitted.net], ["Stableford Pts", submitted.original_points, submitted.points]].map(([label, orig, corrected]) => (
+                                  <View key={String(label)} style={{ flex: 1, alignItems: "center" }}>
+                                    <Text style={{ fontSize: 10, color: "#9ca3af", marginBottom: 2 }}>{label}</Text>
+                                    <Text style={{ fontSize: 14, color: "#dc2626", textDecorationLine: "line-through" }}>{orig ?? "—"}</Text>
+                                    <Text style={{ fontSize: 16, fontWeight: "700", color: "#374151" }}>{corrected ?? "—"}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            </View>
+                          )}
+                        </>
+                      ) : submitted ? (
                         <View style={{ flexDirection: "row", gap: 10 }}>
                           {[["Gross", submitted.gross], ["Nett", submitted.net], ["Stableford Pts", submitted.points]].map(([label, val]) => (
                             <View key={String(label)} style={{ flex: 1, alignItems: "center" }}>

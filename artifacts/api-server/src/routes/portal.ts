@@ -1766,6 +1766,7 @@ router.get("/portal/events/:id/scores", requireClubAuth, async (req: Request, re
   const scores = await query<any>(
     `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
             s.team_id, et.name as team_name,
+            s.dq, s.dq_reason, s.original_gross, s.original_net, s.original_points, s.corrected_at,
             u.id as user_id, u.name as user_name,
             COALESCE(r.division, s.division) as division, COALESCE(r.frozen_handicap, s.frozen_handicap) as frozen_handicap
      FROM event_scores s
@@ -1797,6 +1798,63 @@ router.post("/portal/events/:id/scores", requireClubAuth, async (req: Request, r
        s.gross ?? null, s.net ?? null, s.points ?? null, club.id]
     );
   }
+  res.json({ success: true });
+});
+
+// POST /portal/events/:id/scores/:userId/dq  — disqualify a player (optionally with corrected scores)
+router.post("/portal/events/:id/scores/:userId/dq", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const userId = Number(req.params.userId);
+  const { round = 1, reason, corrected_gross, corrected_net, corrected_points } = req.body ?? {};
+
+  const event = await row<any>("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  // Find the score row for this player/round
+  const scoreRow = await row<any>(
+    "SELECT id, gross, net, points FROM event_scores WHERE event_id = ? AND user_id = ? AND round = ?",
+    [evId, userId, round]
+  );
+
+  if (!scoreRow) {
+    // No score yet — insert a DQ row with corrected scores
+    await exec(
+      `INSERT INTO event_scores (event_id, user_id, round, gross, net, points, verified, verified_by, verified_at, dq, dq_reason, corrected_by, corrected_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, ?, NOW(), TRUE, ?, ?, NOW())`,
+      [evId, userId, round, corrected_gross ?? null, corrected_net ?? null, corrected_points ?? null, club.id, reason ?? null, club.id]
+    );
+  } else {
+    // Existing score — save originals, update with corrected values, set DQ
+    const newGross  = corrected_gross  != null ? Number(corrected_gross)  : scoreRow.gross;
+    const newNet    = corrected_net    != null ? Number(corrected_net)    : scoreRow.net;
+    const newPoints = corrected_points != null ? Number(corrected_points) : scoreRow.points;
+    await exec(
+      `UPDATE event_scores
+         SET dq = TRUE, dq_reason = ?, original_gross = ?, original_net = ?, original_points = ?,
+             gross = ?, net = ?, points = ?, corrected_by = ?, corrected_at = NOW(), verified = 1
+       WHERE id = ?`,
+      [reason ?? null, scoreRow.gross, scoreRow.net, scoreRow.points, newGross, newNet, newPoints, club.id, scoreRow.id]
+    );
+  }
+
+  // Notify the player
+  const player = await row<any>("SELECT id, push_token FROM users WHERE id = ?", [userId]);
+  if (player) {
+    const notifTitle = `Disqualified — ${event.name}`;
+    const notifBody  = reason
+      ? `You have been disqualified from ${event.name}. Reason: ${reason}`
+      : `You have been disqualified from ${event.name}. Please contact the club for details.`;
+    const notifData  = { type: "event_dq", event_id: evId };
+    await exec(
+      "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+      [userId, "event_dq", notifTitle, notifBody, JSON.stringify(notifData)]
+    );
+    if (player.push_token) {
+      sendPushNotifications([{ to: player.push_token, sound: "default", title: notifTitle, body: notifBody, data: notifData }]);
+    }
+  }
+
   res.json({ success: true });
 });
 

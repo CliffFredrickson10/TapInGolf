@@ -561,6 +561,24 @@ async function createSchema(): Promise<void> {
     )
   `);
 
+  // ── Tee-time auto-generation rules ───────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS tee_auto_rules (
+      id               SERIAL PRIMARY KEY,
+      club_id          INT         NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name             VARCHAR(100) NOT NULL,
+      season_start     VARCHAR(5)  NOT NULL,  -- 'MM-DD'
+      season_end       VARCHAR(5)  NOT NULL,  -- 'MM-DD' (may cross year boundary)
+      lookahead_days   INT         NOT NULL DEFAULT 14,
+      players_per_slot INT         NOT NULL DEFAULT 4,
+      config_type      VARCHAR(1)  NOT NULL DEFAULT 'A',
+      config_data      JSONB       NOT NULL DEFAULT '{}',
+      active           BOOLEAN     NOT NULL DEFAULT TRUE,
+      last_run_at      TIMESTAMP,
+      created_at       TIMESTAMP   DEFAULT NOW()
+    )
+  `);
+
   // ── Tournament templates ──────────────────────────────────────────────────
   await ddl(`
     CREATE TABLE IF NOT EXISTS tournament_templates (

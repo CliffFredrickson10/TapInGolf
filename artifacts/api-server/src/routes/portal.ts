@@ -2009,6 +2009,68 @@ router.delete("/portal/schedule-configs/:id", requireClubAuth, async (req: Reque
   res.json({ message: "Deleted" });
 });
 
+// ── Tee Auto-generation Rules ──────────────────────────────────────────────────
+router.get("/portal/tee-auto-rules", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const rows = await query<any>(
+    "SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json(rows.map(r => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
+});
+
+router.post("/portal/tee-auto-rules", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  if (!name || !season_start || !season_end) { res.status(400).json({ message: "name, season_start and season_end are required" }); return; }
+  const id = await exec(
+    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), active !== false]
+  );
+  const created = await row<any>("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
+  res.status(201).json({ ...created, config_data: typeof created?.config_data === "string" ? JSON.parse(created.config_data) : created?.config_data });
+});
+
+router.put("/portal/tee-auto-rules/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const ruleId = Number(req.params.id);
+  const existing = await row<any>("SELECT id FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  if (!existing) { res.status(404).json({ message: "Rule not found" }); return; }
+  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const updates: string[] = []; const vals: any[] = [];
+  if (name !== undefined)             { updates.push("name = ?");             vals.push(String(name).trim()); }
+  if (season_start !== undefined)     { updates.push("season_start = ?");     vals.push(season_start); }
+  if (season_end !== undefined)       { updates.push("season_end = ?");       vals.push(season_end); }
+  if (lookahead_days !== undefined)   { updates.push("lookahead_days = ?");   vals.push(Number(lookahead_days)); }
+  if (players_per_slot !== undefined) { updates.push("players_per_slot = ?"); vals.push(Number(players_per_slot)); }
+  if (config_type !== undefined)      { updates.push("config_type = ?");      vals.push(config_type); }
+  if (config_data !== undefined)      { updates.push("config_data = ?");      vals.push(JSON.stringify(config_data)); }
+  if (active !== undefined)           { updates.push("active = ?");           vals.push(Boolean(active)); }
+  if (!updates.length) { res.status(400).json({ message: "No fields to update" }); return; }
+  vals.push(ruleId, club.id);
+  await run(`UPDATE tee_auto_rules SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
+  const updated = await row<any>("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
+  res.json({ ...updated, config_data: typeof updated?.config_data === "string" ? JSON.parse(updated.config_data) : updated?.config_data });
+});
+
+router.delete("/portal/tee-auto-rules/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const ruleId = Number(req.params.id);
+  await run("DELETE FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  res.json({ message: "Deleted" });
+});
+
+router.post("/portal/tee-auto-rules/:id/run-now", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const ruleId = Number(req.params.id);
+  const rule = await row<any>("SELECT * FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  if (!rule) { res.status(404).json({ message: "Rule not found" }); return; }
+  const { runAutoRuleNow } = await import("../worker/autoTeeGen");
+  const { datesProcessed, slotsCreated } = await runAutoRuleNow(rule);
+  await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
+  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated });
+});
+
 // ── Tournament Templates ───────────────────────────────────────────────────────
 router.get("/portal/tournament-templates", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);

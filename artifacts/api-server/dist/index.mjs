@@ -52418,6 +52418,144 @@ var require_multer = __commonJS({
   }
 });
 
+// src/worker/autoTeeGen.ts
+var autoTeeGen_exports = {};
+__export(autoTeeGen_exports, {
+  runAutoRuleNow: () => runAutoRuleNow,
+  startAutoTeeGenWorker: () => startAutoTeeGenWorker
+});
+function addDaysToDate(base, n) {
+  const d = new Date(base);
+  d.setDate(d.getDate() + n);
+  return d;
+}
+function formatDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+function toMin(t) {
+  const [h, m] = t.split(":").map(Number);
+  return h * 60 + m;
+}
+function fromMin(m) {
+  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+}
+function generateBlockTimes(start, end, intervalMin) {
+  if (!start || !end || intervalMin < 1) return [];
+  let cur = toMin(start);
+  const endMin = toMin(end);
+  const times = [];
+  while (cur <= endMin) {
+    times.push(fromMin(cur));
+    cur += intervalMin;
+  }
+  return times;
+}
+function dateInSeason(dateStr, seasonStart, seasonEnd) {
+  const mmdd = dateStr.slice(5);
+  if (seasonStart <= seasonEnd) {
+    return mmdd >= seasonStart && mmdd <= seasonEnd;
+  }
+  return mmdd >= seasonStart || mmdd <= seasonEnd;
+}
+function buildSlotsForDay(configType, configData) {
+  const slots = [];
+  const addBlock = (b, sessionType) => {
+    if (!b?.start || !b?.end || !b?.interval) return;
+    const times = generateBlockTimes(b.start, b.end, b.interval);
+    if (b.tee_start_type === "two_tee") {
+      times.forEach((t) => {
+        slots.push({ time: t, tee_start_type: "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "tenth_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType });
+      });
+    } else {
+      times.forEach((t) => slots.push({ time: t, tee_start_type: b.tee_start_type ?? "first_tee", crossover_enabled: !!b.crossover_enabled, session_type: sessionType }));
+    }
+  };
+  if (configType === "A") {
+    addBlock(configData.morning, "AM");
+    addBlock(configData.midday, "PM");
+    addBlock(configData.twilight, "PM");
+  } else {
+    addBlock(configData.morning, "AM");
+    addBlock(configData.midday, "PM");
+  }
+  return slots;
+}
+async function runAutoRuleNow(rule) {
+  const { club_id, season_start, season_end, lookahead_days, players_per_slot, config_type } = rule;
+  const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : rule.config_data ?? {};
+  const slotTemplate = buildSlotsForDay(config_type, configData);
+  if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0 };
+  const dates = [];
+  for (let i = 0; i < Number(lookahead_days ?? 14); i++) {
+    const d = formatDate(addDaysToDate(/* @__PURE__ */ new Date(), i));
+    if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
+  }
+  let datesProcessed = 0;
+  let slotsCreated = 0;
+  for (const date of dates) {
+    const existing = await row(
+      "SELECT COUNT(*) AS cnt FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
+      [club_id, date]
+    );
+    if (Number(existing?.cnt ?? 0) > 0) continue;
+    const tournamentSlots = await row(
+      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
+      [club_id, date]
+    );
+    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
+    datesProcessed++;
+    for (const s of slotTemplate) {
+      try {
+        await exec(
+          "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
+          [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type, s.crossover_enabled ? 1 : 0]
+        );
+        slotsCreated++;
+      } catch {
+      }
+    }
+  }
+  return { datesProcessed, slotsCreated };
+}
+async function runAllActiveRules() {
+  const rules = await query("SELECT * FROM tee_auto_rules WHERE active = TRUE");
+  if (!rules.length) return;
+  logger.info({ count: rules.length }, "Auto tee-gen: running active rules");
+  for (const rule of rules) {
+    try {
+      const { datesProcessed, slotsCreated } = await runAutoRuleNow(rule);
+      if (datesProcessed > 0 || slotsCreated > 0) {
+        logger.info({ rule_id: rule.id, club_id: rule.club_id, datesProcessed, slotsCreated }, "Auto tee-gen: generated slots");
+      }
+      await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [rule.id]);
+    } catch (err) {
+      logger.warn({ err, rule_id: rule.id }, "Auto tee-gen: rule error");
+    }
+  }
+}
+function startAutoTeeGenWorker() {
+  logger.info("Auto tee-gen worker started");
+  setTimeout(() => {
+    runAllActiveRules().catch((err) => logger.warn({ err }, "Auto tee-gen: initial run error"));
+  }, 8e3);
+  setInterval(() => {
+    runAllActiveRules().catch((err) => logger.warn({ err }, "Auto tee-gen: interval run error"));
+  }, POLL_INTERVAL_MS);
+}
+var POLL_INTERVAL_MS;
+var init_autoTeeGen = __esm({
+  "src/worker/autoTeeGen.ts"() {
+    "use strict";
+    init_pg();
+    init_logger();
+    POLL_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+  }
+});
+
 // src/app.ts
 var import_express23 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
@@ -65232,6 +65370,99 @@ router14.delete("/portal/schedule-configs/:id", requireClubAuth2, async (req, re
   await run("DELETE FROM tee_time_schedule_configs WHERE id = ? AND club_id = ?", [cfgId, club.id]);
   res.json({ message: "Deleted" });
 });
+router14.get("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const rows = await query(
+    "SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
+    [club.id]
+  );
+  res.json(rows.map((r) => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
+});
+router14.post("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  if (!name || !season_start || !season_end) {
+    res.status(400).json({ message: "name, season_start and season_end are required" });
+    return;
+  }
+  const id = await exec(
+    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), active !== false]
+  );
+  const created = await row("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
+  res.status(201).json({ ...created, config_data: typeof created?.config_data === "string" ? JSON.parse(created.config_data) : created?.config_data });
+});
+router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const ruleId = Number(req.params.id);
+  const existing = await row("SELECT id FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  if (!existing) {
+    res.status(404).json({ message: "Rule not found" });
+    return;
+  }
+  const { name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const updates = [];
+  const vals = [];
+  if (name !== void 0) {
+    updates.push("name = ?");
+    vals.push(String(name).trim());
+  }
+  if (season_start !== void 0) {
+    updates.push("season_start = ?");
+    vals.push(season_start);
+  }
+  if (season_end !== void 0) {
+    updates.push("season_end = ?");
+    vals.push(season_end);
+  }
+  if (lookahead_days !== void 0) {
+    updates.push("lookahead_days = ?");
+    vals.push(Number(lookahead_days));
+  }
+  if (players_per_slot !== void 0) {
+    updates.push("players_per_slot = ?");
+    vals.push(Number(players_per_slot));
+  }
+  if (config_type !== void 0) {
+    updates.push("config_type = ?");
+    vals.push(config_type);
+  }
+  if (config_data !== void 0) {
+    updates.push("config_data = ?");
+    vals.push(JSON.stringify(config_data));
+  }
+  if (active !== void 0) {
+    updates.push("active = ?");
+    vals.push(Boolean(active));
+  }
+  if (!updates.length) {
+    res.status(400).json({ message: "No fields to update" });
+    return;
+  }
+  vals.push(ruleId, club.id);
+  await run(`UPDATE tee_auto_rules SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
+  const updated = await row("SELECT id, name, season_start, season_end, lookahead_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
+  res.json({ ...updated, config_data: typeof updated?.config_data === "string" ? JSON.parse(updated.config_data) : updated?.config_data });
+});
+router14.delete("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const ruleId = Number(req.params.id);
+  await run("DELETE FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  res.json({ message: "Deleted" });
+});
+router14.post("/portal/tee-auto-rules/:id/run-now", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const ruleId = Number(req.params.id);
+  const rule = await row("SELECT * FROM tee_auto_rules WHERE id = ? AND club_id = ?", [ruleId, club.id]);
+  if (!rule) {
+    res.status(404).json({ message: "Rule not found" });
+    return;
+  }
+  const { runAutoRuleNow: runAutoRuleNow2 } = await Promise.resolve().then(() => (init_autoTeeGen(), autoTeeGen_exports));
+  const { datesProcessed, slotsCreated } = await runAutoRuleNow2(rule);
+  await run("UPDATE tee_auto_rules SET last_run_at = NOW() WHERE id = ?", [ruleId]);
+  res.json({ dates_processed: datesProcessed, slots_created: slotsCreated });
+});
 router14.get("/portal/tournament-templates", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
@@ -67755,6 +67986,22 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS tee_auto_rules (
+      id               SERIAL PRIMARY KEY,
+      club_id          INT         NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name             VARCHAR(100) NOT NULL,
+      season_start     VARCHAR(5)  NOT NULL,  -- 'MM-DD'
+      season_end       VARCHAR(5)  NOT NULL,  -- 'MM-DD' (may cross year boundary)
+      lookahead_days   INT         NOT NULL DEFAULT 14,
+      players_per_slot INT         NOT NULL DEFAULT 4,
+      config_type      VARCHAR(1)  NOT NULL DEFAULT 'A',
+      config_data      JSONB       NOT NULL DEFAULT '{}',
+      active           BOOLEAN     NOT NULL DEFAULT TRUE,
+      last_run_at      TIMESTAMP,
+      created_at       TIMESTAMP   DEFAULT NOW()
+    )
+  `);
+  await ddl(`
     CREATE TABLE IF NOT EXISTS tournament_templates (
       id            SERIAL PRIMARY KEY,
       club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
@@ -68364,7 +68611,7 @@ init_pg();
 init_pg();
 init_notifications();
 init_logger();
-var POLL_INTERVAL_MS = 6e4;
+var POLL_INTERVAL_MS2 = 6e4;
 var WINDOW_MINUTES = 3;
 async function getLeadMinutes() {
   try {
@@ -68444,10 +68691,11 @@ function startReminderWorker() {
   runReminderCycle().catch((err) => logger.warn({ err }, "Reminder cycle error"));
   setInterval(() => {
     runReminderCycle().catch((err) => logger.warn({ err }, "Reminder cycle error"));
-  }, POLL_INTERVAL_MS);
+  }, POLL_INTERVAL_MS2);
 }
 
 // src/index.ts
+init_autoTeeGen();
 var rawPort = process.env["PORT"];
 if (!rawPort) {
   throw new Error(
@@ -68468,9 +68716,11 @@ app_default.listen(port, (err) => {
 startDbKeepAlive();
 migrate().then(() => {
   startReminderWorker();
+  startAutoTeeGenWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
+  startAutoTeeGenWorker();
 });
 /*! Bundled license information:
 

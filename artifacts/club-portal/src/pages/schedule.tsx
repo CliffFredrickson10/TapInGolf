@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, useMemo } from "react";
+import { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import { useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -13,10 +13,52 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
   CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X, TicketX,
+  Zap, Play, Clock, ChevronDown, ChevronUp,
 } from "lucide-react";
 import { format, addDays, parseISO, subDays } from "date-fns";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
+
+interface AutoRule {
+  id: number;
+  name: string;
+  season_start: string;
+  season_end: string;
+  lookahead_days: number;
+  players_per_slot: number;
+  config_type: string;
+  config_data: any;
+  active: boolean;
+  last_run_at: string | null;
+}
+
+interface RuleForm {
+  name: string;
+  season_start_month: string;
+  season_start_day: string;
+  season_end_month: string;
+  season_end_day: string;
+  lookahead_days: number;
+  players_per_slot: number;
+  config_type: string;
+  config_data: any;
+  active: boolean;
+}
+
+const MONTHS = [
+  { v: "01", l: "January" }, { v: "02", l: "February" }, { v: "03", l: "March" },
+  { v: "04", l: "April"   }, { v: "05", l: "May"      }, { v: "06", l: "June"     },
+  { v: "07", l: "July"    }, { v: "08", l: "August"   }, { v: "09", l: "September"},
+  { v: "10", l: "October" }, { v: "11", l: "November" }, { v: "12", l: "December" },
+];
+const DAYS = Array.from({ length: 31 }, (_, i) => String(i + 1).padStart(2, "0"));
+
+const DEFAULT_RULE_FORM: RuleForm = {
+  name: "", season_start_month: "09", season_start_day: "01",
+  season_end_month: "04", season_end_day: "30",
+  lookahead_days: 14, players_per_slot: 4,
+  config_type: "A", config_data: {}, active: true,
+};
 
 interface TeeTime {
   id: number;
@@ -1142,6 +1184,104 @@ export default function Schedule() {
   const [bookingOpen, setBookingOpen] = useState(false);
   const [updatingBooking, setUpdatingBooking] = useState(false);
 
+  // Auto-generate rules
+  const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
+  const [autoRulesLoading, setAutoRulesLoading] = useState(false);
+  const [autoRulesOpen, setAutoRulesOpen] = useState(false);
+  const [ruleDlgOpen, setRuleDlgOpen] = useState(false);
+  const [ruleDlgSaving, setRuleDlgSaving] = useState(false);
+  const [ruleEditId, setRuleEditId] = useState<number | null>(null);
+  const [ruleForm, setRuleForm] = useState<RuleForm>({ ...DEFAULT_RULE_FORM });
+  const [ruleRunning, setRuleRunning] = useState<number | null>(null);
+  const [ruleSavedConfigs, setRuleSavedConfigs] = useState<Array<{ id: number; name: string; config_type: string; config_data: any }>>([]);
+
+  // ── Auto-rule handlers ─────────────────────────────────────────────────────
+
+  const loadAutoRules = useCallback(async () => {
+    setAutoRulesLoading(true);
+    try { setAutoRules(await api<AutoRule[]>("/api/portal/tee-auto-rules")); } catch { /* silent */ }
+    finally { setAutoRulesLoading(false); }
+  }, []);
+
+  useEffect(() => { loadAutoRules(); }, [loadAutoRules]);
+
+  const openNewRule = () => {
+    setRuleEditId(null);
+    setRuleForm({ ...DEFAULT_RULE_FORM });
+    setRuleSavedConfigs([]);
+    setRuleDlgOpen(true);
+    api<any[]>("/api/portal/schedule-configs").then(setRuleSavedConfigs).catch(() => {});
+  };
+
+  const openEditRule = (r: AutoRule) => {
+    const [sm, sd] = r.season_start.split("-");
+    const [em, ed] = r.season_end.split("-");
+    setRuleEditId(r.id);
+    setRuleForm({
+      name: r.name, season_start_month: sm, season_start_day: sd,
+      season_end_month: em, season_end_day: ed,
+      lookahead_days: r.lookahead_days, players_per_slot: r.players_per_slot,
+      config_type: r.config_type, config_data: r.config_data, active: r.active,
+    });
+    setRuleSavedConfigs([]);
+    setRuleDlgOpen(true);
+    api<any[]>("/api/portal/schedule-configs").then(setRuleSavedConfigs).catch(() => {});
+  };
+
+  const handleSaveRule = async () => {
+    if (!ruleForm.name.trim()) { toast({ title: "Rule name is required", variant: "destructive" }); return; }
+    setRuleDlgSaving(true);
+    try {
+      const body = {
+        name: ruleForm.name.trim(),
+        season_start: `${ruleForm.season_start_month}-${ruleForm.season_start_day}`,
+        season_end: `${ruleForm.season_end_month}-${ruleForm.season_end_day}`,
+        lookahead_days: ruleForm.lookahead_days,
+        players_per_slot: ruleForm.players_per_slot,
+        config_type: ruleForm.config_type,
+        config_data: ruleForm.config_data,
+        active: ruleForm.active,
+      };
+      if (ruleEditId) {
+        const updated = await api<AutoRule>(`/api/portal/tee-auto-rules/${ruleEditId}`, { method: "PUT", body: JSON.stringify(body) });
+        setAutoRules(prev => prev.map(r => r.id === ruleEditId ? updated : r));
+      } else {
+        const created = await api<AutoRule>("/api/portal/tee-auto-rules", { method: "POST", body: JSON.stringify(body) });
+        setAutoRules(prev => [...prev, created]);
+      }
+      setRuleDlgOpen(false);
+      toast({ title: ruleEditId ? "Rule updated" : "Auto-rule created", description: "Tee times will be generated automatically." });
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setRuleDlgSaving(false); }
+  };
+
+  const handleDeleteRule = async (id: number, name: string) => {
+    if (!confirm(`Delete rule "${name}"? Tee times that were already generated will remain.`)) return;
+    try {
+      await api(`/api/portal/tee-auto-rules/${id}`, { method: "DELETE" });
+      setAutoRules(prev => prev.filter(r => r.id !== id));
+      toast({ title: "Rule deleted" });
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  };
+
+  const handleToggleRule = async (rule: AutoRule) => {
+    try {
+      const updated = await api<AutoRule>(`/api/portal/tee-auto-rules/${rule.id}`, { method: "PUT", body: JSON.stringify({ active: !rule.active }) });
+      setAutoRules(prev => prev.map(r => r.id === rule.id ? updated : r));
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  };
+
+  const handleRunNow = async (rule: AutoRule) => {
+    setRuleRunning(rule.id);
+    try {
+      const result = await api<{ dates_processed: number; slots_created: number }>(`/api/portal/tee-auto-rules/${rule.id}/run-now`, { method: "POST" });
+      setAutoRules(prev => prev.map(r => r.id === rule.id ? { ...r, last_run_at: new Date().toISOString() } : r));
+      toast({ title: "Rule executed", description: result.slots_created > 0 ? `Generated ${result.slots_created} slots across ${result.dates_processed} date${result.dates_processed !== 1 ? "s" : ""}.` : "No new dates needed generation — all dates already have tee times." });
+      if (result.slots_created > 0) load();
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setRuleRunning(null); }
+  };
+
   // ── Data ──────────────────────────────────────────────────────────────────
 
   const load = async () => {
@@ -1276,11 +1416,98 @@ export default function Schedule() {
           <Button variant="outline" size="sm" onClick={() => setDeleteOpen(true)} className="gap-1.5 text-red-600 border-red-200 hover:bg-red-50 hover:border-red-400">
             <Trash2 className="h-3.5 w-3.5" /> Delete Tee Times
           </Button>
+          <Button
+            variant="outline" size="sm"
+            onClick={() => setAutoRulesOpen(p => !p)}
+            className={`gap-1.5 ${autoRulesOpen ? "bg-amber-50 border-amber-300 text-amber-700" : ""}`}
+          >
+            <Zap className="h-3.5 w-3.5" />
+            Auto-Rules
+            {autoRules.length > 0 && (
+              <span className="ml-0.5 rounded-full bg-amber-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center">
+                {autoRules.filter(r => r.active).length}
+              </span>
+            )}
+            {autoRulesOpen ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
+          </Button>
           <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setGenOpen(true)}>
             <CalendarCog className="h-4 w-4" /> Generate Schedule
           </Button>
         </div>
       </div>
+
+      {/* Auto-Rules panel */}
+      {autoRulesOpen && (
+        <div className="px-8 pb-4 flex-shrink-0">
+          <div className="border border-amber-200 bg-amber-50/60 rounded-xl p-4">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Zap className="h-4 w-4 text-amber-600" />
+                <span className="font-semibold text-sm text-amber-900">Tee Time Auto-generation Rules</span>
+                <span className="text-xs text-amber-700 font-normal">— runs daily, fills your {"{lookahead}"} day window</span>
+              </div>
+              {!readOnly && (
+                <Button size="sm" variant="outline" className="gap-1.5 border-amber-300 text-amber-800 hover:bg-amber-100 h-7 text-xs" onClick={openNewRule}>
+                  <Plus className="h-3 w-3" /> New Rule
+                </Button>
+              )}
+            </div>
+
+            {autoRulesLoading ? (
+              <div className="flex items-center gap-2 text-xs text-amber-700"><Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading rules…</div>
+            ) : autoRules.length === 0 ? (
+              <p className="text-xs text-amber-700">No auto-rules yet. Create one to start auto-generating tee times.</p>
+            ) : (
+              <div className="space-y-2">
+                {autoRules.map(rule => (
+                  <div key={rule.id} className="bg-white border border-amber-200 rounded-lg px-4 py-3 flex items-center gap-3">
+                    <Switch
+                      checked={rule.active}
+                      onCheckedChange={() => !readOnly && handleToggleRule(rule)}
+                      disabled={readOnly}
+                      className="data-[state=checked]:bg-amber-500 flex-shrink-0"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{rule.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Season: <span className="font-medium">{rule.season_start} → {rule.season_end}</span>
+                        &nbsp;·&nbsp;{rule.lookahead_days}d window
+                        &nbsp;·&nbsp;{rule.players_per_slot} players/slot
+                        &nbsp;·&nbsp;Config {rule.config_type}
+                      </p>
+                      {rule.last_run_at && (
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                          <Clock className="h-2.5 w-2.5" />
+                          Last run: {format(new Date(rule.last_run_at), "dd MMM yyyy HH:mm")}
+                        </p>
+                      )}
+                    </div>
+                    {!readOnly && (
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <Button
+                          size="icon" variant="ghost"
+                          className="h-7 w-7 text-amber-600 hover:bg-amber-100"
+                          title="Run now"
+                          disabled={ruleRunning === rule.id}
+                          onClick={() => handleRunNow(rule)}
+                        >
+                          {ruleRunning === rule.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7" onClick={() => openEditRule(rule)}>
+                          <Pencil className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDeleteRule(rule.id, rule.name)}>
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Day strip */}
       <div className="px-8 flex-shrink-0">
@@ -1580,6 +1807,144 @@ export default function Schedule() {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Auto-Rule Create / Edit Dialog */}
+      <Dialog open={ruleDlgOpen} onOpenChange={setRuleDlgOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{ruleEditId ? "Edit Auto-Rule" : "New Auto-Generation Rule"}</DialogTitle>
+            <DialogDescription>
+              The rule runs daily and fills your lookahead window with tee slots — skipping dates that already have tee times.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 pt-1">
+            {/* Name */}
+            <div>
+              <Label className="text-xs font-medium mb-1 block">Rule name</Label>
+              <Input
+                placeholder="e.g. Summer weekday schedule"
+                value={ruleForm.name}
+                onChange={e => setRuleForm(p => ({ ...p, name: e.target.value }))}
+              />
+            </div>
+
+            {/* Season */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium mb-1 block">Season start</Label>
+                <div className="flex gap-1">
+                  <Select value={ruleForm.season_start_month} onValueChange={v => setRuleForm(p => ({ ...p, season_start_month: v }))}>
+                    <SelectTrigger className="flex-1 h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select value={ruleForm.season_start_day} onValueChange={v => setRuleForm(p => ({ ...p, season_start_day: v }))}>
+                    <SelectTrigger className="w-16 h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1 block">Season end</Label>
+                <div className="flex gap-1">
+                  <Select value={ruleForm.season_end_month} onValueChange={v => setRuleForm(p => ({ ...p, season_end_month: v }))}>
+                    <SelectTrigger className="flex-1 h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+                  </Select>
+                  <Select value={ruleForm.season_end_day} onValueChange={v => setRuleForm(p => ({ ...p, season_end_day: v }))}>
+                    <SelectTrigger className="w-16 h-9 text-xs"><SelectValue /></SelectTrigger>
+                    <SelectContent>{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+              </div>
+            </div>
+
+            {/* Lookahead + players */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-medium mb-1 block">Lookahead window</Label>
+                <Select value={String(ruleForm.lookahead_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookahead_days: Number(v) }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[7, 14, 21, 28].map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} days</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label className="text-xs font-medium mb-1 block">Players per slot</Label>
+                <Select value={String(ruleForm.players_per_slot)} onValueChange={v => setRuleForm(p => ({ ...p, players_per_slot: Number(v) }))}>
+                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {[1, 2, 3, 4].map(n => <SelectItem key={n} value={String(n)} className="text-xs">{n} player{n !== 1 ? "s" : ""}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Saved config picker */}
+            {ruleSavedConfigs.length > 0 && (
+              <div>
+                <Label className="text-xs font-medium mb-1 block">
+                  <FolderOpen className="h-3 w-3 inline mr-1" />
+                  Load time config from saved template
+                </Label>
+                <Select
+                  value=""
+                  onValueChange={v => {
+                    const cfg = ruleSavedConfigs.find(c => String(c.id) === v);
+                    if (cfg) setRuleForm(p => ({ ...p, config_type: cfg.config_type, config_data: cfg.config_data }));
+                  }}
+                >
+                  <SelectTrigger className="h-9 text-xs"><SelectValue placeholder="Choose a saved config…" /></SelectTrigger>
+                  <SelectContent>
+                    {ruleSavedConfigs.map(c => (
+                      <SelectItem key={c.id} value={String(c.id)} className="text-xs">{c.name} (Type {c.config_type})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
+            {/* Config summary */}
+            {ruleForm.config_data && (Object.keys(ruleForm.config_data).length > 0) ? (
+              <div className="bg-muted rounded-lg px-3 py-2 text-xs text-muted-foreground">
+                <p className="font-medium text-foreground mb-1">Loaded config: Type {ruleForm.config_type}</p>
+                {["morning", "midday", "twilight"].filter(k => ruleForm.config_data[k]?.start).map(k => (
+                  <p key={k}><span className="capitalize font-medium">{k}:</span> {ruleForm.config_data[k].start}–{ruleForm.config_data[k].end} every {ruleForm.config_data[k].interval}min ({ruleForm.config_data[k].tee_start_type})</p>
+                ))}
+              </div>
+            ) : (
+              <div className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs text-amber-700">
+                No time config selected — choose a saved template above, or the rule will use your default Generate Schedule settings when first run.
+              </div>
+            )}
+
+            {/* Active */}
+            <div className="flex items-center gap-3 pt-1">
+              <Switch
+                checked={ruleForm.active}
+                onCheckedChange={v => setRuleForm(p => ({ ...p, active: v }))}
+                className="data-[state=checked]:bg-amber-500"
+              />
+              <Label className="text-sm">Rule is active</Label>
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-2">
+            <Button variant="outline" className="flex-1" onClick={() => setRuleDlgOpen(false)} disabled={ruleDlgSaving}>
+              Cancel
+            </Button>
+            <Button
+              className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]"
+              onClick={handleSaveRule}
+              disabled={ruleDlgSaving}
+            >
+              {ruleDlgSaving && <Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />}
+              {ruleEditId ? "Save Changes" : "Create Rule"}
+            </Button>
+          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -1297,19 +1297,22 @@ router.put("/portal/events/:id/registrations/:userId", requireClubAuth, async (r
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
   await exec("UPDATE event_registrations SET status = ? WHERE event_id = ? AND user_id = ?", [status, evId, targetId]);
   const target = await row<any>("SELECT push_token FROM users WHERE id = ?", [targetId]);
+  const needsPayment = status === "approved" && event.payment_required && event.entry_fee;
+  const notifTitle = status === "approved" ? "Spot Confirmed ⛳" : "Registration Update";
+  const notifBody  = status === "approved"
+    ? needsPayment
+      ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.`
+      : `Your entry for "${event.name}" is confirmed.`
+    : `Your entry for "${event.name}" was not accepted.`;
+  const notifData  = { type: "event_registration_update", event_id: evId, status };
+  // in-app notification (always, regardless of push token)
+  await exec(
+    "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+    [targetId, "event_registration_update", notifTitle, notifBody, JSON.stringify(notifData)]
+  );
   if (target?.push_token) {
-    const needsPayment = status === "approved" && event.payment_required && event.entry_fee;
     const { sendPushNotifications } = await import("../lib/notifications");
-    sendPushNotifications([{
-      to: target.push_token, sound: "default",
-      title: status === "approved" ? "Spot Confirmed ⛳" : "Registration Update",
-      body:  status === "approved"
-        ? needsPayment
-          ? `Your entry for "${event.name}" is approved. Open the app to pay R${parseFloat(event.entry_fee).toFixed(2)}.`
-          : `Your entry for "${event.name}" is confirmed.`
-        : `Your entry for "${event.name}" was not accepted.`,
-      data: { type: "event_registration_update", event_id: evId, status },
-    }]);
+    sendPushNotifications([{ to: target.push_token, sound: "default", title: notifTitle, body: notifBody, data: notifData }]);
   }
   res.json({ success: true });
 });
@@ -1338,28 +1341,59 @@ router.put("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
   const club  = getClub(req);
   const evId  = Number(req.params.id);
   const { round = 1, entries = [] } = req.body ?? {};
-  const event = await row<any>("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const event = await row<any>(
+    "SELECT e.id, e.name, e.payment_required, e.entry_fee FROM golf_events e WHERE e.id = ? AND e.club_id = ?",
+    [evId, club.id]
+  );
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
   await exec("DELETE FROM event_draws WHERE event_id = ? AND round = ?", [evId, round]);
+
+  const drawUserIds: number[] = [];
   for (const entry of entries) {
     if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
     await exec(
       "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
       [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
     );
+    drawUserIds.push(Number(entry.user_id));
   }
-  const registrants = await query<any>(
-    "SELECT u.push_token FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.event_id = ? AND er.status = 'approved' AND u.push_token IS NOT NULL",
-    [evId]
-  );
-  if (registrants.length > 0) {
+
+  // Auto-approve every golfer placed in the draw (they were pending ballot)
+  if (drawUserIds.length > 0) {
+    const placeholders = drawUserIds.map(() => "?").join(", ");
+    await exec(
+      `UPDATE event_registrations SET status = 'approved' WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'pending'`,
+      [evId, ...drawUserIds]
+    );
+  }
+
+  // Notify all draw entrants — push + in-app
+  if (drawUserIds.length > 0) {
+    const placeholders = drawUserIds.map(() => "?").join(", ");
+    const recipients = await query<any>(
+      `SELECT u.id as user_id, u.push_token, er.payment_status
+       FROM users u
+       JOIN event_registrations er ON er.user_id = u.id AND er.event_id = ?
+       WHERE u.id IN (${placeholders})`,
+      [evId, ...drawUserIds]
+    );
     const { sendPushNotifications } = await import("../lib/notifications");
-    sendPushNotifications(registrants.map((r: any) => ({
-      to: r.push_token, sound: "default",
-      title: "Draw Published ⛳",
-      body:  `The tee-time draw for "${event.name}" Round ${round} is now available.`,
-      data:  { type: "event_draw_published", event_id: evId, round },
-    })));
+    const pushMessages: any[] = [];
+    for (const r of recipients) {
+      const needsPay = event.payment_required && r.payment_status !== "paid";
+      const title = needsPay ? "Draw Published — Payment Required ⛳" : "Draw Published ⛳";
+      const body  = needsPay
+        ? `You're in the draw for "${event.name}" Round ${round}. Open the app to pay R${parseFloat(event.entry_fee ?? "0").toFixed(2)} and confirm your spot.`
+        : `The tee-time draw for "${event.name}" Round ${round} is now available.`;
+      const data = { type: "event_draw_published", event_id: evId, round };
+      // in-app notification
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [r.user_id, "event_draw_published", title, body, JSON.stringify(data)]
+      );
+      if (r.push_token) pushMessages.push({ to: r.push_token, sound: "default", title, body, data });
+    }
+    if (pushMessages.length > 0) sendPushNotifications(pushMessages);
   }
   res.json({ success: true });
 });

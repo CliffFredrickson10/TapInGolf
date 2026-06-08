@@ -384,13 +384,17 @@ export default function EventDetailScreen() {
             {/* Registration status / CTA */}
             <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {ctaState === "open_all" && (
-                <View style={styles.statusRow}>
-                  <Ionicons name="checkmark-circle-outline" size={18} color="#22c55e" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.ctaTitle, { color: colors.foreground }]}>No entry required</Text>
-                    <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>No formal entry needed — contact the club to confirm participation.</Text>
-                  </View>
-                </View>
+                <>
+                  <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>
+                    No formal entry needed — book a tee time at the club to secure your spot.
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: colors.primary }]}
+                    onPress={() => router.push({ pathname: "/club/[id]", params: { id: event.club_id } })}
+                  >
+                    <Text style={styles.primaryBtnText}>Book Your Spot</Text>
+                  </TouchableOpacity>
+                </>
               )}
               {ctaState === "login" && (
                 <>

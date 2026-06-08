@@ -47,6 +47,7 @@ interface DrawEntry {
   user_id: number; user_name: string;
   tee_date: string; tee_time: string; draw_group: number; starting_tee: number;
   division: string | null; frozen_handicap: number | null;
+  seed_metric: string | null; seed_value: number | null;
 }
 
 interface LeaderboardEntry {
@@ -572,9 +573,18 @@ export default function EventDetailScreen() {
                   {players.map((p, i) => (
                     <View key={i} style={styles.drawPlayer}>
                       <Text style={[styles.drawPlayerName, { color: colors.foreground }]}>{p.user_name}</Text>
-                      <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
-                        {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
-                      </Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                        <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
+                          {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
+                        </Text>
+                        {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
+                          <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                            <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
+                              {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
                     </View>
                   ))}
                 </View>

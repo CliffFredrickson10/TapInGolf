@@ -15,6 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
+  AlertTriangle,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -68,6 +69,16 @@ interface Score {
 interface TeeSlot {
   id: number; date: string; time: string;
   total_slots: number; active: boolean;
+}
+
+interface ConflictBooking {
+  id: number; booking_ref: string; user_name: string; user_id: number;
+  tee_date: string; tee_time: string; status: string; players: number;
+}
+
+interface ConflictEvent {
+  id: number; name: string; event_date: string; end_date: string | null;
+  status: string; slot_count: number; registrant_count: number;
 }
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
@@ -219,6 +230,15 @@ export default function Events() {
   const [inviteSearching, setInviteSearching] = useState(false);
   const [inviteAdding, setInviteAdding]     = useState<number | null>(null);
   const [inviteRemoving, setInviteRemoving] = useState<number | null>(null);
+
+  // Conflict resolution dialog
+  const [conflictDialog, setConflictDialog] = useState<{
+    open: boolean;
+    eventId: number | null;
+    bookings: ConflictBooking[];
+    events: ConflictEvent[];
+    resolving: boolean;
+  }>({ open: false, eventId: null, bookings: [], events: [], resolving: false });
 
   // Description textarea ref (auto-resize on open — useEffect placed after dlgOpen state)
   const descRef = useRef<HTMLTextAreaElement>(null);
@@ -539,12 +559,44 @@ export default function Events() {
 
   const handlePublish = async (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
+    // Check for date-range conflicts before asking to publish
+    try {
+      const data = await api(`/api/portal/events/${id}/conflicts`);
+      if ((data.conflicting_bookings?.length ?? 0) > 0 || (data.conflicting_events?.length ?? 0) > 0) {
+        setConflictDialog({ open: true, eventId: id, bookings: data.conflicting_bookings, events: data.conflicting_events, resolving: false });
+        return;
+      }
+    } catch { /* if conflict check fails, fall through to normal publish */ }
+
     if (!confirm("Publish this tournament? Notifications will be sent to club members and past golfers.")) return;
     try {
-      await api(`/api/portal/events/${id}/publish`, { method: "POST" });
-      setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, status: "active" } : ev));
+      const updated = await api(`/api/portal/events/${id}/publish`, { method: "POST" });
+      setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, ...updated, status: "active" } : ev));
       toast({ title: "Tournament published", description: "Golfers have been notified." });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+  };
+
+  const handleResolveAndPublish = async () => {
+    if (!conflictDialog.eventId) return;
+    setConflictDialog(prev => ({ ...prev, resolving: true }));
+    try {
+      const updated = await api(`/api/portal/events/${conflictDialog.eventId}/resolve-and-publish`, {
+        method: "POST",
+        body: JSON.stringify({
+          cancel_booking_ids: conflictDialog.bookings.map(b => b.id),
+          cancel_event_ids:   conflictDialog.events.map(ev => ev.id),
+        }),
+      });
+      setEvents(prev => prev.map(ev =>
+        ev.id === conflictDialog.eventId ? { ...ev, ...updated, status: "active" } :
+        conflictDialog.events.some(ce => ce.id === ev.id) ? { ...ev, status: "cancelled" } : ev
+      ));
+      setConflictDialog({ open: false, eventId: null, bookings: [], events: [], resolving: false });
+      toast({ title: "Tournament published", description: "Conflicts resolved. Golfers have been notified." });
+    } catch (e: any) {
+      setConflictDialog(prev => ({ ...prev, resolving: false }));
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
   };
 
   const handleCancel = async (id: number, e: React.MouseEvent) => {
@@ -1666,6 +1718,87 @@ export default function Events() {
           ]);
         } : undefined}
       />
+
+      {/* ── Conflict Resolution Dialog ──────────────────────────────────────── */}
+      <Dialog open={conflictDialog.open} onOpenChange={o => { if (!o && !conflictDialog.resolving) setConflictDialog(prev => ({ ...prev, open: false })); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-700">
+              <AlertTriangle className="h-5 w-5" />
+              Scheduling Conflicts Detected
+            </DialogTitle>
+          </DialogHeader>
+
+          <p className="text-sm text-muted-foreground">
+            This tournament's dates overlap with the following existing items. You must resolve all
+            conflicts before publishing. Affected golfers will be notified automatically.
+          </p>
+
+          {/* Conflicting regular bookings */}
+          {conflictDialog.bookings.length > 0 && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 space-y-2">
+              <p className="text-sm font-semibold text-amber-800 flex items-center gap-1.5">
+                <Calendar className="h-4 w-4" />
+                {conflictDialog.bookings.length} Regular Booking{conflictDialog.bookings.length !== 1 ? "s" : ""} Will Be Cancelled
+              </p>
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {conflictDialog.bookings.map(b => (
+                  <div key={b.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border border-amber-100">
+                    <span className="font-medium truncate max-w-[140px]">{b.user_name}</span>
+                    <span className="text-muted-foreground">{fmtDate(b.tee_date)} · {b.tee_time}</span>
+                    <span className="text-muted-foreground">{b.players} {b.players === 1 ? "player" : "players"}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-amber-700">
+                These bookings will be cancelled and each golfer will receive a notification.
+              </p>
+            </div>
+          )}
+
+          {/* Conflicting other tournaments */}
+          {conflictDialog.events.length > 0 && (
+            <div className="rounded-lg border border-red-200 bg-red-50 p-3 space-y-2">
+              <p className="text-sm font-semibold text-red-800 flex items-center gap-1.5">
+                <Trophy className="h-4 w-4" />
+                {conflictDialog.events.length} Tournament{conflictDialog.events.length !== 1 ? "s" : ""} Will Be Cancelled
+              </p>
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {conflictDialog.events.map(ev => (
+                  <div key={ev.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border border-red-100">
+                    <span className="font-medium truncate max-w-[160px]">{ev.name}</span>
+                    <span className="text-muted-foreground">
+                      {fmtDate(ev.event_date)}{ev.end_date ? ` – ${fmtDate(ev.end_date)}` : ""}
+                    </span>
+                    <span className="text-muted-foreground">{ev.registrant_count} registered</span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-red-700">
+                These tournaments will be cancelled and all registrants will be notified.
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-2 pt-1">
+            <Button
+              variant="outline"
+              className="flex-1"
+              disabled={conflictDialog.resolving}
+              onClick={() => setConflictDialog(prev => ({ ...prev, open: false }))}
+            >
+              Go Back
+            </Button>
+            <Button
+              className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]"
+              disabled={conflictDialog.resolving}
+              onClick={handleResolveAndPublish}
+            >
+              {conflictDialog.resolving ? "Resolving…" : "Resolve & Publish"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

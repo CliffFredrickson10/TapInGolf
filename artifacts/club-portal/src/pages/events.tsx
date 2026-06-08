@@ -1411,7 +1411,6 @@ export default function Events() {
                       )}
                     </div>
                     <div className="flex gap-1.5 flex-wrap justify-end">
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addDrawSlot} disabled={readOnly}><Plus className="h-3.5 w-3.5" />Add One</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>

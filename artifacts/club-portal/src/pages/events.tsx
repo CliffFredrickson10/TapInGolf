@@ -395,7 +395,30 @@ export default function Events() {
     setDrawLoading(true);
     try {
       const data = await api<DrawEntry[]>(`/api/portal/events/${ev.id}/draw?round=${round}`);
-      setDraw(data);
+      if (data.length > 0 || round === 1) {
+        setDraw(data);
+      } else {
+        // Round 2+ with no draw yet — carry over the player roster from Round 1
+        const r1 = await api<DrawEntry[]>(`/api/portal/events/${ev.id}/draw?round=1`);
+        if (r1.length === 0) {
+          setDraw([]);
+        } else {
+          // Compute this round's date (event_date + round - 1 days)
+          const base = new Date(ev.event_date);
+          base.setDate(base.getDate() + (round - 1));
+          const teeDate = base.toISOString().split("T")[0]!;
+          // Copy players — reset tee times so staff can generate/arrange
+          setDraw(r1.map((d, idx) => ({
+            ...d,
+            id: Date.now() + idx,
+            round,
+            tee_date: teeDate,
+            tee_time: "08:00",
+            draw_group: idx + 1,
+            starting_tee: 1,
+          })));
+        }
+      }
     } catch {} finally { setDrawLoading(false); }
   }, []);
 

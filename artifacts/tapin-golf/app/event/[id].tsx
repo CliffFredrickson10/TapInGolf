@@ -149,11 +149,12 @@ export default function EventDetailScreen() {
   const loadDraw = useCallback(async () => {
     if (!event || drawLoaded) return;
     try {
-      const data = await apiFetch(`/clubs/${event.club_id}/events`, user?.token);
-      // Draw is fetched via the public leaderboard route — we use admin draw
-      // only in the portal; for the app, just show the draw from the event detail
+      const data = await apiFetch(`/events/${event.id}/draw`, user?.token);
+      setDraw(Array.isArray(data) ? data : []);
       setDrawLoaded(true);
-    } catch {}
+    } catch {
+      setDrawLoaded(true);
+    }
   }, [event, drawLoaded]);
 
   const loadLeaderboard = useCallback(async () => {

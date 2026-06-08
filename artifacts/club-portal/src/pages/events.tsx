@@ -228,9 +228,10 @@ export default function Events() {
   const [detailTeeSlotsLoading, setDetailTeeSlotsLoading] = useState(false);
 
   // Draw
-  const [draw, setDraw]         = useState<DrawEntry[]>([]);
-  const [drawLoading, setDrawLoading] = useState(false);
-  const [drawRound, setDrawRound] = useState(1);
+  const [draw, setDraw]           = useState<DrawEntry[]>([]);
+  const [drawLoading, setDrawLoading]     = useState(false);
+  const [drawRound, setDrawRound]         = useState(1);
+  const [drawIsPublished, setDrawIsPublished] = useState(false);
   const [savingDraw, setSavingDraw] = useState(false);
   // Draw generation dialog
   const [genDlg, setGenDlg]               = useState(false);
@@ -399,11 +400,13 @@ export default function Events() {
       const data = await api<DrawEntry[]>(`/api/portal/events/${ev.id}/draw?round=${round}`);
       if (data.length > 0 || round === 1) {
         setDraw(data);
+        setDrawIsPublished(data.length > 0);
       } else {
         // Round 2+ with no draw yet — carry over the player roster from Round 1
         const r1 = await api<DrawEntry[]>(`/api/portal/events/${ev.id}/draw?round=1`);
         if (r1.length === 0) {
           setDraw([]);
+          setDrawIsPublished(false);
         } else {
           // Compute this round's date (event_date + round - 1 days)
           const base = new Date(ev.event_date);
@@ -419,6 +422,7 @@ export default function Events() {
             draw_group: idx + 1,
             starting_tee: 1,
           })));
+          setDrawIsPublished(false);
         }
       }
     } catch {} finally { setDrawLoading(false); }
@@ -893,6 +897,7 @@ export default function Events() {
         method: "PUT",
         body: JSON.stringify({ round: drawRound, entries: draw }),
       });
+      setDrawIsPublished(true);
       toast({ title: "Draw published — players notified" });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setSavingDraw(false); }
@@ -956,6 +961,7 @@ export default function Events() {
           }),
         });
         setDraw(data.entries);
+        setDrawIsPublished(false);
         setGenDlg(false);
         toast({ title: `Draw generated — review and click Publish when ready` });
       }
@@ -1392,6 +1398,17 @@ export default function Events() {
                         </SelectContent>
                       </Select>
                       <span className="text-xs text-muted-foreground">{draw.length} player{draw.length !== 1 ? "s" : ""}</span>
+                      {!drawLoading && draw.length > 0 && (
+                        drawIsPublished ? (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-emerald-50 text-emerald-700 border border-emerald-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block" />Published
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-400 inline-block" />Unpublished
+                          </span>
+                        )
+                      )}
                     </div>
                     <div className="flex gap-1.5 flex-wrap justify-end">
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addDrawSlot} disabled={readOnly}><Plus className="h-3.5 w-3.5" />Add One</Button>

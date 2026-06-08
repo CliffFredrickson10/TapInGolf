@@ -436,21 +436,8 @@ async function createSchema(): Promise<void> {
     )
   `);
 
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS club_memberships (
-      id           SERIAL PRIMARY KEY,
-      user_id      INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-      club_id      INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
-      plan_name    VARCHAR(100) NOT NULL,
-      plan_details TEXT,
-      start_date   DATE NOT NULL,
-      expiry_date  DATE,
-      status       VARCHAR(20) NOT NULL DEFAULT 'active'
-                     CHECK (status IN ('active','expired','cancelled','suspended')),
-      notes        TEXT,
-      created_at   TIMESTAMP DEFAULT NOW()
-    )
-  `);
+  // club_memberships was never used in any route — superseded by club_members; drop it
+  await ddl("DROP TABLE IF EXISTS club_memberships CASCADE");
 
   // ── Auth / OTP ────────────────────────────────────────────────────────────
   await ddl(`
@@ -505,15 +492,6 @@ async function createSchema(): Promise<void> {
       user_id    INT NOT NULL,
       sent_at    TIMESTAMP NOT NULL DEFAULT NOW(),
       PRIMARY KEY (booking_id, user_id)
-    )
-  `);
-
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS platform_settings (
-      id            SERIAL PRIMARY KEY,
-      setting_key   VARCHAR(100) UNIQUE NOT NULL,
-      setting_value VARCHAR(255) NOT NULL,
-      updated_at    TIMESTAMP DEFAULT NOW()
     )
   `);
 
@@ -862,22 +840,7 @@ async function createSchema(): Promise<void> {
   await ddl("DROP INDEX IF EXISTS uq_pts_club_date_time");
   await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_general ON portal_tee_slots (club_id, date, tee_time) WHERE event_id IS NULL");
   await ddl("CREATE UNIQUE INDEX IF NOT EXISTS uq_pts_event ON portal_tee_slots (club_id, date, tee_time, event_id) WHERE event_id IS NOT NULL");
-  // Migrate existing event_tee_slots junction data → set event_id directly on the slot row
-  await ddl("UPDATE portal_tee_slots SET event_id = (SELECT ets.event_id FROM event_tee_slots ets WHERE ets.tee_slot_id = portal_tee_slots.id LIMIT 1) WHERE event_id IS NULL AND id IN (SELECT tee_slot_id FROM event_tee_slots)");
-
-  // Links a tournament to specific portal_tee_slots from the club's schedule.
-  // max_participants on golf_events is auto-recalculated whenever this table changes.
-  await ddl(`
-    CREATE TABLE IF NOT EXISTS event_tee_slots (
-      id          SERIAL PRIMARY KEY,
-      event_id    INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
-      tee_slot_id INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
-      created_at  TIMESTAMP DEFAULT NOW(),
-      UNIQUE (event_id, tee_slot_id)
-    )
-  `);
-  await ddl("CREATE INDEX IF NOT EXISTS idx_event_tee_slots_event ON event_tee_slots (event_id)");
-  // event_tee_slots was a junction table superseded by portal_tee_slots.event_id — drop it
+  // event_tee_slots was a junction table superseded by portal_tee_slots.event_id — permanently removed
   await ddl("DROP TABLE IF EXISTS event_tee_slots CASCADE");
 
   // Tee-time draw for a tournament round: groups players onto tee slots.

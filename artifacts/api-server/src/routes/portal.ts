@@ -951,7 +951,7 @@ router.delete("/portal/events/:id", requireClubAuth, async (req: Request, res: R
     saveUserNotification(u.id, "event_cancelled", title, body, data);
   }
 
-  res.json({ message: "Cancelled", slots_deleted: slotDel.rowCount ?? 0 });
+  res.json({ message: "Cancelled" });
 });
 
 // POST /portal/events/:id/publish  →  move to active, notify audience

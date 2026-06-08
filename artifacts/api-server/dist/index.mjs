@@ -52502,15 +52502,13 @@ async function runAutoRuleNow(rule) {
       [club_id, date]
     );
     if (Number(generalExisting?.cnt ?? 0) > 0) continue;
-    const occupiedRows = await query(
-      "SELECT tee_time FROM portal_tee_slots WHERE club_id = ? AND date = ?",
+    const tournamentSlots = await row(
+      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
       [club_id, date]
     );
-    const occupiedTimes = new Set(occupiedRows.map((r) => String(r.tee_time).slice(0, 5)));
+    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
     datesProcessed++;
     for (const s of slotTemplate) {
-      const slotTime = s.time.slice(0, 5);
-      if (occupiedTimes.has(slotTime)) continue;
       try {
         await exec(
           "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, crossover_enabled) VALUES (?, ?, ?, ?, 1, ?, ?, ?) ON CONFLICT DO NOTHING",
@@ -64290,7 +64288,7 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
   for (const u of audience) {
     saveUserNotification(u.id, "event_cancelled", title, body, data);
   }
-  res.json({ message: "Cancelled", slots_deleted: slotDel.rowCount ?? 0 });
+  res.json({ message: "Cancelled" });
 });
 router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

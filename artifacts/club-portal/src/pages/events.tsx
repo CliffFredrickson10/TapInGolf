@@ -759,7 +759,7 @@ export default function Events() {
     e.stopPropagation();
     const ev = events.find(ev => ev.id === id);
     setCancelDlg({ open: true, eventId: id, eventName: ev?.name ?? "this tournament", cancelling: false });
-    setCancelSlotsChoice("open");
+    setCancelSlotsChoice("delete");
   };
 
   const executeCancelTournament = async () => {

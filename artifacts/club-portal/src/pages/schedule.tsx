@@ -117,6 +117,17 @@ interface Block {
   crossover_enabled: boolean;
 }
 
+interface DrawEntry {
+  event_id: number;
+  round: number;
+  tee_date: string;
+  tee_time: string;
+  draw_group: number;
+  starting_tee: number;
+  user_name: string;
+  division: string | null;
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────────
 
 function today() { return format(new Date(), "yyyy-MM-dd"); }
@@ -1167,6 +1178,7 @@ export default function Schedule() {
 
   const [teeTimes, setTeeTimes] = useState<TeeTime[]>([]);
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [drawEntries, setDrawEntries] = useState<DrawEntry[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Generate dialog
@@ -1333,12 +1345,14 @@ export default function Schedule() {
   const load = async () => {
     setLoading(true);
     try {
-      const [tt, bk] = await Promise.all([
+      const [tt, bk, de] = await Promise.all([
         api<TeeTime[]>(`/api/portal/tee-times?from=${rangeStart}&to=${rangeEnd}`),
         api<Booking[]>(`/api/portal/bookings?limit=500&from=${rangeStart}&to=${rangeEnd}`),
+        api<DrawEntry[]>(`/api/portal/schedule-draw-entries?from=${rangeStart}&to=${rangeEnd}`),
       ]);
       setTeeTimes(tt.map(t => ({ ...t, date: t.date.slice(0, 10) })));
       setBookings(bk.map(b => ({ ...b, date: b.date.slice(0, 10) })));
+      setDrawEntries(de.map(d => ({ ...d, tee_date: d.tee_date.slice(0, 10), tee_time: String(d.tee_time).slice(0, 5) })));
     } catch (e: any) {
       toast({ title: "Error loading schedule", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
@@ -1678,6 +1692,21 @@ export default function Schedule() {
             {dayTeeTimes.map((tt, rowIdx) => {
               const isTournament = !!tt.event_id;
 
+              // ── Draw players for tournament slots ─────────────────────────────
+              // Map starting_tee number to tee_start_type string
+              const teeTypeToStartingTee: Record<string, number> = { first_tee: 1, tenth_tee: 10, two_tee: 1 };
+              const slotStartingTee = teeTypeToStartingTee[tt.tee_start_type] ?? 1;
+              const ttTime = String(tt.time).slice(0, 5);
+              const drawPlayers: DrawEntry[] = isTournament
+                ? drawEntries.filter(d =>
+                    d.event_id === tt.event_id &&
+                    d.tee_date === tt.date &&
+                    d.tee_time === ttTime &&
+                    d.starting_tee === slotStartingTee
+                  )
+                : [];
+              const hasDrawPlayers = drawPlayers.length > 0;
+
               // ── Regular slot (+ tournament slots rendered identically but locked) ─
               const slots = buildSlots(tt, bForTT(tt.id));
               const borderCol  = isTournament ? "border-amber-100" : "border-gray-100";
@@ -1691,7 +1720,7 @@ export default function Schedule() {
                 >
                   {/* Time cell */}
                   <div className={`px-3 py-2 flex flex-col justify-center border-r ${borderCol} gap-0.5`}>
-                    <span className="font-mono font-bold text-[#1a5c38] text-sm">{String(tt.time).slice(0, 5)}</span>
+                    <span className="font-mono font-bold text-[#1a5c38] text-sm">{ttTime}</span>
                     <div className="flex gap-1 flex-wrap">
                       {isTournament && (
                         <span className="text-[9px] bg-amber-100 text-amber-800 px-1 py-0.5 rounded font-semibold">🏆 {tt.event_name ?? "Tournament"}</span>
@@ -1714,8 +1743,22 @@ export default function Schedule() {
                     </div>
                   </div>
 
-                  {/* Player cells */}
-                  {slots.map((slot, i) => (
+                  {/* Player cells — draw players for tournament slots, bookings for regular slots */}
+                  {isTournament && hasDrawPlayers
+                    ? Array.from({ length: 4 }, (_, i) => {
+                        const p = drawPlayers[i];
+                        return (
+                          <div key={i} className={`px-3 py-2 border-l ${borderCol} text-xs flex items-center ${p ? "bg-[#1a5c38] text-white" : "text-gray-300"}`}>
+                            {p ? (
+                              <span className="flex items-center justify-between w-full gap-1 min-w-0">
+                                <span className={`truncate leading-tight font-medium ${i > 0 ? "opacity-80 text-[11px]" : ""}`}>{p.user_name}</span>
+                                {p.division && <span className="flex-shrink-0 text-[9px] px-1 py-0.5 rounded bg-white/20 font-semibold">{p.division}</span>}
+                              </span>
+                            ) : <span className="italic text-[11px]">—</span>}
+                          </div>
+                        );
+                      })
+                    : slots.map((slot, i) => (
                     <div key={i}
                       className={`px-3 py-2 border-l ${borderCol} text-xs flex items-center transition-all
                         ${slotBg(slot)}

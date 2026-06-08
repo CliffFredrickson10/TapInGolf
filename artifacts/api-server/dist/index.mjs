@@ -63753,6 +63753,27 @@ router14.get("/portal/tee-times/tournament-conflicts", requireClubAuth2, async (
   );
   res.json(conflicts);
 });
+router14.get("/portal/schedule-draw-entries", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { from, to } = req.query;
+  if (!from || !to) {
+    res.status(400).json({ message: "from and to are required" });
+    return;
+  }
+  const entries = await query(
+    `SELECT d.event_id, d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee,
+            u.name AS user_name, r.division
+     FROM event_draws d
+     JOIN users u ON u.id = d.user_id
+     JOIN golf_events ge ON ge.id = d.event_id
+     JOIN event_registrations r ON r.event_id = d.event_id AND r.user_id = d.user_id
+     WHERE ge.club_id = ? AND d.tee_date BETWEEN ? AND ?
+       AND ge.status NOT IN ('cancelled')
+     ORDER BY d.tee_date, d.tee_time, d.draw_group`,
+    [club.id, from, to]
+  );
+  res.json(entries);
+});
 router14.put("/portal/tee-times/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const ttId = Number(req.params.id);

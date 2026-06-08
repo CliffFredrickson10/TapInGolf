@@ -781,9 +781,24 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
   if (ev.restriction === "members_only") {
     const m = await row<any>("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, user.id]);
     if (!m) { res.status(403).json({ message: "This event is for active club members only" }); return; }
+    if (user.handicap_index == null) {
+      res.status(403).json({ message: "A valid WHS handicap index is required to enter this event. Please add your handicap index to your profile." }); return;
+    }
   } else if (ev.restriction === "invitation_only") {
     const inv = await row<any>("SELECT id FROM event_invites WHERE event_id = ? AND user_id = ?", [evId, user.id]);
     if (!inv) { res.status(403).json({ message: "This event is by invitation only. You have not been invited." }); return; }
+  } else if (ev.restriction === "whs_players_only") {
+    if (user.handicap_index == null) {
+      res.status(403).json({ message: "This event is for WHS-indexed players only. Please add your handicap index to your profile before entering." }); return;
+    }
+  }
+
+  // If the event has divisions, a handicap index is required to be placed in a division
+  const evDivisions: any[] = ev.divisions
+    ? (typeof ev.divisions === "string" ? JSON.parse(ev.divisions) : ev.divisions)
+    : [];
+  if (evDivisions.length > 0 && user.handicap_index == null) {
+    res.status(403).json({ message: "This event uses divisions. A WHS handicap index is required so you can be assigned to the correct division. Please update your profile." }); return;
   }
 
   const existing = await row<any>("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);

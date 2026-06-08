@@ -1866,11 +1866,11 @@ export default function Schedule() {
                 <div className="flex gap-1">
                   <Select value={ruleForm.season_end_month} onValueChange={v => setRuleForm(p => ({ ...p, season_end_month: v }))}>
                     <SelectTrigger className="flex-1 h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+                    <SelectContent side="top" className="max-h-48 overflow-y-auto">{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
                   </Select>
                   <Select value={ruleForm.season_end_day} onValueChange={v => setRuleForm(p => ({ ...p, season_end_day: v }))}>
                     <SelectTrigger className="w-16 h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
+                    <SelectContent side="top" className="max-h-48 overflow-y-auto">{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>
@@ -1891,7 +1891,7 @@ export default function Schedule() {
                 <Label className="text-xs font-medium mb-1 block">Future days (lookahead)</Label>
                 <Select value={String(ruleForm.lookahead_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookahead_days: Number(v) }))}>
                   <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent side="bottom" className="max-h-48 overflow-y-auto">
+                  <SelectContent side="top" className="max-h-48 overflow-y-auto">
                     {Array.from({ length: 28 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} day{d !== 1 ? "s" : ""}</SelectItem>)}
                   </SelectContent>
                 </Select>

@@ -841,7 +841,7 @@ router.get("/events/:id/draw", async (req, res): Promise<void> => {
   const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
   const draws = await query<any>(
-    `SELECT d.round, d.tee_date, d.tee_time, d.draw_group,
+    `SELECT d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee,
             u.id as user_id, u.name as user_name,
             r.division, r.frozen_handicap
      FROM event_draws d

@@ -56,7 +56,7 @@ interface Registration {
 
 interface DrawEntry {
   id: number; round: number; tee_date: string; tee_time: string;
-  draw_group: number; user_id: number; user_name: string;
+  draw_group: number; starting_tee: number; user_id: number; user_name: string;
   division: string | null; frozen_handicap: number | null; notes: string | null;
 }
 
@@ -657,7 +657,7 @@ export default function Events() {
     const today = detail?.event_date ?? new Date().toISOString().split("T")[0];
     setDraw(prev => [...prev, {
       id: Date.now(), round: drawRound, tee_date: today,
-      tee_time: "08:00", draw_group: lastGroup + 1,
+      tee_time: "08:00", draw_group: lastGroup + 1, starting_tee: 1,
       user_id: player.user_id, user_name: player.user_name,
       division: player.division, frozen_handicap: player.frozen_handicap, notes: null,
     }]);
@@ -994,7 +994,7 @@ export default function Events() {
                       {draw.map((d, i) => (
                         <Card key={d.id ?? i}>
                           <CardContent className="p-3">
-                            <div className="grid grid-cols-4 gap-2 items-center text-sm">
+                            <div className="grid grid-cols-5 gap-2 items-center text-sm">
                               <span className="font-medium">{d.user_name}</span>
                               <span className="text-muted-foreground text-xs">{d.division ? `${d.division} Div` : "—"}{d.frozen_handicap != null ? ` · ${d.frozen_handicap}` : ""}</span>
                               <div className="flex items-center gap-1.5">
@@ -1005,9 +1005,16 @@ export default function Events() {
                                 />
                               </div>
                               <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-muted-foreground whitespace-nowrap">Start Tee</span>
+                                <Input
+                                  type="number" min="1" max="18" value={d.starting_tee ?? 1} className="h-7 w-14 text-xs"
+                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? { ...x, starting_tee: Number(e.target.value) } : x))}
+                                />
+                              </div>
+                              <div className="flex items-center gap-1.5">
                                 <span className="text-xs text-muted-foreground">Grp</span>
                                 <Input
-                                  type="number" min="1" value={d.draw_group} className="h-7 w-16 text-xs"
+                                  type="number" min="1" value={d.draw_group} className="h-7 w-14 text-xs"
                                   onChange={e => setDraw(prev => prev.map((x, j) => j === i ? { ...x, draw_group: Number(e.target.value) } : x))}
                                 />
                                 <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive flex-shrink-0"

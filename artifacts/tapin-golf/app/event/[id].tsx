@@ -45,7 +45,7 @@ interface EventDetail {
 
 interface DrawEntry {
   user_id: number; user_name: string;
-  tee_date: string; tee_time: string; draw_group: number;
+  tee_date: string; tee_time: string; draw_group: number; starting_tee: number;
   division: string | null; frozen_handicap: number | null;
 }
 
@@ -559,14 +559,16 @@ export default function EventDetailScreen() {
             ) : (
               Object.entries(
                 draw.reduce((acc, d) => {
-                  const key = `${d.tee_date} ${d.tee_time} (Group ${d.draw_group})`;
-                  if (!acc[key]) acc[key] = [];
-                  acc[key].push(d);
+                  const date = fmtDate(d.tee_date);
+                  const time = String(d.tee_time).slice(0, 5);
+                  const key = `${d.tee_date}__${d.tee_time}__${d.draw_group}__${d.starting_tee}`;
+                  if (!acc[key]) acc[key] = { label: `${date} · ${time} · Tee ${d.starting_tee ?? 1} (Group ${d.draw_group})`, players: [] };
+                  acc[key].players.push(d);
                   return acc;
-                }, {} as Record<string, DrawEntry[]>)
-              ).map(([slot, players]) => (
-                <View key={slot} style={[styles.drawGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.drawSlotTime, { color: colors.primary }]}>{slot}</Text>
+                }, {} as Record<string, { label: string; players: DrawEntry[] }>)
+              ).map(([key, { label, players }]) => (
+                <View key={key} style={[styles.drawGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.drawSlotTime, { color: colors.primary }]}>{label}</Text>
                   {players.map((p, i) => (
                     <View key={i} style={styles.drawPlayer}>
                       <Text style={[styles.drawPlayerName, { color: colors.foreground }]}>{p.user_name}</Text>

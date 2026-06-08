@@ -1324,7 +1324,7 @@ router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
   const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
   const draws = await query<any>(
-    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.notes,
+    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee, d.notes,
             u.id as user_id, u.name as user_name, u.email as user_email,
             r.division, r.frozen_handicap
      FROM event_draws d
@@ -1352,8 +1352,8 @@ router.put("/portal/events/:id/draw", requireClubAuth, async (req: Request, res:
   for (const entry of entries) {
     if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
     await exec(
-      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null]
     );
     drawUserIds.push(Number(entry.user_id));
   }

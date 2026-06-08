@@ -58433,7 +58433,7 @@ router3.get("/events/:id/draw", async (req, res) => {
     return;
   }
   const draws = await query(
-    `SELECT d.round, d.tee_date, d.tee_time, d.draw_group,
+    `SELECT d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee,
             u.id as user_id, u.name as user_name,
             r.division, r.frozen_handicap
      FROM event_draws d
@@ -64929,7 +64929,7 @@ router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
     return;
   }
   const draws = await query(
-    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.notes,
+    `SELECT d.id, d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee, d.notes,
             u.id as user_id, u.name as user_name, u.email as user_email,
             r.division, r.frozen_handicap
      FROM event_draws d
@@ -64958,8 +64958,8 @@ router14.put("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   for (const entry of entries) {
     if (!entry.user_id || !entry.tee_date || !entry.tee_time) continue;
     await exec(
-      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.user_id, entry.notes ?? null]
+      "INSERT INTO event_draws (event_id, round, tee_date, tee_time, draw_group, starting_tee, user_id, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [evId, round, entry.tee_date, entry.tee_time, entry.draw_group ?? 1, entry.starting_tee ?? 1, entry.user_id, entry.notes ?? null]
     );
     drawUserIds.push(Number(entry.user_id));
   }
@@ -68387,10 +68387,12 @@ async function createSchema() {
       tee_time      TIME NOT NULL,
       draw_group    INT NOT NULL,
       user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      starting_tee  INT NOT NULL DEFAULT 1,
       notes         TEXT,
       created_at    TIMESTAMP DEFAULT NOW()
     )
   `);
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS starting_tee INT NOT NULL DEFAULT 1");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
   await ddl(`

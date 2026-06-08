@@ -888,10 +888,12 @@ async function createSchema(): Promise<void> {
       tee_time      TIME NOT NULL,
       draw_group    INT NOT NULL,
       user_id       INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      starting_tee  INT NOT NULL DEFAULT 1,
       notes         TEXT,
       created_at    TIMESTAMP DEFAULT NOW()
     )
   `);
+  await ddl("ALTER TABLE event_draws ADD COLUMN IF NOT EXISTS starting_tee INT NOT NULL DEFAULT 1");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_event ON event_draws (event_id, round)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_draws_user  ON event_draws (user_id)");
 

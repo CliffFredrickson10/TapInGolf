@@ -843,40 +843,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      Number(rounds), (req.body?.image_url) || null, status, club.id]
   );
 
-  // Notify active club members about the new event (invitation_only events get no notification at creation
-  // — invites are managed separately and members are notified on publish)
-  if (restriction !== "invitation_only") {
-    const audience = await query<any>(
-      `SELECT DISTINCT u.id, u.push_token
-       FROM users u
-       JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-       LIMIT 500`,
-      [club.id]
-    );
-    if (audience.length > 0) {
-      const fmtDate = (d: string) => {
-        try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
-        catch { return d; }
-      };
-      const pushAudience = audience.filter((u: any) => u.push_token);
-      if (pushAudience.length > 0) {
-        sendPushNotifications(pushAudience.map((u: any) => ({
-          to: u.push_token, sound: "default",
-          title: `⛳ New Event — ${club.name}`,
-          body:  `${String(name)} · ${fmtDate(event_date)}. Tap to view & enter.`,
-          data:  { type: "event_created", event_id: eventId, club_id: club.id },
-        })));
-      }
-      for (const u of audience) {
-        saveUserNotification(u.id, "event_created",
-          `⛳ New Event — ${club.name}`,
-          `${String(name)} · new tournament announced. Tap to view & enter.`,
-          { event_id: eventId, club_id: club.id }
-        );
-      }
-    }
-  }
-
+  // No notification at creation — members are notified when the event is published.
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [eventId]));
 });
 
@@ -978,9 +945,11 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
 
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
 
-  const fmtDate = (d: string) => {
-    try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
-    catch { return d; }
+  const fmtDate = (d: any) => {
+    try {
+      const iso = d instanceof Date ? d.toISOString() : String(d);
+      return new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    } catch { return String(d); }
   };
 
   // Notification rules on publish:
@@ -1140,9 +1109,11 @@ router.post("/portal/events/:id/resolve-and-publish", requireClubAuth, async (re
   // ── 3. Publish the new event (mirrors /publish logic exactly) ────────────────
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
 
-  const fmtDate = (d: string) => {
-    try { return new Date(String(d).slice(0, 10) + "T00:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }); }
-    catch { return d; }
+  const fmtDate = (d: any) => {
+    try {
+      const iso = d instanceof Date ? d.toISOString() : String(d);
+      return new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    } catch { return String(d); }
   };
   const isInviteOnly = ev.restriction === "invitation_only";
   const audience = await query<any>(

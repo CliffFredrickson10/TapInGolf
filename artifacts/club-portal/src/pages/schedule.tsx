@@ -1853,11 +1853,11 @@ export default function Schedule() {
                 <div className="flex gap-1">
                   <Select value={ruleForm.season_start_month} onValueChange={v => setRuleForm(p => ({ ...p, season_start_month: v }))}>
                     <SelectTrigger className="flex-1 h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
+                    <SelectContent side="top" className="max-h-48 overflow-y-auto">{MONTHS.map(m => <SelectItem key={m.v} value={m.v} className="text-xs">{m.l}</SelectItem>)}</SelectContent>
                   </Select>
                   <Select value={ruleForm.season_start_day} onValueChange={v => setRuleForm(p => ({ ...p, season_start_day: v }))}>
                     <SelectTrigger className="w-16 h-9 text-xs"><SelectValue /></SelectTrigger>
-                    <SelectContent>{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
+                    <SelectContent side="top" className="max-h-48 overflow-y-auto">{DAYS.map(d => <SelectItem key={d} value={d} className="text-xs">{d}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
               </div>

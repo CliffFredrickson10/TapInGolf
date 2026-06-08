@@ -1382,6 +1382,128 @@ router.put("/portal/events/:id/registrations/:userId", requireClubAuth, async (r
   res.json({ success: true });
 });
 
+// ── Generate draw (returns entries without saving — staff reviews then publishes) ──
+router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const {
+    round = 1,
+    date: reqDate,
+    mode = "random",
+    players_per_group = 4,
+    seed_metric = "points",
+    seed_round,
+  } = req.body ?? {};
+
+  const event = await row<any>(
+    "SELECT id, event_date, end_date, rounds FROM golf_events WHERE id = ? AND club_id = ?",
+    [evId, club.id]
+  );
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const teeDate: string = reqDate
+    ? String(reqDate).slice(0, 10)
+    : String(event.event_date).slice(0, 10);
+
+  // Get tournament-exclusive tee slots for this date
+  const slots = await query<any>(
+    "SELECT id, tee_time, tee_start_type, max_players FROM portal_tee_slots WHERE event_id = ? AND date = ? AND is_active = 1 ORDER BY tee_time",
+    [evId, teeDate]
+  );
+
+  // All approved players for this event
+  const approved = await query<any>(
+    `SELECT er.user_id, u.name AS user_name, er.division, er.frozen_handicap
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.status = 'approved'
+     ORDER BY u.name`,
+    [evId]
+  );
+
+  let players = [...approved];
+
+  if (mode === "seeded") {
+    const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
+    const prevScores = await query<any>(
+      "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
+      [evId, sr]
+    );
+    const scoreMap = new Map(prevScores.map((s: any) => [Number(s.user_id), s]));
+
+    // Sort: players with no score go first (arbitrary), then worst→best so best score = last group.
+    // Gross/Net: lower = better, so sort descending (high = worst = first).
+    // Points:    higher = better, so sort ascending  (low  = worst = first).
+    players.sort((a, b) => {
+      const sa = scoreMap.get(a.user_id);
+      const sb = scoreMap.get(b.user_id);
+      if (!sa && !sb) return 0;
+      if (!sa) return -1;
+      if (!sb) return 1;
+      if (seed_metric === "points") {
+        return (sa.points ?? 0) - (sb.points ?? 0);
+      } else if (seed_metric === "gross") {
+        return (sb.gross ?? 999) - (sa.gross ?? 999);
+      } else {
+        return (sb.net ?? 999) - (sa.net ?? 999);
+      }
+    });
+  } else {
+    // Fisher-Yates shuffle
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j]!, players[i]!];
+    }
+  }
+
+  const pgSize = Math.max(1, Math.min(4, Number(players_per_group)));
+  const entries: any[] = [];
+  let playerIdx = 0;
+  let groupNum  = 1;
+
+  const assignGroup = (teeTime: string, startingTee: number) => {
+    const count = Math.min(pgSize, players.length - playerIdx);
+    for (let i = 0; i < count; i++) {
+      const p = players[playerIdx++]!;
+      entries.push({
+        id: Date.now() + entries.length,
+        round: Number(round),
+        tee_date: teeDate,
+        tee_time: teeTime,
+        draw_group: groupNum,
+        starting_tee: startingTee,
+        user_id: p.user_id,
+        user_name: p.user_name,
+        division: p.division,
+        frozen_handicap: p.frozen_handicap,
+        notes: null,
+      });
+    }
+    groupNum++;
+  };
+
+  if (slots.length > 0) {
+    for (const slot of slots) {
+      if (playerIdx >= players.length) break;
+      const teeTime     = String(slot.tee_time).slice(0, 5);
+      const startingTee = (slot.tee_start_type === "10th Tee" || slot.tee_start_type === "tenth_tee") ? 10 : 1;
+      assignGroup(teeTime, startingTee);
+    }
+    // Overflow: more players than slots — continue at last slot's time
+    if (playerIdx < players.length) {
+      const last        = slots[slots.length - 1]!;
+      const teeTime     = String(last.tee_time).slice(0, 5);
+      const startingTee = (last.tee_start_type === "10th Tee" || last.tee_start_type === "tenth_tee") ? 10 : 1;
+      while (playerIdx < players.length) assignGroup(teeTime, startingTee);
+    }
+  } else {
+    // No tee slots configured — create groups at 08:00
+    while (playerIdx < players.length) assignGroup("08:00", 1);
+  }
+
+  res.json({ entries });
+});
+
 router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club  = getClub(req);
   const evId  = Number(req.params.id);

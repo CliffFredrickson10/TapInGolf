@@ -15,7 +15,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
-  AlertTriangle, BookmarkPlus, Loader2,
+  AlertTriangle, BookmarkPlus, Loader2, Shuffle, UserPlus,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -231,6 +231,14 @@ export default function Events() {
   const [drawLoading, setDrawLoading] = useState(false);
   const [drawRound, setDrawRound] = useState(1);
   const [savingDraw, setSavingDraw] = useState(false);
+  // Draw generation dialog
+  const [genDlg, setGenDlg]           = useState(false);
+  const [genMode, setGenMode]         = useState<"random"|"seeded">("random");
+  const [genMetric, setGenMetric]     = useState<"gross"|"net"|"points">("points");
+  const [genSeedRound, setGenSeedRound] = useState(1);
+  const [genPerGroup, setGenPerGroup] = useState(4);
+  const [genAllRounds, setGenAllRounds] = useState(false);
+  const [generating, setGenerating]   = useState(false);
 
   // Scores
   const [scores, setScores]     = useState<Score[]>([]);
@@ -840,6 +848,72 @@ export default function Events() {
     finally { setSavingDraw(false); }
   };
 
+  // Add all approved players not yet in the draw (ungrouped, staff arranges groups)
+  const handleAddAll = () => {
+    if (!detail) return;
+    const inDraw = new Set(draw.map(d => d.user_id));
+    const eligible = regs.filter(r => r.status === "approved" && !inDraw.has(r.user_id));
+    if (!eligible.length) { toast({ title: "All approved players are already in the draw" }); return; }
+    const teeDate = detail.event_date ?? new Date().toISOString().split("T")[0];
+    const lastGroup = draw.length > 0 ? Math.max(...draw.map(d => d.draw_group)) : 0;
+    const newEntries: DrawEntry[] = eligible.map((p, idx) => ({
+      id: Date.now() + idx, round: drawRound, tee_date: teeDate,
+      tee_time: "08:00", draw_group: lastGroup + idx + 1, starting_tee: 1,
+      user_id: p.user_id, user_name: p.user_name,
+      division: p.division, frozen_handicap: p.frozen_handicap, notes: null,
+    }));
+    setDraw(prev => [...prev, ...newEntries]);
+    toast({ title: `${eligible.length} players added to draw` });
+  };
+
+  // Generate draw via API (random or seeded), optionally all rounds
+  const handleGenerateDraw = async () => {
+    if (!detail) return;
+    setGenerating(true);
+    const baseDate = new Date(detail.event_date);
+    try {
+      if (genAllRounds && genMode === "random") {
+        const totalRounds = detail.rounds ?? 1;
+        for (let r = 1; r <= totalRounds; r++) {
+          const d = new Date(baseDate);
+          d.setDate(d.getDate() + (r - 1));
+          const date = d.toISOString().split("T")[0];
+          const data = await api<{ entries: DrawEntry[] }>(`/api/portal/events/${detail.id}/draw/generate`, {
+            method: "POST",
+            body: JSON.stringify({ round: r, date, mode: "random", players_per_group: genPerGroup }),
+          });
+          await api(`/api/portal/events/${detail.id}/draw`, {
+            method: "PUT",
+            body: JSON.stringify({ round: r, entries: data.entries }),
+          });
+        }
+        setGenDlg(false);
+        toast({ title: `All ${detail.rounds ?? 1} rounds randomized and published` });
+        loadDraw(detail, drawRound);
+      } else {
+        const d = new Date(baseDate);
+        d.setDate(d.getDate() + (drawRound - 1));
+        const date = d.toISOString().split("T")[0];
+        const data = await api<{ entries: DrawEntry[] }>(`/api/portal/events/${detail.id}/draw/generate`, {
+          method: "POST",
+          body: JSON.stringify({
+            round: drawRound, date, mode: genMode,
+            players_per_group: genPerGroup,
+            seed_metric: genMetric,
+            seed_round: genSeedRound,
+          }),
+        });
+        setDraw(data.entries);
+        setGenDlg(false);
+        toast({ title: `Draw generated — review and click Publish when ready` });
+      }
+    } catch (e: any) {
+      toast({ title: "Error generating draw", description: e.message, variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const addDrawSlot = () => {
     const approvedInDraw = new Set(draw.map(d => d.user_id));
     const eligible = regs.filter(r => r.status === "approved" && !approvedInDraw.has(r.user_id));
@@ -1217,7 +1291,8 @@ export default function Events() {
 
                 {/* DRAW TAB */}
                 <TabsContent value="draw" className="pb-8">
-                  <div className="flex items-center justify-between mb-3">
+                  {/* Toolbar */}
+                  <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">Round</Label>
                       <Select value={String(drawRound)} onValueChange={v => setDrawRound(Number(v))}>
@@ -1228,57 +1303,193 @@ export default function Events() {
                           ))}
                         </SelectContent>
                       </Select>
+                      <span className="text-xs text-muted-foreground">{draw.length} player{draw.length !== 1 ? "s" : ""}</span>
                     </div>
-                    <div className="flex gap-2">
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addDrawSlot} disabled={readOnly}><Plus className="h-3.5 w-3.5" />Add player</Button>
-                      <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly}>{savingDraw ? "Saving…" : "Publish Draw"}</Button>
+                    <div className="flex gap-1.5 flex-wrap justify-end">
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={addDrawSlot} disabled={readOnly}><Plus className="h-3.5 w-3.5" />Add One</Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                      <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>
                     </div>
                   </div>
+
+                  {/* Draw list — grouped by four-ball */}
                   {drawLoading ? <Skeleton className="h-32 w-full" /> : draw.length === 0 ? (
-                    <p className="text-sm text-muted-foreground py-6 text-center">No draw yet. Add approved players to build the draw.</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {draw.map((d, i) => (
-                        <Card key={d.id ?? i}>
-                          <CardContent className="p-3">
-                            <div className="grid grid-cols-5 gap-2 items-center text-sm">
-                              <span className="font-medium">{d.user_name}</span>
-                              <span className="text-muted-foreground text-xs">{d.division ? `${d.division} Div` : "—"}{d.frozen_handicap != null ? ` · ${d.frozen_handicap}` : ""}</span>
-                              <div className="flex items-center gap-1.5">
-                                <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                <Input
-                                  type="time" value={d.tee_time} className="h-7 text-xs"
-                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? {
-                                    ...x,
-                                    tee_time: e.target.value,
-                                    starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value),
-                                  } : x))}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground whitespace-nowrap">Start Tee</span>
-                                <Input
-                                  type="number" min="1" max="18" value={d.starting_tee ?? 1} className="h-7 w-14 text-xs"
-                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? { ...x, starting_tee: Number(e.target.value) } : x))}
-                                />
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <span className="text-xs text-muted-foreground">Grp</span>
-                                <Input
-                                  type="number" min="1" value={d.draw_group} className="h-7 w-14 text-xs"
-                                  onChange={e => setDraw(prev => prev.map((x, j) => j === i ? { ...x, draw_group: Number(e.target.value) } : x))}
-                                />
-                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive flex-shrink-0"
-                                  onClick={() => setDraw(prev => prev.filter((_, j) => j !== i))}>
-                                  <XCircle className="h-3.5 w-3.5" />
-                                </Button>
+                    <div className="text-center py-10 space-y-3">
+                      <Shuffle className="h-8 w-8 text-muted-foreground mx-auto opacity-40" />
+                      <p className="text-sm text-muted-foreground">No draw yet for Round {drawRound}.</p>
+                      <div className="flex gap-2 justify-center">
+                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All Players</Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                      </div>
+                    </div>
+                  ) : (() => {
+                    // Group entries by draw_group for four-ball display
+                    const groups: Record<number, DrawEntry[]> = {};
+                    for (const d of draw) { (groups[d.draw_group] ??= []).push(d); }
+                    const groupKeys = Object.keys(groups).map(Number).sort((a, b) => a - b);
+                    return (
+                      <div className="space-y-2">
+                        {groupKeys.map(gk => {
+                          const grp = groups[gk]!;
+                          const rep = grp[0]!;
+                          return (
+                            <Card key={gk} className="border-l-4 border-l-[#1a5c38]">
+                              <CardContent className="p-3">
+                                {/* Group header — tee time + starting hole editable for whole group */}
+                                <div className="flex items-center gap-3 mb-2">
+                                  <span className="text-xs font-bold text-[#1a5c38] w-16 shrink-0">Group {gk}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                      type="time"
+                                      value={String(rep.tee_time).slice(0, 5)}
+                                      className="h-7 w-28 text-xs font-mono"
+                                      disabled={readOnly}
+                                      onChange={e => setDraw(prev => prev.map(x =>
+                                        x.draw_group === gk
+                                          ? { ...x, tee_time: e.target.value, starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value) }
+                                          : x
+                                      ))}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">Tee</span>
+                                    <Input
+                                      type="number" min="1" max="18"
+                                      value={rep.starting_tee ?? 1}
+                                      className="h-7 w-14 text-xs"
+                                      disabled={readOnly}
+                                      onChange={e => setDraw(prev => prev.map(x =>
+                                        x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
+                                      ))}
+                                    />
+                                  </div>
+                                  <span className="text-xs text-muted-foreground ml-auto">{grp.length} player{grp.length !== 1 ? "s" : ""}</span>
+                                </div>
+                                {/* Players in this group */}
+                                <div className="divide-y divide-gray-100">
+                                  {grp.map((d) => {
+                                    const globalIdx = draw.indexOf(d);
+                                    return (
+                                      <div key={d.id ?? d.user_id} className="flex items-center gap-2 py-1.5 text-sm">
+                                        <span className="flex-1 font-medium">{d.user_name}</span>
+                                        <span className="text-xs text-muted-foreground">
+                                          {d.division ? `${d.division}` : "—"}
+                                          {d.frozen_handicap != null ? ` · HCP ${d.frozen_handicap}` : ""}
+                                        </span>
+                                        {!readOnly && (
+                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive flex-shrink-0"
+                                            onClick={() => setDraw(prev => prev.filter((_, j) => j !== globalIdx))}>
+                                            <XCircle className="h-3.5 w-3.5" />
+                                          </Button>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </CardContent>
+                            </Card>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  {/* Generate Draw dialog */}
+                  <Dialog open={genDlg} onOpenChange={setGenDlg}>
+                    <DialogContent className="max-w-md">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2"><Shuffle className="h-4 w-4 text-amber-600" />Generate Draw</DialogTitle>
+                      </DialogHeader>
+                      <div className="space-y-4 pt-2">
+                        {/* Mode toggle */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-2 block">Draw Type</Label>
+                          <div className="flex gap-2">
+                            <Button size="sm" variant={genMode === "random" ? "default" : "outline"}
+                              className={genMode === "random" ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
+                              onClick={() => setGenMode("random")}>
+                              <Shuffle className="h-3.5 w-3.5 mr-1.5" />Random Draw
+                            </Button>
+                            <Button size="sm" variant={genMode === "seeded" ? "default" : "outline"}
+                              className={genMode === "seeded" ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
+                              onClick={() => setGenMode("seeded")}>
+                              <Trophy className="h-3.5 w-3.5 mr-1.5" />Seeded Draw
+                            </Button>
+                          </div>
+                        </div>
+
+                        {/* Players per group */}
+                        <div>
+                          <Label className="text-xs text-muted-foreground mb-2 block">Players per Group</Label>
+                          <div className="flex gap-2">
+                            {[2, 3, 4].map(n => (
+                              <Button key={n} size="sm" variant={genPerGroup === n ? "default" : "outline"}
+                                className={genPerGroup === n ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
+                                onClick={() => setGenPerGroup(n)}>
+                                {n}-Ball
+                              </Button>
+                            ))}
+                          </div>
+                        </div>
+
+                        {/* Seeded options */}
+                        {genMode === "seeded" && (
+                          <>
+                            <div>
+                              <Label className="text-xs text-muted-foreground mb-1.5 block">Seed Metric <span className="text-[10px]">(best score = last group)</span></Label>
+                              <div className="flex gap-2">
+                                {(["points", "gross", "net"] as const).map(m => (
+                                  <Button key={m} size="sm" variant={genMetric === m ? "default" : "outline"}
+                                    className={genMetric === m ? "bg-[#1a5c38] hover:bg-[#164d30] flex-1" : "flex-1"}
+                                    onClick={() => setGenMetric(m)}>
+                                    {m === "points" ? "Stableford Pts" : m === "gross" ? "Gross Score" : "Nett Score"}
+                                  </Button>
+                                ))}
                               </div>
                             </div>
-                          </CardContent>
-                        </Card>
-                      ))}
-                    </div>
-                  )}
+                            <div>
+                              <Label className="text-xs text-muted-foreground mb-1.5 block">Use Scores from Round</Label>
+                              <Select value={String(genSeedRound)} onValueChange={v => setGenSeedRound(Number(v))}>
+                                <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {Array.from({ length: Math.max(1, drawRound - 1) }, (_, i) => (
+                                    <SelectItem key={i + 1} value={String(i + 1)}>Round {i + 1}</SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                              <p className="text-[11px] text-muted-foreground mt-1">Players without a score are placed in the first groups.</p>
+                            </div>
+                          </>
+                        )}
+
+                        {/* All rounds option (random only, multi-round tournaments) */}
+                        {genMode === "random" && (detail.rounds ?? 1) > 1 && (
+                          <div className="flex items-center gap-3 p-3 bg-amber-50 rounded-lg border border-amber-200">
+                            <Switch checked={genAllRounds} onCheckedChange={setGenAllRounds} />
+                            <div>
+                              <p className="text-sm font-medium">Randomize All {detail.rounds} Rounds</p>
+                              <p className="text-xs text-muted-foreground">Generates and immediately publishes draws for every day before the tournament starts.</p>
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="flex gap-2 pt-1">
+                          <Button variant="outline" className="flex-1" onClick={() => setGenDlg(false)} disabled={generating}>Cancel</Button>
+                          <Button
+                            className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]"
+                            onClick={handleGenerateDraw}
+                            disabled={generating || (genMode === "seeded" && drawRound <= 1)}>
+                            {generating ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1.5" />Generating…</> : genAllRounds ? `Generate & Publish All ${detail.rounds} Rounds` : "Generate"}
+                          </Button>
+                        </div>
+                        {genMode === "seeded" && drawRound <= 1 && (
+                          <p className="text-xs text-amber-600 text-center -mt-2">Seeded draw requires scores from a previous round.</p>
+                        )}
+                      </div>
+                    </DialogContent>
+                  </Dialog>
                 </TabsContent>
 
                 {/* SCORES TAB */}

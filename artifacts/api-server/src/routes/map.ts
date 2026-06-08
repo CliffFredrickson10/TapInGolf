@@ -1,14 +1,11 @@
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 import { Router, type IRouter } from "express";
 import { query } from "../lib/pg";
 
 const router: IRouter = Router();
 
-const __dir = dirname(fileURLToPath(import.meta.url));
-const LEAFLET_CSS = readFileSync(join(__dir, "../lib/leaflet.css"), "utf8");
-const LEAFLET_JS  = readFileSync(join(__dir, "../lib/leaflet.js"),  "utf8");
+const LEAFLET_CDN = "https://unpkg.com/leaflet@1.9.4/dist";
+const LEAFLET_CSS = `<link rel="stylesheet" href="${LEAFLET_CDN}/leaflet.css"/>`;
+const LEAFLET_JS  = `<script src="${LEAFLET_CDN}/leaflet.js"></script>`;
 
 router.get("/map-embed", async (req, res): Promise<void> => {
   const userLat = req.query.lat ? parseFloat(String(req.query.lat)) : null;
@@ -29,7 +26,7 @@ router.get("/map-embed", async (req, res): Promise<void> => {
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <style>${LEAFLET_CSS}</style>
+  ${LEAFLET_CSS}
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden}
@@ -47,7 +44,7 @@ router.get("/map-embed", async (req, res): Promise<void> => {
 </head>
 <body>
 <div id="map"></div>
-<script>${LEAFLET_JS}</script>
+${LEAFLET_JS}
 <script>
 (function(){
   var clubs=${pinsJson};

@@ -18794,10 +18794,10 @@ var require_view = __commonJS({
     var debug = require_src()("express:view");
     var path3 = __require("node:path");
     var fs = __require("node:fs");
-    var dirname2 = path3.dirname;
+    var dirname = path3.dirname;
     var basename = path3.basename;
     var extname = path3.extname;
-    var join2 = path3.join;
+    var join = path3.join;
     var resolve = path3.resolve;
     module.exports = View;
     function View(name, options) {
@@ -18833,7 +18833,7 @@ var require_view = __commonJS({
       for (var i = 0; i < roots.length && !path4; i++) {
         var root = roots[i];
         var loc = resolve(root, name);
-        var dir = dirname2(loc);
+        var dir = dirname(loc);
         var file = basename(loc);
         path4 = this.resolve(dir, file);
       }
@@ -18859,12 +18859,12 @@ var require_view = __commonJS({
     };
     View.prototype.resolve = function resolve2(dir, file) {
       var ext = this.ext;
-      var path4 = join2(dir, file);
+      var path4 = join(dir, file);
       var stat = tryStat(path4);
       if (stat && stat.isFile()) {
         return path4;
       }
-      path4 = join2(dir, basename(file, ext), "index" + ext);
+      path4 = join(dir, basename(file, ext), "index" + ext);
       stat = tryStat(path4);
       if (stat && stat.isFile()) {
         return path4;
@@ -22569,7 +22569,7 @@ var require_send = __commonJS({
     var Stream = __require("stream");
     var util2 = __require("util");
     var extname = path3.extname;
-    var join2 = path3.join;
+    var join = path3.join;
     var normalize = path3.normalize;
     var resolve = path3.resolve;
     var sep = path3.sep;
@@ -22741,7 +22741,7 @@ var require_send = __commonJS({
           return res;
         }
         parts = path4.split(sep);
-        path4 = normalize(join2(root, path4));
+        path4 = normalize(join(root, path4));
       } else {
         if (UP_PATH_REGEXP.test(path4)) {
           debug('malicious path "%s"', path4);
@@ -22874,7 +22874,7 @@ var require_send = __commonJS({
           if (err) return self2.onStatError(err);
           return self2.error(404);
         }
-        var p = join2(path4, self2._index[i]);
+        var p = join(path4, self2._index[i]);
         debug('stat "%s"', p);
         fs.stat(p, function(err2, stat) {
           if (err2) return next(err2);
@@ -25998,7 +25998,7 @@ var require_thread_stream = __commonJS({
     var { version } = require_package();
     var { EventEmitter } = __require("events");
     var { Worker } = __require("worker_threads");
-    var { join: join2 } = __require("path");
+    var { join } = __require("path");
     var { pathToFileURL } = __require("url");
     var { wait } = require_wait();
     var {
@@ -26034,7 +26034,7 @@ var require_thread_stream = __commonJS({
     function createWorker(stream, opts) {
       const { filename, workerData } = opts;
       const bundlerOverrides = "__bundlerPathsOverrides" in globalThis ? globalThis.__bundlerPathsOverrides : {};
-      const toExecute = bundlerOverrides["thread-stream-worker"] || join2(__dirname, "lib", "worker.js");
+      const toExecute = bundlerOverrides["thread-stream-worker"] || join(__dirname, "lib", "worker.js");
       const worker = new Worker(toExecute, {
         ...opts.workerOpts,
         trackUnmanagedFds: false,
@@ -26420,7 +26420,7 @@ var require_transport = __commonJS({
     "use strict";
     var { createRequire } = __require("module");
     var getCallers = require_caller();
-    var { join: join2, isAbsolute, sep } = __require("node:path");
+    var { join, isAbsolute, sep } = __require("node:path");
     var sleep = require_atomic_sleep();
     var onExit = require_on_exit_leak_free();
     var ThreadStream = require_thread_stream();
@@ -26483,7 +26483,7 @@ var require_transport = __commonJS({
         throw new Error("only one of target or targets can be specified");
       }
       if (targets) {
-        target = bundlerOverrides["pino-worker"] || join2(__dirname, "worker.js");
+        target = bundlerOverrides["pino-worker"] || join(__dirname, "worker.js");
         options.targets = targets.filter((dest) => dest.target).map((dest) => {
           return {
             ...dest,
@@ -26501,7 +26501,7 @@ var require_transport = __commonJS({
           });
         });
       } else if (pipeline) {
-        target = bundlerOverrides["pino-worker"] || join2(__dirname, "worker.js");
+        target = bundlerOverrides["pino-worker"] || join(__dirname, "worker.js");
         options.pipelines = [pipeline.map((dest) => {
           return {
             ...dest,
@@ -26523,7 +26523,7 @@ var require_transport = __commonJS({
           return origin;
         }
         if (origin === "pino/file") {
-          return join2(__dirname, "..", "file.js");
+          return join(__dirname, "..", "file.js");
         }
         let fixTarget2;
         for (const filePath of callers) {
@@ -27512,7 +27512,7 @@ var require_safe_stable_stringify = __commonJS({
               return circularValue;
             }
             let res = "";
-            let join2 = ",";
+            let join = ",";
             const originalIndentation = indentation;
             if (Array.isArray(value)) {
               if (value.length === 0) {
@@ -27526,7 +27526,7 @@ var require_safe_stable_stringify = __commonJS({
                 indentation += spacer;
                 res += `
 ${indentation}`;
-                join2 = `,
+                join = `,
 ${indentation}`;
               }
               const maximumValuesToStringify = Math.min(value.length, maximumBreadth);
@@ -27534,13 +27534,13 @@ ${indentation}`;
               for (; i < maximumValuesToStringify - 1; i++) {
                 const tmp2 = stringifyFnReplacer(String(i), value, stack, replacer, spacer, indentation);
                 res += tmp2 !== void 0 ? tmp2 : "null";
-                res += join2;
+                res += join;
               }
               const tmp = stringifyFnReplacer(String(i), value, stack, replacer, spacer, indentation);
               res += tmp !== void 0 ? tmp : "null";
               if (value.length - 1 > maximumBreadth) {
                 const removedKeys = value.length - maximumBreadth - 1;
-                res += `${join2}"... ${getItemCount(removedKeys)} not stringified"`;
+                res += `${join}"... ${getItemCount(removedKeys)} not stringified"`;
               }
               if (spacer !== "") {
                 res += `
@@ -27561,7 +27561,7 @@ ${originalIndentation}`;
             let separator = "";
             if (spacer !== "") {
               indentation += spacer;
-              join2 = `,
+              join = `,
 ${indentation}`;
               whitespace = " ";
             }
@@ -27575,13 +27575,13 @@ ${indentation}`;
               const tmp = stringifyFnReplacer(key2, value, stack, replacer, spacer, indentation);
               if (tmp !== void 0) {
                 res += `${separator}${strEscape(key2)}:${whitespace}${tmp}`;
-                separator = join2;
+                separator = join;
               }
             }
             if (keyLength > maximumBreadth) {
               const removedKeys = keyLength - maximumBreadth;
               res += `${separator}"...":${whitespace}"${getItemCount(removedKeys)} not stringified"`;
-              separator = join2;
+              separator = join;
             }
             if (spacer !== "" && separator.length > 1) {
               res = `
@@ -27622,7 +27622,7 @@ ${originalIndentation}`;
             }
             const originalIndentation = indentation;
             let res = "";
-            let join2 = ",";
+            let join = ",";
             if (Array.isArray(value)) {
               if (value.length === 0) {
                 return "[]";
@@ -27635,7 +27635,7 @@ ${originalIndentation}`;
                 indentation += spacer;
                 res += `
 ${indentation}`;
-                join2 = `,
+                join = `,
 ${indentation}`;
               }
               const maximumValuesToStringify = Math.min(value.length, maximumBreadth);
@@ -27643,13 +27643,13 @@ ${indentation}`;
               for (; i < maximumValuesToStringify - 1; i++) {
                 const tmp2 = stringifyArrayReplacer(String(i), value[i], stack, replacer, spacer, indentation);
                 res += tmp2 !== void 0 ? tmp2 : "null";
-                res += join2;
+                res += join;
               }
               const tmp = stringifyArrayReplacer(String(i), value[i], stack, replacer, spacer, indentation);
               res += tmp !== void 0 ? tmp : "null";
               if (value.length - 1 > maximumBreadth) {
                 const removedKeys = value.length - maximumBreadth - 1;
-                res += `${join2}"... ${getItemCount(removedKeys)} not stringified"`;
+                res += `${join}"... ${getItemCount(removedKeys)} not stringified"`;
               }
               if (spacer !== "") {
                 res += `
@@ -27662,7 +27662,7 @@ ${originalIndentation}`;
             let whitespace = "";
             if (spacer !== "") {
               indentation += spacer;
-              join2 = `,
+              join = `,
 ${indentation}`;
               whitespace = " ";
             }
@@ -27671,7 +27671,7 @@ ${indentation}`;
               const tmp = stringifyArrayReplacer(key2, value[key2], stack, replacer, spacer, indentation);
               if (tmp !== void 0) {
                 res += `${separator}${strEscape(key2)}:${whitespace}${tmp}`;
-                separator = join2;
+                separator = join;
               }
             }
             if (spacer !== "" && separator.length > 1) {
@@ -27729,20 +27729,20 @@ ${originalIndentation}`;
               indentation += spacer;
               let res2 = `
 ${indentation}`;
-              const join3 = `,
+              const join2 = `,
 ${indentation}`;
               const maximumValuesToStringify = Math.min(value.length, maximumBreadth);
               let i = 0;
               for (; i < maximumValuesToStringify - 1; i++) {
                 const tmp2 = stringifyIndent(String(i), value[i], stack, spacer, indentation);
                 res2 += tmp2 !== void 0 ? tmp2 : "null";
-                res2 += join3;
+                res2 += join2;
               }
               const tmp = stringifyIndent(String(i), value[i], stack, spacer, indentation);
               res2 += tmp !== void 0 ? tmp : "null";
               if (value.length - 1 > maximumBreadth) {
                 const removedKeys = value.length - maximumBreadth - 1;
-                res2 += `${join3}"... ${getItemCount(removedKeys)} not stringified"`;
+                res2 += `${join2}"... ${getItemCount(removedKeys)} not stringified"`;
               }
               res2 += `
 ${originalIndentation}`;
@@ -27758,16 +27758,16 @@ ${originalIndentation}`;
               return '"[Object]"';
             }
             indentation += spacer;
-            const join2 = `,
+            const join = `,
 ${indentation}`;
             let res = "";
             let separator = "";
             let maximumPropertiesToStringify = Math.min(keyLength, maximumBreadth);
             if (isTypedArrayWithEntries(value)) {
-              res += stringifyTypedArray(value, join2, maximumBreadth);
+              res += stringifyTypedArray(value, join, maximumBreadth);
               keys = keys.slice(value.length);
               maximumPropertiesToStringify -= value.length;
-              separator = join2;
+              separator = join;
             }
             if (deterministic) {
               keys = sort(keys, comparator);
@@ -27778,13 +27778,13 @@ ${indentation}`;
               const tmp = stringifyIndent(key2, value[key2], stack, spacer, indentation);
               if (tmp !== void 0) {
                 res += `${separator}${strEscape(key2)}: ${tmp}`;
-                separator = join2;
+                separator = join;
               }
             }
             if (keyLength > maximumBreadth) {
               const removedKeys = keyLength - maximumBreadth;
               res += `${separator}"...": "${getItemCount(removedKeys)} not stringified"`;
-              separator = join2;
+              separator = join;
             }
             if (separator !== "") {
               res = `
@@ -49040,7 +49040,7 @@ var require_buffer_list = __commonJS({
         }
       }, {
         key: "join",
-        value: function join2(s) {
+        value: function join(s) {
           if (this.length === 0) return "";
           var p = this.head;
           var ret = "" + p.data;
@@ -52423,7 +52423,7 @@ var import_express23 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path2 from "path";
-import { fileURLToPath as fileURLToPath2 } from "url";
+import { fileURLToPath } from "url";
 
 // src/routes/index.ts
 var import_express22 = __toESM(require_express2(), 1);
@@ -57684,8 +57684,9 @@ var auth_default = router2;
 var import_express3 = __toESM(require_express2(), 1);
 init_pg();
 import { Storage } from "@google-cloud/storage";
-var router3 = (0, import_express3.Router)();
-var SIDECAR = "http://127.0.0.1:1106";
+
+// src/lib/pricing.ts
+init_pg();
 var calcAge = (dob) => {
   if (!dob) return null;
   const birth = dob instanceof Date ? dob : new Date(String(dob));
@@ -57713,6 +57714,74 @@ var pensionerMemberTierType = (membershipType) => {
   if (membershipType.includes("week_day") || membershipType.includes("weekday")) return "pensioner_week_day";
   return "pensioner_full";
 };
+async function getUserTierPrices(userId, clubId) {
+  let tierType = "non_affiliated_visitor";
+  const tierCandidates = [];
+  if (userId) {
+    const [memberRow, userRow] = await Promise.all([
+      row(
+        "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
+        [clubId, userId]
+      ).catch(() => null),
+      row("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null)
+    ]);
+    const dob = userRow?.date_of_birth ?? null;
+    const hasHna = await isHnaVerified(userId);
+    const memberType = memberRow?.membership_type ?? null;
+    const isHonorary = memberType === "honorary";
+    const isJunior = !isHonorary && ageIsJunior(dob);
+    const isStudent = !isHonorary && !isJunior && ageIsStudent(dob);
+    const isPensioner = ageIsPensioner(dob);
+    if (isHonorary) {
+      tierType = "honorary";
+      tierCandidates.push("honorary");
+      if (isPensioner) tierCandidates.push("pensioner_full");
+    } else if (isJunior) {
+      tierType = memberRow ? "junior_member" : "junior_visitor";
+      tierCandidates.push(tierType);
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isStudent) {
+      tierType = memberRow ? "student_member" : "student_visitor";
+      tierCandidates.push(tierType);
+      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
+    } else if (isPensioner) {
+      if (memberRow) {
+        tierType = pensionerMemberTierType(memberType ?? "");
+      } else {
+        tierType = hasHna ? "affiliated_pensioner" : "non_affiliated_pensioner";
+      }
+      tierCandidates.push(tierType);
+    } else {
+      tierType = memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor");
+      tierCandidates.push(tierType);
+    }
+  } else {
+    tierType = "non_affiliated_visitor";
+    tierCandidates.push(tierType);
+  }
+  const candidateRows = await Promise.all(
+    tierCandidates.map(
+      (t) => row(
+        "SELECT price_18h, price_9h FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?",
+        [clubId, t]
+      ).catch(() => null)
+    )
+  );
+  let price18 = null;
+  let price9 = null;
+  for (const tr of candidateRows) {
+    if (!tr) continue;
+    const p18 = tr.price_18h != null ? parseFloat(tr.price_18h) : null;
+    const p9 = tr.price_9h != null ? parseFloat(tr.price_9h) : null;
+    if (p18 !== null && (price18 === null || p18 < price18)) price18 = p18;
+    if (p9 !== null && (price9 === null || p9 < price9)) price9 = p9;
+  }
+  return { price18, price9, tierType };
+}
+
+// src/routes/clubs.ts
+var router3 = (0, import_express3.Router)();
+var SIDECAR = "http://127.0.0.1:1106";
 var TIER_LABELS = {
   full_member: "Full Member",
   six_day_member: "Six Day Member",
@@ -58721,102 +58790,6 @@ async function saveUserNotification(userId, type, title, body, data = {}) {
 
 // src/routes/bookings.ts
 init_stitch();
-
-// src/lib/pricing.ts
-init_pg();
-var calcAge2 = (dob) => {
-  if (!dob) return null;
-  const birth = dob instanceof Date ? dob : new Date(String(dob));
-  if (isNaN(birth.getTime())) return null;
-  const today = /* @__PURE__ */ new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || m === 0 && today.getDate() < birth.getDate()) age--;
-  return age;
-};
-var ageIsJunior2 = (dob) => {
-  const a = calcAge2(dob);
-  return a !== null && a <= 18;
-};
-var ageIsStudent2 = (dob) => {
-  const a = calcAge2(dob);
-  return a !== null && a >= 18 && a <= 24;
-};
-var ageIsPensioner2 = (dob) => {
-  const a = calcAge2(dob);
-  return a !== null && a >= 65;
-};
-var pensionerMemberTierType2 = (membershipType) => {
-  if (membershipType.includes("six_day")) return "pensioner_six_day";
-  if (membershipType.includes("week_day") || membershipType.includes("weekday")) return "pensioner_week_day";
-  return "pensioner_full";
-};
-async function getUserTierPrices(userId, clubId) {
-  let tierType = "non_affiliated_visitor";
-  const tierCandidates = [];
-  if (userId) {
-    const [memberRow, userRow] = await Promise.all([
-      row(
-        "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
-        [clubId, userId]
-      ).catch(() => null),
-      row("SELECT date_of_birth, hna_number FROM users WHERE id = ?", [userId]).catch(() => null)
-    ]);
-    const dob = userRow?.date_of_birth ?? null;
-    const hasHna = await isHnaVerified(userId);
-    const memberType = memberRow?.membership_type ?? null;
-    const isHonorary = memberType === "honorary";
-    const isJunior = !isHonorary && ageIsJunior2(dob);
-    const isStudent = !isHonorary && !isJunior && ageIsStudent2(dob);
-    const isPensioner = ageIsPensioner2(dob);
-    if (isHonorary) {
-      tierType = "honorary";
-      tierCandidates.push("honorary");
-      if (isPensioner) tierCandidates.push("pensioner_full");
-    } else if (isJunior) {
-      tierType = memberRow ? "junior_member" : "junior_visitor";
-      tierCandidates.push(tierType);
-      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
-    } else if (isStudent) {
-      tierType = memberRow ? "student_member" : "student_visitor";
-      tierCandidates.push(tierType);
-      if (!memberRow && hasHna) tierCandidates.push("affiliated_visitor");
-    } else if (isPensioner) {
-      if (memberRow) {
-        tierType = pensionerMemberTierType2(memberType ?? "");
-      } else {
-        tierType = hasHna ? "affiliated_pensioner" : "non_affiliated_pensioner";
-      }
-      tierCandidates.push(tierType);
-    } else {
-      tierType = memberType ?? (hasHna ? "affiliated_visitor" : "non_affiliated_visitor");
-      tierCandidates.push(tierType);
-    }
-  } else {
-    tierType = "non_affiliated_visitor";
-    tierCandidates.push(tierType);
-  }
-  const candidateRows = await Promise.all(
-    tierCandidates.map(
-      (t) => row(
-        "SELECT price_18h, price_9h FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?",
-        [clubId, t]
-      ).catch(() => null)
-    )
-  );
-  let price18 = null;
-  let price9 = null;
-  for (const tr of candidateRows) {
-    if (!tr) continue;
-    const p18 = tr.price_18h != null ? parseFloat(tr.price_18h) : null;
-    const p9 = tr.price_9h != null ? parseFloat(tr.price_9h) : null;
-    if (p18 !== null && (price18 === null || p18 < price18)) price18 = p18;
-    if (p9 !== null && (price9 === null || p9 < price9)) price9 = p9;
-  }
-  return { price18, price9, tierType };
-}
-
-// src/routes/bookings.ts
 var router4 = (0, import_express4.Router)();
 function verifySvixSignature(secret, svixId, svixTimestamp, svixSignature, rawBody) {
   if (!svixId || !svixTimestamp || !svixSignature) return false;
@@ -62064,7 +62037,6 @@ var notifications_default = router12;
 var import_express13 = __toESM(require_express2(), 1);
 init_pg();
 init_notifications();
-init_stitch();
 var router13 = (0, import_express13.Router)();
 var VALID_MEMBERSHIP_TYPES = ["standard", "premium", "honorary"];
 var DEFAULT_DIVISIONS = [
@@ -62072,379 +62044,6 @@ var DEFAULT_DIVISIONS = [
   { label: "B Division", key: "B", min_hcp: 10, max_hcp: 17.9, format: "stroke_play", tees: "club" },
   { label: "C Division", key: "C", min_hcp: 18, max_hcp: 36, format: "stableford", tees: "club" }
 ];
-function assignDivision(handicap, divisions) {
-  if (handicap == null) return null;
-  for (const d of divisions) {
-    if (handicap >= d.min_hcp && handicap <= d.max_hcp) return d.key;
-  }
-  return divisions[divisions.length - 1]?.key ?? null;
-}
-router13.get("/clubs/:id/events", async (req, res) => {
-  const clubId = parseInt(req.params.id, 10);
-  const caller = await getUser(req);
-  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const events = await query(
-    `SELECT e.id, e.name, e.description, e.event_date, e.end_date, e.start_time, e.end_time,
-            e.event_type, e.format, e.restriction, e.entry_fee, e.max_participants, e.status,
-            e.divisions, e.entries_open, e.entries_close, e.ballot, e.scoring_enabled,
-            e.payment_required, e.rounds,
-            e.use_tiered_pricing, e.allow_wallet, e.allow_prepaid, e.allow_voucher,
-            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
-     FROM golf_events e
-     WHERE e.club_id = ? AND e.status = 'active' AND e.event_date >= ?
-     ORDER BY e.event_date ASC, e.start_time ASC`,
-    [clubId, today]
-  );
-  const enriched = await Promise.all(events.map(async (ev) => {
-    let user_eligible = null;
-    let user_registration = null;
-    if (caller) {
-      if (ev.restriction === "open") {
-        user_eligible = true;
-      } else if (ev.restriction === "members_only") {
-        const m = await row(
-          "SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
-          [clubId, caller.id]
-        );
-        user_eligible = !!m;
-      } else if (ev.restriction === "invitation_only") {
-        const r = await row(
-          "SELECT status, division, frozen_handicap, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
-          [ev.id, caller.id]
-        );
-        user_registration = r ?? null;
-        user_eligible = r?.status === "approved";
-      }
-    }
-    const divisions = ev.divisions ?? DEFAULT_DIVISIONS;
-    const userDiv = caller ? assignDivision(caller.handicap ? parseFloat(caller.handicap) : null, divisions) : null;
-    return {
-      ...ev,
-      entry_fee: ev.entry_fee != null ? parseFloat(ev.entry_fee) : null,
-      approved_count: parseInt(ev.approved_count ?? "0"),
-      divisions,
-      user_eligible,
-      user_registration,
-      user_division_preview: userDiv
-    };
-  }));
-  res.json({ events: enriched });
-});
-router13.get("/events/:id", async (req, res) => {
-  const caller = await getUser(req);
-  const eventId = parseInt(req.params.id, 10);
-  const ev = await row(
-    `SELECT e.*, c.name as club_name, c.id as club_id,
-            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id AND er.status = 'approved') as approved_count
-     FROM golf_events e JOIN clubs c ON c.id = e.club_id
-     WHERE e.id = ?`,
-    [eventId]
-  );
-  if (!ev) {
-    res.status(404).json({ message: "Event not found" });
-    return;
-  }
-  const divisions = ev.divisions ?? DEFAULT_DIVISIONS;
-  let user_registration = null;
-  let user_eligible = null;
-  if (caller) {
-    const r = await row(
-      "SELECT status, division, frozen_handicap, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
-      [eventId, caller.id]
-    );
-    user_registration = r ?? null;
-    if (ev.restriction === "open") user_eligible = true;
-    else if (ev.restriction === "members_only") {
-      const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [ev.club_id, caller.id]);
-      user_eligible = !!m;
-    } else user_eligible = r?.status === "approved";
-  }
-  const userDiv = caller ? assignDivision(caller.handicap ? parseFloat(caller.handicap) : null, divisions) : null;
-  res.json({
-    ...ev,
-    entry_fee: ev.entry_fee != null ? parseFloat(ev.entry_fee) : null,
-    approved_count: parseInt(ev.approved_count ?? "0"),
-    divisions,
-    user_registration,
-    user_eligible,
-    user_division_preview: userDiv
-  });
-});
-router13.post("/events/:id/register", async (req, res) => {
-  const caller = await getUser(req);
-  if (!caller) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  const eventId = parseInt(req.params.id, 10);
-  const event = await row("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
-  if (!event) {
-    res.status(404).json({ message: "Event not found" });
-    return;
-  }
-  const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  if (event.entries_open && today < event.entries_open) {
-    res.status(400).json({ message: "Entries not yet open" });
-    return;
-  }
-  if (event.entries_close && today > event.entries_close) {
-    res.status(400).json({ message: "Entries are closed" });
-    return;
-  }
-  if (event.restriction === "members_only") {
-    const m = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'", [event.club_id, caller.id]);
-    if (!m) {
-      res.status(403).json({ message: "This event is for club members only" });
-      return;
-    }
-  }
-  const existing = await row(
-    "SELECT id, status, payment_status, payment_url FROM event_registrations WHERE event_id = ? AND user_id = ?",
-    [eventId, caller.id]
-  );
-  if (existing) {
-    res.json({ message: "Already registered", status: existing.status, payment_status: existing.payment_status, payment_url: existing.payment_url });
-    return;
-  }
-  const divisions = event.divisions ?? DEFAULT_DIVISIONS;
-  const handicap = caller.handicap ? parseFloat(caller.handicap) : null;
-  const division = assignDivision(handicap, divisions);
-  if (event.max_participants) {
-    const { cnt } = await row(
-      "SELECT COUNT(*) AS cnt FROM event_registrations WHERE event_id = ? AND status != 'rejected'",
-      [eventId]
-    ) ?? { cnt: "0" };
-    if (parseInt(cnt) >= event.max_participants) {
-      res.status(400).json({ message: "Event is full" });
-      return;
-    }
-  }
-  const autoApprove = event.restriction === "open" && !event.payment_required;
-  const status = autoApprove ? "approved" : "pending";
-  await exec(
-    "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
-    [eventId, caller.id, status, division, handicap]
-  );
-  res.status(201).json({ success: true, status, division, frozen_handicap: handicap });
-});
-router13.post("/events/:id/pay", async (req, res) => {
-  const caller = await getUser(req);
-  if (!caller) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  const eventId = parseInt(req.params.id, 10);
-  const event = await row("SELECT * FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
-  if (!event) {
-    res.status(404).json({ message: "Event not found" });
-    return;
-  }
-  if (!event.payment_required) {
-    res.status(400).json({ message: "This event does not require payment" });
-    return;
-  }
-  const reg = await row(
-    "SELECT id, status, payment_status FROM event_registrations WHERE event_id = ? AND user_id = ?",
-    [eventId, caller.id]
-  );
-  if (!reg) {
-    res.status(404).json({ message: "Not registered for this event" });
-    return;
-  }
-  if (reg.status !== "approved") {
-    res.status(400).json({ message: "Registration is not yet approved" });
-    return;
-  }
-  if (reg.payment_status === "paid") {
-    res.status(400).json({ message: "Already paid" });
-    return;
-  }
-  let amount;
-  if (event.use_tiered_pricing) {
-    const tier = await getUserTierPrices(caller.id, event.club_id);
-    if (tier.price18 == null) {
-      res.status(400).json({ message: "No pricing tier is configured for your membership type at this club." });
-      return;
-    }
-    amount = tier.price18;
-  } else {
-    if (!event.entry_fee) {
-      res.status(400).json({ message: "No entry fee set for this event." });
-      return;
-    }
-    amount = parseFloat(event.entry_fee);
-  }
-  const method = String(req.body?.payment_method ?? "stitch");
-  const allowed = ["stitch"];
-  if (event.allow_wallet) allowed.push("wallet");
-  if (event.allow_prepaid) allowed.push("prepaid");
-  if (event.allow_voucher) allowed.push("voucher");
-  if (!allowed.includes(method)) {
-    res.status(400).json({ message: `Payment method '${method}' is not allowed for this event. Allowed: ${allowed.join(", ")}` });
-    return;
-  }
-  if (method === "wallet") {
-    const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [caller.id]);
-    const available = walletRow ? parseFloat(walletRow.balance) : 0;
-    if (available < amount) {
-      res.status(402).json({
-        message: `Insufficient wallet balance. You have R${available.toFixed(2)} but need R${amount.toFixed(2)}.`,
-        error_code: "wallet_insufficient_funds"
-      });
-      return;
-    }
-    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?", [amount, caller.id, amount]);
-    await exec(
-      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
-      ["wallet", eventId, caller.id]
-    );
-    res.json({ success: true, paid: true, payment_method: "wallet", amount });
-    return;
-  }
-  if (method === "prepaid") {
-    const membership = await row(
-      "SELECT id, prepaid_rounds, prepaid_rounds_used FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
-      [event.club_id, caller.id]
-    );
-    if (!membership) {
-      res.status(400).json({ message: "You must be an active member of this club to use prepaid rounds." });
-      return;
-    }
-    const remaining = (parseInt(membership.prepaid_rounds) || 0) - (parseInt(membership.prepaid_rounds_used) || 0);
-    if (remaining <= 0) {
-      res.status(402).json({ message: "You have no prepaid rounds remaining at this club." });
-      return;
-    }
-    await exec(
-      "UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1 WHERE id = ? AND prepaid_rounds > prepaid_rounds_used",
-      [membership.id]
-    );
-    await exec(
-      "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
-      ["prepaid", eventId, caller.id]
-    );
-    res.json({ success: true, paid: true, payment_method: "prepaid" });
-    return;
-  }
-  if (method === "voucher") {
-    const voucherCode = req.body?.voucher_code ? String(req.body.voucher_code).toUpperCase().trim() : null;
-    if (!voucherCode) {
-      res.status(400).json({ message: "voucher_code is required when using voucher payment." });
-      return;
-    }
-    let discountAmount = 0;
-    let appliedVoucher = null;
-    const cancelVoucher = await row(
-      "SELECT * FROM cancellation_vouchers WHERE code = ? AND user_id = ? AND value_remaining > 0",
-      [voucherCode, caller.id]
-    );
-    if (cancelVoucher) {
-      discountAmount = Math.min(parseFloat(cancelVoucher.value_remaining), amount);
-      appliedVoucher = cancelVoucher.code;
-    } else {
-      const voucher = await row("SELECT * FROM vouchers WHERE code = ? AND active = 1", [voucherCode]);
-      const valid = voucher && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) && (voucher.club_id === null || voucher.club_id === event.club_id);
-      if (valid) {
-        discountAmount = voucher.discount_type === "percentage" ? Math.round(amount * parseFloat(voucher.discount_value) / 100 * 100) / 100 : Math.min(parseFloat(voucher.discount_value), amount);
-        appliedVoucher = voucher.code;
-      }
-    }
-    if (!appliedVoucher) {
-      res.status(400).json({ message: "Voucher code is invalid, expired, or not applicable to this event." });
-      return;
-    }
-    const remainder = Math.max(0, amount - discountAmount);
-    if (cancelVoucher) {
-      await exec("UPDATE cancellation_vouchers SET value_remaining = value_remaining - ? WHERE code = ?", [discountAmount, voucherCode]);
-    } else {
-      await exec("UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
-    }
-    if (remainder <= 0) {
-      await exec(
-        "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE event_id = ? AND user_id = ?",
-        ["voucher", eventId, caller.id]
-      );
-      res.json({ success: true, paid: true, payment_method: "voucher", discount: discountAmount, amount: 0 });
-      return;
-    }
-    let pr2;
-    try {
-      pr2 = await createStitchPayment({
-        amount: remainder,
-        payerName: caller.name ?? "Golfer",
-        merchantReference: `event-${eventId}-user-${caller.id}`,
-        redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
-      });
-    } catch (e) {
-      const msg = e?.message ?? "Payment gateway error";
-      const isConfig = msg.includes("not configured") || msg.includes("credentials");
-      res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform." : msg });
-      return;
-    }
-    await exec(
-      "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
-      [pr2.id, pr2.url, eventId, caller.id]
-    );
-    res.json({ payment_url: pr2.url, voucher_applied: true, discount: discountAmount, remainder });
-    return;
-  }
-  let pr;
-  try {
-    pr = await createStitchPayment({
-      amount,
-      payerName: caller.name ?? "Golfer",
-      merchantReference: `event-${eventId}-user-${caller.id}`,
-      redirectUrl: `https://${process.env["REPLIT_DEV_DOMAIN"] ?? "localhost"}/booking/success`
-    });
-  } catch (e) {
-    const msg = e?.message ?? "Payment gateway error";
-    const isConfig = msg.includes("not configured") || msg.includes("credentials");
-    res.status(503).json({ message: isConfig ? "Payment is not yet configured for this platform. Please contact support." : msg });
-    return;
-  }
-  await exec(
-    "UPDATE event_registrations SET payment_id = ?, payment_url = ? WHERE event_id = ? AND user_id = ?",
-    [pr.id, pr.url, eventId, caller.id]
-  );
-  res.json({ payment_url: pr.url });
-});
-router13.get("/events/:id/leaderboard", async (req, res) => {
-  const eventId = parseInt(req.params.id, 10);
-  const round = req.query.round ? parseInt(String(req.query.round), 10) : null;
-  const event = await row("SELECT id, scoring_enabled, rounds, divisions, format FROM golf_events WHERE id = ?", [eventId]);
-  if (!event) {
-    res.status(404).json({ message: "Event not found" });
-    return;
-  }
-  if (!event.scoring_enabled) {
-    res.json({ leaderboard: [] });
-    return;
-  }
-  const roundFilter = round ? "AND s.round = ?" : "";
-  const params = round ? [eventId, round] : [eventId];
-  const rows = await query(
-    `SELECT s.user_id, s.round, s.gross, s.net, s.points, s.verified,
-            u.name as player_name, u.handicap,
-            r.division, r.frozen_handicap
-     FROM event_scores s
-     JOIN users u ON u.id = s.user_id
-     JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
-     WHERE s.event_id = ? ${roundFilter}
-     ORDER BY r.division ASC, s.gross ASC`,
-    params
-  );
-  const divisions = {};
-  for (const r of rows) {
-    const div = r.division ?? "Open";
-    if (!divisions[div]) divisions[div] = [];
-    divisions[div].push(r);
-  }
-  const leaderboard = Object.entries(divisions).map(([division, players]) => ({
-    division,
-    players: players.sort((a, b) => (a.gross ?? 999) - (b.gross ?? 999)).map((p, i) => ({ ...p, position: i + 1 }))
-  }));
-  res.json({ leaderboard });
-});
 router13.get("/admin/events", async (req, res) => {
   const user = await getUser(req);
   if (!isStaff(user)) {
@@ -62932,38 +62531,6 @@ router13.post("/admin/events/:id/scores", async (req, res) => {
       ]
     );
   }
-  res.json({ success: true });
-});
-router13.post("/events/:id/scores", async (req, res) => {
-  const caller = await getUser(req);
-  if (!caller) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  const eventId = parseInt(req.params.id, 10);
-  const { round = 1, hole_scores, gross, net, points } = req.body ?? {};
-  const event = await row("SELECT id, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'", [eventId]);
-  if (!event) {
-    res.status(404).json({ message: "Event not found" });
-    return;
-  }
-  if (!event.scoring_enabled) {
-    res.status(400).json({ message: "Scoring not enabled for this event" });
-    return;
-  }
-  const reg = await row("SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ?", [eventId, caller.id]);
-  if (!reg || reg.status !== "approved") {
-    res.status(403).json({ message: "Not an approved participant" });
-    return;
-  }
-  await exec(
-    `INSERT INTO event_scores (event_id, user_id, round, hole_scores, gross, net, points)
-     VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON CONFLICT (event_id, user_id, round) DO UPDATE
-       SET hole_scores = EXCLUDED.hole_scores, gross = EXCLUDED.gross, net = EXCLUDED.net,
-           points = EXCLUDED.points, submitted_at = NOW(), verified = 0`,
-    [eventId, caller.id, round, hole_scores ? JSON.stringify(hole_scores) : null, gross ?? null, net ?? null, points ?? null]
-  );
   res.json({ success: true });
 });
 router13.get("/admin/members", async (req, res) => {
@@ -66741,13 +66308,10 @@ var settings_default = router17;
 // src/routes/map.ts
 var import_express18 = __toESM(require_express2(), 1);
 init_pg();
-import { readFileSync } from "fs";
-import { join, dirname } from "path";
-import { fileURLToPath } from "url";
 var router18 = (0, import_express18.Router)();
-var __dir = dirname(fileURLToPath(import.meta.url));
-var LEAFLET_CSS = readFileSync(join(__dir, "../lib/leaflet.css"), "utf8");
-var LEAFLET_JS = readFileSync(join(__dir, "../lib/leaflet.js"), "utf8");
+var LEAFLET_CDN = "https://unpkg.com/leaflet@1.9.4/dist";
+var LEAFLET_CSS = `<link rel="stylesheet" href="${LEAFLET_CDN}/leaflet.css"/>`;
+var LEAFLET_JS = `<script src="${LEAFLET_CDN}/leaflet.js"></script>`;
 router18.get("/map-embed", async (req, res) => {
   const userLat = req.query.lat ? parseFloat(String(req.query.lat)) : null;
   const userLng = req.query.lng ? parseFloat(String(req.query.lng)) : null;
@@ -66765,7 +66329,7 @@ router18.get("/map-embed", async (req, res) => {
 <html>
 <head>
   <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-  <style>${LEAFLET_CSS}</style>
+  ${LEAFLET_CSS}
   <style>
     *{margin:0;padding:0;box-sizing:border-box}
     html,body{width:100%;height:100%;overflow:hidden}
@@ -66783,7 +66347,7 @@ router18.get("/map-embed", async (req, res) => {
 </head>
 <body>
 <div id="map"></div>
-<script>${LEAFLET_JS}</script>
+${LEAFLET_JS}
 <script>
 (function(){
   var clubs=${pinsJson};
@@ -67568,7 +67132,7 @@ var routes_default = router22;
 
 // src/app.ts
 init_logger();
-var __dirname2 = path2.dirname(fileURLToPath2(import.meta.url));
+var __dirname2 = path2.dirname(fileURLToPath(import.meta.url));
 var app = (0, import_express23.default)();
 app.use(
   (0, import_pino_http.default)({

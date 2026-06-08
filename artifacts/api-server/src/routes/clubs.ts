@@ -3,31 +3,10 @@ import { query, row, exec, run } from "../lib/pg";
 import { getUser } from "../lib/auth";
 import { isHnaVerified } from "../lib/hna";
 import { Storage } from "@google-cloud/storage";
+import { calcAge, ageIsJunior, ageIsStudent, ageIsPensioner, pensionerMemberTierType } from "../lib/pricing";
 
 const router: IRouter = Router();
 const SIDECAR = "http://127.0.0.1:1106";
-
-// ── Age-based tier helpers (shared across endpoints) ─────────────────────────
-// pg returns DATE columns as JS Date objects; handle both Date and string safely.
-const calcAge = (dob: unknown): number | null => {
-  if (!dob) return null;
-  const birth = dob instanceof Date ? dob : new Date(String(dob));
-  if (isNaN(birth.getTime())) return null;
-  const today = new Date();
-  let age = today.getFullYear() - birth.getFullYear();
-  const m = today.getMonth() - birth.getMonth();
-  if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--;
-  return age;
-};
-const ageIsJunior    = (dob: unknown) => { const a = calcAge(dob); return a !== null && a <= 18; };
-const ageIsStudent   = (dob: unknown) => { const a = calcAge(dob); return a !== null && a >= 18 && a <= 24; };
-const ageIsPensioner = (dob: unknown) => { const a = calcAge(dob); return a !== null && a >= 65; };
-
-const pensionerMemberTierType = (membershipType: string): string => {
-  if (membershipType.includes("six_day")) return "pensioner_six_day";
-  if (membershipType.includes("week_day") || membershipType.includes("weekday")) return "pensioner_week_day";
-  return "pensioner_full";
-};
 
 // Human-readable labels for every pricing tier — mirrors the club portal's pricing page.
 const TIER_LABELS: Record<string, string> = {

@@ -1880,13 +1880,12 @@ export default function Schedule() {
             <div className="grid grid-cols-3 gap-3">
               <div>
                 <Label className="text-xs font-medium mb-1 block">Past days (lookback)</Label>
-                <Select value={String(ruleForm.lookback_days)} onValueChange={v => setRuleForm(p => ({ ...p, lookback_days: Number(v) }))}>
-                  <SelectTrigger className="h-9 text-xs"><SelectValue /></SelectTrigger>
-                  <SelectContent side="bottom" className="max-h-48 overflow-y-auto">
-                    <SelectItem value="0" className="text-xs">Today only</SelectItem>
-                    {Array.from({ length: 30 }, (_, i) => i + 1).map(d => <SelectItem key={d} value={String(d)} className="text-xs">{d} day{d !== 1 ? "s" : ""} back</SelectItem>)}
-                  </SelectContent>
-                </Select>
+                <Input
+                  type="number" min={0} max={9999} className="h-9 text-xs"
+                  value={ruleForm.lookback_days}
+                  onChange={e => setRuleForm(p => ({ ...p, lookback_days: Math.max(0, Number(e.target.value) || 0) }))}
+                />
+                <p className="text-[10px] text-muted-foreground mt-1">0 = start from today</p>
               </div>
               <div>
                 <Label className="text-xs font-medium mb-1 block">Future days (lookahead)</Label>

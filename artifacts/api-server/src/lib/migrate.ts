@@ -495,6 +495,15 @@ async function createSchema(): Promise<void> {
     )
   `);
 
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS event_payment_reminders_sent (
+      event_id  INT  NOT NULL,
+      user_id   INT  NOT NULL,
+      sent_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      PRIMARY KEY (event_id, user_id, sent_date)
+    )
+  `);
+
   // ── Notifications ─────────────────────────────────────────────────────────
   await ddl(`
     CREATE TABLE IF NOT EXISTS user_notification_prefs (

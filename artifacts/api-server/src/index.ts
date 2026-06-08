@@ -4,6 +4,7 @@ import { migrate } from "./lib/migrate";
 import { startDbKeepAlive } from "./lib/pg";
 import { startReminderWorker } from "./worker/reminder";
 import { startAutoTeeGenWorker } from "./worker/autoTeeGen";
+import { startEntryPaymentReminderWorker } from "./worker/entryPaymentReminder";
 
 const rawPort = process.env["PORT"];
 
@@ -33,9 +34,11 @@ migrate()
   .then(() => {
     startReminderWorker();
     startAutoTeeGenWorker();
+    startEntryPaymentReminderWorker();
   })
   .catch((err) => {
     logger.warn({ err }, "Migration failed — check DB credentials/firewall. App will serve requests but DB queries may fail.");
     startReminderWorker();
     startAutoTeeGenWorker();
+    startEntryPaymentReminderWorker();
   });

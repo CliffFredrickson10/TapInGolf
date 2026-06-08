@@ -35623,6 +35623,32 @@ var init_pg = __esm({
   }
 });
 
+// src/lib/notifications.ts
+var notifications_exports = {};
+__export(notifications_exports, {
+  sendPushNotifications: () => sendPushNotifications
+});
+async function sendPushNotifications(messages) {
+  const valid = messages.filter((m) => m.to && m.to.startsWith("ExponentPushToken["));
+  if (!valid.length) return;
+  try {
+    await fetch("https://exp.host/--/api/v2/push/send", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json"
+      },
+      body: JSON.stringify(valid)
+    });
+  } catch {
+  }
+}
+var init_notifications = __esm({
+  "src/lib/notifications.ts"() {
+    "use strict";
+  }
+});
+
 // src/lib/stitch.ts
 var stitch_exports = {};
 __export(stitch_exports, {
@@ -35744,32 +35770,6 @@ var init_stitch = __esm({
     _cachedToken = null;
     _tokenExpiry = 0;
     _registeredRedirects = /* @__PURE__ */ new Set();
-  }
-});
-
-// src/lib/notifications.ts
-var notifications_exports = {};
-__export(notifications_exports, {
-  sendPushNotifications: () => sendPushNotifications
-});
-async function sendPushNotifications(messages) {
-  const valid = messages.filter((m) => m.to && m.to.startsWith("ExponentPushToken["));
-  if (!valid.length) return;
-  try {
-    await fetch("https://exp.host/--/api/v2/push/send", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json"
-      },
-      body: JSON.stringify(valid)
-    });
-  } catch {
-  }
-}
-var init_notifications = __esm({
-  "src/lib/notifications.ts"() {
-    "use strict";
   }
 });
 
@@ -58636,7 +58636,7 @@ router3.post("/events/:id/register", async (req, res) => {
     return;
   }
   if (ev.max_participants) {
-    const cnt = await row("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND status IN ('pending','approved')", [evId]);
+    const cnt = await row("SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND payment_status = 'paid'", [evId]);
     if (parseInt(cnt?.n ?? "0") >= parseInt(ev.max_participants)) {
       res.status(400).json({ message: "This event is full" });
       return;
@@ -58653,11 +58653,22 @@ router3.post("/events/:id/register", async (req, res) => {
       }
     }
   }
-  const status = Number(ev.ballot) ? "pending" : "approved";
+  const status = "approved";
   await exec(
     "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, ?, ?, ?)",
     [evId, user.id, status, division, frozenHcp]
   );
+  const needsPayment = ev.payment_required && ev.entry_fee;
+  const notifTitle = "Entry Received \u26F3";
+  const notifBody = needsPayment ? `Your entry for "${ev.name}" is reserved. Open the app to complete payment of R${parseFloat(ev.entry_fee).toFixed(2)}.` : `You're in! Your entry for "${ev.name}" is confirmed.`;
+  await exec(
+    "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+    [user.id, "event_registration_update", notifTitle, notifBody, JSON.stringify({ type: "event_registration_update", event_id: evId, status: "approved" })]
+  );
+  if (user.push_token) {
+    const { sendPushNotifications: sendPushNotifications2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+    sendPushNotifications2([{ to: user.push_token, sound: "default", title: notifTitle, body: notifBody, data: { type: "event_registration_update", event_id: evId } }]);
+  }
   res.json({ status, division, frozen_handicap: frozenHcp });
 });
 router3.get("/events/:id/draw", async (req, res) => {
@@ -60028,21 +60039,67 @@ router4.post("/stitch/webhook", async (req, res) => {
     const eventId = parseInt(parts[1] ?? "", 10);
     const userId = parseInt(parts[3] ?? "", 10);
     if (!isNaN(eventId) && !isNaN(userId)) {
-      const claimed = await run(
-        "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
-        [eventId, userId]
-      );
-      if (claimed === 1) {
-        const ev = await row("SELECT name FROM golf_events WHERE id = ?", [eventId]);
-        const u = await row("SELECT push_token FROM users WHERE id = ?", [userId]);
-        if (u?.push_token && ev) {
-          sendPushNotifications([{
-            to: u.push_token,
-            sound: "default",
-            title: "Payment Confirmed \u26F3",
-            body: `Your entry fee for "${ev.name}" has been received. You're in!`,
-            data: { type: "event_payment_confirmed", event_id: eventId }
-          }]);
+      const ev = await row("SELECT id, name, max_participants FROM golf_events WHERE id = ?", [eventId]);
+      const u = await row("SELECT id, push_token FROM users WHERE id = ?", [userId]);
+      let fieldFull = false;
+      if (ev?.max_participants) {
+        const paid = await row(
+          "SELECT COUNT(*) AS n FROM event_registrations WHERE event_id = ? AND payment_status = 'paid' AND user_id != ?",
+          [eventId, userId]
+        );
+        fieldFull = parseInt(paid?.n ?? "0") >= parseInt(ev.max_participants);
+      }
+      if (fieldFull) {
+        await run(
+          "UPDATE event_registrations SET status = 'rejected' WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+          [eventId, userId]
+        );
+        if (ev && u) {
+          await run(
+            "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+            [
+              userId,
+              "event_registration_update",
+              "Field Full \u2014 Entry Not Confirmed",
+              `Sorry, the field for "${ev.name}" filled up before your payment was processed. Your payment will be refunded.`,
+              JSON.stringify({ type: "event_registration_update", event_id: eventId, status: "rejected" })
+            ]
+          );
+          if (u.push_token) {
+            sendPushNotifications([{
+              to: u.push_token,
+              sound: "default",
+              title: "Field Full \u2014 Entry Not Confirmed",
+              body: `Sorry, the field for "${ev.name}" filled up before your payment was processed. Your payment will be refunded.`,
+              data: { type: "event_registration_update", event_id: eventId }
+            }]);
+          }
+        }
+      } else {
+        const claimed = await run(
+          "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
+          [eventId, userId]
+        );
+        if (claimed === 1 && ev && u) {
+          await run(
+            "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+            [
+              userId,
+              "event_payment_confirmed",
+              "Payment Confirmed \u26F3",
+              `Your entry fee for "${ev.name}" has been received. Your spot is confirmed!`,
+              JSON.stringify({ type: "event_payment_confirmed", event_id: eventId })
+            ]
+          );
+          if (u.push_token) {
+            sendPushNotifications([{
+              to: u.push_token,
+              sound: "default",
+              title: "Payment Confirmed \u26F3",
+              body: `Your entry fee for "${ev.name}" has been received. Your spot is confirmed!`,
+              data: { type: "event_payment_confirmed", event_id: eventId }
+            }]);
+          }
         }
       }
     }
@@ -68197,6 +68254,14 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS event_payment_reminders_sent (
+      event_id  INT  NOT NULL,
+      user_id   INT  NOT NULL,
+      sent_date DATE NOT NULL DEFAULT CURRENT_DATE,
+      PRIMARY KEY (event_id, user_id, sent_date)
+    )
+  `);
+  await ddl(`
     CREATE TABLE IF NOT EXISTS user_notification_prefs (
       id                    SERIAL PRIMARY KEY,
       user_id               INT NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
@@ -68970,6 +69035,86 @@ function startReminderWorker() {
 
 // src/index.ts
 init_autoTeeGen();
+
+// src/worker/entryPaymentReminder.ts
+init_pg();
+init_notifications();
+init_logger();
+var POLL_INTERVAL_MS3 = 60 * 60 * 1e3;
+async function runEntryPaymentReminderCycle() {
+  const due = await query(
+    `SELECT
+       er.event_id,
+       er.user_id,
+       ge.name        AS event_name,
+       ge.event_date,
+       ge.entry_fee,
+       c.name         AS club_name,
+       u.name         AS user_name,
+       u.push_token
+     FROM event_registrations er
+     JOIN golf_events ge ON ge.id = er.event_id
+     JOIN clubs c        ON c.id  = ge.club_id
+     JOIN users u        ON u.id  = er.user_id
+     WHERE er.status           = 'approved'
+       AND er.payment_status  != 'paid'
+       AND ge.payment_required = 1
+       AND ge.status           = 'active'
+       AND ge.event_date       > NOW()
+       AND NOT EXISTS (
+         SELECT 1 FROM event_payment_reminders_sent s
+         WHERE s.event_id = er.event_id
+           AND s.user_id  = er.user_id
+           AND s.sent_date = CURRENT_DATE
+       )`
+  );
+  if (!due.length) return;
+  logger.info({ count: due.length }, "Sending event entry payment reminders");
+  const pushMessages = due.filter((r) => r.push_token?.startsWith("ExponentPushToken[")).map((r) => {
+    const eventDate = new Date(r.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "long" });
+    return {
+      to: r.push_token,
+      sound: "default",
+      title: "Entry fee outstanding \u26F3",
+      body: `Your spot in "${r.event_name}" at ${r.club_name} on ${eventDate} is reserved but not yet paid. Complete payment to secure your place \u2014 spots go to the first players to pay.`,
+      data: { type: "entry_payment_reminder", event_id: r.event_id }
+    };
+  });
+  for (let i = 0; i < pushMessages.length; i += 100) {
+    await sendPushNotifications(pushMessages.slice(i, i + 100));
+  }
+  for (const r of due) {
+    const eventDate = new Date(r.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "long" });
+    saveUserNotification(
+      r.user_id,
+      "entry_payment_reminder",
+      "Entry fee outstanding \u26F3",
+      `Your spot in "${r.event_name}" at ${r.club_name} on ${eventDate} is reserved but not yet paid. Complete payment to secure your place \u2014 spots go to the first players to pay.`,
+      { type: "entry_payment_reminder", event_id: r.event_id }
+    );
+    try {
+      await run(
+        "INSERT INTO event_payment_reminders_sent (event_id, user_id, sent_date) VALUES (?, ?, CURRENT_DATE) ON CONFLICT DO NOTHING",
+        [r.event_id, r.user_id]
+      );
+    } catch (err) {
+      logger.warn({ err, event_id: r.event_id, user_id: r.user_id }, "Could not mark entry payment reminder as sent");
+    }
+  }
+}
+function startEntryPaymentReminderWorker() {
+  logger.info("Entry payment reminder worker started");
+  runEntryPaymentReminderCycle().catch(
+    (err) => logger.warn({ err }, "Entry payment reminder cycle error")
+  );
+  setInterval(() => {
+    runEntryPaymentReminderCycle().catch(
+      (err) => logger.warn({ err }, "Entry payment reminder cycle error")
+    );
+  }, POLL_INTERVAL_MS3);
+}
+
+// src/index.ts
 var rawPort = process.env["PORT"];
 if (!rawPort) {
   throw new Error(
@@ -68991,10 +69136,12 @@ startDbKeepAlive();
 migrate().then(() => {
   startReminderWorker();
   startAutoTeeGenWorker();
+  startEntryPaymentReminderWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
   startAutoTeeGenWorker();
+  startEntryPaymentReminderWorker();
 });
 /*! Bundled license information:
 

@@ -607,27 +607,27 @@ export default function EventDetailScreen() {
                     {players.map((p, i) => {
                       const isMe = user && Number(p.user_id) === Number(user.id);
                       return (
-                        <View key={i} style={[styles.drawPlayer, isMe && { backgroundColor: colors.primary + "12", marginHorizontal: -4, paddingHorizontal: 4, borderRadius: 6 }]}>
-                          <View style={{ flex: 1, flexDirection: "row", alignItems: "center", gap: 6, flexShrink: 1 }}>
+                        <View key={i} style={[styles.drawPlayer, isMe && { backgroundColor: colors.primary + "12", marginHorizontal: -4, paddingHorizontal: 4, borderRadius: 6, alignItems: "flex-start", flexDirection: "column" }]}>
+                          <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
                             <Text style={[styles.drawPlayerName, { color: isMe ? colors.primary : colors.foreground }]}>{p.user_name}</Text>
-                            {isMe && (
-                              <View style={{ backgroundColor: colors.primary, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                                <Text style={{ fontSize: 9, color: "#fff", fontWeight: "700" }}>YOUR TEE TIME</Text>
-                              </View>
-                            )}
+                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                              <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
+                                {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
+                              </Text>
+                              {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
+                                <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                  <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
+                                    {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
+                                  </Text>
+                                </View>
+                              )}
+                            </View>
                           </View>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                            <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
-                              {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
-                            </Text>
-                            {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
-                              <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                                <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
-                                  {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
-                                </Text>
-                              </View>
-                            )}
-                          </View>
+                          {isMe && (
+                            <View style={{ backgroundColor: colors.primary, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 }}>
+                              <Text style={{ fontSize: 9, color: "#fff", fontWeight: "700", letterSpacing: 0.5 }}>YOUR TEE TIME</Text>
+                            </View>
+                          )}
                         </View>
                       );
                     })}

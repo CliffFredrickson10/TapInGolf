@@ -169,6 +169,10 @@ export default function EventDetailScreen() {
   useEffect(() => { loadEvent(); }, [loadEvent]);
 
   useEffect(() => {
+    if (activeTab === "draw" && !drawLoaded) loadDraw();
+  }, [activeTab, drawLoaded, loadDraw]);
+
+  useEffect(() => {
     if (activeTab === "scores" && !lbLoaded) loadLeaderboard();
   }, [activeTab, lbLoaded]);
 

@@ -845,24 +845,27 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
   res.json({ status, division, frozen_handicap: frozenHcp });
 });
 
-// GET /events/:id/draw  — public draw for an event (published draw entries)
+// GET /events/:id/draw  — public draw for an event (all rounds)
 router.get("/events/:id/draw", async (req, res): Promise<void> => {
-  const evId  = parseInt(req.params.id, 10);
-  const round = req.query.round ? Number(req.query.round) : 1;
+  const evId = parseInt(req.params.id, 10);
   const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND status = 'active'", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
   const draws = await query<any>(
     `SELECT d.round, d.tee_date, d.tee_time, d.draw_group, d.starting_tee,
+            d.seed_metric, d.seed_value,
             u.id as user_id, u.name as user_name,
             r.division, r.frozen_handicap
      FROM event_draws d
      JOIN users u ON u.id = d.user_id
      JOIN event_registrations r ON r.event_id = d.event_id AND r.user_id = d.user_id
-     WHERE d.event_id = ? AND d.round = ?
-     ORDER BY d.tee_time ASC, d.draw_group ASC`,
-    [evId, round]
+     WHERE d.event_id = ?
+     ORDER BY d.round ASC, d.tee_time ASC, d.draw_group ASC`,
+    [evId]
   );
-  res.json(draws);
+  res.json(draws.map((d: any) => ({
+    ...d,
+    seed_value: d.seed_value != null ? parseFloat(d.seed_value) : null,
+  })));
 });
 
 router.delete("/events/:id/register", async (req, res): Promise<void> => {

@@ -110,8 +110,9 @@ export default function EventDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
 
-  const [draw, setDraw]     = useState<DrawEntry[]>([]);
+  const [draw, setDraw]       = useState<DrawEntry[]>([]);
   const [drawLoaded, setDrawLoaded] = useState(false);
+  const [drawRound, setDrawRound]   = useState(1);
 
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [lbLoaded, setLbLoaded] = useState(false);
@@ -548,50 +549,84 @@ export default function EventDetailScreen() {
         )}
 
         {/* ── DRAW TAB ───────────────────────────────────────────────────────── */}
-        {activeTab === "draw" && (
-          <>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Tee-Time Draw</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Published by the club.</Text>
-            {draw.length === 0 ? (
-              <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Ionicons name="list-outline" size={32} color={colors.mutedForeground} style={{ marginBottom: 8 }} />
-                <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>Draw not yet published.</Text>
-              </View>
-            ) : (
-              Object.entries(
-                draw.reduce((acc, d) => {
-                  const date = fmtDate(d.tee_date);
-                  const time = String(d.tee_time).slice(0, 5);
-                  const key = `${d.tee_date}__${d.tee_time}__${d.draw_group}__${d.starting_tee}`;
-                  if (!acc[key]) acc[key] = { label: `${date} · ${time} · Tee ${d.starting_tee ?? 1} (Group ${d.draw_group})`, players: [] };
-                  acc[key].players.push(d);
-                  return acc;
-                }, {} as Record<string, { label: string; players: DrawEntry[] }>)
-              ).map(([key, { label, players }]) => (
-                <View key={key} style={[styles.drawGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  <Text style={[styles.drawSlotTime, { color: colors.primary }]}>{label}</Text>
-                  {players.map((p, i) => (
-                    <View key={i} style={styles.drawPlayer}>
-                      <Text style={[styles.drawPlayerName, { color: colors.foreground }]}>{p.user_name}</Text>
-                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
-                        <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
-                          {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
+        {activeTab === "draw" && (() => {
+          const totalRounds = event?.rounds ?? 1;
+          const publishedRounds = [...new Set(draw.map(d => d.round))].sort((a, b) => a - b);
+          const roundDraw = draw.filter(d => d.round === drawRound);
+          return (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Tee-Time Draw</Text>
+              <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>Published by the club.</Text>
+
+              {/* Round tabs — only shown for multi-round events */}
+              {totalRounds > 1 && (
+                <View style={{ flexDirection: "row", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+                  {Array.from({ length: totalRounds }, (_, i) => i + 1).map(r => {
+                    const published = publishedRounds.includes(r);
+                    const active = drawRound === r;
+                    return (
+                      <TouchableOpacity
+                        key={r}
+                        onPress={() => setDrawRound(r)}
+                        style={{
+                          paddingHorizontal: 14, paddingVertical: 6,
+                          borderRadius: 20, borderWidth: 1.5,
+                          borderColor: active ? colors.primary : colors.border,
+                          backgroundColor: active ? colors.primary : colors.card,
+                          opacity: published ? 1 : 0.5,
+                        }}>
+                        <Text style={{ fontSize: 12, fontWeight: "600", color: active ? "#fff" : colors.mutedForeground }}>
+                          Round {r}{!published ? " —" : ""}
                         </Text>
-                        {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
-                          <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                            <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
-                              {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                    </View>
-                  ))}
+                      </TouchableOpacity>
+                    );
+                  })}
                 </View>
-              ))
-            )}
-          </>
-        )}
+              )}
+
+              {roundDraw.length === 0 ? (
+                <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Ionicons name="list-outline" size={32} color={colors.mutedForeground} style={{ marginBottom: 8 }} />
+                  <Text style={[styles.emptyText, { color: colors.mutedForeground }]}>
+                    {draw.length === 0 ? "Draw not yet published." : `Round ${drawRound} draw not yet published.`}
+                  </Text>
+                </View>
+              ) : (
+                Object.entries(
+                  roundDraw.reduce((acc, d) => {
+                    const date = fmtDate(d.tee_date);
+                    const time = String(d.tee_time).slice(0, 5);
+                    const key = `${d.tee_date}__${d.tee_time}__${d.draw_group}__${d.starting_tee}`;
+                    if (!acc[key]) acc[key] = { label: `${date} · ${time} · Tee ${d.starting_tee ?? 1} (Group ${d.draw_group})`, players: [] };
+                    acc[key].players.push(d);
+                    return acc;
+                  }, {} as Record<string, { label: string; players: DrawEntry[] }>)
+                ).map(([key, { label, players }]) => (
+                  <View key={key} style={[styles.drawGroup, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.drawSlotTime, { color: colors.primary }]}>{label}</Text>
+                    {players.map((p, i) => (
+                      <View key={i} style={styles.drawPlayer}>
+                        <Text style={[styles.drawPlayerName, { color: colors.foreground }]}>{p.user_name}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
+                            {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
+                          </Text>
+                          {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
+                            <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
+                                {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                ))
+              )}
+            </>
+          );
+        })()}
 
         {/* ── LEADERBOARD TAB ─────────────────────────────────────────────────── */}
         {activeTab === "scores" && (

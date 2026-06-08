@@ -722,7 +722,13 @@ export default function Events() {
           api(`/api/portal/events/${evId}/tee-times/${id}`, { method: "DELETE" }).catch(() => {})
         ));
       }
-      toast({ title: editId ? "Tournament updated" : "Tournament created" });
+      const wasPublished = editId && events.find(e => e.id === editId)?.status === "active";
+      toast({
+        title: editId ? "Tournament updated" : "Tournament created",
+        description: wasPublished
+          ? "Changes saved. Tap 'Publish Changes' to notify registered golfers."
+          : undefined,
+      });
       setDlgOpen(false);
       loadEvents();
     } catch (e: any) {
@@ -741,11 +747,19 @@ export default function Events() {
       }
     } catch { /* if conflict check fails, fall through to normal publish */ }
 
-    if (!confirm("Publish this tournament? Notifications will be sent to club members and past golfers.")) return;
+    const ev = events.find(e => e.id === id);
+    const isRepublish = (ev?.total_registrations ?? 0) > 0;
+    const confirmMsg = isRepublish
+      ? "Publish changes? All registered golfers will be notified of the update."
+      : "Publish this tournament? Notifications will be sent to club members.";
+    if (!confirm(confirmMsg)) return;
     try {
       const updated = await api(`/api/portal/events/${id}/publish`, { method: "POST" });
-      setEvents(prev => prev.map(ev => ev.id === id ? { ...ev, ...updated, status: "active" } : ev));
-      toast({ title: "Tournament published", description: "Golfers have been notified." });
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, ...updated, status: "active" } : e));
+      toast({
+        title: isRepublish ? "Changes published" : "Tournament published",
+        description: isRepublish ? "Registered golfers have been notified of the update." : "Club members have been notified.",
+      });
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
   };
 
@@ -959,8 +973,15 @@ export default function Events() {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Button variant="ghost" size="icon" className="h-7 w-7" onClick={e => openEdit(ev, e)} disabled={readOnly}><Pencil className="h-3.5 w-3.5" /></Button>
                     {ev.status === "pending_publish" && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-green-700" title="Publish tournament" onClick={e => handlePublish(ev.id, e)} disabled={readOnly}>
-                        <Send className="h-3.5 w-3.5" />
+                      <Button
+                        variant="ghost" size="sm"
+                        className="h-7 px-2 text-xs text-green-700 hover:bg-green-50 gap-1"
+                        title={ev.total_registrations > 0 ? "Publish changes & notify registrants" : "Publish tournament"}
+                        onClick={e => handlePublish(ev.id, e)}
+                        disabled={readOnly}
+                      >
+                        <Send className="h-3 w-3" />
+                        {ev.total_registrations > 0 ? "Publish Changes" : "Publish"}
                       </Button>
                     )}
                     <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" title="Cancel tournament" onClick={e => handleCancel(ev.id, e)} disabled={readOnly || ev.status === "cancelled"}><Trash2 className="h-3.5 w-3.5" /></Button>

@@ -854,7 +854,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
 router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
-  const existing = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const existing = await row<any>("SELECT id, status FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) { res.status(404).json({ message: "Event not found" }); return; }
   const {
     name, description, event_date, end_date, start_time, end_time, event_type, format, format_custom, format2, format2_custom,
@@ -876,7 +876,6 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (format2_custom !== undefined)      { updates.push("format2_custom = ?");    vals.push(format2_custom || null); }
   if (image_url !== undefined)           { updates.push("image_url = ?");         vals.push(image_url || null); }
   if (restriction !== undefined)         { updates.push("restriction = ?");       vals.push(restriction); }
-  // NOTE: status is intentionally excluded — use /publish or DELETE to change it
   if (entry_fee !== undefined)           { updates.push("entry_fee = ?");         vals.push(entry_fee != null ? parseFloat(entry_fee) : null); }
   if (max_participants !== undefined)    { updates.push("max_participants = ?");  vals.push(max_participants != null ? parseInt(max_participants) : null); }
   if (divisions !== undefined)           { updates.push("divisions = ?");         vals.push(JSON.stringify(divisions)); }
@@ -891,6 +890,12 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (allow_prepaid !== undefined)       { updates.push("allow_prepaid = ?");      vals.push(allow_prepaid ? 1 : 0); }
   if (allow_voucher !== undefined)       { updates.push("allow_voucher = ?");      vals.push(allow_voucher ? 1 : 0); }
   if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
+  // Editing a published tournament requires republishing — reset to pending_publish
+  // so the portal shows "Publish Changes" and notifications go out on republish.
+  if (existing.status === "active") {
+    updates.push("status = ?");
+    vals.push("pending_publish");
+  }
   if (!updates.length) { res.json({ message: "No changes" }); return; }
   vals.push(evId, club.id);
   await exec(`UPDATE golf_events SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
@@ -965,48 +970,76 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
   const ev = await row<any>("SELECT id, name, event_date, restriction FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
 
+  // Check if this is a republish (event already had registrations) or a first publish
+  const regRow = await row<any>("SELECT COUNT(*) AS cnt FROM event_registrations WHERE event_id = ?", [evId]);
+  const isRepublish = parseInt(regRow?.cnt ?? "0") > 0;
+
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
 
-  const fmtDate = (d: any) => {
+  const fmtDateStr = (d: any) => {
     try {
       const iso = d instanceof Date ? d.toISOString() : String(d);
       return new Date(iso.slice(0, 10) + "T12:00:00").toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
     } catch { return String(d); }
   };
 
-  // Notification rules on publish:
-  // - invitation_only  → notify only users on the event invite list
-  // - everything else  → notify ALL active club members
-  const isInviteOnly = ev.restriction === "invitation_only";
-  const audience = await query<any>(
-    isInviteOnly
-      ? `SELECT DISTINCT u.id, u.push_token
-         FROM users u
-         JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
-         LIMIT 500`
-      : `SELECT DISTINCT u.id, u.push_token
-         FROM users u
-         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-         LIMIT 500`,
-    isInviteOnly ? [evId] : [club.id]
-  );
-
-  if (audience.length > 0) {
-    const title = isInviteOnly
-      ? `📩 You've been invited — ${club.name}`
-      : `⛳ Tournament Now Open — ${club.name}`;
-    const body = isInviteOnly
-      ? `${String(ev.name)} · ${fmtDate(ev.event_date)}. You have been invited — tap to register.`
-      : `${String(ev.name)} · ${fmtDate(ev.event_date)}. Tap to view & enter.`;
-    const pushAudience = audience.filter((u: any) => u.push_token);
-    if (pushAudience.length > 0) {
-      sendPushNotifications(pushAudience.map((u: any) => ({
-        to: u.push_token, sound: "default", title, body,
-        data: { type: "event_published", event_id: evId, club_id: club.id },
-      })));
+  if (isRepublish) {
+    // Republish: notify all registrants (any status) that details have changed
+    const audience = await query<any>(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       JOIN event_registrations er ON er.user_id = u.id AND er.event_id = ?
+       LIMIT 500`,
+      [evId]
+    );
+    if (audience.length > 0) {
+      const title = `📢 Tournament Updated — ${club.name}`;
+      const body  = `${String(ev.name)} · ${fmtDateStr(ev.event_date)} has been updated. Check the latest details.`;
+      const pushAudience = audience.filter((u: any) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u: any) => ({
+          to: u.push_token, sound: "default", title, body,
+          data: { type: "event_updated", event_id: evId, club_id: club.id },
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_updated", title, body, { event_id: evId, club_id: club.id });
+      }
     }
-    for (const u of audience) {
-      saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
+  } else {
+    // First publish: notify the full discovery audience
+    // - invitation_only  → notify only invited users
+    // - everything else  → notify ALL active club members
+    const isInviteOnly = ev.restriction === "invitation_only";
+    const audience = await query<any>(
+      isInviteOnly
+        ? `SELECT DISTINCT u.id, u.push_token
+           FROM users u
+           JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
+           LIMIT 500`
+        : `SELECT DISTINCT u.id, u.push_token
+           FROM users u
+           JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+           LIMIT 500`,
+      isInviteOnly ? [evId] : [club.id]
+    );
+    if (audience.length > 0) {
+      const title = isInviteOnly
+        ? `📩 You've been invited — ${club.name}`
+        : `⛳ Tournament Now Open — ${club.name}`;
+      const body = isInviteOnly
+        ? `${String(ev.name)} · ${fmtDateStr(ev.event_date)}. You have been invited — tap to register.`
+        : `${String(ev.name)} · ${fmtDateStr(ev.event_date)}. Tap to view & enter.`;
+      const pushAudience = audience.filter((u: any) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u: any) => ({
+          to: u.push_token, sound: "default", title, body,
+          data: { type: "event_published", event_id: evId, club_id: club.id },
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
+      }
     }
   }
   res.json(await row<any>("SELECT * FROM golf_events WHERE id = ?", [evId]));

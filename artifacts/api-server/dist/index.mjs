@@ -64002,9 +64002,9 @@ router14.delete("/portal/ads/:id", requireClubAuth2, async (req, res) => {
 });
 router14.get("/portal/events", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const upcoming = req.query.upcoming !== "false";
+  const upcoming = req.query.upcoming;
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const filter = upcoming ? `AND e.event_date >= '${today}'` : `AND e.event_date < '${today}'`;
+  const filter = upcoming === "all" ? "" : upcoming === "false" ? `AND e.event_date < '${today}'` : `AND e.event_date >= '${today}'`;
   const events = await query(
     `SELECT e.*,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = e.id) as total_registrations,
@@ -64103,7 +64103,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
 router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const existing = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const existing = await row("SELECT id, status FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!existing) {
     res.status(404).json({ message: "Event not found" });
     return;
@@ -64248,6 +64248,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     updates.push("rounds = ?");
     vals.push(Number(rounds));
   }
+  if (existing.status === "active") {
+    updates.push("status = ?");
+    vals.push("pending_publish");
+  }
   if (!updates.length) {
     res.json({ message: "No changes" });
     return;
@@ -64314,8 +64318,10 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
     res.status(404).json({ message: "Event not found" });
     return;
   }
+  const regRow = await row("SELECT COUNT(*) AS cnt FROM event_registrations WHERE event_id = ?", [evId]);
+  const isRepublish = parseInt(regRow?.cnt ?? "0") > 0;
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
-  const fmtDate3 = (d) => {
+  const fmtDateStr = (d) => {
     try {
       const iso = d instanceof Date ? d.toISOString() : String(d);
       return (/* @__PURE__ */ new Date(iso.slice(0, 10) + "T12:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -64323,32 +64329,59 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
       return String(d);
     }
   };
-  const isInviteOnly = ev.restriction === "invitation_only";
-  const audience = await query(
-    isInviteOnly ? `SELECT DISTINCT u.id, u.push_token
-         FROM users u
-         JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
-         LIMIT 500` : `SELECT DISTINCT u.id, u.push_token
-         FROM users u
-         JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
-         LIMIT 500`,
-    isInviteOnly ? [evId] : [club.id]
-  );
-  if (audience.length > 0) {
-    const title = isInviteOnly ? `\u{1F4E9} You've been invited \u2014 ${club.name}` : `\u26F3 Tournament Now Open \u2014 ${club.name}`;
-    const body = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`;
-    const pushAudience = audience.filter((u) => u.push_token);
-    if (pushAudience.length > 0) {
-      sendPushNotifications(pushAudience.map((u) => ({
-        to: u.push_token,
-        sound: "default",
-        title,
-        body,
-        data: { type: "event_published", event_id: evId, club_id: club.id }
-      })));
+  if (isRepublish) {
+    const audience = await query(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       JOIN event_registrations er ON er.user_id = u.id AND er.event_id = ?
+       LIMIT 500`,
+      [evId]
+    );
+    if (audience.length > 0) {
+      const title = `\u{1F4E2} Tournament Updated \u2014 ${club.name}`;
+      const body = `${String(ev.name)} \xB7 ${fmtDateStr(ev.event_date)} has been updated. Check the latest details.`;
+      const pushAudience = audience.filter((u) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u) => ({
+          to: u.push_token,
+          sound: "default",
+          title,
+          body,
+          data: { type: "event_updated", event_id: evId, club_id: club.id }
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_updated", title, body, { event_id: evId, club_id: club.id });
+      }
     }
-    for (const u of audience) {
-      saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
+  } else {
+    const isInviteOnly = ev.restriction === "invitation_only";
+    const audience = await query(
+      isInviteOnly ? `SELECT DISTINCT u.id, u.push_token
+           FROM users u
+           JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ?
+           LIMIT 500` : `SELECT DISTINCT u.id, u.push_token
+           FROM users u
+           JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+           LIMIT 500`,
+      isInviteOnly ? [evId] : [club.id]
+    );
+    if (audience.length > 0) {
+      const title = isInviteOnly ? `\u{1F4E9} You've been invited \u2014 ${club.name}` : `\u26F3 Tournament Now Open \u2014 ${club.name}`;
+      const body = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDateStr(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDateStr(ev.event_date)}. Tap to view & enter.`;
+      const pushAudience = audience.filter((u) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u) => ({
+          to: u.push_token,
+          sound: "default",
+          title,
+          body,
+          data: { type: "event_published", event_id: evId, club_id: club.id }
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
+      }
     }
   }
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));

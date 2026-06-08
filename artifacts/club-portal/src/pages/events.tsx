@@ -233,13 +233,14 @@ export default function Events() {
   const [drawRound, setDrawRound] = useState(1);
   const [savingDraw, setSavingDraw] = useState(false);
   // Draw generation dialog
-  const [genDlg, setGenDlg]           = useState(false);
-  const [genMode, setGenMode]         = useState<"random"|"seeded">("random");
-  const [genMetric, setGenMetric]     = useState<"gross"|"net"|"points">("points");
-  const [genSeedRound, setGenSeedRound] = useState(1);
-  const [genPerGroup, setGenPerGroup] = useState(4);
-  const [genAllRounds, setGenAllRounds] = useState(false);
-  const [generating, setGenerating]   = useState(false);
+  const [genDlg, setGenDlg]               = useState(false);
+  const [genMode, setGenMode]             = useState<"random"|"seeded">("random");
+  const [genMetric, setGenMetric]         = useState<"gross"|"net"|"points">("points");
+  const [genSeedRound, setGenSeedRound]   = useState(1);
+  const [genPerGroup, setGenPerGroup]     = useState(4);
+  const [genAllRounds, setGenAllRounds]   = useState(false);
+  const [genGroupByDiv, setGenGroupByDiv] = useState(false);
+  const [generating, setGenerating]       = useState(false);
 
   // Scores
   const [scores, setScores]     = useState<Score[]>([]);
@@ -930,7 +931,7 @@ export default function Events() {
           const date = d.toISOString().split("T")[0];
           const data = await api<{ entries: DrawEntry[] }>(`/api/portal/events/${detail.id}/draw/generate`, {
             method: "POST",
-            body: JSON.stringify({ round: r, date, mode: "random", players_per_group: genPerGroup }),
+            body: JSON.stringify({ round: r, date, mode: "random", players_per_group: genPerGroup, group_by_division: genGroupByDiv }),
           });
           await api(`/api/portal/events/${detail.id}/draw`, {
             method: "PUT",
@@ -951,6 +952,7 @@ export default function Events() {
             players_per_group: genPerGroup,
             seed_metric: genMetric,
             seed_round: genSeedRound,
+            group_by_division: genGroupByDiv,
           }),
         });
         setDraw(data.entries);
@@ -1522,6 +1524,15 @@ export default function Events() {
                                 {n}-Ball
                               </Button>
                             ))}
+                          </div>
+                        </div>
+
+                        {/* Group by Division toggle */}
+                        <div className="flex items-center gap-3 p-3 rounded-lg border border-gray-200 bg-gray-50">
+                          <Switch checked={genGroupByDiv} onCheckedChange={setGenGroupByDiv} />
+                          <div>
+                            <p className="text-sm font-medium">Group by Division</p>
+                            <p className="text-xs text-muted-foreground">Keep players from the same division together in groups.</p>
                           </div>
                         </div>
 

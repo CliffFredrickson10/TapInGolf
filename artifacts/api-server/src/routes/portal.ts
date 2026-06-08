@@ -1495,6 +1495,7 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     players_per_group = 4,
     seed_metric = "points",
     seed_round,
+    group_by_division = false,
   } = req.body ?? {};
 
   const event = await row<any>(
@@ -1528,54 +1529,73 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
   // seedValueMap: user_id → { value, metric } for display in the draw
   const seedValueMap = new Map<number, { value: number | null; metric: string }>();
 
-  if (mode === "seeded") {
-    if (seed_metric === "handicap") {
-      // Seed by frozen handicap: highest handicap (weakest) first, scratch/plus (best) last group.
-      // Players with no handicap go first.
-      players.sort((a, b) => {
-        const ha = a.frozen_handicap ?? 999;
-        const hb = b.frozen_handicap ?? 999;
-        return hb - ha; // descending — highest hcp first
-      });
-      for (const p of players) {
-        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+  // Pre-fetch previous-round scores if seeding by score metric
+  let scoreMap = new Map<number, any>();
+  if (mode === "seeded" && seed_metric !== "handicap") {
+    const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
+    const prevScores = await query<any>(
+      "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
+      [evId, sr]
+    );
+    scoreMap = new Map(prevScores.map((s: any) => [Number(s.user_id), s]));
+  }
+
+  // Sort a slice of players in-place (random or seeded)
+  const sortSlice = (slice: any[]) => {
+    if (mode === "seeded") {
+      if (seed_metric === "handicap") {
+        // Highest handicap (weakest) first → best player last group
+        slice.sort((a, b) => (b.frozen_handicap ?? 999) - (a.frozen_handicap ?? 999));
+      } else {
+        // Players without a score → first groups; then worst→best so best score = last group
+        slice.sort((a, b) => {
+          const sa = scoreMap.get(a.user_id);
+          const sb = scoreMap.get(b.user_id);
+          if (!sa && !sb) return 0;
+          if (!sa) return -1;
+          if (!sb) return 1;
+          if (seed_metric === "points") return (sa.points ?? 0) - (sb.points ?? 0);
+          if (seed_metric === "gross")  return (sb.gross ?? 999) - (sa.gross ?? 999);
+          return (sb.net ?? 999) - (sa.net ?? 999);
+        });
       }
     } else {
-      const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
-      const prevScores = await query<any>(
-        "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
-        [evId, sr]
-      );
-      const scoreMap = new Map(prevScores.map((s: any) => [Number(s.user_id), s]));
+      // Fisher-Yates shuffle
+      for (let i = slice.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [slice[i], slice[j]] = [slice[j]!, slice[i]!];
+      }
+    }
+  };
 
-      // Sort: players with no score go first, then worst→best so best score = last group.
-      // Gross/Net: lower = better, so sort descending (high = worst = first).
-      // Points:    higher = better, so sort ascending  (low  = worst = first).
-      players.sort((a, b) => {
-        const sa = scoreMap.get(a.user_id);
-        const sb = scoreMap.get(b.user_id);
-        if (!sa && !sb) return 0;
-        if (!sa) return -1;
-        if (!sb) return 1;
-        if (seed_metric === "points") {
-          return (sa.points ?? 0) - (sb.points ?? 0);
-        } else if (seed_metric === "gross") {
-          return (sb.gross ?? 999) - (sa.gross ?? 999);
-        } else {
-          return (sb.net ?? 999) - (sa.net ?? 999);
-        }
-      });
-      for (const p of players) {
+  if (group_by_division) {
+    // Partition players by division, sort within each, then concatenate (divisions alphabetically)
+    const divMap = new Map<string, any[]>();
+    for (const p of players) {
+      const div = p.division ?? "Unassigned";
+      if (!divMap.has(div)) divMap.set(div, []);
+      divMap.get(div)!.push(p);
+    }
+    const sortedDivs = [...divMap.keys()].sort();
+    players = sortedDivs.flatMap(div => {
+      const slice = [...divMap.get(div)!];
+      sortSlice(slice);
+      return slice;
+    });
+  } else {
+    sortSlice(players);
+  }
+
+  // Build seedValueMap after ordering is finalised
+  if (mode === "seeded") {
+    for (const p of players) {
+      if (seed_metric === "handicap") {
+        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+      } else {
         const s = scoreMap.get(p.user_id);
         const val = s ? (seed_metric === "points" ? s.points : seed_metric === "gross" ? s.gross : s.net) : null;
         seedValueMap.set(p.user_id, { value: val ?? null, metric: seed_metric });
       }
-    }
-  } else {
-    // Fisher-Yates shuffle
-    for (let i = players.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [players[i], players[j]] = [players[j]!, players[i]!];
     }
   }
 

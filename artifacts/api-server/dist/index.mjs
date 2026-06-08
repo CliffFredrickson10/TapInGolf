@@ -64865,7 +64865,8 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     mode = "random",
     players_per_group = 4,
     seed_metric = "points",
-    seed_round
+    seed_round,
+    group_by_division = false
   } = req.body ?? {};
   const event = await row(
     "SELECT id, event_date, end_date, rounds FROM golf_events WHERE id = ? AND club_id = ?",
@@ -64890,47 +64891,63 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
   );
   let players = [...approved];
   const seedValueMap = /* @__PURE__ */ new Map();
-  if (mode === "seeded") {
-    if (seed_metric === "handicap") {
-      players.sort((a, b) => {
-        const ha = a.frozen_handicap ?? 999;
-        const hb = b.frozen_handicap ?? 999;
-        return hb - ha;
-      });
-      for (const p of players) {
-        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+  let scoreMap = /* @__PURE__ */ new Map();
+  if (mode === "seeded" && seed_metric !== "handicap") {
+    const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
+    const prevScores = await query(
+      "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
+      [evId, sr]
+    );
+    scoreMap = new Map(prevScores.map((s) => [Number(s.user_id), s]));
+  }
+  const sortSlice = (slice) => {
+    if (mode === "seeded") {
+      if (seed_metric === "handicap") {
+        slice.sort((a, b) => (b.frozen_handicap ?? 999) - (a.frozen_handicap ?? 999));
+      } else {
+        slice.sort((a, b) => {
+          const sa = scoreMap.get(a.user_id);
+          const sb = scoreMap.get(b.user_id);
+          if (!sa && !sb) return 0;
+          if (!sa) return -1;
+          if (!sb) return 1;
+          if (seed_metric === "points") return (sa.points ?? 0) - (sb.points ?? 0);
+          if (seed_metric === "gross") return (sb.gross ?? 999) - (sa.gross ?? 999);
+          return (sb.net ?? 999) - (sa.net ?? 999);
+        });
       }
     } else {
-      const sr = seed_round != null ? Number(seed_round) : Math.max(1, Number(round) - 1);
-      const prevScores = await query(
-        "SELECT user_id, gross, net, points FROM event_scores WHERE event_id = ? AND round = ?",
-        [evId, sr]
-      );
-      const scoreMap = new Map(prevScores.map((s) => [Number(s.user_id), s]));
-      players.sort((a, b) => {
-        const sa = scoreMap.get(a.user_id);
-        const sb = scoreMap.get(b.user_id);
-        if (!sa && !sb) return 0;
-        if (!sa) return -1;
-        if (!sb) return 1;
-        if (seed_metric === "points") {
-          return (sa.points ?? 0) - (sb.points ?? 0);
-        } else if (seed_metric === "gross") {
-          return (sb.gross ?? 999) - (sa.gross ?? 999);
-        } else {
-          return (sb.net ?? 999) - (sa.net ?? 999);
-        }
-      });
-      for (const p of players) {
+      for (let i = slice.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [slice[i], slice[j]] = [slice[j], slice[i]];
+      }
+    }
+  };
+  if (group_by_division) {
+    const divMap = /* @__PURE__ */ new Map();
+    for (const p of players) {
+      const div = p.division ?? "Unassigned";
+      if (!divMap.has(div)) divMap.set(div, []);
+      divMap.get(div).push(p);
+    }
+    const sortedDivs = [...divMap.keys()].sort();
+    players = sortedDivs.flatMap((div) => {
+      const slice = [...divMap.get(div)];
+      sortSlice(slice);
+      return slice;
+    });
+  } else {
+    sortSlice(players);
+  }
+  if (mode === "seeded") {
+    for (const p of players) {
+      if (seed_metric === "handicap") {
+        seedValueMap.set(p.user_id, { value: p.frozen_handicap ?? null, metric: "handicap" });
+      } else {
         const s = scoreMap.get(p.user_id);
         const val = s ? seed_metric === "points" ? s.points : seed_metric === "gross" ? s.gross : s.net : null;
         seedValueMap.set(p.user_id, { value: val ?? null, metric: seed_metric });
       }
-    }
-  } else {
-    for (let i = players.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [players[i], players[j]] = [players[j], players[i]];
     }
   }
   const pgSize = Math.max(1, Math.min(4, Number(players_per_group)));

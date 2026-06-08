@@ -498,6 +498,7 @@ router.get("/portal/tee-times/tournament-conflicts", requireClubAuth, async (req
      FROM portal_tee_slots pts
      JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ? AND pts.event_id IS NOT NULL
+       AND ge.status NOT IN ('cancelled')
      ORDER BY pts.date, pts.tee_time`,
     [club.id, from, to]
   );

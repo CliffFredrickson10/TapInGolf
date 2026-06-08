@@ -63833,6 +63833,7 @@ router14.get("/portal/tee-times/tournament-conflicts", requireClubAuth2, async (
      FROM portal_tee_slots pts
      JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ? AND pts.event_id IS NOT NULL
+       AND ge.status NOT IN ('cancelled')
      ORDER BY pts.date, pts.tee_time`,
     [club.id, from, to]
   );
@@ -64520,6 +64521,136 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
     }
     for (const u of audience) {
       saveUserNotification(u.id, "event_published", title, body, { event_id: evId, club_id: club.id });
+    }
+  }
+  res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));
+});
+router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id, event_date, end_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const dateFrom = String(ev.event_date).slice(0, 10);
+  const dateTo = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
+  const conflicting_bookings = await query(
+    `SELECT b.id, b.booking_ref, u.name AS user_name, u.id AS user_id,
+            pts.date AS tee_date, pts.tee_time, b.status, b.players
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN users u ON u.id = b.user_id
+     WHERE pts.club_id = ?
+       AND pts.event_id IS NULL
+       AND pts.date BETWEEN ? AND ?
+       AND b.status NOT IN ('cancelled', 'refunded')
+     ORDER BY pts.date, pts.tee_time`,
+    [club.id, dateFrom, dateTo]
+  );
+  const conflicting_events = await query(
+    `SELECT ge.id, ge.name, ge.event_date, ge.end_date, ge.status,
+            (SELECT COUNT(*) FROM portal_tee_slots pts WHERE pts.event_id = ge.id) AS slot_count,
+            (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = ge.id) AS registrant_count
+     FROM golf_events ge
+     WHERE ge.club_id = ?
+       AND ge.id != ?
+       AND ge.status NOT IN ('cancelled')
+       AND ge.event_date <= ?
+       AND COALESCE(ge.end_date, ge.event_date) >= ?
+     ORDER BY ge.event_date ASC`,
+    [club.id, evId, dateTo, dateFrom]
+  );
+  res.json({ conflicting_bookings, conflicting_events });
+});
+router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id, name, event_date, end_date, restriction FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const cancel_booking_ids = (req.body?.cancel_booking_ids ?? []).map(Number).filter(Boolean);
+  const cancel_event_ids = (req.body?.cancel_event_ids ?? []).map(Number).filter(Boolean);
+  if (cancel_booking_ids.length > 0) {
+    const ph = cancel_booking_ids.map(() => "?").join(",");
+    const affected = await query(
+      `SELECT b.id, u.id AS user_id, u.push_token
+       FROM bookings b JOIN users u ON u.id = b.user_id
+       WHERE b.id IN (${ph})`,
+      cancel_booking_ids
+    );
+    await exec(
+      `UPDATE bookings SET status = 'cancelled' WHERE id IN (${ph}) AND status NOT IN ('cancelled','refunded')`,
+      cancel_booking_ids
+    );
+    const bTitle = `Booking Cancelled \u2014 ${club.name}`;
+    const bBody = `Your tee time booking has been cancelled to accommodate a tournament. We apologise for the inconvenience.`;
+    const bData = { type: "booking_cancelled_tournament", club_id: club.id, event_id: evId };
+    const bPush = affected.filter((u) => u.push_token);
+    if (bPush.length > 0) {
+      sendPushNotifications(bPush.map((u) => ({ to: u.push_token, sound: "default", title: bTitle, body: bBody, data: bData })));
+    }
+    for (const u of affected) {
+      saveUserNotification(u.user_id, "booking_cancelled", bTitle, bBody, bData);
+    }
+  }
+  for (const conflictEvId of cancel_event_ids) {
+    const conflictEv = await row("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [conflictEvId, club.id]);
+    if (!conflictEv) continue;
+    const cAudience = await query(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       WHERE u.id IN (
+         SELECT er.user_id FROM event_registrations er WHERE er.event_id = ?
+         UNION
+         SELECT cm.user_id FROM club_members cm WHERE cm.club_id = ? AND cm.status = 'active'
+       )`,
+      [conflictEvId, club.id]
+    );
+    await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ?", [conflictEvId]);
+    await exec("DELETE FROM event_draws WHERE event_id = ?", [conflictEvId]);
+    await run("DELETE FROM portal_tee_slots WHERE event_id = ?", [conflictEvId]);
+    const cTitle = `\u274C Tournament Cancelled \u2014 ${club.name}`;
+    const cBody = `${String(conflictEv.name)} has been cancelled. We're sorry for the inconvenience.`;
+    const cData = { type: "event_cancelled", event_id: conflictEvId, club_id: club.id };
+    const cPush = cAudience.filter((u) => u.push_token);
+    if (cPush.length > 0) {
+      sendPushNotifications(cPush.map((u) => ({ to: u.push_token, sound: "default", title: cTitle, body: cBody, data: cData })));
+    }
+    for (const u of cAudience) {
+      saveUserNotification(u.id, "event_cancelled", cTitle, cBody, cData);
+    }
+  }
+  await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const fmtDate3 = (d) => {
+    try {
+      return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
+    } catch {
+      return d;
+    }
+  };
+  const isInviteOnly = ev.restriction === "invitation_only";
+  const audience = await query(
+    isInviteOnly ? `SELECT DISTINCT u.id, u.push_token FROM users u JOIN event_invites ei ON ei.user_id = u.id AND ei.event_id = ? LIMIT 500` : `SELECT DISTINCT u.id, u.push_token FROM users u JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active' LIMIT 500`,
+    isInviteOnly ? [evId] : [club.id]
+  );
+  if (audience.length > 0) {
+    const pTitle = isInviteOnly ? `\u{1F4E9} You've been invited \u2014 ${club.name}` : `\u26F3 Tournament Now Open \u2014 ${club.name}`;
+    const pBody = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`;
+    const pPush = audience.filter((u) => u.push_token);
+    if (pPush.length > 0) {
+      sendPushNotifications(pPush.map((u) => ({
+        to: u.push_token,
+        sound: "default",
+        title: pTitle,
+        body: pBody,
+        data: { type: "event_published", event_id: evId, club_id: club.id }
+      })));
+    }
+    for (const u of audience) {
+      saveUserNotification(u.id, "event_published", pTitle, pBody, { event_id: evId, club_id: club.id });
     }
   }
   res.json(await row("SELECT * FROM golf_events WHERE id = ?", [evId]));

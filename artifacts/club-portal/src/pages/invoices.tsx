@@ -203,7 +203,7 @@ export default function Invoices() {
                   <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{counterSummary.unbilled_count} unbilled</Badge>
                 </div>
                 <p className="text-sm text-orange-700">
-                  {counterSummary.unbilled_count} walk-in booking{counterSummary.unbilled_count !== 1 ? "s" : ""} at R{counterSummary.fee_per_booking.toFixed(2)}/booking = <strong>{fmtRand(counterSummary.unbilled_fee)}</strong> owed to TapIn Golf
+                  {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""}{counterSummary.unbilled_bookings > 0 ? ` (${counterSummary.unbilled_bookings} booking${counterSummary.unbilled_bookings !== 1 ? "s" : ""})` : ""} at R{counterSummary.fee_per_booking.toFixed(2)}/slot = <strong>{fmtRand(counterSummary.unbilled_fee)}</strong> owed to TapIn Golf
                 </p>
                 <p className="text-xs text-orange-600/80 flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />

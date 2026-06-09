@@ -203,9 +203,9 @@ router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
        COALESCE(SUM(b.total_amount), 0) as gross_revenue,
        COALESCE(SUM(b.platform_fee), 0) as platform_fees,
        COALESCE(SUM(b.club_amount), 0) as club_earnings,
-       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+       (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
         WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled') AS counter_bookings_total,
-       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+       (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
         WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled' AND cb.counter_invoice_id IS NULL) AS counter_bookings_unbilled
      FROM clubs c
      LEFT JOIN portal_tee_slots pts ON pts.club_id = c.id

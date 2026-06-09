@@ -61785,9 +61785,9 @@ router10.get("/admin/revenue/clubs", async (req, res) => {
        COALESCE(SUM(b.total_amount), 0) as gross_revenue,
        COALESCE(SUM(b.platform_fee), 0) as platform_fees,
        COALESCE(SUM(b.club_amount), 0) as club_earnings,
-       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+       (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
         WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled') AS counter_bookings_total,
-       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+       (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
         WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled' AND cb.counter_invoice_id IS NULL) AS counter_bookings_unbilled
      FROM clubs c
      LEFT JOIN portal_tee_slots pts ON pts.club_id = c.id
@@ -65831,7 +65831,7 @@ router14.post("/portal/invoices/:id/refresh-url", requireClubAuth2, async (req, 
 });
 router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone } = req.body ?? {};
+  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone, player_names } = req.body ?? {};
   if (!tee_time_id || !players || Number(players) < 1 || Number(players) > 4) {
     res.status(400).json({ message: "tee_time_id and players (1-4) required" });
     return;
@@ -65874,26 +65874,44 @@ router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => 
     ]
   );
   const bookingId = result[0]?.id;
-  await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [Number(players), Number(tee_time_id)]);
+  const names = Array.isArray(player_names) ? player_names : [];
+  const numPlayers = Number(players);
+  for (let i = 0; i < numPlayers; i++) {
+    const pName = (names[i] ?? "").trim() || guest_name || "Guest";
+    const pUserId = i === 0 && user_id ? Number(user_id) : null;
+    await exec(
+      `INSERT INTO booking_players (booking_id, user_id, guest_name, paid) VALUES (?, ?, ?, 1)`,
+      [bookingId, pUserId, pUserId ? null : pName]
+    );
+  }
+  await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [numPlayers, Number(tee_time_id)]);
   res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
 });
 router14.get("/portal/counter-bookings/summary", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
-  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
   const unbilled = await row(
-    `SELECT COUNT(*) AS cnt FROM bookings b
+    `SELECT COALESCE(SUM(b.players), 0) AS total_slots, COUNT(*) AS total_bookings
+     FROM bookings b
      JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
      WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL`,
     [club.id]
   );
-  const count = parseInt(unbilled?.cnt ?? "0");
-  res.json({ unbilled_count: count, unbilled_fee: Math.round(feePerBooking * count * 100) / 100, fee_per_booking: feePerBooking });
+  const totalSlots = parseInt(unbilled?.total_slots ?? "0");
+  const totalBookings = parseInt(unbilled?.total_bookings ?? "0");
+  res.json({
+    unbilled_count: totalSlots,
+    unbilled_bookings: totalBookings,
+    unbilled_fee: Math.round(feePerSlot * totalSlots * 100) / 100,
+    fee_per_booking: feePerSlot
+  });
 });
 router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const unbilledBookings = await query(
-    `SELECT b.id, b.booking_ref, b.created_at, COALESCE(u.name, b.guest_name, 'Guest') AS guest_name,
+    `SELECT b.id, b.booking_ref, b.players, b.created_at,
+            COALESCE(u.name, b.guest_name, 'Guest') AS guest_name,
             pts.date, pts.tee_time AS time
      FROM bookings b
      JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
@@ -65907,24 +65925,26 @@ router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, 
     return;
   }
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
-  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
-  const totalAmount = Math.round(feePerBooking * unbilledBookings.length * 100) / 100;
+  const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const totalSlots = unbilledBookings.reduce((s, b) => s + Number(b.players ?? 1), 0);
+  const totalAmount = Math.round(feePerSlot * totalSlots * 100) / 100;
   const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
   const invoiceRef = `CINV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
-  const description = `${unbilledBookings.length} counter booking${unbilledBookings.length !== 1 ? "s" : ""} @ R${feePerBooking.toFixed(2)}/booking \u2014 TapIn platform fee`;
+  const description = `${totalSlots} player slot${totalSlots !== 1 ? "s" : ""} (${unbilledBookings.length} booking${unbilledBookings.length !== 1 ? "s" : ""}) @ R${feePerSlot.toFixed(2)}/slot \u2014 TapIn platform fee`;
   const lineItems = unbilledBookings.map((b) => ({
     booking_ref: b.booking_ref,
     guest_name: b.guest_name,
     date: String(b.date).slice(0, 10),
     time: String(b.time).slice(0, 5),
-    amount: feePerBooking
+    players: Number(b.players ?? 1),
+    amount: Math.round(feePerSlot * Number(b.players ?? 1) * 100) / 100
   }));
   const invResult = await query(
     `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, invoice_type, line_items)
      VALUES (?, ?, ?, ?, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
-    [club.id, invoiceRef, description, unbilledBookings.length, feePerBooking, totalAmount, JSON.stringify(lineItems)]
+    [club.id, invoiceRef, description, totalSlots, feePerSlot, totalAmount, JSON.stringify(lineItems)]
   );
-  const invoiceId = invResult.rows[0].id;
+  const invoiceId = invResult[0]?.id;
   const ids = unbilledBookings.map((b) => b.id);
   const placeholders = ids.map(() => "?").join(",");
   await exec(`UPDATE bookings SET counter_invoice_id = ? WHERE id IN (${placeholders})`, [invoiceId, ...ids]);
@@ -65943,7 +65963,7 @@ router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, 
   } catch (payErr) {
     logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for counter invoice");
   }
-  res.json({ id: invoiceId, ref: invoiceRef, count: unbilledBookings.length, fee_per_booking: feePerBooking, total_amount: totalAmount, payment_url: paymentUrl });
+  res.json({ id: invoiceId, ref: invoiceRef, total_slots: totalSlots, count: unbilledBookings.length, fee_per_slot: feePerSlot, total_amount: totalAmount, payment_url: paymentUrl });
 });
 router14.get("/portal/invoice-success", async (_req, res) => {
   res.setHeader("Content-Type", "text/html");

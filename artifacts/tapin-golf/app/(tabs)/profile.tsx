@@ -76,6 +76,8 @@ export default function ProfileScreen() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [uploadingPic, setUploadingPic] = useState(false);
 
+  const [hnaOpen, setHnaOpen]                 = useState(false);
+
   // All my vouchers (cancellation + discount combined)
   const [vouchersOpen, setVouchersOpen]       = useState(false);
   const [voucherList, setVoucherList]         = useState<any[]>([]);
@@ -624,15 +626,26 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           )}
 
-          {/* HNA card verification */}
-          <HnaVerificationCard
-            token={user.token}
-            onVerified={() => {
-              apiFetch("/profile", user.token, { cache: "no-store" } as any)
-                .then((data: any) => { if (data?.user) updateUser({ ...data.user, token: user.token }); })
-                .catch(() => {});
-            }}
-          />
+          {/* HNA card verification — collapsible */}
+          <TouchableOpacity
+            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => setHnaOpen(v => !v)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="card-outline" size={20} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.foreground }]}>HNA Verification</Text>
+            <Ionicons name={hnaOpen ? "chevron-down" : "chevron-forward"} size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          {hnaOpen && (
+            <HnaVerificationCard
+              token={user.token}
+              onVerified={() => {
+                apiFetch("/profile", user.token, { cache: "no-store" } as any)
+                  .then((data: any) => { if (data?.user) updateUser({ ...data.user, token: user.token }); })
+                  .catch(() => {});
+              }}
+            />
+          )}
 
           {/* Club bans */}
           {myBans.length > 0 && (

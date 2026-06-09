@@ -65872,7 +65872,7 @@ router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => 
       guest_phone ?? null
     ]
   );
-  const bookingId = result.rows[0].id;
+  const bookingId = result[0]?.id;
   await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [Number(players), Number(tee_time_id)]);
   res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
 });

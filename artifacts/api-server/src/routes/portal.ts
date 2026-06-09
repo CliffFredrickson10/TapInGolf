@@ -2229,7 +2229,7 @@ router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, re
     [user_id ? Number(user_id) : null, Number(tee_time_id), Number(players), bookingRef,
      guest_name ?? null, guest_email ?? null, guest_phone ?? null]
   );
-  const bookingId: number = result.rows[0].id;
+  const bookingId: number = result[0]?.id;
   await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [Number(players), Number(tee_time_id)]);
   res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
 });

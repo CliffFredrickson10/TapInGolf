@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import { getUser, isStaff } from "../lib/auth";
 import crypto from "crypto";
 import { randomUUID } from "crypto";
 import { createStitchPayment } from "../lib/stitch";
@@ -2206,7 +2207,7 @@ router.post("/portal/invoices/:id/refresh-url", requireClubAuth, async (req: Req
 // Create a counter booking for a tee slot on behalf of a TapIn user or guest
 router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone, player_names } = req.body ?? {};
+  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone, player_names, player_emails } = req.body ?? {};
   if (!tee_time_id || !players || Number(players) < 1 || Number(players) > 4) {
     res.status(400).json({ message: "tee_time_id and players (1-4) required" }); return;
   }
@@ -2237,13 +2238,15 @@ router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, re
 
   // Insert per-player rows into booking_players so names appear on the schedule grid
   const names: string[] = Array.isArray(player_names) ? player_names : [];
+  const emails: string[] = Array.isArray(player_emails) ? player_emails : [];
   const numPlayers = Number(players);
   for (let i = 0; i < numPlayers; i++) {
     const pName = (names[i] ?? "").trim() || guest_name || "Guest";
+    const pEmail = (emails[i] ?? "").trim() || null;
     const pUserId = i === 0 && user_id ? Number(user_id) : null;
     await exec(
-      `INSERT INTO booking_players (booking_id, user_id, guest_name, paid) VALUES (?, ?, ?, 1)`,
-      [bookingId, pUserId, pUserId ? null : pName]
+      `INSERT INTO booking_players (booking_id, user_id, guest_name, guest_email, paid) VALUES (?, ?, ?, ?, 1)`,
+      [bookingId, pUserId, pUserId ? null : pName, pUserId ? null : pEmail]
     );
   }
 
@@ -3241,6 +3244,67 @@ router.post("/portal/bans/:id/respond", requireClubAuth, async (req: Request, re
     saveUserNotification(ban.user_id, "club_ban", title, body, { club_id: club.id, ban_id: id });
   }
   res.json({ success: true });
+});
+
+// ── Staff: guest leads (non-member players captured via counter bookings) ──────
+router.get("/staff/guest-leads", async (req: Request, res: Response): Promise<void> => {
+  const user = getUser(req);
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const { q = "", page = "1", limit = "50" } = req.query as Record<string, string>;
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const offset = (pageNum - 1) * pageSize;
+
+  const search = `%${q}%`;
+  const rows = await query<any>(
+    `SELECT
+       bp.id,
+       bp.guest_name    AS player_name,
+       bp.guest_email   AS player_email,
+       c.name           AS club_name,
+       c.province,
+       pts.date         AS booking_date,
+       pts.tee_time     AS booking_time,
+       b.booking_ref,
+       b.created_at
+     FROM booking_players bp
+     JOIN bookings b        ON b.id = bp.booking_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN clubs c           ON c.id = pts.club_id
+     WHERE bp.user_id IS NULL
+       AND bp.guest_name IS NOT NULL
+       AND b.booking_source = 'club_counter'
+       AND b.status <> 'cancelled'
+       AND (
+         bp.guest_name  ILIKE ?
+         OR COALESCE(bp.guest_email, '') ILIKE ?
+         OR c.name ILIKE ?
+       )
+     ORDER BY b.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [search, search, search, pageSize, offset]
+  );
+
+  const total = await row<any>(
+    `SELECT COUNT(*) AS cnt
+     FROM booking_players bp
+     JOIN bookings b        ON b.id = bp.booking_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN clubs c           ON c.id = pts.club_id
+     WHERE bp.user_id IS NULL
+       AND bp.guest_name IS NOT NULL
+       AND b.booking_source = 'club_counter'
+       AND b.status <> 'cancelled'
+       AND (
+         bp.guest_name  ILIKE ?
+         OR COALESCE(bp.guest_email, '') ILIKE ?
+         OR c.name ILIKE ?
+       )`,
+    [search, search, search]
+  );
+
+  res.json({ leads: rows, total: Number(total?.cnt ?? 0), page: pageNum, pageSize });
 });
 
 export default router;

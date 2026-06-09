@@ -1281,18 +1281,24 @@ function CounterBookingDialog({
   const [players, setPlayers] = useState(1);
   const emptySlot = (): PlayerSlot => ({ userId: null, name: "", email: "" });
   const [slots, setSlots] = useState<PlayerSlot[]>([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
-  const [leadEmail, setLeadEmail] = useState("");
+  const [slotEmails, setSlotEmails] = useState<string[]>(["", "", "", ""]);
   const [leadPhone, setLeadPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  const resetSlots = () => setSlots([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
+  const resetSlots = () => {
+    setSlots([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
+    setSlotEmails(["", "", "", ""]);
+  };
 
   useEffect(() => {
-    if (!open) { setPlayers(1); resetSlots(); setLeadEmail(""); setLeadPhone(""); }
+    if (!open) { setPlayers(1); resetSlots(); setLeadPhone(""); }
   }, [open]);
 
   const updateSlot = (i: number, s: PlayerSlot) =>
     setSlots(prev => { const n = [...prev]; n[i] = s; return n; });
+
+  const updateSlotEmail = (i: number, v: string) =>
+    setSlotEmails(prev => { const n = [...prev]; n[i] = v; return n; });
 
   const lead = slots[0];
   const leadIsGuest = lead.userId === null;
@@ -1308,16 +1314,20 @@ function CounterBookingDialog({
       const names = Array.from({ length: players }, (_, i) =>
         slots[i]?.name.trim() || leadName
       );
+      const playerEmails = Array.from({ length: players }, (_, i) =>
+        slots[i]?.userId ? "" : slotEmails[i]?.trim() || ""
+      );
       await api("/api/portal/counter-bookings", {
         method: "POST",
         body: JSON.stringify({
-          tee_time_id:  tee.id,
+          tee_time_id:   tee.id,
           players,
-          user_id:      leadIsGuest ? undefined : lead.userId,
-          guest_name:   leadIsGuest ? leadName : undefined,
-          guest_email:  leadIsGuest ? (leadEmail.trim() || undefined) : undefined,
-          guest_phone:  leadIsGuest ? (leadPhone.trim() || undefined) : undefined,
-          player_names: names,
+          user_id:       leadIsGuest ? undefined : lead.userId,
+          guest_name:    leadIsGuest ? leadName : undefined,
+          guest_email:   leadIsGuest ? (slotEmails[0].trim() || undefined) : undefined,
+          guest_phone:   leadIsGuest ? (leadPhone.trim() || undefined) : undefined,
+          player_names:  names,
+          player_emails: playerEmails,
         }),
       });
       toast({ title: "Booking added", description: `${tee.date} · ${String(tee.time).slice(0, 5)} · ${players} player${players > 1 ? "s" : ""}` });
@@ -1378,22 +1388,24 @@ function CounterBookingDialog({
                       />
                     </div>
                   </div>
-                  {/* Lead guest contact fields — shown only when Player 1 is not a linked member */}
-                  {i === 0 && leadIsGuest && lead.name.trim() && (
-                    <div className="ml-[72px] grid grid-cols-2 gap-2">
+                  {/* Guest contact fields — shown for each unlinked slot that has a typed name */}
+                  {slots[i].userId === null && slots[i].name.trim() && (
+                    <div className={`ml-[72px] ${i === 0 ? "grid grid-cols-2 gap-2" : ""}`}>
                       <Input
                         className="h-7 text-xs"
                         type="email"
                         placeholder="Email (optional)"
-                        value={leadEmail}
-                        onChange={e => setLeadEmail(e.target.value)}
+                        value={slotEmails[i] ?? ""}
+                        onChange={e => updateSlotEmail(i, e.target.value)}
                       />
-                      <Input
-                        className="h-7 text-xs"
-                        placeholder="Phone (optional)"
-                        value={leadPhone}
-                        onChange={e => setLeadPhone(e.target.value)}
-                      />
+                      {i === 0 && (
+                        <Input
+                          className="h-7 text-xs"
+                          placeholder="Phone (optional)"
+                          value={leadPhone}
+                          onChange={e => setLeadPhone(e.target.value)}
+                        />
+                      )}
                     </div>
                   )}
                 </div>

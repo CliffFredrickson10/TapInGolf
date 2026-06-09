@@ -1393,7 +1393,12 @@ async function reconcileSlotPlayerCounts(): Promise<void> {
   if (fixed > 0) logger.info({ slots: fixed }, "Reconciled tee-slot player counts");
 }
 
+async function applyLateAlters() {
+  await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+}
+
 export async function migrate(): Promise<void> {
+  await applyLateAlters();
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();

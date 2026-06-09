@@ -33,6 +33,7 @@ import StaffClubs from "@/pages/staff/clubs";
 import StaffAds from "@/pages/staff/ads";
 import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
+import StaffGuestLeads from "@/pages/staff/guest-leads";
 import Payments from "@/pages/payments";
 import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
@@ -92,6 +93,7 @@ function Router() {
                 <Route path="/ads" component={StaffAds} />
                 <Route path="/vouchers" component={StaffVouchers} />
                 <Route path="/reminder-settings" component={StaffReminderSettings} />
+                <Route path="/guest-leads" component={StaffGuestLeads} />
                 <Route>
                   <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
                 </Route>

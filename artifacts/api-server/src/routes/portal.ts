@@ -424,6 +424,7 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
   const club = getClub(req);
   const { date, from, to } = req.query as any;
   let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+       pts.player_count,
        pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
        pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
        pts.event_id,
@@ -665,7 +666,7 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
   if (status) { sql += " AND b.status = ?"; params.push(status); }
   if (date) { sql += " AND pts.date = ?"; params.push(date); }
   else if (from && to) { sql += " AND pts.date BETWEEN ? AND ?"; params.push(from, to); }
-  sql += ` ORDER BY b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+  sql += ` ORDER BY pts.date ASC, pts.tee_time ASC, b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
   const rows = await query<any>(sql, params);
   res.json(rows.map(r => ({ ...r, time: String(r.time).slice(0, 5), total_amount: Number(r.total_amount), tee_price: Number(r.tee_price) })));
 });

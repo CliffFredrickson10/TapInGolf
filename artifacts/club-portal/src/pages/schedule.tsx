@@ -70,6 +70,7 @@ interface TeeTime {
   price: number;
   price_9: number | null;
   total_slots: number;
+  player_count?: number;
   active: boolean;
   promotional_price: number | null;
   tee_start_type: "first_tee" | "two_tee" | "tenth_tee";
@@ -99,6 +100,7 @@ interface Booking {
   // Per-player paid flags (0/1) from booking_players, ordered by bp.id.
   // Only populated for split-bill bookings. Used to colour each slot independently.
   player_paid: (0 | 1)[];
+  booking_source?: string;
 }
 
 type SlotKind =
@@ -188,6 +190,15 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
       }
       slots[fillIdx] = { kind: "booked", booking: b, playerIndex: p, effectiveStatus };
       fillIdx++;
+    }
+  }
+  // If player_count from DB is higher than what bookings filled (e.g. stale bookings not yet loaded),
+  // mark remaining open slots as unavailable so staff can't double-book.
+  const dbPlayerCount = tt.player_count ?? 0;
+  if (dbPlayerCount > fillIdx) {
+    let extra = dbPlayerCount - fillIdx;
+    for (let i = 0; i < COLS && extra > 0; i++) {
+      if (slots[i].kind === "open") { slots[i] = { kind: "unavailable" }; extra--; }
     }
   }
   return slots;
@@ -2015,8 +2026,13 @@ export default function Schedule() {
                           <span className={`truncate leading-tight font-medium ${slot.playerIndex > 0 ? "opacity-70 italic text-[11px]" : ""}`}>
                             {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
                           </span>
-                          <span className={`flex-shrink-0 text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.effectiveStatus] ?? ""}`}>
-                            {STATUS_LABEL[slot.effectiveStatus] ?? slot.effectiveStatus}
+                          <span className="flex items-center gap-1 flex-shrink-0">
+                            {slot.playerIndex === 0 && slot.booking.booking_source === "club_counter" && (
+                              <span className="text-[8px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200 font-bold">Walk-in</span>
+                            )}
+                            <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.effectiveStatus] ?? ""}`}>
+                              {STATUS_LABEL[slot.effectiveStatus] ?? slot.effectiveStatus}
+                            </span>
                           </span>
                         </span>
                       )}

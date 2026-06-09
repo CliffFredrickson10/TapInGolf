@@ -695,7 +695,19 @@ async function createSchema(): Promise<void> {
   await ddl("DROP TABLE IF EXISTS tee_times CASCADE");
 
   // ── Schema evolution: unique constraint on portal_tee_slots ──────────────
-  // Deduplicate first (safe no-op if no dupes exist)
+  // Repoint any bookings that reference a duplicate (higher-id) slot to the survivor first,
+  // then delete the now-orphaned duplicates (safe no-op when no dupes exist).
+  await query(`
+    UPDATE bookings bk
+       SET portal_slot_id = survivor.id
+      FROM portal_tee_slots dup
+      JOIN portal_tee_slots survivor
+        ON  dup.club_id  = survivor.club_id
+        AND dup.date     = survivor.date
+        AND dup.tee_time = survivor.tee_time
+        AND dup.id       > survivor.id
+     WHERE bk.portal_slot_id = dup.id
+  `);
   await query(`
     DELETE FROM portal_tee_slots a
     USING portal_tee_slots b

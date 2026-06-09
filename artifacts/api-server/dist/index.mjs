@@ -63918,6 +63918,7 @@ router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const { date, from, to } = req.query;
   let sql = `SELECT pts.id, pts.date, pts.tee_time AS time, pts.max_players AS total_slots,
+       pts.player_count,
        pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
        pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
        pts.event_id,
@@ -64187,7 +64188,7 @@ router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
     sql += " AND pts.date BETWEEN ? AND ?";
     params.push(from, to);
   }
-  sql += ` ORDER BY b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+  sql += ` ORDER BY pts.date ASC, pts.tee_time ASC, b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
   const rows = await query(sql, params);
   res.json(rows.map((r) => ({ ...r, time: String(r.time).slice(0, 5), total_amount: Number(r.total_amount), tee_price: Number(r.tee_price) })));
 });
@@ -69050,6 +69051,17 @@ async function createSchema() {
     await ddl(idx);
   }
   await ddl("DROP TABLE IF EXISTS tee_times CASCADE");
+  await query(`
+    UPDATE bookings bk
+       SET portal_slot_id = survivor.id
+      FROM portal_tee_slots dup
+      JOIN portal_tee_slots survivor
+        ON  dup.club_id  = survivor.club_id
+        AND dup.date     = survivor.date
+        AND dup.tee_time = survivor.tee_time
+        AND dup.id       > survivor.id
+     WHERE bk.portal_slot_id = dup.id
+  `);
   await query(`
     DELETE FROM portal_tee_slots a
     USING portal_tee_slots b

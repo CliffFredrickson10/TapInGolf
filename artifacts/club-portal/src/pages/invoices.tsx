@@ -3,11 +3,22 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock } from "lucide-react";
+import {
+  Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
+  ChevronDown, ChevronUp, User,
+} from "lucide-react";
 import { format, parseISO } from "date-fns";
+
+interface LineItem {
+  email: string;
+  name: string | null;
+  membership_type: string;
+  rounds: number;
+  amount: number;
+}
 
 interface ClubInvoice {
   id: number;
@@ -20,10 +31,83 @@ interface ClubInvoice {
   stitch_payment_url: string | null;
   paid_at: string | null;
   created_at: string;
+  line_items: LineItem[];
 }
 
 function fmtRand(n: number) {
   return `R ${Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function capitalize(s: string) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
+  const [open, setOpen] = useState(false);
+  const items = inv.line_items ?? [];
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {open ? "Hide" : "View"} breakdown — {inv.total_rounds} round{inv.total_rounds !== 1 ? "s" : ""} across {items.length} member{items.length !== 1 ? "s" : ""}
+      </button>
+
+      {open && items.length > 0 && (
+        <div className="mt-3 rounded-lg border overflow-hidden bg-white">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/40 border-b">
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Member</th>
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden sm:table-cell">Type</th>
+                <th className="text-center px-3 py-2 font-medium text-muted-foreground">Rounds</th>
+                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Fee</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.map((li, i) => (
+                <tr key={i} className={i < items.length - 1 ? "border-b" : ""}>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                      <div className="min-w-0">
+                        {li.name && (
+                          <p className="font-medium truncate text-foreground">{li.name}</p>
+                        )}
+                        <p className={`text-muted-foreground truncate ${li.name ? "text-xs" : ""}`}>{li.email}</p>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell text-xs capitalize">
+                    {capitalize(li.membership_type)}
+                  </td>
+                  <td className="px-3 py-2 text-center font-medium">{li.rounds}</td>
+                  <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              <tr className="border-t bg-muted/20">
+                <td colSpan={2} className="px-3 py-2 font-semibold text-foreground hidden sm:table-cell">Total</td>
+                <td className="px-3 py-2 text-center font-bold">{inv.total_rounds}</td>
+                <td className="px-3 py-2 text-right font-bold text-[#1a5c38]">{fmtRand(inv.total_amount)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div className="px-3 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
+            Rate: R{Number(inv.platform_fee_rate).toFixed(2)} per prepaid round (TapIn platform fee)
+          </div>
+        </div>
+      )}
+
+      {open && items.length === 0 && (
+        <p className="mt-2 text-xs text-muted-foreground italic">No per-member breakdown available for this invoice.</p>
+      )}
+    </div>
+  );
 }
 
 export default function Invoices() {
@@ -46,9 +130,7 @@ export default function Invoices() {
   const refreshUrl = async (inv: ClubInvoice) => {
     setRefreshingId(inv.id);
     try {
-      const data = await api<{ payment_url: string }>(`/api/portal/invoices/${inv.id}/refresh-url`, {
-        method: "POST",
-      });
+      const data = await api<{ payment_url: string }>(`/api/portal/invoices/${inv.id}/refresh-url`, { method: "POST" });
       setInvoices(prev => prev.map(i => i.id === inv.id ? { ...i, stitch_payment_url: data.payment_url } : i));
       window.open(data.payment_url, "_blank", "noopener,noreferrer");
     } catch (err: any) {
@@ -86,11 +168,9 @@ export default function Invoices() {
 
       {/* Outstanding invoices */}
       {loading ? (
-        <Card>
-          <CardContent className="p-6 space-y-4">
-            {[1, 2].map(i => <Skeleton key={i} className="h-20 w-full" />)}
-          </CardContent>
-        </Card>
+        <div className="space-y-4">
+          {[1, 2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
+        </div>
       ) : unpaid.length > 0 ? (
         <div className="space-y-4">
           <h2 className="text-sm font-semibold text-orange-600 uppercase tracking-wide flex items-center gap-1.5">
@@ -99,7 +179,8 @@ export default function Invoices() {
           {unpaid.map(inv => (
             <Card key={inv.id} className="border-orange-200 bg-orange-50/40">
               <CardContent className="p-5">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                {/* Header row */}
+                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
                   <div className="space-y-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-mono text-sm font-semibold text-foreground">{inv.invoice_ref}</span>
@@ -108,8 +189,6 @@ export default function Invoices() {
                     <p className="text-sm text-muted-foreground">{inv.description}</p>
                     <p className="text-xs text-muted-foreground">
                       Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
-                      {" · "}{inv.total_rounds} round{inv.total_rounds !== 1 ? "s" : ""}
-                      {" · "}R{Number(inv.platform_fee_rate).toFixed(2)}/round
                     </p>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
@@ -119,15 +198,15 @@ export default function Invoices() {
                       disabled={refreshingId === inv.id}
                       className="bg-[#1a5c38] hover:bg-[#164d2f] text-white"
                     >
-                      {refreshingId === inv.id ? (
-                        <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                      )}
+                      {refreshingId === inv.id
+                        ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        : <ExternalLink className="h-4 w-4 mr-2" />}
                       Pay Now
                     </Button>
                   </div>
                 </div>
+                {/* Expandable per-member breakdown */}
+                <InvoiceBreakdown inv={inv} />
               </CardContent>
             </Card>
           ))}
@@ -163,35 +242,29 @@ export default function Invoices() {
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
             <CheckCircle2 className="h-4 w-4" /> Payment History
           </h2>
-          <Card>
-            <CardContent className="p-0">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b bg-muted/30">
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground">Invoice</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden sm:table-cell">Description</th>
-                    <th className="text-left px-4 py-3 font-medium text-muted-foreground hidden md:table-cell">Paid</th>
-                    <th className="text-right px-4 py-3 font-medium text-muted-foreground">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paid.map((inv, i) => (
-                    <tr key={inv.id} className={i < paid.length - 1 ? "border-b" : ""}>
-                      <td className="px-4 py-3">
-                        <span className="font-mono text-xs font-semibold">{inv.invoice_ref}</span>
-                        <Badge className="ml-2 bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>
-                      </td>
-                      <td className="px-4 py-3 text-muted-foreground hidden sm:table-cell max-w-xs truncate">{inv.description}</td>
-                      <td className="px-4 py-3 text-muted-foreground hidden md:table-cell text-xs">
-                        {inv.paid_at ? format(parseISO(inv.paid_at), "d MMM yyyy") : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium">{fmtRand(inv.total_amount)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </CardContent>
-          </Card>
+          <div className="space-y-3">
+            {paid.map(inv => (
+              <Card key={inv.id}>
+                <CardContent className="p-5">
+                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono text-sm font-semibold">{inv.invoice_ref}</span>
+                        <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>
+                      </div>
+                      <p className="text-sm text-muted-foreground">{inv.description}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
+                        {inv.paid_at && ` · Paid ${format(parseISO(inv.paid_at), "d MMM yyyy")}`}
+                      </p>
+                    </div>
+                    <span className="text-lg font-bold flex-shrink-0">{fmtRand(inv.total_amount)}</span>
+                  </div>
+                  <InvoiceBreakdown inv={inv} />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       )}
     </div>

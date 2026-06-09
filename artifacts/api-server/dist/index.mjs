@@ -65561,6 +65561,7 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
   let pending = 0;
   let invoicedRounds = 0;
   const errors = [];
+  const lineItems = [];
   for (const r of rows) {
     const email = String(r.email ?? "").trim().toLowerCase();
     const membership_type = String(r.membership_type ?? "standard").trim().toLowerCase();
@@ -65588,7 +65589,7 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
       continue;
     }
     try {
-      const user = await row("SELECT id FROM users WHERE email = ?", [email]);
+      const user = await row("SELECT id, name FROM users WHERE email = ?", [email]);
       if (!user) {
         await exec(
           `INSERT INTO pending_memberships
@@ -65606,7 +65607,17 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
           [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
         );
         pending++;
-        invoicedRounds += prepaid_rounds;
+        if (prepaid_rounds > 0) {
+          invoicedRounds += prepaid_rounds;
+          lineItems.push({
+            email,
+            name: null,
+            membership_type,
+            rounds: prepaid_rounds,
+            amount: 0
+            /* filled after feeRate known */
+          });
+        }
         continue;
       }
       const existing = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
@@ -65632,7 +65643,17 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
       );
       if (existing) renewed++;
       else added++;
-      invoicedRounds += prepaid_rounds;
+      if (prepaid_rounds > 0) {
+        invoicedRounds += prepaid_rounds;
+        lineItems.push({
+          email,
+          name: user.name ?? null,
+          membership_type,
+          rounds: prepaid_rounds,
+          amount: 0
+          /* filled after feeRate known */
+        });
+      }
     } catch (err) {
       errors.push(`${email}: ${err.message}`);
     }
@@ -65643,13 +65664,14 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
       const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
       const feeRate = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
       const totalAmount = Math.round(feeRate * invoicedRounds * 100) / 100;
+      const stampedItems = lineItems.map((li) => ({ ...li, amount: Math.round(feeRate * li.rounds * 100) / 100 }));
       const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
       const invoiceRef = `INV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
-      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round \u2014 TapIn platform fee`;
+      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} across ${lineItems.length} member${lineItems.length !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round \u2014 TapIn platform fee`;
       const invResult = await query(
-        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount]
+        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, line_items)
+         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb) RETURNING id`,
+        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount, JSON.stringify(stampedItems)]
       );
       const invoiceId = invResult.rows[0].id;
       const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
@@ -65747,10 +65769,20 @@ router14.get("/portal/invoices", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const invoices = await query(
     `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount,
-            status, stitch_payment_url, paid_at, created_at
+            status, stitch_payment_url, paid_at, created_at, line_items
      FROM club_invoices WHERE club_id = ? ORDER BY created_at DESC`,
     [club.id]
   );
+  for (const inv of invoices) {
+    if (typeof inv.line_items === "string") {
+      try {
+        inv.line_items = JSON.parse(inv.line_items);
+      } catch {
+        inv.line_items = [];
+      }
+    }
+    if (!Array.isArray(inv.line_items)) inv.line_items = [];
+  }
   const unpaidCount = invoices.filter((i) => i.status === "unpaid").length;
   res.json({ invoices, unpaid_count: unpaidCount });
 });
@@ -68963,6 +68995,7 @@ async function createSchema() {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS line_items JSONB NOT NULL DEFAULT '[]'::jsonb");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (
       id         SERIAL PRIMARY KEY,

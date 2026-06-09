@@ -1959,6 +1959,8 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
   let pending = 0;     // staged for a golfer with no account yet
   let invoicedRounds = 0; // prepaid rounds that were successfully committed
   const errors: string[] = [];
+  // Per-member line items for the invoice: { email, name, membership_type, rounds, amount }
+  const lineItems: Array<{ email: string; name: string | null; membership_type: string; rounds: number; amount: number }> = [];
 
   for (const r of rows) {
     const email = String(r.email ?? "").trim().toLowerCase();
@@ -1975,7 +1977,7 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
     if (!start_date) { errors.push(`${email}: Start date is required`); continue; }
     if (!renewal_date) { errors.push(`${email}: Renewal date is required`); continue; }
     try {
-      const user = await row<any>("SELECT id FROM users WHERE email = ?", [email]);
+      const user = await row<any>("SELECT id, name FROM users WHERE email = ?", [email]);
 
       // No account → stage as pending (auto-links on signup)
       if (!user) {
@@ -1995,7 +1997,10 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
           [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
         );
         pending++;
-        invoicedRounds += prepaid_rounds;
+        if (prepaid_rounds > 0) {
+          invoicedRounds += prepaid_rounds;
+          lineItems.push({ email, name: null, membership_type, rounds: prepaid_rounds, amount: 0 /* filled after feeRate known */ });
+        }
         continue;
       }
 
@@ -2022,7 +2027,10 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
         [hnaClean, stuClean, stuClean, user.id]
       );
       if (existing) renewed++; else added++;
-      invoicedRounds += prepaid_rounds;
+      if (prepaid_rounds > 0) {
+        invoicedRounds += prepaid_rounds;
+        lineItems.push({ email, name: user.name ?? null, membership_type, rounds: prepaid_rounds, amount: 0 /* filled after feeRate known */ });
+      }
     } catch (err: any) {
       errors.push(`${email}: ${err.message}`);
     }
@@ -2036,14 +2044,17 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
       const feeRate    = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
       const totalAmount = Math.round(feeRate * invoicedRounds * 100) / 100;
 
+      // Stamp per-member amounts now that feeRate is known
+      const stampedItems = lineItems.map(li => ({ ...li, amount: Math.round(feeRate * li.rounds * 100) / 100 }));
+
       const dateStr    = new Date().toISOString().slice(0, 10).replace(/-/g, "");
       const invoiceRef = `INV-${club.id}-${dateStr}-${randomUUID().slice(0, 6).toUpperCase()}`;
-      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round — TapIn platform fee`;
+      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} across ${lineItems.length} member${lineItems.length !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round — TapIn platform fee`;
 
       const invResult = await query(
-        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount)
-         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
-        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount]
+        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, line_items)
+         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb) RETURNING id`,
+        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount, JSON.stringify(stampedItems)]
       );
       const invoiceId: number = invResult.rows[0].id;
 
@@ -2134,10 +2145,17 @@ router.get("/portal/invoices", requireClubAuth, async (req: Request, res: Respon
   const club = getClub(req);
   const invoices = await query<any>(
     `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount,
-            status, stitch_payment_url, paid_at, created_at
+            status, stitch_payment_url, paid_at, created_at, line_items
      FROM club_invoices WHERE club_id = ? ORDER BY created_at DESC`,
     [club.id]
   );
+  // Ensure line_items is always a parsed array (PG returns it as JSON object already)
+  for (const inv of invoices) {
+    if (typeof inv.line_items === "string") {
+      try { inv.line_items = JSON.parse(inv.line_items); } catch { inv.line_items = []; }
+    }
+    if (!Array.isArray(inv.line_items)) inv.line_items = [];
+  }
   const unpaidCount = invoices.filter(i => i.status === "unpaid").length;
   res.json({ invoices, unpaid_count: unpaidCount });
 });

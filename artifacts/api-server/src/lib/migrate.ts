@@ -791,6 +791,7 @@ async function createSchema(): Promise<void> {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS line_items JSONB NOT NULL DEFAULT '[]'::jsonb");
   // club_inbox_notifications: system → club portal event feed (new bookings, cancellations, etc.)
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (

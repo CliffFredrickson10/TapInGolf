@@ -61231,12 +61231,12 @@ router8.get("/vouchers/available", async (req, res) => {
   const stdRows = await query(
     `SELECT * FROM vouchers
      WHERE active = 1
+       AND user_id = ?
        AND (expires_at IS NULL OR expires_at > NOW())
        AND (max_uses IS NULL OR uses_count < max_uses)
        AND (min_amount IS NULL OR CAST(min_amount AS DECIMAL(10,2)) = 0 OR ? >= CAST(min_amount AS DECIMAL(10,2)))
-       AND (user_id IS NULL OR user_id = ?)
        ${club_id != null ? "AND (club_id = ? OR club_id IS NULL)" : ""}`,
-    club_id != null ? [amount, user.id, club_id] : [amount, user.id]
+    club_id != null ? [user.id, amount, club_id] : [user.id, amount]
   );
   for (const v of stdRows) {
     const discountValue = parseFloat(v.discount_value);

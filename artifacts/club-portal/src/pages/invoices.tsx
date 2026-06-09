@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
-  ChevronDown, ChevronUp, User, Download,
+  ChevronDown, ChevronUp, User, Download, Calculator,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -354,12 +354,14 @@ interface InvoiceSectionProps {
   clubName: string;
   clubEmail: string;
   refreshingId: number | null;
+  recalculatingId: number | null;
   onPay: (inv: ClubInvoice) => void;
   onDownload: (inv: ClubInvoice, name: string, email: string) => void;
+  onRecalculate?: (inv: ClubInvoice) => void;
   emptyMessage: string;
 }
 
-function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshingId, onPay, onDownload, emptyMessage }: InvoiceSectionProps) {
+function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshingId, recalculatingId, onPay, onDownload, onRecalculate, emptyMessage }: InvoiceSectionProps) {
   const isUnpaid = status === "unpaid";
   return (
     <div className="space-y-3">
@@ -404,6 +406,21 @@ function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshi
                   <span className={`font-bold flex-shrink-0 ${isUnpaid ? "text-xl" : "text-lg"}`}>
                     {fmtRand(inv.total_amount)}
                   </span>
+                  {isUnpaid && onRecalculate && inv.invoice_type === "counter_bookings" && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => onRecalculate(inv)}
+                      disabled={recalculatingId === inv.id}
+                      className="gap-1.5"
+                      title="Pull in any new walk-in bookings and update this invoice"
+                    >
+                      {recalculatingId === inv.id
+                        ? <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        : <Calculator className="h-3.5 w-3.5" />}
+                      Recalculate
+                    </Button>
+                  )}
                   <Button
                     variant="outline"
                     size="sm"
@@ -444,6 +461,7 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState<ClubInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
+  const [recalculatingId, setRecalculatingId] = useState<number | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -473,6 +491,26 @@ export default function Invoices() {
       window.open(inv.stitch_payment_url, "_blank", "noopener,noreferrer");
     } else {
       refreshUrl(inv);
+    }
+  };
+
+  const recalculate = async (inv: ClubInvoice) => {
+    setRecalculatingId(inv.id);
+    try {
+      const data = await api<{ total_slots: number; total_bookings: number; total_amount: number; payment_url: string | null; added: number }>(
+        `/api/portal/invoices/${inv.id}/recalculate`, { method: "POST" }
+      );
+      toast({
+        title: "Invoice updated",
+        description: data.added > 0
+          ? `${data.added} new booking${data.added !== 1 ? "s" : ""} added — new total ${fmtRand(data.total_amount)}`
+          : `No new bookings found — total remains ${fmtRand(data.total_amount)}`,
+      });
+      load();
+    } catch (err: any) {
+      toast({ title: "Recalculate failed", description: err.message, variant: "destructive" });
+    } finally {
+      setRecalculatingId(null);
     }
   };
 
@@ -542,8 +580,10 @@ export default function Invoices() {
                   clubName={clubName}
                   clubEmail={clubEmail}
                   refreshingId={refreshingId}
+                  recalculatingId={recalculatingId}
                   onPay={payNow}
                   onDownload={downloadInvoice}
+                  onRecalculate={recalculate}
                   emptyMessage="No outstanding counter booking invoices"
                 />
                 <InvoiceSection
@@ -553,6 +593,7 @@ export default function Invoices() {
                   clubName={clubName}
                   clubEmail={clubEmail}
                   refreshingId={refreshingId}
+                  recalculatingId={recalculatingId}
                   onPay={payNow}
                   onDownload={downloadInvoice}
                   emptyMessage="No outstanding prepaid round invoices"
@@ -582,6 +623,7 @@ export default function Invoices() {
                   clubName={clubName}
                   clubEmail={clubEmail}
                   refreshingId={refreshingId}
+                  recalculatingId={recalculatingId}
                   onPay={payNow}
                   onDownload={downloadInvoice}
                   emptyMessage="No paid counter booking invoices"
@@ -593,6 +635,7 @@ export default function Invoices() {
                   clubName={clubName}
                   clubEmail={clubEmail}
                   refreshingId={refreshingId}
+                  recalculatingId={recalculatingId}
                   onPay={payNow}
                   onDownload={downloadInvoice}
                   emptyMessage="No paid prepaid round invoices"

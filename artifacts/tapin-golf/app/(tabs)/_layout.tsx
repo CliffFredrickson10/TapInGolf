@@ -8,8 +8,6 @@ import React from "react";
 import { Platform, StyleSheet, View, useColorScheme } from "react-native";
 import { useColors } from "@/hooks/useColors";
 import GoogleAdBanner from "@/components/GoogleAdBanner";
-import { MenuDrawer } from "@/components/MenuDrawer";
-
 function NativeTabLayout() {
   return (
     <NativeTabs>
@@ -43,10 +41,7 @@ function ClassicTabLayout() {
   const isDark = colorScheme === "dark";
   const isIOS = Platform.OS === "ios";
   const isWeb = Platform.OS === "web";
-  const [menuOpen, setMenuOpen] = React.useState(false);
-
   return (
-    <>
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: colors.primary,
@@ -134,29 +129,13 @@ function ClassicTabLayout() {
       />
       <Tabs.Screen
         name="scoring"
-        options={{
-          title: "Menu",
-          tabBarIcon: ({ color }) =>
-            isIOS ? (
-              <SymbolView name="line.3.horizontal" tintColor={color} size={24} />
-            ) : (
-              <Ionicons name="menu" size={24} color={color} />
-            ),
-        }}
-        listeners={{
-          tabPress: (e: any) => {
-            e.preventDefault();
-            setMenuOpen(true);
-          },
-        }}
+        options={{ href: null }}
       />
       <Tabs.Screen
         name="profile"
         options={{ href: null }}
       />
     </Tabs>
-    <MenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} />
-    </>
   );
 }
 

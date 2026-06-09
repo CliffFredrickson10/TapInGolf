@@ -49,6 +49,11 @@ function notifIcon(type: string): { name: any; color: string } {
     case "friend_accepted":   return { name: "people",             color: "#1565c0" };
     case "new_message":       return { name: "chatbubble-ellipses",color: "#6a1b9a" };
     case "club_broadcast":    return { name: "megaphone",          color: "#e65100" };
+    case "event_dq":          return { name: "ban",                color: "#dc2626" };
+    case "event_created":
+    case "event_published":
+    case "event_draw_published":
+    case "event_cancelled":   return { name: "trophy",             color: "#1a5c38" };
     default:                  return { name: "notifications",      color: "#546e7a" };
   }
 }
@@ -67,6 +72,7 @@ function handleTap(notif: AppNotification) {
     case "new_message":
       if (d.conversation_id) router.push({ pathname: "/chat/[id]", params: { id: d.conversation_id } });
       break;
+    case "event_dq":
     case "event_created":
     case "event_published":
     case "event_cancelled":
@@ -128,8 +134,11 @@ function NotifRow({
           )}
         </View>
         <Text
-          style={[styles.rowBody, { color: colors.mutedForeground }]}
-          numberOfLines={2}
+          style={[
+            styles.rowBody,
+            { color: notif.type === "event_dq" ? "#dc2626" : colors.mutedForeground },
+          ]}
+          numberOfLines={notif.type === "event_dq" ? undefined : 2}
         >
           {notif.body}
         </Text>

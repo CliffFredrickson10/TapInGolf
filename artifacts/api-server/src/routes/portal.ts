@@ -638,7 +638,10 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
                     b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
                     b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
                     b.discount_amount, b.voucher_code, b.created_at,
-                    u.name AS guest_name, u.email AS guest_email, u.phone AS guest_phone,
+                    COALESCE(u.name, b.guest_name) AS guest_name,
+                    COALESCE(u.email, b.guest_email) AS guest_email,
+                    COALESCE(u.phone, b.guest_phone) AS guest_phone,
+                    b.booking_source,
                     COALESCE(
                       (SELECT json_agg(COALESCE(pu.name, bp.guest_name) ORDER BY bp.id)
                          FROM booking_players bp
@@ -656,7 +659,7 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
                     b.refund_processed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
-             JOIN users u ON b.user_id = u.id
+             LEFT JOIN users u ON b.user_id = u.id
              WHERE pts.club_id = ?`;
   const params: any[] = [club.id];
   if (status) { sql += " AND b.status = ?"; params.push(status); }
@@ -2191,6 +2194,125 @@ router.post("/portal/invoices/:id/refresh-url", requireClubAuth, async (req: Req
   } catch (err: any) {
     res.status(502).json({ message: `Failed to create payment link: ${err.message}` });
   }
+});
+
+// ─── COUNTER BOOKINGS (club-initiated walk-in/manual bookings) ───────────────
+
+// Search TapIn users by name or email (for counter booking user picker)
+router.get("/portal/users/search", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const q = String(req.query.q ?? "").trim();
+  if (q.length < 2) { res.json([]); return; }
+  const users = await query<any>(
+    `SELECT id, name, email FROM users WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? ORDER BY name LIMIT 20`,
+    [`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`]
+  );
+  res.json(users);
+});
+
+// Create a counter booking for a tee slot on behalf of a TapIn user or guest
+router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone } = req.body ?? {};
+  if (!tee_time_id || !players || Number(players) < 1 || Number(players) > 4) {
+    res.status(400).json({ message: "tee_time_id and players (1-4) required" }); return;
+  }
+  if (!user_id && !guest_name) {
+    res.status(400).json({ message: "Either a TapIn user or guest name is required" }); return;
+  }
+
+  const tt = await row<any>("SELECT id, total_slots, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
+  if (!tt) { res.status(404).json({ message: "Tee time not found" }); return; }
+  const available = (tt.total_slots ?? 4) - (tt.player_count ?? 0);
+  if (available < Number(players)) { res.status(400).json({ message: `Only ${available} slot(s) available` }); return; }
+
+  if (user_id) {
+    const u = await row<any>("SELECT id FROM users WHERE id = ?", [Number(user_id)]);
+    if (!u) { res.status(404).json({ message: "TapIn user not found" }); return; }
+  }
+
+  const bookingRef = `CTR-${randomUUID().slice(0, 8).toUpperCase()}`;
+  const result = await query<any>(
+    `INSERT INTO bookings (user_id, portal_slot_id, players, total_amount, my_amount, club_amount, platform_fee,
+       booking_ref, payment_method, status, holes, booking_source, guest_name, guest_email, guest_phone)
+     VALUES (?, ?, ?, 0, 0, 0, 0, ?, 'counter', 'confirmed', 18, 'club_counter', ?, ?, ?)
+     RETURNING id`,
+    [user_id ? Number(user_id) : null, Number(tee_time_id), Number(players), bookingRef,
+     guest_name ?? null, guest_email ?? null, guest_phone ?? null]
+  );
+  const bookingId: number = result.rows[0].id;
+  await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [Number(players), Number(tee_time_id)]);
+  res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
+});
+
+// Return unbilled counter booking count + fees owed for this club
+router.get("/portal/counter-bookings/summary", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const unbilled = await row<any>(
+    `SELECT COUNT(*) AS cnt FROM bookings b
+     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL`,
+    [club.id]
+  );
+  const count = parseInt(unbilled?.cnt ?? "0");
+  res.json({ unbilled_count: count, unbilled_fee: Math.round(feePerBooking * count * 100) / 100, fee_per_booking: feePerBooking });
+});
+
+// Generate a monthly invoice for all unbilled counter bookings
+router.post("/portal/invoices/counter-monthly", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const unbilledBookings = await query<any>(
+    `SELECT b.id, b.booking_ref, b.created_at, COALESCE(u.name, b.guest_name, 'Guest') AS guest_name,
+            pts.date, pts.tee_time AS time
+     FROM bookings b
+     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL
+     ORDER BY pts.date, pts.tee_time`,
+    [club.id]
+  );
+  if (unbilledBookings.length === 0) { res.status(400).json({ message: "No unbilled counter bookings" }); return; }
+
+  const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const totalAmount = Math.round(feePerBooking * unbilledBookings.length * 100) / 100;
+
+  const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+  const invoiceRef = `CINV-${club.id}-${dateStr}-${randomUUID().slice(0, 6).toUpperCase()}`;
+  const description = `${unbilledBookings.length} counter booking${unbilledBookings.length !== 1 ? "s" : ""} @ R${feePerBooking.toFixed(2)}/booking — TapIn platform fee`;
+  const lineItems = unbilledBookings.map((b: any) => ({
+    booking_ref: b.booking_ref,
+    guest_name: b.guest_name,
+    date: String(b.date).slice(0, 10),
+    time: String(b.time).slice(0, 5),
+    amount: feePerBooking,
+  }));
+
+  const invResult = await query<any>(
+    `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, invoice_type, line_items)
+     VALUES (?, ?, ?, ?, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
+    [club.id, invoiceRef, description, unbilledBookings.length, feePerBooking, totalAmount, JSON.stringify(lineItems)]
+  );
+  const invoiceId: number = invResult.rows[0].id;
+
+  const ids: number[] = unbilledBookings.map((b: any) => b.id);
+  const placeholders = ids.map(() => "?").join(",");
+  await exec(`UPDATE bookings SET counter_invoice_id = ? WHERE id IN (${placeholders})`, [invoiceId, ...ids]);
+
+  const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+  let paymentUrl: string | null = null;
+  try {
+    const payment = await createStitchPayment({
+      amount: totalAmount, payerName: club.name, merchantReference: `invoice-${invoiceId}`,
+      redirectUrl: `${host}/api/portal/invoice-success`, payerEmail: club.email ?? undefined,
+    });
+    await exec("UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?", [payment.id, payment.url, invoiceId]);
+    paymentUrl = payment.url;
+  } catch (payErr: any) {
+    logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for counter invoice");
+  }
+  res.json({ id: invoiceId, ref: invoiceRef, count: unbilledBookings.length, fee_per_booking: feePerBooking, total_amount: totalAmount, payment_url: paymentUrl });
 });
 
 // Simple redirect-back page shown after the club pays via Stitch

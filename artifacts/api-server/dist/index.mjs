@@ -61784,10 +61784,14 @@ router10.get("/admin/revenue/clubs", async (req, res) => {
        COUNT(DISTINCT b.id) as total_bookings,
        COALESCE(SUM(b.total_amount), 0) as gross_revenue,
        COALESCE(SUM(b.platform_fee), 0) as platform_fees,
-       COALESCE(SUM(b.club_amount), 0) as club_earnings
+       COALESCE(SUM(b.club_amount), 0) as club_earnings,
+       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+        WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled') AS counter_bookings_total,
+       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+        WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled' AND cb.counter_invoice_id IS NULL) AS counter_bookings_unbilled
      FROM clubs c
      LEFT JOIN portal_tee_slots pts ON pts.club_id = c.id
-     LEFT JOIN bookings b ON b.portal_slot_id = pts.id AND b.status IN ('confirmed','completed')
+     LEFT JOIN bookings b ON b.portal_slot_id = pts.id AND b.status IN ('confirmed','completed') AND b.booking_source = 'app'
      WHERE 1=1 ${scope.where.replace("AND c.id", "AND c.id")}
      GROUP BY c.id, c.name, c.location, c.province
      ORDER BY club_earnings DESC`,
@@ -61799,7 +61803,9 @@ router10.get("/admin/revenue/clubs", async (req, res) => {
       total_bookings: parseInt(c.total_bookings ?? 0),
       gross_revenue: parseFloat(c.gross_revenue ?? 0),
       platform_fees: parseFloat(c.platform_fees ?? 0),
-      club_earnings: parseFloat(c.club_earnings ?? 0)
+      club_earnings: parseFloat(c.club_earnings ?? 0),
+      counter_bookings_total: parseInt(c.counter_bookings_total ?? 0),
+      counter_bookings_unbilled: parseInt(c.counter_bookings_unbilled ?? 0)
     }))
   });
 });
@@ -64146,7 +64152,10 @@ router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
                     b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
                     b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
                     b.discount_amount, b.voucher_code, b.created_at,
-                    u.name AS guest_name, u.email AS guest_email, u.phone AS guest_phone,
+                    COALESCE(u.name, b.guest_name) AS guest_name,
+                    COALESCE(u.email, b.guest_email) AS guest_email,
+                    COALESCE(u.phone, b.guest_phone) AS guest_phone,
+                    b.booking_source,
                     COALESCE(
                       (SELECT json_agg(COALESCE(pu.name, bp.guest_name) ORDER BY bp.id)
                          FROM booking_players bp
@@ -64164,7 +64173,7 @@ router14.get("/portal/bookings", requireClubAuth2, async (req, res) => {
                     b.refund_processed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
-             JOIN users u ON b.user_id = u.id
+             LEFT JOIN users u ON b.user_id = u.id
              WHERE pts.club_id = ?`;
   const params = [club.id];
   if (status) {
@@ -65818,6 +65827,134 @@ router14.post("/portal/invoices/:id/refresh-url", requireClubAuth2, async (req, 
   } catch (err) {
     res.status(502).json({ message: `Failed to create payment link: ${err.message}` });
   }
+});
+router14.get("/portal/users/search", requireClubAuth2, async (req, res) => {
+  const q = String(req.query.q ?? "").trim();
+  if (q.length < 2) {
+    res.json([]);
+    return;
+  }
+  const users = await query(
+    `SELECT id, name, email FROM users WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? ORDER BY name LIMIT 20`,
+    [`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`]
+  );
+  res.json(users);
+});
+router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone } = req.body ?? {};
+  if (!tee_time_id || !players || Number(players) < 1 || Number(players) > 4) {
+    res.status(400).json({ message: "tee_time_id and players (1-4) required" });
+    return;
+  }
+  if (!user_id && !guest_name) {
+    res.status(400).json({ message: "Either a TapIn user or guest name is required" });
+    return;
+  }
+  const tt = await row("SELECT id, total_slots, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
+  if (!tt) {
+    res.status(404).json({ message: "Tee time not found" });
+    return;
+  }
+  const available = (tt.total_slots ?? 4) - (tt.player_count ?? 0);
+  if (available < Number(players)) {
+    res.status(400).json({ message: `Only ${available} slot(s) available` });
+    return;
+  }
+  if (user_id) {
+    const u = await row("SELECT id FROM users WHERE id = ?", [Number(user_id)]);
+    if (!u) {
+      res.status(404).json({ message: "TapIn user not found" });
+      return;
+    }
+  }
+  const bookingRef = `CTR-${randomUUID2().slice(0, 8).toUpperCase()}`;
+  const result = await query(
+    `INSERT INTO bookings (user_id, portal_slot_id, players, total_amount, my_amount, club_amount, platform_fee,
+       booking_ref, payment_method, status, holes, booking_source, guest_name, guest_email, guest_phone)
+     VALUES (?, ?, ?, 0, 0, 0, 0, ?, 'counter', 'confirmed', 18, 'club_counter', ?, ?, ?)
+     RETURNING id`,
+    [
+      user_id ? Number(user_id) : null,
+      Number(tee_time_id),
+      Number(players),
+      bookingRef,
+      guest_name ?? null,
+      guest_email ?? null,
+      guest_phone ?? null
+    ]
+  );
+  const bookingId = result.rows[0].id;
+  await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [Number(players), Number(tee_time_id)]);
+  res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
+});
+router14.get("/portal/counter-bookings/summary", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const unbilled = await row(
+    `SELECT COUNT(*) AS cnt FROM bookings b
+     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL`,
+    [club.id]
+  );
+  const count = parseInt(unbilled?.cnt ?? "0");
+  res.json({ unbilled_count: count, unbilled_fee: Math.round(feePerBooking * count * 100) / 100, fee_per_booking: feePerBooking });
+});
+router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const unbilledBookings = await query(
+    `SELECT b.id, b.booking_ref, b.created_at, COALESCE(u.name, b.guest_name, 'Guest') AS guest_name,
+            pts.date, pts.tee_time AS time
+     FROM bookings b
+     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL
+     ORDER BY pts.date, pts.tee_time`,
+    [club.id]
+  );
+  if (unbilledBookings.length === 0) {
+    res.status(400).json({ message: "No unbilled counter bookings" });
+    return;
+  }
+  const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+  const feePerBooking = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const totalAmount = Math.round(feePerBooking * unbilledBookings.length * 100) / 100;
+  const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+  const invoiceRef = `CINV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
+  const description = `${unbilledBookings.length} counter booking${unbilledBookings.length !== 1 ? "s" : ""} @ R${feePerBooking.toFixed(2)}/booking \u2014 TapIn platform fee`;
+  const lineItems = unbilledBookings.map((b) => ({
+    booking_ref: b.booking_ref,
+    guest_name: b.guest_name,
+    date: String(b.date).slice(0, 10),
+    time: String(b.time).slice(0, 5),
+    amount: feePerBooking
+  }));
+  const invResult = await query(
+    `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, invoice_type, line_items)
+     VALUES (?, ?, ?, ?, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
+    [club.id, invoiceRef, description, unbilledBookings.length, feePerBooking, totalAmount, JSON.stringify(lineItems)]
+  );
+  const invoiceId = invResult.rows[0].id;
+  const ids = unbilledBookings.map((b) => b.id);
+  const placeholders = ids.map(() => "?").join(",");
+  await exec(`UPDATE bookings SET counter_invoice_id = ? WHERE id IN (${placeholders})`, [invoiceId, ...ids]);
+  const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+  let paymentUrl = null;
+  try {
+    const payment = await createStitchPayment({
+      amount: totalAmount,
+      payerName: club.name,
+      merchantReference: `invoice-${invoiceId}`,
+      redirectUrl: `${host}/api/portal/invoice-success`,
+      payerEmail: club.email ?? void 0
+    });
+    await exec("UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?", [payment.id, payment.url, invoiceId]);
+    paymentUrl = payment.url;
+  } catch (payErr) {
+    logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for counter invoice");
+  }
+  res.json({ id: invoiceId, ref: invoiceRef, count: unbilledBookings.length, fee_per_booking: feePerBooking, total_amount: totalAmount, payment_url: paymentUrl });
 });
 router14.get("/portal/invoice-success", async (_req, res) => {
   res.setHeader("Content-Type", "text/html");
@@ -68996,6 +69133,13 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS line_items JSONB NOT NULL DEFAULT '[]'::jsonb");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20) NOT NULL DEFAULT 'prepaid_rounds'");
+  await ddl("ALTER TABLE bookings ALTER COLUMN user_id DROP NOT NULL");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_phone VARCHAR(100)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_source VARCHAR(20) NOT NULL DEFAULT 'app'");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS counter_invoice_id INT REFERENCES club_invoices(id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (
       id         SERIAL PRIMARY KEY,

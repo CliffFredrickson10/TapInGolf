@@ -25,6 +25,7 @@ interface Summary {
 interface ClubRow {
   id: number; name: string; location: string; province: string;
   total_bookings: number; gross_revenue: number; platform_fees: number; club_earnings: number;
+  counter_bookings_total: number; counter_bookings_unbilled: number;
 }
 interface BookingRow {
   id: number; booking_ref: string; total_amount: number; platform_fee: number; club_amount: number;
@@ -489,9 +490,11 @@ export default function StaffRevenue() {
                 <thead>
                   <tr className="border-b text-left text-muted-foreground">
                     <th className="py-2 pr-4 font-medium">Club</th>
-                    <th className="py-2 px-4 font-medium text-right">Bookings</th>
+                    <th className="py-2 px-4 font-medium text-right">App Bookings</th>
                     <th className="py-2 px-4 font-medium text-right">Gross</th>
                     <th className="py-2 px-4 font-medium text-right">Platform Fees</th>
+                    <th className="py-2 px-4 font-medium text-right text-orange-700">Counter</th>
+                    <th className="py-2 px-4 font-medium text-right text-orange-700">Unbilled Fee</th>
                     <th className="py-2 pl-4 font-medium text-right">Club Earnings</th>
                     <th className="py-2 pl-2 w-8" />
                   </tr>
@@ -514,6 +517,12 @@ export default function StaffRevenue() {
                       <td className="py-2.5 px-4 text-right">{c.total_bookings}</td>
                       <td className="py-2.5 px-4 text-right">{rand(c.gross_revenue)}</td>
                       <td className="py-2.5 px-4 text-right text-[#1a5c38]">{rand(c.platform_fees)}</td>
+                      <td className="py-2.5 px-4 text-right">
+                        {c.counter_bookings_total > 0 ? <span className="font-medium">{c.counter_bookings_total}</span> : <span className="text-muted-foreground">—</span>}
+                      </td>
+                      <td className="py-2.5 px-4 text-right">
+                        {c.counter_bookings_unbilled > 0 ? <span className="font-semibold text-orange-700">{rand(c.counter_bookings_unbilled * 10)}</span> : <span className="text-muted-foreground">—</span>}
+                      </td>
                       <td className="py-2.5 pl-4 text-right">{rand(c.club_earnings)}</td>
                       <td className="py-2.5 pl-2 text-muted-foreground">
                         <ChevronRight className="h-4 w-4 group-hover:text-[#1a5c38] transition-colors" />

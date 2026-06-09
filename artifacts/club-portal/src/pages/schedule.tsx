@@ -14,6 +14,7 @@ import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
   CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X, TicketX,
   Zap, Play, Clock, ChevronDown, ChevronUp, AlertTriangle,
+  Search, UserPlus, Users,
 } from "lucide-react";
 import { format, addDays, parseISO, subDays } from "date-fns";
 
@@ -1166,6 +1167,203 @@ function DeleteTeeTimesDialog({
 
 // ─── Main Component ────────────────────────────────────────────────────────────
 
+// ─── Counter Booking Dialog ────────────────────────────────────────────────────
+
+function CounterBookingDialog({
+  open, onOpenChange, tee, onBooked,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  tee: TeeTime | null;
+  onBooked: () => void;
+}) {
+  const { toast } = useToast();
+  const [mode, setMode] = useState<"member" | "guest">("member");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<{ id: number; name: string; email: string } | null>(null);
+  const [guestName, setGuestName] = useState("");
+  const [guestEmail, setGuestEmail] = useState("");
+  const [guestPhone, setGuestPhone] = useState("");
+  const [players, setPlayers] = useState(1);
+  const [submitting, setSubmitting] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (!open) {
+      setMode("member"); setSearchQuery(""); setSearchResults([]); setSelectedUser(null);
+      setGuestName(""); setGuestEmail(""); setGuestPhone(""); setPlayers(1);
+    }
+  }, [open]);
+
+  useEffect(() => {
+    if (mode !== "member") return;
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (searchQuery.length < 2) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await api<Array<{ id: number; name: string; email: string }>>(
+          `/api/portal/users/search?q=${encodeURIComponent(searchQuery)}`
+        );
+        setSearchResults(r);
+      } catch { /* silent */ } finally { setSearching(false); }
+    }, 300);
+  }, [searchQuery, mode]);
+
+  const handleSubmit = async () => {
+    if (!tee) return;
+    if (mode === "member" && !selectedUser) { toast({ title: "Select a TapIn member first", variant: "destructive" }); return; }
+    if (mode === "guest" && !guestName.trim()) { toast({ title: "Guest name is required", variant: "destructive" }); return; }
+    setSubmitting(true);
+    try {
+      await api("/api/portal/counter-bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          tee_time_id: tee.id, players,
+          user_id:    mode === "member" ? selectedUser?.id : undefined,
+          guest_name:  mode === "guest"  ? guestName.trim()              : undefined,
+          guest_email: mode === "guest"  ? guestEmail.trim() || undefined : undefined,
+          guest_phone: mode === "guest"  ? guestPhone.trim() || undefined : undefined,
+        }),
+      });
+      toast({ title: "Booking added", description: `${tee.date} · ${String(tee.time).slice(0, 5)} · ${players} player${players > 1 ? "s" : ""}` });
+      onOpenChange(false);
+      onBooked();
+    } catch (e: any) {
+      toast({ title: "Booking failed", description: e.message, variant: "destructive" });
+    } finally { setSubmitting(false); }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[480px]">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <UserPlus className="h-4 w-4" />
+            Add Booking
+          </DialogTitle>
+          {tee && (
+            <DialogDescription>
+              {tee.date} · {String(tee.time).slice(0, 5)} — booking made by the club on behalf of a golfer
+            </DialogDescription>
+          )}
+        </DialogHeader>
+
+        <div className="space-y-4 pt-1">
+          {/* Mode toggle */}
+          <div className="flex rounded-lg border p-0.5 bg-muted/40">
+            {(["member", "guest"] as const).map(m => (
+              <button key={m}
+                className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors
+                  ${mode === m ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
+                onClick={() => { setMode(m); setSelectedUser(null); setSearchQuery(""); setSearchResults([]); }}
+              >
+                {m === "member" ? "TapIn Member" : "Guest"}
+              </button>
+            ))}
+          </div>
+
+          {/* TapIn member search */}
+          {mode === "member" && (
+            <div className="space-y-2">
+              {selectedUser ? (
+                <div className="flex items-center justify-between p-2.5 rounded-lg border bg-[#1a5c38]/5 border-[#1a5c38]/20">
+                  <div className="flex items-center gap-2">
+                    <Users className="h-4 w-4 text-[#1a5c38] flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium">{selectedUser.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{selectedUser.email}</p>
+                    </div>
+                  </div>
+                  <button className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded ml-2"
+                    onClick={() => setSelectedUser(null)}>Change</button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    className="pl-8 pr-8"
+                    placeholder="Search name or email…"
+                    value={searchQuery}
+                    onChange={e => setSearchQuery(e.target.value)}
+                    autoFocus
+                  />
+                  {searching && <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-52 overflow-y-auto">
+                      {searchResults.map(u => (
+                        <button key={u.id}
+                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
+                          onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery(""); }}>
+                          <Users className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium">{u.name}</p>
+                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+                    <p className="mt-1.5 text-xs text-muted-foreground px-0.5">
+                      No TapIn members found — switch to <button className="underline" onClick={() => setMode("guest")}>Guest</button>.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Guest details */}
+          {mode === "guest" && (
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs">Guest Name *</Label>
+                <Input className="mt-1" placeholder="Full name" value={guestName} onChange={e => setGuestName(e.target.value)} autoFocus />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label className="text-xs">Email</Label>
+                  <Input className="mt-1" type="email" placeholder="Optional" value={guestEmail} onChange={e => setGuestEmail(e.target.value)} />
+                </div>
+                <div>
+                  <Label className="text-xs">Phone</Label>
+                  <Input className="mt-1" placeholder="Optional" value={guestPhone} onChange={e => setGuestPhone(e.target.value)} />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Players */}
+          <div>
+            <Label className="text-xs mb-1.5 block">Number of Players</Label>
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map(n => (
+                <button key={n}
+                  className={`flex-1 py-2 rounded-md border text-sm font-semibold transition-colors
+                    ${players === n ? "bg-[#1a5c38] text-white border-[#1a5c38]" : "bg-white text-foreground hover:bg-muted/50"}`}
+                  onClick={() => setPlayers(n)}>
+                  {n}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" className="flex-1" onClick={() => onOpenChange(false)} disabled={submitting}>Cancel</Button>
+            <Button className="flex-1 bg-[#1a5c38] hover:bg-[#164d2f] text-white" onClick={handleSubmit} disabled={submitting}>
+              {submitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              {submitting ? "Booking…" : "Confirm Booking"}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export default function Schedule() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
@@ -1211,6 +1409,10 @@ export default function Schedule() {
   const [ruleSavedConfigs, setRuleSavedConfigs] = useState<Array<{ id: number; name: string; config_type: string; config_data: any }>>([]);
   const [ruleConfirm, setRuleConfirm] = useState<{ type: "delete" | "toggle_off"; rule: AutoRule } | null>(null);
   const [ruleConfirmBusy, setRuleConfirmBusy] = useState(false);
+
+  // Counter (walk-in) booking dialog state
+  const [counterOpen, setCounterOpen] = useState(false);
+  const [counterTee, setCounterTee] = useState<TeeTime | null>(null);
 
   // ── Auto-rule handlers ─────────────────────────────────────────────────────
 
@@ -1785,13 +1987,13 @@ export default function Schedule() {
                       onClick={() => {
                         if (isTournament) return;
                         if (slot.kind === "booked" && slot.playerIndex === 0) { setSelBooking(slot.booking); setBookingOpen(true); }
-                        else if (slot.kind === "open") handleBlockSlot(tt, i);
+                        else if (slot.kind === "open") { setCounterTee(tt); setCounterOpen(true); }
                         else if (slot.kind === "blocked") handleBlockSlot(tt, i);
                       }}
                       title={
                         isTournament ? undefined :
                         slot.kind === "booked" ? `Manage: ${slot.booking.booking_ref}` :
-                        slot.kind === "open" ? "Click to block this slot" :
+                        slot.kind === "open" ? "Add booking for this slot" :
                         slot.kind === "blocked" ? "Click to unblock this slot" :
                         undefined
                       }
@@ -1802,7 +2004,7 @@ export default function Schedule() {
                             ? <span className="text-amber-300 italic text-[11px]">Open</span>
                             : tt.promotional_price
                               ? <span className="text-gray-500">R{tt.promotional_price}</span>
-                              : <span className="text-gray-300 italic text-[11px]">Click to block slot</span>}
+                              : <span className="text-[#1a5c38]/60 italic text-[11px]">+ Add booking</span>}
                         </span>
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
@@ -2110,6 +2312,14 @@ export default function Schedule() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ── Counter (walk-in) booking dialog ─────────────────────────────────── */}
+      <CounterBookingDialog
+        open={counterOpen}
+        onOpenChange={setCounterOpen}
+        tee={counterTee}
+        onBooked={load}
+      />
     </div>
   );
 }

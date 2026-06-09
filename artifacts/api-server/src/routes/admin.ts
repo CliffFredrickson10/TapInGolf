@@ -202,10 +202,14 @@ router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
        COUNT(DISTINCT b.id) as total_bookings,
        COALESCE(SUM(b.total_amount), 0) as gross_revenue,
        COALESCE(SUM(b.platform_fee), 0) as platform_fees,
-       COALESCE(SUM(b.club_amount), 0) as club_earnings
+       COALESCE(SUM(b.club_amount), 0) as club_earnings,
+       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+        WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled') AS counter_bookings_total,
+       (SELECT COUNT(*) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
+        WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled' AND cb.counter_invoice_id IS NULL) AS counter_bookings_unbilled
      FROM clubs c
      LEFT JOIN portal_tee_slots pts ON pts.club_id = c.id
-     LEFT JOIN bookings b ON b.portal_slot_id = pts.id AND b.status IN ('confirmed','completed')
+     LEFT JOIN bookings b ON b.portal_slot_id = pts.id AND b.status IN ('confirmed','completed') AND b.booking_source = 'app'
      WHERE 1=1 ${scope.where.replace("AND c.id", "AND c.id")}
      GROUP BY c.id, c.name, c.location, c.province
      ORDER BY club_earnings DESC`,
@@ -215,10 +219,12 @@ router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
   res.json({
     clubs: clubs.map((c: any) => ({
       ...c,
-      total_bookings: parseInt(c.total_bookings ?? 0),
-      gross_revenue:  parseFloat(c.gross_revenue ?? 0),
-      platform_fees:  parseFloat(c.platform_fees ?? 0),
-      club_earnings:  parseFloat(c.club_earnings ?? 0),
+      total_bookings:             parseInt(c.total_bookings ?? 0),
+      gross_revenue:              parseFloat(c.gross_revenue ?? 0),
+      platform_fees:              parseFloat(c.platform_fees ?? 0),
+      club_earnings:              parseFloat(c.club_earnings ?? 0),
+      counter_bookings_total:     parseInt(c.counter_bookings_total ?? 0),
+      counter_bookings_unbilled:  parseInt(c.counter_bookings_unbilled ?? 0),
     })),
   });
 });

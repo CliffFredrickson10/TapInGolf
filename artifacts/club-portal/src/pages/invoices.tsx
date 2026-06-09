@@ -8,9 +8,15 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
-  ChevronDown, ChevronUp, User,
+  ChevronDown, ChevronUp, User, ConciergeBell, AlertCircle,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
+
+interface CounterSummary {
+  unbilled_count: number;
+  unbilled_fee: number;
+  fee_per_booking: number;
+}
 
 interface LineItem {
   email: string;
@@ -116,16 +122,35 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState<ClubInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
+  const [counterSummary, setCounterSummary] = useState<CounterSummary | null>(null);
+  const [generatingCounter, setGeneratingCounter] = useState(false);
 
   const load = () => {
     setLoading(true);
-    api<{ invoices: ClubInvoice[] }>("/api/portal/invoices")
-      .then(d => setInvoices(d.invoices))
+    Promise.all([
+      api<{ invoices: ClubInvoice[] }>("/api/portal/invoices"),
+      api<CounterSummary>("/api/portal/counter-bookings/summary"),
+    ])
+      .then(([d, cs]) => { setInvoices(d.invoices); setCounterSummary(cs); })
       .catch(() => toast({ title: "Failed to load invoices", variant: "destructive" }))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { if (club) load(); }, [club]);
+
+  const generateCounterInvoice = async () => {
+    setGeneratingCounter(true);
+    try {
+      const data = await api<{ payment_url: string | null; count: number; total_amount: number }>(
+        "/api/portal/invoices/counter-monthly", { method: "POST" }
+      );
+      toast({ title: "Invoice generated", description: `${data.count} counter booking${data.count !== 1 ? "s" : ""} — ${fmtRand(data.total_amount)}` });
+      load();
+      if (data.payment_url) window.open(data.payment_url, "_blank", "noopener,noreferrer");
+    } catch (e: any) {
+      toast({ title: "Failed to generate invoice", description: e.message, variant: "destructive" });
+    } finally { setGeneratingCounter(false); }
+  };
 
   const refreshUrl = async (inv: ClubInvoice) => {
     setRefreshingId(inv.id);
@@ -165,6 +190,38 @@ export default function Invoices() {
           Refresh
         </Button>
       </div>
+
+      {/* Counter Bookings pending charges */}
+      {!loading && counterSummary && counterSummary.unbilled_count > 0 && (
+        <Card className="border-orange-200 bg-orange-50/40">
+          <CardContent className="p-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <ConciergeBell className="h-4 w-4 text-orange-600" />
+                  <span className="font-semibold text-orange-800">Counter Bookings — Pending Charges</span>
+                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{counterSummary.unbilled_count} unbilled</Badge>
+                </div>
+                <p className="text-sm text-orange-700">
+                  {counterSummary.unbilled_count} walk-in booking{counterSummary.unbilled_count !== 1 ? "s" : ""} at R{counterSummary.fee_per_booking.toFixed(2)}/booking = <strong>{fmtRand(counterSummary.unbilled_fee)}</strong> owed to TapIn Golf
+                </p>
+                <p className="text-xs text-orange-600/80 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  Counter booking fees are invoiced monthly. Generate your invoice below to pay via Stitch.
+                </p>
+              </div>
+              <Button
+                onClick={generateCounterInvoice}
+                disabled={generatingCounter}
+                className="bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
+              >
+                {generatingCounter ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
+                {generatingCounter ? "Generating…" : "Generate Invoice"}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Outstanding invoices */}
       {loading ? (

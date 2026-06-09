@@ -772,21 +772,6 @@ export default function ProfileScreen() {
             </>
           )}
 
-          {[
-            { icon: "calendar-outline", label: "My Bookings", onPress: () => router.push("/(tabs)/bookings") },
-            { icon: "people-outline", label: "My Friends", onPress: () => router.push("/(tabs)/friends") },
-          ].map((item) => (
-            <TouchableOpacity
-              key={item.label}
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={item.onPress} activeOpacity={0.8}
-            >
-              <Ionicons name={item.icon as any} size={20} color={colors.primary} />
-              <Text style={[styles.menuText, { color: colors.foreground }]}>{item.label}</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          ))}
-
           {/* My Vouchers (cancellation + personal discount — auto-applied at checkout) */}
           <TouchableOpacity
             style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}

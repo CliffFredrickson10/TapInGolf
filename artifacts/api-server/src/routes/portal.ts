@@ -2254,23 +2254,34 @@ router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, re
   res.json({ id: bookingId, booking_ref: bookingRef, message: "Counter booking created" });
 });
 
-// Return unbilled counter booking slot count + fees owed for this club
+// Return unbilled counter booking slot count + fees owed for this club (includes per-booking line items)
 router.get("/portal/counter-bookings/summary", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
   const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
-  const unbilled = await row<any>(
-    `SELECT COALESCE(SUM(b.players), 0) AS total_slots, COUNT(*) AS total_bookings
+  const bookings = await query<any>(
+    `SELECT b.id, b.booking_ref, b.players, pts.date, pts.tee_time AS time,
+            COALESCE(u.name, b.guest_name, 'Walk-in') AS guest_name
      FROM bookings b
      JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
-     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL`,
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL
+     ORDER BY pts.date, pts.tee_time`,
     [club.id]
   );
-  const totalSlots = parseInt(unbilled?.total_slots ?? "0");
-  const totalBookings = parseInt(unbilled?.total_bookings ?? "0");
-  const totalIncVat = Math.round(feePerSlot * totalSlots * 100) / 100;
-  const vatAmount   = Math.round(totalIncVat * 15 / 115 * 100) / 100;
-  const exclVat     = Math.round((totalIncVat - vatAmount) * 100) / 100;
+  const totalSlots    = bookings.reduce((s: number, b: any) => s + Number(b.players ?? 1), 0);
+  const totalBookings = bookings.length;
+  const totalIncVat   = Math.round(feePerSlot * totalSlots * 100) / 100;
+  const vatAmount     = Math.round(totalIncVat * 15 / 115 * 100) / 100;
+  const exclVat       = Math.round((totalIncVat - vatAmount) * 100) / 100;
+  const lineItems = bookings.map((b: any) => ({
+    booking_ref: b.booking_ref,
+    guest_name:  b.guest_name,
+    date:        String(b.date).slice(0, 10),
+    time:        String(b.time).slice(0, 5),
+    players:     Number(b.players ?? 1),
+    amount:      Math.round(feePerSlot * Number(b.players ?? 1) * 100) / 100,
+  }));
   res.json({
     unbilled_count: totalSlots,
     unbilled_bookings: totalBookings,
@@ -2279,6 +2290,7 @@ router.get("/portal/counter-bookings/summary", requireClubAuth, async (req: Requ
     unbilled_total: totalIncVat,
     fee_per_booking: feePerSlot,
     vat_rate: 0.15,
+    line_items: lineItems,
   });
 });
 

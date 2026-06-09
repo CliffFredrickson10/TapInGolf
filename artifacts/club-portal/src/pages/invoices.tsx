@@ -13,6 +13,15 @@ import {
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
+interface CounterSummaryLineItem {
+  booking_ref: string;
+  guest_name: string;
+  date: string;
+  time: string;
+  players: number;
+  amount: number;
+}
+
 interface CounterSummary {
   unbilled_count: number;
   unbilled_bookings: number;
@@ -21,6 +30,7 @@ interface CounterSummary {
   unbilled_total: number;
   fee_per_booking: number;
   vat_rate: number;
+  line_items: CounterSummaryLineItem[];
 }
 
 interface LineItem {
@@ -436,6 +446,86 @@ function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshi
   );
 }
 
+// ── Unbilled summary card (expandable) ───────────────────────────────────────
+
+function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
+  const [open, setOpen] = useState(false);
+  const items = summary.line_items ?? [];
+  const vatAmt  = summary.unbilled_vat;
+  const exclVat = summary.unbilled_fee;
+
+  return (
+    <Card>
+      <CardContent className="p-5">
+        {/* Header row — always visible */}
+        <button
+          onClick={() => setOpen(v => !v)}
+          className="w-full flex items-start gap-3 text-left"
+        >
+          <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold">Unbilled walk-in bookings accumulating</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              {summary.unbilled_bookings} booking{summary.unbilled_bookings !== 1 ? "s" : ""} · {summary.unbilled_count} player slot{summary.unbilled_count !== 1 ? "s" : ""} · platform fee due: <strong className="text-foreground">{fmtRand(summary.unbilled_total)}</strong> (incl. VAT)
+            </p>
+            <p className="text-xs text-muted-foreground mt-1">An invoice will be automatically generated on the 1st of next month.</p>
+          </div>
+          <div className="flex-shrink-0 mt-0.5 text-muted-foreground">
+            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+          </div>
+        </button>
+
+        {/* Expandable breakdown */}
+        {open && items.length > 0 && (
+          <div className="mt-4 rounded-lg border overflow-hidden bg-white">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-muted/40 border-b">
+                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Booking</th>
+                  <th className="text-center px-3 py-2 font-medium text-muted-foreground">Players</th>
+                  <th className="text-right px-3 py-2 font-medium text-muted-foreground">Fee @ R{summary.fee_per_booking.toFixed(2)}/slot (incl. VAT)</th>
+                </tr>
+              </thead>
+              <tbody>
+                {items.map((li, i) => (
+                  <tr key={i} className={i < items.length - 1 ? "border-b" : ""}>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center gap-2">
+                        <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                        <div>
+                          <p className="font-medium text-foreground">{li.guest_name}</p>
+                          <p className="text-xs text-muted-foreground font-mono">{li.booking_ref}</p>
+                          <p className="text-xs text-muted-foreground">{li.date} · {li.time}</p>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-center text-muted-foreground">{li.players}</td>
+                    <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot>
+                <tr className="border-t bg-muted/20">
+                  <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">Excl. VAT</td>
+                  <td className="px-3 py-2 text-right text-sm">{fmtRand(exclVat)}</td>
+                </tr>
+                <tr>
+                  <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">VAT (15%)</td>
+                  <td className="px-3 py-2 text-right text-sm">{fmtRand(vatAmt)}</td>
+                </tr>
+                <tr className="border-t bg-muted/20 font-semibold">
+                  <td colSpan={2} className="px-3 py-2 text-right">Total (incl. VAT)</td>
+                  <td className="px-3 py-2 text-right">{fmtRand(summary.unbilled_total)}</td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function Invoices() {
@@ -503,20 +593,7 @@ export default function Invoices() {
 
       {/* Unbilled counter bookings summary */}
       {counterSummary && counterSummary.unbilled_bookings > 0 && (
-        <Card>
-          <CardContent className="p-5">
-            <div className="flex items-start gap-3">
-              <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="font-semibold">Unbilled walk-in bookings accumulating</p>
-                <p className="text-sm text-muted-foreground mt-0.5">
-                  {counterSummary.unbilled_bookings} booking{counterSummary.unbilled_bookings !== 1 ? "s" : ""} · {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""} · platform fee due: <strong className="text-foreground">{fmtRand(counterSummary.unbilled_total)}</strong> (incl. VAT)
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">An invoice will be automatically generated on the 1st of next month.</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+        <UnbilledSummaryCard summary={counterSummary} />
       )}
 
       {/* Tabbed invoice list */}

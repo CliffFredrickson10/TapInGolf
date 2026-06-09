@@ -23,8 +23,8 @@ interface ClubProfile {
   latitude: number | null; longitude: number | null;
   geofence_enabled: boolean; geofence_radius_m: number | null;
   stitch_enabled: boolean;
-  wallet_enabled: boolean;
   prepaid_enabled: boolean;
+  voucher_enabled: boolean;
   pay_at_club_enabled: boolean;
 }
 
@@ -651,7 +651,7 @@ export default function Profile() {
               <Label>TapIn Wallet</Label>
               <p className="text-xs text-muted-foreground">Golfers pay from their pre-loaded TapIn wallet balance</p>
             </div>
-            <Switch checked={!!profile.wallet_enabled} onCheckedChange={v => update("wallet_enabled", v)} />
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-2 py-1 rounded-full">Always on</span>
           </div>
           <div className="flex items-center justify-between">
             <div>
@@ -659,6 +659,13 @@ export default function Profile() {
               <p className="text-xs text-muted-foreground">Members can redeem their pre-purchased round packages</p>
             </div>
             <Switch checked={!!profile.prepaid_enabled} onCheckedChange={v => update("prepaid_enabled", v)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Vouchers</Label>
+              <p className="text-xs text-muted-foreground">Golfers can redeem discount or promotional voucher codes</p>
+            </div>
+            <Switch checked={!!profile.voucher_enabled} onCheckedChange={v => update("voucher_enabled", v)} />
           </div>
           <div className="flex items-center justify-between border-t pt-4">
             <div>

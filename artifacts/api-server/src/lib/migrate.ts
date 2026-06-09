@@ -772,6 +772,7 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stitch_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS wallet_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS prepaid_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS voucher_enabled SMALLINT NOT NULL DEFAULT 1");
   // club_inbox_notifications: system → club portal event feed (new bookings, cancellations, etc.)
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (

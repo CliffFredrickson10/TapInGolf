@@ -253,8 +253,9 @@ router.get("/portal/me", requireClubAuth, async (req: Request, res: Response): P
     geofence_enabled: !!club.geofence_enabled, geofence_radius_m: club.geofence_radius_m,
     pay_at_club_enabled: !!club.pay_at_club_enabled,
     stitch_enabled:  club.stitch_enabled  !== undefined ? !!club.stitch_enabled  : true,
-    wallet_enabled:  club.wallet_enabled  !== undefined ? !!club.wallet_enabled  : true,
+    wallet_enabled:  true, // TapIn Wallet is always available — cannot be disabled by clubs
     prepaid_enabled: club.prepaid_enabled !== undefined ? !!club.prepaid_enabled : true,
+    voucher_enabled: club.voucher_enabled !== undefined ? !!club.voucher_enabled : true,
   });
 });
 
@@ -263,7 +264,7 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
   const { name, location, province, image_url, logo_url, holes, price_from, facilities, website, description,
           phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude,
           geofence_enabled, geofence_radius_m, pay_at_club_enabled,
-          stitch_enabled, wallet_enabled, prepaid_enabled } = req.body ?? {};
+          stitch_enabled, prepaid_enabled, voucher_enabled } = req.body ?? {};
 
   await exec(
     `UPDATE clubs SET
@@ -275,8 +276,8 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
       geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m),
       pay_at_club_enabled = COALESCE(?, pay_at_club_enabled),
       stitch_enabled  = COALESCE(?, stitch_enabled),
-      wallet_enabled  = COALESCE(?, wallet_enabled),
-      prepaid_enabled = COALESCE(?, prepaid_enabled)
+      prepaid_enabled = COALESCE(?, prepaid_enabled),
+      voucher_enabled = COALESCE(?, voucher_enabled)
     WHERE id = ?`,
     [name ?? null, location ?? null, province ?? null,
      image_url ?? null, logo_url ?? null, holes ?? null, price_from ?? null,
@@ -287,11 +288,11 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
      geofence_enabled != null ? (geofence_enabled ? 1 : 0) : null, geofence_radius_m ?? null,
      pay_at_club_enabled != null ? (pay_at_club_enabled ? 1 : 0) : null,
      stitch_enabled  != null ? (stitch_enabled  ? 1 : 0) : null,
-     wallet_enabled  != null ? (wallet_enabled  ? 1 : 0) : null,
      prepaid_enabled != null ? (prepaid_enabled ? 1 : 0) : null,
+     voucher_enabled != null ? (voucher_enabled ? 1 : 0) : null,
      club.id]
   );
-  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, wallet_enabled, prepaid_enabled FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 

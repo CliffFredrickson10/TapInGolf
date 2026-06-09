@@ -435,18 +435,18 @@ router.post("/bookings", async (req, res): Promise<void> => {
   // ── Payment method availability check ────────────────────────────
   {
     const clubPm = await row<any>(
-      "SELECT stitch_enabled, wallet_enabled, prepaid_enabled, pay_at_club_enabled FROM clubs WHERE id = ?",
+      "SELECT stitch_enabled, prepaid_enabled, voucher_enabled, pay_at_club_enabled FROM clubs WHERE id = ?",
       [slot.club_id]
     );
     const stitchOk    = !clubPm || clubPm.stitch_enabled  == null || !!clubPm.stitch_enabled;
-    const walletOk    = !clubPm || clubPm.wallet_enabled  == null || !!clubPm.wallet_enabled;
     const prepaidOk   = !clubPm || clubPm.prepaid_enabled == null || !!clubPm.prepaid_enabled;
+    const voucherOk   = !clubPm || clubPm.voucher_enabled == null || !!clubPm.voucher_enabled;
     const payAtClubOk = clubPm && !!clubPm.pay_at_club_enabled;
 
     if (payment_method === "stitch"      && !stitchOk)    { res.status(400).json({ message: "Online card/EFT payment is not accepted by this club." }); return; }
-    if (payment_method === "wallet"      && !walletOk)    { res.status(400).json({ message: "Wallet payment is not accepted by this club." }); return; }
     if (payment_method === "prepaid"     && !prepaidOk)   { res.status(400).json({ message: "Prepaid rounds are not accepted by this club." }); return; }
     if (payment_method === "pay_at_club" && !payAtClubOk) { res.status(400).json({ message: "This club does not accept pay-at-club bookings." }); return; }
+    if (voucher_code && !voucherOk)                       { res.status(400).json({ message: "Voucher codes are not accepted by this club." }); return; }
   }
   // ─────────────────────────────────────────────────────────────────
 

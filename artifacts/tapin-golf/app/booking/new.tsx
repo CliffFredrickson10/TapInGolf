@@ -85,8 +85,8 @@ export default function NewBookingScreen() {
     cart_compulsory?: string;
     cart_price?: string;
     stitch_enabled?: string;
-    wallet_enabled?: string;
     prepaid_enabled?: string;
+    voucher_enabled?: string;
     pay_at_club_enabled?: string;
     event_id?: string;
     event_name?: string;
@@ -164,10 +164,9 @@ export default function NewBookingScreen() {
   // Default to the first enabled payment method for this club
   const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
     params.stitch_enabled  !== "0" ? "stitch"      :
-    params.wallet_enabled  !== "0" ? "wallet"      :
     params.prepaid_enabled !== "0" ? "prepaid"     :
     params.pay_at_club_enabled === "1" ? "pay_at_club" :
-    "stitch" // ultimate fallback
+    "wallet" // ultimate fallback (wallet is always on)
   );
   const [prepaidBalance, setPrepaidBalance] = useState<{ total: number; used: number; remaining: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -214,8 +213,8 @@ export default function NewBookingScreen() {
   }, [isMember, isJunior, isStudent, isPensioner, hnaVerified]);
 
   const stitchEnabled    = params.stitch_enabled  !== "0";  // default true
-  const walletEnabled    = params.wallet_enabled  !== "0";  // default true
   const prepaidEnabled   = params.prepaid_enabled !== "0";  // default true
+  const voucherEnabled   = params.voucher_enabled !== "0";  // default true
   const payAtClubEnabled = params.pay_at_club_enabled === "1";
   const [platformFee, setPlatformFee] = useState<number>(10);
 
@@ -792,8 +791,8 @@ export default function NewBookingScreen() {
             </View>
           )}
 
-          {/* Wallet option — shown only when club has enabled it and balance is loaded */}
-          {walletEnabled && walletBalance !== null && (
+          {/* Wallet option — always available; shown once balance is loaded */}
+          {walletBalance !== null && (
             <TouchableOpacity
               style={[
                 styles.paymentOption,
@@ -817,7 +816,7 @@ export default function NewBookingScreen() {
           )}
 
           {/* Insufficient wallet balance notice */}
-          {walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
+          {paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
             <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fef3cd", borderRadius: 8, padding: 8 }}>
               <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
@@ -957,53 +956,57 @@ export default function NewBookingScreen() {
             </View>
           ) : null}
 
-          {/* Voucher */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Voucher Code</Text>
-          {appliedVoucher ? (
-            <View style={[styles.voucherApplied, { backgroundColor: "#e8f5e9", borderColor: "#4caf50" }]}>
-              <Ionicons name="checkmark-circle" size={20} color="#4caf50" />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.voucherAppliedCode, { color: "#2e7d32" }]}>{appliedVoucher.code}</Text>
-                <Text style={[styles.voucherAppliedSub, { color: "#388e3c" }]}>
-                  {appliedVoucher.discount_type === "percentage"
-                    ? `${appliedVoucher.discount_value}% off`
-                    : `R${appliedVoucher.discount_value.toFixed(2)} off`}
-                  {" · "}saving R{appliedVoucher.discount_amount.toFixed(2)}
-                </Text>
-              </View>
-              <TouchableOpacity onPress={removeVoucher}>
-                <Ionicons name="close-circle" size={20} color="#e53935" />
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <View style={styles.voucherRow}>
-              <TextInput
-                style={[styles.voucherInput, { backgroundColor: colors.card, borderColor: voucherError ? "#e53935" : colors.border, color: colors.foreground }]}
-                placeholder="Enter voucher code"
-                placeholderTextColor={colors.mutedForeground}
-                value={voucherInput}
-                onChangeText={(t) => { setVoucherInput(t.toUpperCase()); setVoucherError(null); }}
-                autoCapitalize="characters"
-                autoCorrect={false}
-                returnKeyType="done"
-                onSubmitEditing={validateVoucher}
-              />
-              <TouchableOpacity
-                style={[styles.voucherBtn, { backgroundColor: voucherInput.trim() ? colors.primary : colors.muted }]}
-                onPress={validateVoucher}
-                disabled={!voucherInput.trim() || voucherLoading}
-              >
-                {voucherLoading
-                  ? <ActivityIndicator size="small" color="#fff" />
-                  : <Text style={styles.voucherBtnText}>Apply</Text>}
-              </TouchableOpacity>
-            </View>
-          )}
-          {voucherError && (
-            <View style={[styles.errorRow, { backgroundColor: "#ffebee", borderColor: "#e53935" }]}>
-              <Ionicons name="alert-circle-outline" size={16} color="#e53935" />
-              <Text style={[styles.errorText, { color: "#e53935" }]}>{voucherError}</Text>
-            </View>
+          {/* Voucher — shown only when club has enabled voucher codes */}
+          {voucherEnabled && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Voucher Code</Text>
+              {appliedVoucher ? (
+                <View style={[styles.voucherApplied, { backgroundColor: "#e8f5e9", borderColor: "#4caf50" }]}>
+                  <Ionicons name="checkmark-circle" size={20} color="#4caf50" />
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.voucherAppliedCode, { color: "#2e7d32" }]}>{appliedVoucher.code}</Text>
+                    <Text style={[styles.voucherAppliedSub, { color: "#388e3c" }]}>
+                      {appliedVoucher.discount_type === "percentage"
+                        ? `${appliedVoucher.discount_value}% off`
+                        : `R${appliedVoucher.discount_value.toFixed(2)} off`}
+                      {" · "}saving R{appliedVoucher.discount_amount.toFixed(2)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity onPress={removeVoucher}>
+                    <Ionicons name="close-circle" size={20} color="#e53935" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <View style={styles.voucherRow}>
+                  <TextInput
+                    style={[styles.voucherInput, { backgroundColor: colors.card, borderColor: voucherError ? "#e53935" : colors.border, color: colors.foreground }]}
+                    placeholder="Enter voucher code"
+                    placeholderTextColor={colors.mutedForeground}
+                    value={voucherInput}
+                    onChangeText={(t) => { setVoucherInput(t.toUpperCase()); setVoucherError(null); }}
+                    autoCapitalize="characters"
+                    autoCorrect={false}
+                    returnKeyType="done"
+                    onSubmitEditing={validateVoucher}
+                  />
+                  <TouchableOpacity
+                    style={[styles.voucherBtn, { backgroundColor: voucherInput.trim() ? colors.primary : colors.muted }]}
+                    onPress={validateVoucher}
+                    disabled={!voucherInput.trim() || voucherLoading}
+                  >
+                    {voucherLoading
+                      ? <ActivityIndicator size="small" color="#fff" />
+                      : <Text style={styles.voucherBtnText}>Apply</Text>}
+                  </TouchableOpacity>
+                </View>
+              )}
+              {voucherError && (
+                <View style={[styles.errorRow, { backgroundColor: "#ffebee", borderColor: "#e53935" }]}>
+                  <Ionicons name="alert-circle-outline" size={16} color="#e53935" />
+                  <Text style={[styles.errorText, { color: "#e53935" }]}>{voucherError}</Text>
+                </View>
+              )}
+            </>
           )}
 
           {/* Total */}
@@ -1161,9 +1164,9 @@ export default function NewBookingScreen() {
 
           {/* Book button */}
           <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: (submitting || (walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)) ? colors.muted : colors.primary }]}
+            style={[styles.bookBtn, { backgroundColor: (submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)) ? colors.muted : colors.primary }]}
             onPress={() => { setBookError(null); handleBook(); }}
-            disabled={submitting || (walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)}
+            disabled={submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)}
             activeOpacity={0.85}
           >
             <Text style={styles.bookBtnText}>{submitting ? "Processing…" : "Confirm Booking"}</Text>

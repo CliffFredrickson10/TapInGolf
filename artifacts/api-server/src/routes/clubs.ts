@@ -141,8 +141,9 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.cart_price          = c.cart_price ? parseFloat(c.cart_price) : null;
       c.pay_at_club_enabled = !!c.pay_at_club_enabled;
       c.stitch_enabled      = c.stitch_enabled  !== undefined ? !!c.stitch_enabled  : true;
-      c.wallet_enabled      = c.wallet_enabled  !== undefined ? !!c.wallet_enabled  : true;
+      c.wallet_enabled      = true; // TapIn Wallet is always available
       c.prepaid_enabled     = c.prepaid_enabled !== undefined ? !!c.prepaid_enabled : true;
+      c.voucher_enabled     = c.voucher_enabled !== undefined ? !!c.voucher_enabled : true;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
     });
     return clubs;

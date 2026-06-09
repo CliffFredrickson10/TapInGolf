@@ -4,6 +4,7 @@ import { router, usePathname } from "expo-router";
 import React, { useEffect, useState } from "react";
 import { Platform, StyleSheet, Text, TouchableOpacity, View } from "react-native";
 import { initialWindowMetrics, useSafeAreaInsets } from "react-native-safe-area-context";
+import { MenuDrawer } from "@/components/MenuDrawer";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 
@@ -14,6 +15,7 @@ const BTN_BG = "rgba(255,255,255,0.15)";
 export function AppHeader() {
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
+  const [menuOpen, setMenuOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
   const pathname = usePathname();
 
@@ -72,8 +74,19 @@ export function AppHeader() {
               <Text style={styles.signInText}>Sign In</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity
+            onPress={() => { Haptics.selectionAsync(); setMenuOpen(true); }}
+            style={styles.iconBtn}
+            activeOpacity={0.75}
+          >
+            <View style={styles.stripe} />
+            <View style={styles.stripe} />
+            <View style={styles.stripe} />
+          </TouchableOpacity>
         </View>
       </View>
+
+      <MenuDrawer visible={menuOpen} onClose={() => setMenuOpen(false)} />
     </>
   );
 }
@@ -106,6 +119,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: 5,
   },
+  stripe: { width: 16, height: 2, borderRadius: 1, backgroundColor: WHITE },
 
   signInBtn: {
     height: 34,

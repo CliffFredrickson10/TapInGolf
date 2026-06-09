@@ -3268,7 +3268,7 @@ router.post("/portal/bans/:id/respond", requireClubAuth, async (req: Request, re
 
 // ── Staff: guest leads (non-member players captured via counter bookings) ──────
 router.get("/staff/guest-leads", async (req: Request, res: Response): Promise<void> => {
-  const user = getUser(req);
+  const user = await getUser(req);
   if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
 
   const { q = "", page = "1", limit = "50" } = req.query as Record<string, string>;

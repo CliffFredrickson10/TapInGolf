@@ -66983,7 +66983,7 @@ router14.post("/portal/bans/:id/respond", requireClubAuth2, async (req, res) => 
   res.json({ success: true });
 });
 router14.get("/staff/guest-leads", async (req, res) => {
-  const user = getUser(req);
+  const user = await getUser(req);
   if (!isStaff(user)) {
     res.status(403).json({ message: "Forbidden" });
     return;

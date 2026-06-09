@@ -14,8 +14,12 @@ import { format, parseISO } from "date-fns";
 
 interface CounterSummary {
   unbilled_count: number;
+  unbilled_bookings: number;
   unbilled_fee: number;
+  unbilled_vat: number;
+  unbilled_total: number;
   fee_per_booking: number;
+  vat_rate: number;
 }
 
 interface LineItem {
@@ -32,7 +36,10 @@ interface ClubInvoice {
   description: string;
   total_rounds: number;
   platform_fee_rate: number;
+  vat_rate: number;
+  vat_amount: number;
   total_amount: number;
+  invoice_type: "prepaid_rounds" | "counter_bookings";
   status: "unpaid" | "paid" | "cancelled";
   stitch_payment_url: string | null;
   paid_at: string | null;
@@ -96,15 +103,36 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
               ))}
             </tbody>
             <tfoot>
-              <tr className="border-t bg-muted/20">
-                <td colSpan={2} className="px-3 py-2 font-semibold text-foreground hidden sm:table-cell">Total</td>
-                <td className="px-3 py-2 text-center font-bold">{inv.total_rounds}</td>
-                <td className="px-3 py-2 text-right font-bold text-[#1a5c38]">{fmtRand(inv.total_amount)}</td>
-              </tr>
+              {(() => {
+                const subtotal = items.reduce((s, li) => s + li.amount, 0);
+                const vatAmt   = Number(inv.vat_amount) || Math.round(subtotal * (Number(inv.vat_rate) || 0.15) * 100) / 100;
+                return (
+                  <>
+                    <tr className="border-t bg-muted/20">
+                      <td colSpan={2} className="px-3 py-2 text-muted-foreground text-sm hidden sm:table-cell">Subtotal</td>
+                      <td className="px-3 py-2 text-center text-muted-foreground text-sm">{inv.total_rounds}</td>
+                      <td className="px-3 py-2 text-right text-muted-foreground text-sm">{fmtRand(subtotal)}</td>
+                    </tr>
+                    <tr className="bg-muted/20">
+                      <td colSpan={2} className="px-3 py-1.5 text-muted-foreground text-xs hidden sm:table-cell">
+                        VAT ({Math.round((Number(inv.vat_rate) || 0.15) * 100)}%)
+                      </td>
+                      <td colSpan={2} className="px-3 py-1.5 text-right text-muted-foreground text-xs">{fmtRand(vatAmt)}</td>
+                    </tr>
+                    <tr className="bg-muted/10 border-t">
+                      <td colSpan={2} className="px-3 py-2 font-semibold text-foreground hidden sm:table-cell">Total (incl. VAT)</td>
+                      <td className="px-3 py-2 text-center font-bold sm:hidden">&nbsp;</td>
+                      <td className="px-3 py-2 text-right font-bold text-[#1a5c38]">{fmtRand(inv.total_amount)}</td>
+                    </tr>
+                  </>
+                );
+              })()}
             </tfoot>
           </table>
           <div className="px-3 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
-            Rate: R{Number(inv.platform_fee_rate).toFixed(2)} per prepaid round (TapIn platform fee)
+            {inv.invoice_type === "counter_bookings"
+              ? `Rate: R${Number(inv.platform_fee_rate).toFixed(2)} per player slot (TapIn platform fee, excl. VAT)`
+              : `Rate: R${Number(inv.platform_fee_rate).toFixed(2)} per prepaid round (TapIn platform fee, excl. VAT)`}
           </div>
         </div>
       )}
@@ -203,7 +231,11 @@ export default function Invoices() {
                   <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{counterSummary.unbilled_count} unbilled</Badge>
                 </div>
                 <p className="text-sm text-orange-700">
-                  {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""}{counterSummary.unbilled_bookings > 0 ? ` (${counterSummary.unbilled_bookings} booking${counterSummary.unbilled_bookings !== 1 ? "s" : ""})` : ""} at R{counterSummary.fee_per_booking.toFixed(2)}/slot = <strong>{fmtRand(counterSummary.unbilled_fee)}</strong> owed to TapIn Golf
+                  {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""}
+                  {counterSummary.unbilled_bookings > 0 ? ` (${counterSummary.unbilled_bookings} booking${counterSummary.unbilled_bookings !== 1 ? "s" : ""})` : ""}
+                  {" "}at R{counterSummary.fee_per_booking.toFixed(2)}/slot = <strong>{fmtRand(counterSummary.unbilled_fee)}</strong>
+                  {" + VAT "}({Math.round((counterSummary.vat_rate ?? 0.15) * 100)}%) {fmtRand(counterSummary.unbilled_vat)}
+                  {" = "}<strong>{fmtRand(counterSummary.unbilled_total)}</strong> incl. VAT
                 </p>
                 <p className="text-xs text-orange-600/80 flex items-center gap-1">
                   <AlertCircle className="h-3 w-3" />

@@ -805,6 +805,8 @@ async function createSchema(): Promise<void> {
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS line_items JSONB NOT NULL DEFAULT '[]'::jsonb");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20) NOT NULL DEFAULT 'prepaid_rounds'");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS vat_rate DECIMAL(5,4) NOT NULL DEFAULT 0.15");
   // Counter (walk-in) bookings created by the club on behalf of a user/guest
   await ddl("ALTER TABLE bookings ALTER COLUMN user_id DROP NOT NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");

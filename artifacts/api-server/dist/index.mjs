@@ -65673,17 +65673,20 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
     try {
       const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
       const feeRate = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
-      const totalAmount = Math.round(feeRate * invoicedRounds * 100) / 100;
+      const vatRate = 0.15;
+      const subtotal = Math.round(feeRate * invoicedRounds * 100) / 100;
+      const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
+      const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100;
       const stampedItems = lineItems.map((li) => ({ ...li, amount: Math.round(feeRate * li.rounds * 100) / 100 }));
       const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
       const invoiceRef = `INV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
-      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} across ${lineItems.length} member${lineItems.length !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round \u2014 TapIn platform fee`;
+      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} across ${lineItems.length} member${lineItems.length !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round \u2014 TapIn platform fee (incl. 15% VAT)`;
       const invResult = await query(
-        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, line_items)
-         VALUES (?, ?, ?, ?, ?, ?, ?::jsonb) RETURNING id`,
-        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount, JSON.stringify(stampedItems)]
+        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate, vat_amount, total_amount, line_items)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?::jsonb) RETURNING id`,
+        [club.id, invoiceRef, description, invoicedRounds, feeRate, vatRate, vatAmount, totalAmount, JSON.stringify(stampedItems)]
       );
-      const invoiceId = invResult.rows[0].id;
+      const invoiceId = invResult[0]?.id;
       const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
       const redirectUrl = `${host}/api/portal/invoice-success`;
       try {
@@ -65698,10 +65701,10 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
           "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
           [payment.id, payment.url, invoiceId]
         );
-        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: payment.url };
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, subtotal, vat_amount: vatAmount, amount: totalAmount, payment_url: payment.url };
       } catch (payErr) {
         logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for club invoice");
-        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: null };
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, subtotal, vat_amount: vatAmount, amount: totalAmount, payment_url: null };
       }
     } catch (invErr) {
       logger.error({ err: invErr }, "Failed to create club invoice after member import");
@@ -65778,8 +65781,9 @@ router14.post("/portal/members/bulk-renew", requireClubAuth2, async (req, res) =
 router14.get("/portal/invoices", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const invoices = await query(
-    `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount,
-            status, stitch_payment_url, paid_at, created_at, line_items
+    `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate,
+            vat_rate, vat_amount, total_amount,
+            status, stitch_payment_url, paid_at, created_at, line_items, invoice_type
      FROM club_invoices WHERE club_id = ? ORDER BY created_at DESC`,
     [club.id]
   );
@@ -65900,11 +65904,17 @@ router14.get("/portal/counter-bookings/summary", requireClubAuth2, async (req, r
   );
   const totalSlots = parseInt(unbilled?.total_slots ?? "0");
   const totalBookings = parseInt(unbilled?.total_bookings ?? "0");
+  const vatRate = 0.15;
+  const subtotal = Math.round(feePerSlot * totalSlots * 100) / 100;
+  const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
   res.json({
     unbilled_count: totalSlots,
     unbilled_bookings: totalBookings,
-    unbilled_fee: Math.round(feePerSlot * totalSlots * 100) / 100,
-    fee_per_booking: feePerSlot
+    unbilled_fee: subtotal,
+    unbilled_vat: vatAmount,
+    unbilled_total: Math.round((subtotal + vatAmount) * 100) / 100,
+    fee_per_booking: feePerSlot,
+    vat_rate: vatRate
   });
 });
 router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, res) => {
@@ -65926,11 +65936,14 @@ router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, 
   }
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
   const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const vatRate = 0.15;
   const totalSlots = unbilledBookings.reduce((s, b) => s + Number(b.players ?? 1), 0);
-  const totalAmount = Math.round(feePerSlot * totalSlots * 100) / 100;
+  const subtotal = Math.round(feePerSlot * totalSlots * 100) / 100;
+  const vatAmount = Math.round(subtotal * vatRate * 100) / 100;
+  const totalAmount = Math.round((subtotal + vatAmount) * 100) / 100;
   const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
   const invoiceRef = `CINV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
-  const description = `${totalSlots} player slot${totalSlots !== 1 ? "s" : ""} (${unbilledBookings.length} booking${unbilledBookings.length !== 1 ? "s" : ""}) @ R${feePerSlot.toFixed(2)}/slot \u2014 TapIn platform fee`;
+  const description = `${totalSlots} player slot${totalSlots !== 1 ? "s" : ""} (${unbilledBookings.length} booking${unbilledBookings.length !== 1 ? "s" : ""}) @ R${feePerSlot.toFixed(2)}/slot \u2014 TapIn platform fee (incl. 15% VAT)`;
   const lineItems = unbilledBookings.map((b) => ({
     booking_ref: b.booking_ref,
     guest_name: b.guest_name,
@@ -65940,9 +65953,9 @@ router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, 
     amount: Math.round(feePerSlot * Number(b.players ?? 1) * 100) / 100
   }));
   const invResult = await query(
-    `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount, invoice_type, line_items)
-     VALUES (?, ?, ?, ?, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
-    [club.id, invoiceRef, description, totalSlots, feePerSlot, totalAmount, JSON.stringify(lineItems)]
+    `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate, vat_amount, total_amount, invoice_type, line_items)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
+    [club.id, invoiceRef, description, totalSlots, feePerSlot, vatRate, vatAmount, totalAmount, JSON.stringify(lineItems)]
   );
   const invoiceId = invResult[0]?.id;
   const ids = unbilledBookings.map((b) => b.id);
@@ -69154,6 +69167,8 @@ async function createSchema() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS line_items JSONB NOT NULL DEFAULT '[]'::jsonb");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS invoice_type VARCHAR(20) NOT NULL DEFAULT 'prepaid_rounds'");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS vat_amount DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS vat_rate DECIMAL(5,4) NOT NULL DEFAULT 0.15");
   await ddl("ALTER TABLE bookings ALTER COLUMN user_id DROP NOT NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_name VARCHAR(255)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");

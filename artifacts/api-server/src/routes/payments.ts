@@ -14,60 +14,13 @@ async function ensureWallet(userId: number): Promise<number> {
   return parseFloat(wallet.balance);
 }
 
-// GET /payments/methods — wallet balance + saved cards
+// GET /payments/methods — wallet balance only (card saving is disabled)
 router.get("/payments/methods", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
 
   const balance = await ensureWallet(user.id);
-  const methods = await query<any>(
-    "SELECT id, type, label, card_last4, card_brand, card_expiry, is_default, created_at FROM payment_methods WHERE user_id = ? ORDER BY is_default DESC, created_at DESC",
-    [user.id]
-  );
-  res.json({ wallet: { balance }, methods });
-});
-
-// POST /payments/methods — add a card
-router.post("/payments/methods", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
-
-  const { label, card_last4, card_brand, card_expiry, set_default } = req.body ?? {};
-  if (!label || !card_last4 || !card_expiry) {
-    res.status(400).json({ message: "label, card_last4, and card_expiry are required" }); return;
-  }
-  if (String(card_last4).replace(/\D/g, "").length < 4) {
-    res.status(400).json({ message: "card_last4 must be 4 digits" }); return;
-  }
-
-  if (set_default) {
-    await exec("UPDATE payment_methods SET is_default = 0 WHERE user_id = ?", [user.id]);
-  }
-
-  const id = await exec(
-    "INSERT INTO payment_methods (user_id, type, label, card_last4, card_brand, card_expiry, is_default) VALUES (?, 'card', ?, ?, ?, ?, ?)",
-    [user.id, label, String(card_last4).replace(/\D/g, "").slice(-4), card_brand || null, card_expiry, set_default ? 1 : 0]
-  );
-  res.status(201).json({ id, success: true });
-});
-
-// DELETE /payments/methods/:id — remove a card
-router.delete("/payments/methods/:id", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
-
-  await exec("DELETE FROM payment_methods WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
-  res.json({ success: true });
-});
-
-// PUT /payments/methods/:id/default — set default card
-router.put("/payments/methods/:id/default", async (req, res): Promise<void> => {
-  const user = await getUser(req);
-  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
-
-  await exec("UPDATE payment_methods SET is_default = 0 WHERE user_id = ?", [user.id]);
-  await exec("UPDATE payment_methods SET is_default = 1 WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
-  res.json({ success: true });
+  res.json({ wallet: { balance }, methods: [] });
 });
 
 // POST /payments/wallet/topup-url — create a Stitch payment URL for wallet top-up

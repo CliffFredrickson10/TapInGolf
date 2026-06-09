@@ -19,16 +19,6 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 
-type PaymentMethod = {
-  id: number;
-  type: "card" | "payfast";
-  label: string;
-  card_last4: string;
-  card_brand: string;
-  card_expiry: string;
-  is_default: number;
-};
-
 type Transaction = {
   id: number;
   booking_ref: string;
@@ -68,14 +58,6 @@ function fmtAmount(amount: number) {
   return `R ${Number(amount).toFixed(2)}`;
 }
 
-function cardBrandIcon(brand: string) {
-  const b = (brand ?? "").toLowerCase();
-  if (b.includes("visa")) return "V";
-  if (b.includes("master")) return "MC";
-  if (b.includes("amex") || b.includes("american")) return "AE";
-  return "•";
-}
-
 const TOPUP_PRESETS = [50, 100, 200, 500];
 
 const STATUS_COLORS: Record<string, string> = {
@@ -101,7 +83,6 @@ export default function PaymentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
 
   const [walletBalance, setWalletBalance] = useState(0);
-  const [methods, setMethods] = useState<PaymentMethod[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [memberships, setMemberships] = useState<Membership[]>([]);
 
@@ -117,17 +98,6 @@ export default function PaymentsScreen() {
   const [voucherError, setVoucherError] = useState("");
   const [voucherSuccess, setVoucherSuccess] = useState("");
 
-  // Add card state
-  const [showAddCard, setShowAddCard] = useState(false);
-  const [cardNumber, setCardNumber] = useState("");
-  const [cardExpiry, setCardExpiry] = useState("");
-  const [cardLabel, setCardLabel] = useState("");
-  const [cardDefault, setCardDefault] = useState(false);
-  const [addingCard, setAddingCard] = useState(false);
-  const [cardError, setCardError] = useState("");
-
-  // Delete confirmation
-  const [deletingId, setDeletingId] = useState<number | null>(null);
   const [vatPct, setVatPct] = useState(15);
 
   const load = useCallback(async () => {
@@ -139,7 +109,6 @@ export default function PaymentsScreen() {
         apiFetch("/payments/memberships", user.token),
       ]);
       setWalletBalance(methodsData.wallet?.balance ?? 0);
-      setMethods(methodsData.methods ?? []);
       setTransactions(txData.transactions ?? []);
       setMemberships(memberData.memberships ?? []);
     } catch {}
@@ -202,66 +171,6 @@ export default function PaymentsScreen() {
     } finally {
       setToppingUp(false);
     }
-  };
-
-  const detectCardBrand = (num: string) => {
-    const n = num.replace(/\D/g, "");
-    if (n.startsWith("4")) return "Visa";
-    if (n.startsWith("5") || n.startsWith("2")) return "Mastercard";
-    if (n.startsWith("3")) return "Amex";
-    return "";
-  };
-
-  const handleAddCard = async () => {
-    if (!user) return;
-    const digits = cardNumber.replace(/\D/g, "");
-    if (digits.length < 4) { setCardError("Enter at least 4 card digits"); return; }
-    if (!cardExpiry.match(/^\d{2}\/\d{2}$/)) { setCardError("Expiry must be MM/YY"); return; }
-    const last4 = digits.slice(-4);
-    const brand = detectCardBrand(digits);
-    const label = cardLabel.trim() || `${brand || "Card"} •••• ${last4}`;
-    setAddingCard(true);
-    setCardError("");
-    try {
-      await apiFetch("/payments/methods", user.token, {
-        method: "POST",
-        body: JSON.stringify({ label, card_last4: last4, card_brand: brand, card_expiry: cardExpiry, set_default: cardDefault }),
-      });
-      setCardNumber(""); setCardExpiry(""); setCardLabel(""); setCardDefault(false);
-      setShowAddCard(false);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      await load();
-    } catch (err: any) {
-      setCardError(err.message ?? "Failed to add card");
-    } finally {
-      setAddingCard(false);
-    }
-  };
-
-  const handleDeleteCard = async (id: number) => {
-    if (!user) return;
-    setDeletingId(id);
-    try {
-      await apiFetch(`/payments/methods/${id}`, user.token, { method: "DELETE" });
-      setMethods((prev) => prev.filter((m) => m.id !== id));
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    } catch {}
-    setDeletingId(null);
-  };
-
-  const handleSetDefault = async (id: number) => {
-    if (!user) return;
-    try {
-      await apiFetch(`/payments/methods/${id}/default`, user.token, { method: "PUT" });
-      setMethods((prev) => prev.map((m) => ({ ...m, is_default: m.id === id ? 1 : 0 })));
-      Haptics.selectionAsync();
-    } catch {}
-  };
-
-  const handleCardExpiryChange = (text: string) => {
-    const digits = text.replace(/\D/g, "").slice(0, 4);
-    if (digits.length > 2) setCardExpiry(digits.slice(0, 2) + "/" + digits.slice(2));
-    else setCardExpiry(digits);
   };
 
   if (!user) {
@@ -431,114 +340,6 @@ export default function PaymentsScreen() {
                 </View>
               )}
 
-              {/* Saved cards */}
-              {methods.length > 0 && (
-                <View style={{ marginTop: 12, gap: 8 }}>
-                  <Text style={[styles.listLabel, { color: colors.mutedForeground }]}>Saved Cards</Text>
-                  {methods.map((m) => (
-                    <View key={m.id} style={[styles.cardItem, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                      <View style={[styles.cardBrandBadge, { backgroundColor: colors.primary + "18" }]}>
-                        <Text style={[styles.cardBrandText, { color: colors.primary }]}>{cardBrandIcon(m.card_brand)}</Text>
-                      </View>
-                      <View style={{ flex: 1 }}>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                          <Text style={[styles.cardLabel, { color: colors.foreground }]}>{m.label}</Text>
-                          {m.is_default === 1 && (
-                            <View style={[styles.defaultBadge, { backgroundColor: colors.primary + "22" }]}>
-                              <Text style={[styles.defaultText, { color: colors.primary }]}>Default</Text>
-                            </View>
-                          )}
-                        </View>
-                        <Text style={[styles.cardSub, { color: colors.mutedForeground }]}>
-                          Expires {m.card_expiry}
-                        </Text>
-                      </View>
-                      <View style={{ flexDirection: "row", gap: 8 }}>
-                        {m.is_default !== 1 && (
-                          <TouchableOpacity onPress={() => handleSetDefault(m.id)} style={styles.iconBtn}>
-                            <Ionicons name="star-outline" size={18} color={colors.accent} />
-                          </TouchableOpacity>
-                        )}
-                        {deletingId === m.id ? (
-                          <ActivityIndicator size="small" color={colors.destructive} />
-                        ) : (
-                          <TouchableOpacity onPress={() => handleDeleteCard(m.id)} style={styles.iconBtn}>
-                            <Ionicons name="trash-outline" size={18} color={colors.destructive} />
-                          </TouchableOpacity>
-                        )}
-                      </View>
-                    </View>
-                  ))}
-                </View>
-              )}
-
-              {/* Add card button */}
-              <TouchableOpacity
-                style={[styles.addCardBtn, { borderColor: showAddCard ? colors.primary : colors.border, backgroundColor: colors.card, marginTop: 12 }]}
-                onPress={() => { setShowAddCard(!showAddCard); setCardError(""); }}
-                activeOpacity={0.8}
-              >
-                <Ionicons name={showAddCard ? "close" : "add-circle-outline"} size={18} color={colors.primary} />
-                <Text style={[styles.addCardText, { color: colors.primary }]}>{showAddCard ? "Cancel" : "Add Card"}</Text>
-              </TouchableOpacity>
-
-              {/* Add card form */}
-              {showAddCard && (
-                <View style={[styles.subCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 0 }]}>
-                  <Text style={[styles.subCardTitle, { color: colors.foreground }]}>Card details</Text>
-
-                  <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Card Number</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
-                    value={cardNumber}
-                    onChangeText={(t) => setCardNumber(t.replace(/\D/g, "").slice(0, 16))}
-                    placeholder="•••• •••• •••• ••••"
-                    placeholderTextColor={colors.mutedForeground}
-                    keyboardType="number-pad"
-                    maxLength={16}
-                  />
-
-                  <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Expiry (MM/YY)</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
-                    value={cardExpiry}
-                    onChangeText={handleCardExpiryChange}
-                    placeholder="MM/YY"
-                    placeholderTextColor={colors.mutedForeground}
-                    keyboardType="number-pad"
-                    maxLength={5}
-                  />
-
-                  <Text style={[styles.inputLabel, { color: colors.mutedForeground }]}>Label (optional)</Text>
-                  <TextInput
-                    style={[styles.fieldInput, { borderColor: colors.border, color: colors.foreground, backgroundColor: colors.background }]}
-                    value={cardLabel}
-                    onChangeText={setCardLabel}
-                    placeholder="e.g. My Visa"
-                    placeholderTextColor={colors.mutedForeground}
-                  />
-
-                  <TouchableOpacity
-                    style={{ flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 }}
-                    onPress={() => { setCardDefault(!cardDefault); Haptics.selectionAsync(); }}
-                    activeOpacity={0.7}
-                  >
-                    <View style={[styles.checkbox, { borderColor: cardDefault ? colors.primary : colors.border, backgroundColor: cardDefault ? colors.primary : "transparent" }]}>
-                      {cardDefault && <Ionicons name="checkmark" size={12} color="#fff" />}
-                    </View>
-                    <Text style={[styles.checkboxLabel, { color: colors.foreground }]}>Set as default payment method</Text>
-                  </TouchableOpacity>
-
-                  {cardError ? <Text style={[styles.errText, { color: colors.destructive }]}>{cardError}</Text> : null}
-
-                  <TouchableOpacity
-                    style={[styles.actionBtn, { backgroundColor: addingCard ? colors.muted : colors.primary, marginTop: 12 }]}
-                    onPress={handleAddCard} disabled={addingCard}
-                  >
-                    <Text style={styles.actionBtnText}>{addingCard ? "Saving…" : "Save Card"}</Text>
-                  </TouchableOpacity>
-                </View>
-              )}
             </View>
 
             {/* ═══════════════ TRANSACTION HISTORY ═══════════════ */}

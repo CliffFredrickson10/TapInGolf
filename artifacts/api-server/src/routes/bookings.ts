@@ -726,17 +726,17 @@ router.post("/bookings", async (req, res): Promise<void> => {
         "SELECT * FROM vouchers WHERE code = ? AND active = 1",
         [codeUpper]
       );
+      const voucherRemaining = voucher
+        ? (voucher.value_remaining != null ? parseFloat(voucher.value_remaining) : parseFloat(voucher.discount_value))
+        : 0;
       const voucherValid =
         voucher &&
+        voucherRemaining > 0 &&
         (!voucher.expires_at || new Date(voucher.expires_at) > new Date()) &&
-        (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) &&
+        (voucher.user_id === null || voucher.user_id === user.id) &&
         (voucher.club_id === null || voucher.club_id === slot.club_id);
       if (voucherValid) {
-        if (voucher.discount_type === "percentage") {
-          discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
-        } else {
-          discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
-        }
+        discountAmount = Math.min(voucherRemaining, totalGreens);
         appliedVoucher = voucher.code;
       }
     }
@@ -856,7 +856,15 @@ router.post("/bookings", async (req, res): Promise<void> => {
           [discountAmount, discountAmount, appliedVoucher]
         );
       } else {
-        await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+        // Deduct the used portion from value_remaining; mark inactive when exhausted
+        await clientQuery(client,
+          `UPDATE vouchers
+             SET value_remaining = GREATEST(0, COALESCE(value_remaining, discount_value) - ?),
+                 uses_count      = uses_count + 1,
+                 active          = CASE WHEN GREATEST(0, COALESCE(value_remaining, discount_value) - ?) = 0 THEN 0 ELSE active END
+           WHERE code = ?`,
+          [discountAmount, discountAmount, appliedVoucher]
+        );
       }
     }
     // For prepaid: deduct one round from the member's balance

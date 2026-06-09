@@ -59784,13 +59784,10 @@ router4.post("/bookings", async (req, res) => {
         "SELECT * FROM vouchers WHERE code = ? AND active = 1",
         [codeUpper]
       );
-      const voucherValid = voucher && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.max_uses === null || voucher.uses_count < voucher.max_uses) && (voucher.club_id === null || voucher.club_id === slot.club_id);
+      const voucherRemaining = voucher ? voucher.value_remaining != null ? parseFloat(voucher.value_remaining) : parseFloat(voucher.discount_value) : 0;
+      const voucherValid = voucher && voucherRemaining > 0 && (!voucher.expires_at || new Date(voucher.expires_at) > /* @__PURE__ */ new Date()) && (voucher.user_id === null || voucher.user_id === user.id) && (voucher.club_id === null || voucher.club_id === slot.club_id);
       if (voucherValid) {
-        if (voucher.discount_type === "percentage") {
-          discountAmount = Math.round(totalGreens * parseFloat(voucher.discount_value) / 100 * 100) / 100;
-        } else {
-          discountAmount = Math.min(parseFloat(voucher.discount_value), totalGreens);
-        }
+        discountAmount = Math.min(voucherRemaining, totalGreens);
         appliedVoucher = voucher.code;
       }
     }
@@ -59898,7 +59895,15 @@ router4.post("/bookings", async (req, res) => {
           [discountAmount, discountAmount, appliedVoucher]
         );
       } else {
-        await clientQuery(client, "UPDATE vouchers SET uses_count = uses_count + 1 WHERE code = ?", [appliedVoucher]);
+        await clientQuery(
+          client,
+          `UPDATE vouchers
+             SET value_remaining = GREATEST(0, COALESCE(value_remaining, discount_value) - ?),
+                 uses_count      = uses_count + 1,
+                 active          = CASE WHEN GREATEST(0, COALESCE(value_remaining, discount_value) - ?) = 0 THEN 0 ELSE active END
+           WHERE code = ?`,
+          [discountAmount, discountAmount, appliedVoucher]
+        );
       }
     }
     if (payment_method === "prepaid") {
@@ -61233,32 +61238,28 @@ router8.get("/vouchers/available", async (req, res) => {
      WHERE active = 1
        AND user_id = ?
        AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)
+       AND (value_remaining IS NULL OR value_remaining > 0)
        AND (min_amount IS NULL OR CAST(min_amount AS DECIMAL(10,2)) = 0 OR ? >= CAST(min_amount AS DECIMAL(10,2)))
        ${club_id != null ? "AND (club_id = ? OR club_id IS NULL)" : ""}`,
     club_id != null ? [user.id, amount, club_id] : [user.id, amount]
   );
   for (const v of stdRows) {
     const discountValue = parseFloat(v.discount_value);
-    let discountAmount;
-    if (v.discount_type === "percentage") {
-      discountAmount = Math.round(amount * discountValue / 100 * 100) / 100;
-    } else {
-      discountAmount = Math.min(discountValue, amount);
-    }
-    const usesRemaining = v.max_uses != null ? Number(v.max_uses) - Number(v.uses_count) : null;
-    const remainingTag = usesRemaining != null ? ` \xB7 ${usesRemaining} use${usesRemaining === 1 ? "" : "s"} remaining` : "";
+    const valueRemaining = v.value_remaining != null ? parseFloat(v.value_remaining) : discountValue;
+    const discountAmount = Math.min(valueRemaining, amount);
+    const isPartiallyUsed = valueRemaining < discountValue;
+    const label = isPartiallyUsed ? `R${valueRemaining.toFixed(2)} remaining` : `R${discountValue.toFixed(2)} off`;
     results.push({
       code: v.code,
-      label: v.discount_type === "percentage" ? `${discountValue}% off` : `R${discountValue.toFixed(2)} off`,
-      sub: `Save R${discountAmount.toFixed(2)} on this booking${remainingTag}`,
-      discount_type: v.discount_type,
+      label,
+      sub: `R${valueRemaining.toFixed(2)} remaining (of R${discountValue.toFixed(2)})`,
+      discount_type: "fixed",
       discount_value: discountValue,
       discount_amount: discountAmount,
       final_amount: Math.max(0, amount - discountAmount),
       is_cancellation_voucher: false,
       expires_at: v.expires_at ?? null,
-      uses_remaining: usesRemaining
+      value_remaining: valueRemaining
     });
   }
   res.json({ vouchers: results });
@@ -61270,9 +61271,8 @@ router8.get("/vouchers/my-discount", async (req, res) => {
     return;
   }
   const vouchers = await query(
-    `SELECT v.id, v.code, v.discount_type, v.discount_value,
-            v.min_amount, v.max_uses, v.uses_count,
-            v.active, v.expires_at, v.created_at,
+    `SELECT v.id, v.code, v.discount_value, v.value_remaining,
+            v.min_amount, v.active, v.expires_at, v.created_at,
             c.name AS club_name
      FROM vouchers v
      LEFT JOIN clubs c ON c.id = v.club_id
@@ -66143,7 +66143,7 @@ router14.delete("/portal/members/:id", requireClubAuth2, async (req, res) => {
 router14.get("/portal/vouchers", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   res.json(await query(
-    `SELECT v.id, v.code, v.discount_type, v.discount_value, v.min_amount, v.max_uses, v.uses_count,
+    `SELECT v.id, v.code, v.discount_value, v.value_remaining, v.min_amount,
             v.active, v.expires_at, v.created_at, v.user_id,
             u.name AS user_name, u.email AS user_email
      FROM vouchers v
@@ -66155,9 +66155,9 @@ router14.get("/portal/vouchers", requireClubAuth2, async (req, res) => {
 });
 router14.post("/portal/vouchers", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { code, discount_type, discount_value, min_amount, max_uses, expires_at, user_id } = req.body ?? {};
-  if (!code || !discount_type || discount_value == null) {
-    res.status(400).json({ message: "code, discount_type and discount_value required" });
+  const { code, discount_value, min_amount, expires_at, user_id } = req.body ?? {};
+  if (!code || discount_value == null) {
+    res.status(400).json({ message: "code and discount_value required" });
     return;
   }
   const existing = await row("SELECT id FROM vouchers WHERE code = ?", [code]);
@@ -66166,19 +66166,19 @@ router14.post("/portal/vouchers", requireClubAuth2, async (req, res) => {
     return;
   }
   const resolvedUserId = user_id != null ? Number(user_id) : null;
+  const value = Number(discount_value);
   const result = await exec(
-    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
-    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null, resolvedUserId]
+    "INSERT INTO vouchers (code, discount_type, discount_value, value_remaining, club_id, min_amount, active, expires_at, user_id) VALUES (?, 'fixed', ?, ?, ?, ?, 1, ?, ?)",
+    [code.toUpperCase(), value, value, club.id, min_amount ?? null, expires_at ?? null, resolvedUserId]
   );
   const newVoucher = await row(
     `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
     [result.insertId]
   );
   if (resolvedUserId != null) {
-    const discountLabel = discount_type === "percentage" ? `${Number(discount_value)}% off` : `R${Number(discount_value).toFixed(2)} off`;
     const notifTitle = `\u{1F39F}\uFE0F New voucher from ${club.name}`;
-    const notifBody = `You've been gifted a discount voucher: ${code.toUpperCase()} \u2014 ${discountLabel}. Use it on your next booking!`;
-    const notifData = { type: "voucher_issued", voucher_id: result.insertId, code: code.toUpperCase(), discount_type, discount_value: Number(discount_value) };
+    const notifBody = `You've been gifted a R${value.toFixed(2)} discount voucher: ${code.toUpperCase()}. It will be applied automatically at checkout!`;
+    const notifData = { type: "voucher_issued", voucher_id: result.insertId, code: code.toUpperCase(), discount_value: value };
     await exec(
       "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
       [resolvedUserId, "voucher_issued", notifTitle, notifBody, JSON.stringify(notifData)]
@@ -66199,16 +66199,13 @@ router14.put("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
     res.status(404).json({ message: "Voucher not found" });
     return;
   }
-  const { discount_value, min_amount, max_uses, active, expires_at, user_id } = req.body ?? {};
+  const { active, expires_at, user_id } = req.body ?? {};
   const resolvedUserId = "user_id" in (req.body ?? {}) ? user_id != null ? Number(user_id) : null : void 0;
   const sets = [
-    "discount_value = COALESCE(?, discount_value)",
-    "min_amount = ?",
-    "max_uses = ?",
     "active = COALESCE(?, active)",
     "expires_at = ?"
   ];
-  const vals = [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? active ? 1 : 0 : null, expires_at ?? null];
+  const vals = [active != null ? active ? 1 : 0 : null, expires_at ?? null];
   if (resolvedUserId !== void 0) {
     sets.push("user_id = ?");
     vals.push(resolvedUserId);
@@ -69874,6 +69871,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
   await ddl("ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE SET NULL");
   await ddl("CREATE INDEX IF NOT EXISTS idx_vouchers_user_id ON vouchers (user_id)");
+  await ddl("ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS value_remaining DECIMAL(10,2)");
+  await ddl("UPDATE vouchers SET value_remaining = discount_value WHERE value_remaining IS NULL AND discount_type = 'fixed'");
 }
 async function migrate() {
   await applyLateAlters();

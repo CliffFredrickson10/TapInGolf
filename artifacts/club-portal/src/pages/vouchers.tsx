@@ -21,8 +21,8 @@ import {
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DiscountVoucher {
-  id: number; code: string; discount_type: string; discount_value: number;
-  min_amount: number | null; max_uses: number | null; uses_count: number;
+  id: number; code: string; discount_value: number; value_remaining: number | null;
+  min_amount: number | null;
   active: boolean; expires_at: string | null; created_at: string;
   user_id: number | null; user_name: string | null; user_email: string | null;
 }
@@ -50,8 +50,8 @@ interface BatchVoucher {
 // ─── Discount Vouchers tab ────────────────────────────────────────────────────
 
 const EMPTY_FORM = {
-  code: "", discount_type: "percentage", discount_value: 10,
-  min_amount: "" as any, max_uses: "" as any, expires_at: "",
+  code: "", discount_value: "" as any,
+  min_amount: "" as any, expires_at: "",
   user_id: null as number | null,
   user_name: null as string | null,
   user_email: null as string | null,
@@ -114,8 +114,8 @@ function DiscountVouchersTab() {
   };
   const openEdit = (v: DiscountVoucher) => {
     setForm({
-      code: v.code, discount_type: v.discount_type, discount_value: v.discount_value,
-      min_amount: v.min_amount ?? "", max_uses: v.max_uses ?? "",
+      code: v.code, discount_value: v.discount_value,
+      min_amount: v.min_amount ?? "",
       expires_at: v.expires_at ? v.expires_at.split("T")[0] : "",
       user_id: v.user_id ?? null,
       user_name: v.user_name ?? null,
@@ -131,13 +131,11 @@ function DiscountVouchersTab() {
     setSaving(true);
     try {
       const body = {
-        code:          form.code,
-        discount_type: form.discount_type,
-        discount_value: form.discount_value,
-        min_amount:    form.min_amount  === "" ? null : Number(form.min_amount),
-        max_uses:      form.max_uses    === "" ? null : Number(form.max_uses),
-        expires_at:    form.expires_at  || null,
-        user_id:       form.user_id ?? null,
+        code:           form.code,
+        discount_value: Number(form.discount_value),
+        min_amount:     form.min_amount === "" ? null : Number(form.min_amount),
+        expires_at:     form.expires_at || null,
+        user_id:        form.user_id ?? null,
       };
       if (editId) await api(`/api/portal/vouchers/${editId}`, { method: "PUT", body: JSON.stringify(body) });
       else        await api("/api/portal/vouchers",             { method: "POST", body: JSON.stringify(body) });
@@ -193,26 +191,17 @@ function DiscountVouchersTab() {
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>Discount Type</Label>
-                  <Select value={form.discount_type} onValueChange={v => setForm(f => ({ ...f, discount_type: v }))} disabled={!!editId}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="percentage">Percentage (%)</SelectItem>
-                      <SelectItem value="fixed">Fixed Amount (R)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Discount Value {form.discount_type === "percentage" ? "(%)" : "(ZAR)"}</Label>
-                  <Input type="number" value={form.discount_value} onChange={e => setForm(f => ({ ...f, discount_value: Number(e.target.value) }))} />
+                  <Label>Voucher Value (ZAR) *</Label>
+                  <Input
+                    type="number" min={1} step={0.01}
+                    value={form.discount_value}
+                    onChange={e => setForm(f => ({ ...f, discount_value: e.target.value }))}
+                    placeholder="e.g. 200" disabled={!!editId}
+                  />
                 </div>
                 <div className="space-y-1.5">
                   <Label>Min Booking Amount (R)</Label>
                   <Input type="number" value={form.min_amount} onChange={e => setForm(f => ({ ...f, min_amount: e.target.value }))} placeholder="Optional" />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Max Uses</Label>
-                  <Input type="number" value={form.max_uses} onChange={e => setForm(f => ({ ...f, max_uses: e.target.value }))} placeholder="Unlimited" />
                 </div>
                 <div className="space-y-1.5 col-span-2">
                   <Label>Expires On</Label>
@@ -309,7 +298,7 @@ function DiscountVouchersTab() {
                     <div className="min-w-0 flex-1">
                       <code className="text-lg font-bold font-mono tracking-widest">{v.code}</code>
                       <p className="text-sm text-muted-foreground">
-                        {v.discount_type === "percentage" ? `${v.discount_value}% off` : `R${v.discount_value} off`}
+                        R{Number(v.discount_value).toFixed(2)} off
                         {v.min_amount ? ` · min R${v.min_amount}` : ""}
                       </p>
                       {v.user_name ? (
@@ -329,7 +318,10 @@ function DiscountVouchersTab() {
                     </span>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                    <span>Used: {v.uses_count}{v.max_uses ? ` / ${v.max_uses}` : ""}</span>
+                    {v.value_remaining != null && Number(v.value_remaining) < Number(v.discount_value)
+                      ? <span className="font-medium text-foreground">R{Number(v.value_remaining).toFixed(2)} remaining (of R{Number(v.discount_value).toFixed(2)})</span>
+                      : <span>R{Number(v.discount_value).toFixed(2)} off</span>
+                    }
                     {v.expires_at && <span>Expires: {format(new Date(v.expires_at), "dd MMM yyyy")}</span>}
                   </div>
                   <div className="flex items-center gap-2 pt-1">

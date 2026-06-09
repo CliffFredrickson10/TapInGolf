@@ -2417,7 +2417,7 @@ router.delete("/portal/members/:id", requireClubAuth, async (req: Request, res: 
 router.get("/portal/vouchers", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   res.json(await query<any>(
-    `SELECT v.id, v.code, v.discount_type, v.discount_value, v.min_amount, v.max_uses, v.uses_count,
+    `SELECT v.id, v.code, v.discount_value, v.value_remaining, v.min_amount,
             v.active, v.expires_at, v.created_at, v.user_id,
             u.name AS user_name, u.email AS user_email
      FROM vouchers v
@@ -2430,14 +2430,15 @@ router.get("/portal/vouchers", requireClubAuth, async (req: Request, res: Respon
 
 router.post("/portal/vouchers", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { code, discount_type, discount_value, min_amount, max_uses, expires_at, user_id } = req.body ?? {};
-  if (!code || !discount_type || discount_value == null) { res.status(400).json({ message: "code, discount_type and discount_value required" }); return; }
+  const { code, discount_value, min_amount, expires_at, user_id } = req.body ?? {};
+  if (!code || discount_value == null) { res.status(400).json({ message: "code and discount_value required" }); return; }
   const existing = await row<any>("SELECT id FROM vouchers WHERE code = ?", [code]);
   if (existing) { res.status(409).json({ message: "Code already exists" }); return; }
   const resolvedUserId = user_id != null ? Number(user_id) : null;
+  const value = Number(discount_value);
   const result = await exec(
-    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
-    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null, resolvedUserId]
+    "INSERT INTO vouchers (code, discount_type, discount_value, value_remaining, club_id, min_amount, active, expires_at, user_id) VALUES (?, 'fixed', ?, ?, ?, ?, 1, ?, ?)",
+    [code.toUpperCase(), value, value, club.id, min_amount ?? null, expires_at ?? null, resolvedUserId]
   );
   const newVoucher = await row<any>(
     `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
@@ -2446,12 +2447,9 @@ router.post("/portal/vouchers", requireClubAuth, async (req: Request, res: Respo
 
   // ── Notify the assigned user ─────────────────────────────────────────────
   if (resolvedUserId != null) {
-    const discountLabel = discount_type === "percentage"
-      ? `${Number(discount_value)}% off`
-      : `R${Number(discount_value).toFixed(2)} off`;
     const notifTitle = `🎟️ New voucher from ${club.name}`;
-    const notifBody  = `You've been gifted a discount voucher: ${code.toUpperCase()} — ${discountLabel}. Use it on your next booking!`;
-    const notifData  = { type: "voucher_issued", voucher_id: (result as any).insertId, code: code.toUpperCase(), discount_type, discount_value: Number(discount_value) };
+    const notifBody  = `You've been gifted a R${value.toFixed(2)} discount voucher: ${code.toUpperCase()}. It will be applied automatically at checkout!`;
+    const notifData  = { type: "voucher_issued", voucher_id: (result as any).insertId, code: code.toUpperCase(), discount_value: value };
     await exec(
       "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
       [resolvedUserId, "voucher_issued", notifTitle, notifBody, JSON.stringify(notifData)]
@@ -2471,16 +2469,13 @@ router.put("/portal/vouchers/:id", requireClubAuth, async (req: Request, res: Re
   const vId = Number(req.params.id);
   const existing = await row<any>("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   if (!existing) { res.status(404).json({ message: "Voucher not found" }); return; }
-  const { discount_value, min_amount, max_uses, active, expires_at, user_id } = req.body ?? {};
+  const { active, expires_at, user_id } = req.body ?? {};
   const resolvedUserId = 'user_id' in (req.body ?? {}) ? (user_id != null ? Number(user_id) : null) : undefined;
   const sets: string[] = [
-    "discount_value = COALESCE(?, discount_value)",
-    "min_amount = ?",
-    "max_uses = ?",
     "active = COALESCE(?, active)",
     "expires_at = ?",
   ];
-  const vals: any[] = [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? (active ? 1 : 0) : null, expires_at ?? null];
+  const vals: any[] = [active != null ? (active ? 1 : 0) : null, expires_at ?? null];
   if (resolvedUserId !== undefined) { sets.push("user_id = ?"); vals.push(resolvedUserId); }
   await exec(`UPDATE vouchers SET ${sets.join(", ")} WHERE id = ? AND club_id = ?`, [...vals, vId, club.id]);
   res.json(await row<any>(

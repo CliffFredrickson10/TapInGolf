@@ -169,36 +169,30 @@ router.get("/vouchers/available", async (req, res): Promise<void> => {
      WHERE active = 1
        AND user_id = ?
        AND (expires_at IS NULL OR expires_at > NOW())
-       AND (max_uses IS NULL OR uses_count < max_uses)
+       AND (value_remaining IS NULL OR value_remaining > 0)
        AND (min_amount IS NULL OR CAST(min_amount AS DECIMAL(10,2)) = 0 OR ? >= CAST(min_amount AS DECIMAL(10,2)))
        ${club_id != null ? "AND (club_id = ? OR club_id IS NULL)" : ""}`,
     club_id != null ? [user.id, amount, club_id] : [user.id, amount]
   );
   for (const v of stdRows) {
-    const discountValue = parseFloat(v.discount_value);
-    let discountAmount: number;
-    if (v.discount_type === "percentage") {
-      discountAmount = Math.round(amount * discountValue / 100 * 100) / 100;
-    } else {
-      discountAmount = Math.min(discountValue, amount);
-    }
-    const usesRemaining = v.max_uses != null ? (Number(v.max_uses) - Number(v.uses_count)) : null;
-    const remainingTag  = usesRemaining != null
-      ? ` · ${usesRemaining} use${usesRemaining === 1 ? "" : "s"} remaining`
-      : "";
+    const discountValue    = parseFloat(v.discount_value);
+    const valueRemaining   = v.value_remaining != null ? parseFloat(v.value_remaining) : discountValue;
+    const discountAmount   = Math.min(valueRemaining, amount);
+    const isPartiallyUsed  = valueRemaining < discountValue;
+    const label = isPartiallyUsed
+      ? `R${valueRemaining.toFixed(2)} remaining`
+      : `R${discountValue.toFixed(2)} off`;
     results.push({
       code:                    v.code,
-      label:                   v.discount_type === "percentage"
-                                 ? `${discountValue}% off`
-                                 : `R${discountValue.toFixed(2)} off`,
-      sub:                     `Save R${discountAmount.toFixed(2)} on this booking${remainingTag}`,
-      discount_type:           v.discount_type as "fixed" | "percentage",
+      label,
+      sub:                     `R${valueRemaining.toFixed(2)} remaining (of R${discountValue.toFixed(2)})`,
+      discount_type:           "fixed" as const,
       discount_value:          discountValue,
       discount_amount:         discountAmount,
       final_amount:            Math.max(0, amount - discountAmount),
       is_cancellation_voucher: false,
       expires_at:              v.expires_at ?? null,
-      uses_remaining:          usesRemaining,
+      value_remaining:         valueRemaining,
     });
   }
 
@@ -211,9 +205,8 @@ router.get("/vouchers/my-discount", async (req, res): Promise<void> => {
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
 
   const vouchers = await query<any>(
-    `SELECT v.id, v.code, v.discount_type, v.discount_value,
-            v.min_amount, v.max_uses, v.uses_count,
-            v.active, v.expires_at, v.created_at,
+    `SELECT v.id, v.code, v.discount_value, v.value_remaining,
+            v.min_amount, v.active, v.expires_at, v.created_at,
             c.name AS club_name
      FROM vouchers v
      LEFT JOIN clubs c ON c.id = v.club_id

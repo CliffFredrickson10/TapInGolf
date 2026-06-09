@@ -838,40 +838,20 @@ export default function ProfileScreen() {
                     );
                   })}
                   {discountList.map((v) => {
-                    const isExpired     = v.expires_at && new Date(v.expires_at) < new Date();
-                    const maxUses       = v.max_uses != null ? Number(v.max_uses) : null;
-                    const usesCount     = Number(v.uses_count ?? 0);
-                    const usesRemaining = maxUses != null ? (maxUses - usesCount) : null;
-                    const isUsedUp      = usesRemaining !== null && usesRemaining <= 0;
-                    const isInactive    = !v.active;
-                    const dim           = isExpired || isUsedUp || isInactive;
-                    const statusColor   = dim ? "#6b7280" : "#16a34a";
-                    const statusLabel   = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
-                    const discountValue = Number(v.discount_value);
+                    const isExpired      = v.expires_at && new Date(v.expires_at) < new Date();
+                    const discountValue  = Number(v.discount_value);
+                    const valueRemaining = v.value_remaining != null ? Number(v.value_remaining) : discountValue;
+                    const isUsedUp       = valueRemaining <= 0;
+                    const isInactive     = !v.active;
+                    const dim            = isExpired || isUsedUp || isInactive;
+                    const statusColor    = dim ? "#6b7280" : "#16a34a";
+                    const statusLabel    = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
                     const expDate = v.expires_at
                       ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
                       : null;
-
-                    let valueMetaText: string;
-                    if (v.discount_type === "percentage") {
-                      if (maxUses != null && usesCount > 0) {
-                        valueMetaText = `${usesRemaining} use${usesRemaining === 1 ? "" : "s"} remaining (of ${maxUses})`;
-                      } else if (maxUses != null) {
-                        valueMetaText = `${maxUses} use${maxUses === 1 ? "" : "s"} (${discountValue}% off each)`;
-                      } else {
-                        valueMetaText = `${discountValue}% off`;
-                      }
-                    } else {
-                      if (maxUses != null) {
-                        const totalValue     = discountValue * maxUses;
-                        const remainingValue = discountValue * (usesRemaining ?? 0);
-                        valueMetaText = remainingValue < totalValue
-                          ? `R${remainingValue.toFixed(2)} remaining (of R${totalValue.toFixed(2)})`
-                          : `R${totalValue.toFixed(2)} off`;
-                      } else {
-                        valueMetaText = `R${discountValue.toFixed(2)} off`;
-                      }
-                    }
+                    const valueMetaText = valueRemaining < discountValue
+                      ? `R${valueRemaining.toFixed(2)} remaining (of R${discountValue.toFixed(2)})`
+                      : `R${discountValue.toFixed(2)} off`;
 
                     return (
                       <View key={`dv-${v.id}`} style={[styles.voucherCard, { borderColor: colors.border, opacity: dim ? 0.6 : 1 }]}>

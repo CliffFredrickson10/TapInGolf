@@ -64941,18 +64941,18 @@ router14.delete("/portal/events/:id/invites/:userId", requireClubAuth2, async (r
 router14.get("/portal/users/search", requireClubAuth2, async (req, res) => {
   const q = String(req.query.q ?? "").trim();
   if (!q || q.length < 2) {
-    res.json({ users: [] });
+    res.json({ users: [], items: [] });
     return;
   }
   const users = await query(
-    `SELECT id, name, email, handicap_index
+    `SELECT id, name, email
      FROM users
      WHERE name ILIKE ? OR email ILIKE ?
      ORDER BY name ASC
      LIMIT 20`,
     [`%${q}%`, `%${q}%`]
   );
-  res.json({ users });
+  res.json(users);
 });
 router14.get("/portal/events/:id/tee-slots", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -65828,18 +65828,6 @@ router14.post("/portal/invoices/:id/refresh-url", requireClubAuth2, async (req, 
     res.status(502).json({ message: `Failed to create payment link: ${err.message}` });
   }
 });
-router14.get("/portal/users/search", requireClubAuth2, async (req, res) => {
-  const q = String(req.query.q ?? "").trim();
-  if (q.length < 2) {
-    res.json([]);
-    return;
-  }
-  const users = await query(
-    `SELECT id, name, email FROM users WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? ORDER BY name LIMIT 20`,
-    [`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`]
-  );
-  res.json(users);
-});
 router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone } = req.body ?? {};
@@ -65851,12 +65839,12 @@ router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => 
     res.status(400).json({ message: "Either a TapIn user or guest name is required" });
     return;
   }
-  const tt = await row("SELECT id, total_slots, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
+  const tt = await row("SELECT id, max_players, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
   if (!tt) {
     res.status(404).json({ message: "Tee time not found" });
     return;
   }
-  const available = (tt.total_slots ?? 4) - (tt.player_count ?? 0);
+  const available = (tt.max_players ?? 4) - (tt.player_count ?? 0);
   if (available < Number(players)) {
     res.status(400).json({ message: `Only ${available} slot(s) available` });
     return;

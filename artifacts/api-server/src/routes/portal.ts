@@ -1303,19 +1303,20 @@ router.delete("/portal/events/:id/invites/:userId", requireClubAuth, async (req:
   res.json({ message: "Removed from invite list" });
 });
 
-// GET /portal/users/search?q=  — search users by name or email (for invite list)
+// GET /portal/users/search?q=  — search users by name or email (for invite list / counter booking)
 router.get("/portal/users/search", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
-  if (!q || q.length < 2) { res.json({ users: [] }); return; }
+  if (!q || q.length < 2) { res.json({ users: [], items: [] }); return; }
   const users = await query<any>(
-    `SELECT id, name, email, handicap_index
+    `SELECT id, name, email
      FROM users
      WHERE name ILIKE ? OR email ILIKE ?
      ORDER BY name ASC
      LIMIT 20`,
     [`%${q}%`, `%${q}%`]
   );
-  res.json({ users });
+  // Support both response shapes: { users } for existing callers, array for counter booking dialog
+  res.json(users);
 });
 
 // ── Tee-slot linking (portal) ────────────────────────────────────────────────
@@ -2198,17 +2199,6 @@ router.post("/portal/invoices/:id/refresh-url", requireClubAuth, async (req: Req
 
 // ─── COUNTER BOOKINGS (club-initiated walk-in/manual bookings) ───────────────
 
-// Search TapIn users by name or email (for counter booking user picker)
-router.get("/portal/users/search", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
-  const q = String(req.query.q ?? "").trim();
-  if (q.length < 2) { res.json([]); return; }
-  const users = await query<any>(
-    `SELECT id, name, email FROM users WHERE LOWER(name) LIKE ? OR LOWER(email) LIKE ? ORDER BY name LIMIT 20`,
-    [`%${q.toLowerCase()}%`, `%${q.toLowerCase()}%`]
-  );
-  res.json(users);
-});
-
 // Create a counter booking for a tee slot on behalf of a TapIn user or guest
 router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
@@ -2220,9 +2210,9 @@ router.post("/portal/counter-bookings", requireClubAuth, async (req: Request, re
     res.status(400).json({ message: "Either a TapIn user or guest name is required" }); return;
   }
 
-  const tt = await row<any>("SELECT id, total_slots, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
+  const tt = await row<any>("SELECT id, max_players, player_count FROM portal_tee_slots WHERE id = ? AND club_id = ?", [tee_time_id, club.id]);
   if (!tt) { res.status(404).json({ message: "Tee time not found" }); return; }
-  const available = (tt.total_slots ?? 4) - (tt.player_count ?? 0);
+  const available = (tt.max_players ?? 4) - (tt.player_count ?? 0);
   if (available < Number(players)) { res.status(400).json({ message: `Only ${available} slot(s) available` }); return; }
 
   if (user_id) {

@@ -378,7 +378,7 @@ router.put("/portal/cancellation-policy", requireClubAuth, async (req: Request, 
 router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const today = new Date().toISOString().split("T")[0];
-  const [teeTimes, bookings, reviews, members, events, revenue] = await Promise.all([
+  const [teeTimes, bookings, reviews, members, events, revenue, bookingSources] = await Promise.all([
     row<any>("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
     row<any>("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
     row<any>("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
@@ -391,6 +391,12 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
               JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
               WHERE pts.club_id = ? AND b.status IN ('confirmed','completed')
                 AND b.payment_method != 'prepaid'`, [club.id]),
+    row<any>(`SELECT
+               SUM(CASE WHEN b.booking_source = 'club_counter' THEN 1 ELSE 0 END) AS walkin_total,
+               SUM(CASE WHEN b.booking_source != 'club_counter' OR b.booking_source IS NULL THEN 1 ELSE 0 END) AS app_total
+             FROM bookings b
+             JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+             WHERE pts.club_id = ? AND b.status NOT IN ('cancelled')`, [club.id]),
   ]);
   const recentBookings = await query<any>(
     `SELECT b.id, b.booking_ref, b.players, b.total_amount, b.status, b.created_at,
@@ -416,6 +422,8 @@ router.get("/portal/dashboard", requireClubAuth, async (req: Request, res: Respo
     total_revenue:   Number(revenue?.total_revenue ?? 0),
     club_earnings:   Number(revenue?.club_earnings  ?? 0),
     platform_fees:   Number(revenue?.platform_fees  ?? 0),
+    walkin_bookings: Number(bookingSources?.walkin_total ?? 0),
+    app_bookings:    Number(bookingSources?.app_total    ?? 0),
   });
 });
 

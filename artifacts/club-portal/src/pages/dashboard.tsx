@@ -3,7 +3,7 @@ import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Clock, CalendarCheck, Star, Users, Calendar, TrendingUp, Banknote, Building2 } from "lucide-react";
+import { Clock, CalendarCheck, Star, Users, Calendar, TrendingUp, Banknote, Building2, PersonStanding, Smartphone } from "lucide-react";
 import { format } from "date-fns";
 
 interface DashboardData {
@@ -20,6 +20,8 @@ interface DashboardData {
   total_revenue: number;
   club_earnings: number;
   platform_fees: number;
+  walkin_bookings: number;
+  app_bookings: number;
 }
 
 const fmtRand = (n: number) => `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -69,6 +71,8 @@ export default function Dashboard() {
     { label: "Pending Bookings", value: data.pending_bookings_today, sub: "awaiting confirmation", icon: TrendingUp, color: "text-red-600" },
     { label: "Club Earnings", value: fmtRand(data.club_earnings ?? 0), sub: `of ${fmtRand(data.total_revenue ?? 0)} total collected`, icon: Building2, color: "text-[#1a5c38]" },
     { label: "TapIn Platform Fees", value: fmtRand(data.platform_fees ?? 0), sub: "flat fee per booking", icon: Banknote, color: "text-amber-600" },
+    { label: "Walk-in Bookings", value: data.walkin_bookings ?? 0, sub: "counter / walk-in (all time)", icon: PersonStanding, color: "text-orange-600" },
+    { label: "App Bookings", value: data.app_bookings ?? 0, sub: "booked via TapIn app (all time)", icon: Smartphone, color: "text-blue-600" },
   ];
 
   return (

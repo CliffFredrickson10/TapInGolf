@@ -3,7 +3,7 @@ import * as Haptics from "expo-haptics";
 import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import { router } from "expo-router";
-import * as Clipboard from "expo-clipboard";
+
 import React, { useState } from "react";
 import {
   ActivityIndicator,
@@ -76,17 +76,12 @@ export default function ProfileScreen() {
   const [confirmLogout, setConfirmLogout] = useState(false);
   const [uploadingPic, setUploadingPic] = useState(false);
 
-  // Cancellation vouchers
-  const [vouchersOpen, setVouchersOpen]     = useState(false);
-  const [voucherList, setVoucherList]       = useState<any[]>([]);
+  // All my vouchers (cancellation + discount combined)
+  const [vouchersOpen, setVouchersOpen]       = useState(false);
+  const [voucherList, setVoucherList]         = useState<any[]>([]);
+  const [discountList, setDiscountList]       = useState<any[]>([]);
   const [loadingVouchers, setLoadingVouchers] = useState(false);
-  const [copiedCode, setCopiedCode]         = useState<string | null>(null);
-
-  // Discount vouchers assigned to me
-  const [discountOpen, setDiscountOpen]         = useState(false);
-  const [discountList, setDiscountList]         = useState<any[]>([]);
-  const [loadingDiscount, setLoadingDiscount]   = useState(false);
-  const [discountFetched, setDiscountFetched]   = useState(false);
+  const [vouchersFetched, setVouchersFetched] = useState(false);
 
   // Club bans
   const [myBans, setMyBans]               = useState<any[]>([]);
@@ -121,38 +116,20 @@ export default function ProfileScreen() {
     if (!user?.token) return;
     setLoadingVouchers(true);
     try {
-      const data: any = await apiFetch("/profile/cancellation-vouchers", user.token);
-      setVoucherList(data?.vouchers ?? []);
+      const [cancData, discData]: any[] = await Promise.all([
+        apiFetch("/profile/cancellation-vouchers", user.token),
+        apiFetch("/vouchers/my-discount", user.token),
+      ]);
+      setVoucherList(cancData?.vouchers ?? []);
+      setDiscountList(Array.isArray(discData) ? discData : []);
+      setVouchersFetched(true);
     } catch {}
     setLoadingVouchers(false);
   }, [user?.token]);
 
   const handleToggleVouchers = () => {
-    if (!vouchersOpen && voucherList.length === 0) fetchVouchers();
+    if (!vouchersOpen && !vouchersFetched) fetchVouchers();
     setVouchersOpen(v => !v);
-  };
-
-  const fetchDiscountVouchers = React.useCallback(async () => {
-    if (!user?.token) return;
-    setLoadingDiscount(true);
-    try {
-      const data: any = await apiFetch("/vouchers/my-discount", user.token);
-      setDiscountList(Array.isArray(data) ? data : []);
-      setDiscountFetched(true);
-    } catch {}
-    setLoadingDiscount(false);
-  }, [user?.token]);
-
-  const handleToggleDiscount = () => {
-    if (!discountOpen && !discountFetched) fetchDiscountVouchers();
-    setDiscountOpen(v => !v);
-  };
-
-  const handleCopyCode = async (code: string) => {
-    await Clipboard.setStringAsync(code);
-    setCopiedCode(code);
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-    setTimeout(() => setCopiedCode(null), 2000);
   };
 
   // Fetch fresh profile data from server whenever the token changes (e.g. after login).
@@ -800,7 +777,7 @@ export default function ProfileScreen() {
             </TouchableOpacity>
           ))}
 
-          {/* My Vouchers (cancellation vouchers from clubs) */}
+          {/* My Vouchers (cancellation + personal discount — auto-applied at checkout) */}
           <TouchableOpacity
             style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
             onPress={handleToggleVouchers} activeOpacity={0.8}
@@ -814,149 +791,101 @@ export default function ProfileScreen() {
           </TouchableOpacity>
           {vouchersOpen && (
             <View style={[styles.voucherPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {voucherList.length === 0 && !loadingVouchers ? (
+              {voucherList.length === 0 && discountList.length === 0 && !loadingVouchers ? (
                 <Text style={[styles.voucherEmpty, { color: colors.mutedForeground }]}>
-                  No vouchers yet. Vouchers issued by a club after a cancellation will appear here.
+                  No vouchers yet. Vouchers issued by clubs will appear here and be applied automatically at checkout.
                 </Text>
               ) : (
-                voucherList.map((v) => {
-                  const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
-                  const isRedeemed = !!v.redeemed_at;
-                  const statusColor = isRedeemed ? "#6b7280" : isExpired ? colors.destructive : "#16a34a";
-                  const statusLabel = isRedeemed ? "Redeemed" : isExpired ? "Expired" : "Active";
-                  const expDate = v.expires_at
-                    ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
-                    : null;
-                  return (
-                    <View key={v.id} style={[styles.voucherCard, { borderColor: colors.border, opacity: isRedeemed || isExpired ? 0.6 : 1 }]}>
-                      <View style={styles.voucherCardTop}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name}</Text>
-                          {v.reason ? <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{v.reason}</Text> : null}
+                <>
+                  {voucherList.map((v) => {
+                    const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
+                    const isRedeemed = !!v.redeemed_at;
+                    const statusColor = isRedeemed ? "#6b7280" : isExpired ? colors.destructive : "#16a34a";
+                    const statusLabel = isRedeemed ? "Redeemed" : isExpired ? "Expired" : "Active";
+                    const expDate = v.expires_at
+                      ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+                      : null;
+                    return (
+                      <View key={`cv-${v.id}`} style={[styles.voucherCard, { borderColor: colors.border, opacity: isRedeemed || isExpired ? 0.6 : 1 }]}>
+                        <View style={styles.voucherCardTop}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name}</Text>
+                            {v.reason ? <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{v.reason}</Text> : null}
+                          </View>
+                          <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
+                            <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                          </View>
                         </View>
-                        <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
-                          <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                        <View style={[styles.voucherCodeRow, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+                          <Text style={[styles.voucherCode, { color: colors.primary }]}>{v.code}</Text>
+                          <Text style={[styles.voucherCopyHint, { color: colors.mutedForeground }]}>Auto-applied at checkout</Text>
                         </View>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.voucherCodeRow, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}
-                        onPress={() => handleCopyCode(v.code)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.voucherCode, { color: colors.primary }]}>{v.code}</Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                          {copiedCode === v.code
-                            ? <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
-                            : <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
-                          }
-                          <Text style={[styles.voucherCopyHint, { color: copiedCode === v.code ? "#16a34a" : colors.mutedForeground }]}>
-                            {copiedCode === v.code ? "Copied!" : "Copy"}
-                          </Text>
-                        </View>
-                      </TouchableOpacity>
-                      <View style={styles.voucherCardMeta}>
-                        {v.value_rands != null && (
-                          <Text style={[styles.voucherMeta, { color: colors.foreground }]}>
-                            {v.value_remaining != null && Number(v.value_remaining) < Number(v.value_rands)
-                              ? `R${Number(v.value_remaining).toFixed(2)} remaining (of R${Number(v.value_rands).toFixed(2)})`
-                              : `R${Number(v.value_rands).toFixed(2)} off`}
-                          </Text>
-                        )}
-                        {expDate && (
-                          <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
-                            {isExpired ? "Expired " : "Expires "}{expDate}
-                          </Text>
-                        )}
-                      </View>
-                    </View>
-                  );
-                })
-              )}
-            </View>
-          )}
-
-          {/* My Discount Vouchers (vouchers assigned specifically to me by clubs) */}
-          <TouchableOpacity
-            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-            onPress={handleToggleDiscount} activeOpacity={0.8}
-          >
-            <Ionicons name="pricetag-outline" size={20} color={colors.primary} />
-            <Text style={[styles.menuText, { color: colors.foreground }]}>My Discount Vouchers</Text>
-            {loadingDiscount
-              ? <ActivityIndicator size="small" color={colors.primary} />
-              : <Ionicons name={discountOpen ? "chevron-down" : "chevron-forward"} size={18} color={colors.mutedForeground} />
-            }
-          </TouchableOpacity>
-          {discountOpen && (
-            <View style={[styles.voucherPanel, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              {discountList.length === 0 && !loadingDiscount ? (
-                <Text style={[styles.voucherEmpty, { color: colors.mutedForeground }]}>
-                  No discount vouchers yet. When a club issues you a personal discount voucher, it will appear here.
-                </Text>
-              ) : (
-                discountList.map((v) => {
-                  const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
-                  const isUsedUp   = v.max_uses !== null && v.uses_count >= v.max_uses;
-                  const isInactive = !v.active;
-                  const dim        = isExpired || isUsedUp || isInactive;
-                  const statusColor = dim ? "#6b7280" : "#16a34a";
-                  const statusLabel = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
-                  const discountLabel = v.discount_type === "percentage"
-                    ? `${Number(v.discount_value)}% off`
-                    : `R${Number(v.discount_value).toFixed(2)} off`;
-                  const expDate = v.expires_at
-                    ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
-                    : null;
-                  return (
-                    <View key={v.id} style={[styles.voucherCard, { borderColor: colors.border, opacity: dim ? 0.6 : 1 }]}>
-                      <View style={styles.voucherCardTop}>
-                        <View style={{ flex: 1 }}>
-                          {v.club_name
-                            ? <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name}</Text>
-                            : <Text style={[styles.voucherClub, { color: colors.foreground }]}>Any Club</Text>
-                          }
-                          <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{discountLabel}</Text>
-                        </View>
-                        <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
-                          <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                        <View style={styles.voucherCardMeta}>
+                          {v.value_rands != null && (
+                            <Text style={[styles.voucherMeta, { color: colors.foreground }]}>
+                              {v.value_remaining != null && Number(v.value_remaining) < Number(v.value_rands)
+                                ? `R${Number(v.value_remaining).toFixed(2)} remaining (of R${Number(v.value_rands).toFixed(2)})`
+                                : `R${Number(v.value_rands).toFixed(2)} off`}
+                            </Text>
+                          )}
+                          {expDate && (
+                            <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
+                              {isExpired ? "Expired " : "Expires "}{expDate}
+                            </Text>
+                          )}
                         </View>
                       </View>
-                      <TouchableOpacity
-                        style={[styles.voucherCodeRow, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}
-                        onPress={() => handleCopyCode(v.code)}
-                        activeOpacity={0.7}
-                      >
-                        <Text style={[styles.voucherCode, { color: colors.primary }]}>{v.code}</Text>
-                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4 }}>
-                          {copiedCode === v.code
-                            ? <Ionicons name="checkmark-circle" size={14} color="#16a34a" />
-                            : <Ionicons name="copy-outline" size={14} color={colors.mutedForeground} />
-                          }
-                          <Text style={[styles.voucherCopyHint, { color: copiedCode === v.code ? "#16a34a" : colors.mutedForeground }]}>
-                            {copiedCode === v.code ? "Copied!" : "Copy"}
-                          </Text>
+                    );
+                  })}
+                  {discountList.map((v) => {
+                    const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
+                    const isUsedUp   = v.max_uses !== null && v.uses_count >= v.max_uses;
+                    const isInactive = !v.active;
+                    const dim        = isExpired || isUsedUp || isInactive;
+                    const statusColor = dim ? "#6b7280" : "#16a34a";
+                    const statusLabel = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
+                    const discountLabel = v.discount_type === "percentage"
+                      ? `${Number(v.discount_value)}% off`
+                      : `R${Number(v.discount_value).toFixed(2)} off`;
+                    const expDate = v.expires_at
+                      ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+                      : null;
+                    return (
+                      <View key={`dv-${v.id}`} style={[styles.voucherCard, { borderColor: colors.border, opacity: dim ? 0.6 : 1 }]}>
+                        <View style={styles.voucherCardTop}>
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name ?? "Any Club"}</Text>
+                            <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{discountLabel}</Text>
+                          </View>
+                          <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
+                            <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
+                          </View>
                         </View>
-                      </TouchableOpacity>
-                      <View style={styles.voucherCardMeta}>
-                        {v.min_amount != null && Number(v.min_amount) > 0 && (
-                          <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
-                            Min booking R{Number(v.min_amount).toFixed(2)}
-                          </Text>
-                        )}
-                        {expDate && (
-                          <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
-                            {isExpired ? "Expired " : "Expires "}{expDate}
-                          </Text>
-                        )}
-                        {v.max_uses != null && (
-                          <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
-                            {v.uses_count}/{v.max_uses} uses
-                          </Text>
-                        )}
+                        <View style={[styles.voucherCodeRow, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+                          <Text style={[styles.voucherCode, { color: colors.primary }]}>{v.code}</Text>
+                          <Text style={[styles.voucherCopyHint, { color: colors.mutedForeground }]}>Auto-applied at checkout</Text>
+                        </View>
+                        <View style={styles.voucherCardMeta}>
+                          {v.min_amount != null && Number(v.min_amount) > 0 && (
+                            <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
+                              Min booking R{Number(v.min_amount).toFixed(2)}
+                            </Text>
+                          )}
+                          {expDate && (
+                            <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
+                              {isExpired ? "Expired " : "Expires "}{expDate}
+                            </Text>
+                          )}
+                          {v.max_uses != null && (
+                            <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
+                              {v.uses_count}/{v.max_uses} uses
+                            </Text>
+                          )}
+                        </View>
                       </View>
-                    </View>
-                  );
-                })
+                    );
+                  })}
+                </>
               )}
             </View>
           )}

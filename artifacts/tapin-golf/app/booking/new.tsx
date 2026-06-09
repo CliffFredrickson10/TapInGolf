@@ -84,6 +84,9 @@ export default function NewBookingScreen() {
     cart_available?: string;
     cart_compulsory?: string;
     cart_price?: string;
+    stitch_enabled?: string;
+    wallet_enabled?: string;
+    prepaid_enabled?: string;
     pay_at_club_enabled?: string;
     event_id?: string;
     event_name?: string;
@@ -158,7 +161,14 @@ export default function NewBookingScreen() {
   const [numPlayers, setNumPlayers]   = useState(1);
   const [splitBill, setSplitBill]     = useState(false);
   const [includeCart, setIncludeCart] = useState(cartCompulsory);
-  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">("stitch");
+  // Default to the first enabled payment method for this club
+  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
+    params.stitch_enabled  !== "0" ? "stitch"      :
+    params.wallet_enabled  !== "0" ? "wallet"      :
+    params.prepaid_enabled !== "0" ? "prepaid"     :
+    params.pay_at_club_enabled === "1" ? "pay_at_club" :
+    "stitch" // ultimate fallback
+  );
   const [prepaidBalance, setPrepaidBalance] = useState<{ total: number; used: number; remaining: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [isMember, setIsMember]       = useState(false);
@@ -203,6 +213,9 @@ export default function NewBookingScreen() {
     return hnaVerified ? "Affiliated Visitor" : "Non-Affiliated Visitor";
   }, [isMember, isJunior, isStudent, isPensioner, hnaVerified]);
 
+  const stitchEnabled    = params.stitch_enabled  !== "0";  // default true
+  const walletEnabled    = params.wallet_enabled  !== "0";  // default true
+  const prepaidEnabled   = params.prepaid_enabled !== "0";  // default true
   const payAtClubEnabled = params.pay_at_club_enabled === "1";
   const [platformFee, setPlatformFee] = useState<number>(10);
 
@@ -728,28 +741,25 @@ export default function NewBookingScreen() {
 
           {/* Payment method */}
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Method</Text>
-          {([
-            { id: "stitch", label: "Stitch", icon: "card-outline", sub: "Instant EFT, Debit/Credit card" },
-          ] as const).map((pm) => (
+          {stitchEnabled && (
             <TouchableOpacity
-              key={pm.id}
               style={[
                 styles.paymentOption,
                 {
-                  backgroundColor: paymentMethod === pm.id ? colors.primaryLight : colors.card,
-                  borderColor:     paymentMethod === pm.id ? colors.primary : colors.border,
+                  backgroundColor: paymentMethod === "stitch" ? colors.primaryLight : colors.card,
+                  borderColor:     paymentMethod === "stitch" ? colors.primary : colors.border,
                 },
               ]}
-              onPress={() => { Haptics.selectionAsync(); setPaymentMethod(pm.id); }}
+              onPress={() => { Haptics.selectionAsync(); setPaymentMethod("stitch"); }}
             >
-              <Ionicons name={pm.icon as any} size={22} color={paymentMethod === pm.id ? colors.primary : colors.mutedForeground} />
+              <Ionicons name="card-outline" size={22} color={paymentMethod === "stitch" ? colors.primary : colors.mutedForeground} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.payLabel, { color: colors.foreground }]}>{pm.label}</Text>
-                <Text style={[styles.paySub, { color: colors.mutedForeground }]}>{pm.sub}</Text>
+                <Text style={[styles.payLabel, { color: colors.foreground }]}>Stitch</Text>
+                <Text style={[styles.paySub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
               </View>
-              {paymentMethod === pm.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+              {paymentMethod === "stitch" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
             </TouchableOpacity>
-          ))}
+          )}
 
           {/* Pay at Club option — shown only when club has enabled it */}
           {payAtClubEnabled && (
@@ -782,8 +792,8 @@ export default function NewBookingScreen() {
             </View>
           )}
 
-          {/* Wallet option — always shown once balance is loaded */}
-          {walletBalance !== null && (
+          {/* Wallet option — shown only when club has enabled it and balance is loaded */}
+          {walletEnabled && walletBalance !== null && (
             <TouchableOpacity
               style={[
                 styles.paymentOption,
@@ -807,7 +817,7 @@ export default function NewBookingScreen() {
           )}
 
           {/* Insufficient wallet balance notice */}
-          {paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
+          {walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
             <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fef3cd", borderRadius: 8, padding: 8 }}>
               <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
@@ -816,8 +826,8 @@ export default function NewBookingScreen() {
             </View>
           )}
 
-          {/* Prepaid rounds option — shown only when member has rounds at this club */}
-          {prepaidBalance !== null && (
+          {/* Prepaid rounds option — shown only when club has enabled it and member has rounds */}
+          {prepaidEnabled && prepaidBalance !== null && (
             <TouchableOpacity
               style={[
                 styles.paymentOption,
@@ -1151,9 +1161,9 @@ export default function NewBookingScreen() {
 
           {/* Book button */}
           <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: (submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)) ? colors.muted : colors.primary }]}
+            style={[styles.bookBtn, { backgroundColor: (submitting || (walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)) ? colors.muted : colors.primary }]}
             onPress={() => { setBookError(null); handleBook(); }}
-            disabled={submitting || (paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)}
+            disabled={submitting || (walletEnabled && paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount)}
             activeOpacity={0.85}
           >
             <Text style={styles.bookBtnText}>{submitting ? "Processing…" : "Confirm Booking"}</Text>

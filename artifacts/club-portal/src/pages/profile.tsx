@@ -22,6 +22,9 @@ interface ClubProfile {
   cart_available: boolean; cart_compulsory: boolean; cart_price: number | null;
   latitude: number | null; longitude: number | null;
   geofence_enabled: boolean; geofence_radius_m: number | null;
+  stitch_enabled: boolean;
+  wallet_enabled: boolean;
+  prepaid_enabled: boolean;
   pay_at_club_enabled: boolean;
 }
 
@@ -631,13 +634,37 @@ export default function Profile() {
       </Card>
 
       <Card>
-        <CardHeader><CardTitle>Payment Options</CardTitle></CardHeader>
+        <CardHeader>
+          <CardTitle>Payment Methods</CardTitle>
+          <p className="text-sm text-muted-foreground">Choose which payment methods golfers can use when booking at your club.</p>
+        </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
+              <Label>Stitch (Card / Instant EFT)</Label>
+              <p className="text-xs text-muted-foreground">Online payment via debit/credit card or instant EFT — full greens fee charged at booking</p>
+            </div>
+            <Switch checked={!!profile.stitch_enabled} onCheckedChange={v => update("stitch_enabled", v)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>TapIn Wallet</Label>
+              <p className="text-xs text-muted-foreground">Golfers pay from their pre-loaded TapIn wallet balance</p>
+            </div>
+            <Switch checked={!!profile.wallet_enabled} onCheckedChange={v => update("wallet_enabled", v)} />
+          </div>
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Prepaid Rounds</Label>
+              <p className="text-xs text-muted-foreground">Members can redeem their pre-purchased round packages</p>
+            </div>
+            <Switch checked={!!profile.prepaid_enabled} onCheckedChange={v => update("prepaid_enabled", v)} />
+          </div>
+          <div className="flex items-center justify-between border-t pt-4">
+            <div>
               <Label>Pay at Club</Label>
               <p className="text-xs text-muted-foreground">
-                Allow golfers to book with a commitment fee online and pay the greens fee at the club
+                Golfers pay a small commitment fee online and settle the greens fee directly at the club
               </p>
             </div>
             <Switch checked={!!profile.pay_at_club_enabled} onCheckedChange={v => update("pay_at_club_enabled", v)} />

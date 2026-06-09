@@ -769,6 +769,9 @@ async function createSchema(): Promise<void> {
   // cancel_fee_pct: cancellation fee % always withheld (must be >= platform_fee_pct, default 5).
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_fee_pct INT NOT NULL DEFAULT 5");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS pay_at_club_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stitch_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS wallet_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS prepaid_enabled SMALLINT NOT NULL DEFAULT 1");
   // club_inbox_notifications: system → club portal event feed (new bookings, cancellations, etc.)
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (

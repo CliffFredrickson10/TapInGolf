@@ -58042,6 +58042,9 @@ router3.get("/clubs", async (req, res) => {
       c.cart_compulsory = !!c.cart_compulsory;
       c.cart_price = c.cart_price ? parseFloat(c.cart_price) : null;
       c.pay_at_club_enabled = !!c.pay_at_club_enabled;
+      c.stitch_enabled = c.stitch_enabled !== void 0 ? !!c.stitch_enabled : true;
+      c.wallet_enabled = c.wallet_enabled !== void 0 ? !!c.wallet_enabled : true;
+      c.prepaid_enabled = c.prepaid_enabled !== void 0 ? !!c.prepaid_enabled : true;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
     });
     return clubs2;
@@ -59503,12 +59506,28 @@ router4.post("/bookings", async (req, res) => {
     res.status(409).json({ message: "Not enough slots available" });
     return;
   }
-  if (payment_method === "pay_at_club") {
-    const clubRow = await row(
-      "SELECT pay_at_club_enabled FROM clubs WHERE id = ?",
+  {
+    const clubPm = await row(
+      "SELECT stitch_enabled, wallet_enabled, prepaid_enabled, pay_at_club_enabled FROM clubs WHERE id = ?",
       [slot.club_id]
     );
-    if (!clubRow?.pay_at_club_enabled) {
+    const stitchOk = !clubPm || clubPm.stitch_enabled == null || !!clubPm.stitch_enabled;
+    const walletOk = !clubPm || clubPm.wallet_enabled == null || !!clubPm.wallet_enabled;
+    const prepaidOk = !clubPm || clubPm.prepaid_enabled == null || !!clubPm.prepaid_enabled;
+    const payAtClubOk = clubPm && !!clubPm.pay_at_club_enabled;
+    if (payment_method === "stitch" && !stitchOk) {
+      res.status(400).json({ message: "Online card/EFT payment is not accepted by this club." });
+      return;
+    }
+    if (payment_method === "wallet" && !walletOk) {
+      res.status(400).json({ message: "Wallet payment is not accepted by this club." });
+      return;
+    }
+    if (payment_method === "prepaid" && !prepaidOk) {
+      res.status(400).json({ message: "Prepaid rounds are not accepted by this club." });
+      return;
+    }
+    if (payment_method === "pay_at_club" && !payAtClubOk) {
       res.status(400).json({ message: "This club does not accept pay-at-club bookings." });
       return;
     }
@@ -63667,7 +63686,10 @@ router14.get("/portal/me", requireClubAuth2, async (req, res) => {
     longitude: club.longitude ? Number(club.longitude) : null,
     geofence_enabled: !!club.geofence_enabled,
     geofence_radius_m: club.geofence_radius_m,
-    pay_at_club_enabled: !!club.pay_at_club_enabled
+    pay_at_club_enabled: !!club.pay_at_club_enabled,
+    stitch_enabled: club.stitch_enabled !== void 0 ? !!club.stitch_enabled : true,
+    wallet_enabled: club.wallet_enabled !== void 0 ? !!club.wallet_enabled : true,
+    prepaid_enabled: club.prepaid_enabled !== void 0 ? !!club.prepaid_enabled : true
   });
 });
 router14.put("/portal/me", requireClubAuth2, async (req, res) => {
@@ -63693,7 +63715,10 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
     longitude,
     geofence_enabled,
     geofence_radius_m,
-    pay_at_club_enabled
+    pay_at_club_enabled,
+    stitch_enabled,
+    wallet_enabled,
+    prepaid_enabled
   } = req.body ?? {};
   await exec(
     `UPDATE clubs SET
@@ -63703,7 +63728,10 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       cart_available = COALESCE(?, cart_available), cart_compulsory = COALESCE(?, cart_compulsory),
       cart_price = ?, latitude = ?, longitude = ?,
       geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m),
-      pay_at_club_enabled = COALESCE(?, pay_at_club_enabled)
+      pay_at_club_enabled = COALESCE(?, pay_at_club_enabled),
+      stitch_enabled  = COALESCE(?, stitch_enabled),
+      wallet_enabled  = COALESCE(?, wallet_enabled),
+      prepaid_enabled = COALESCE(?, prepaid_enabled)
     WHERE id = ?`,
     [
       name ?? null,
@@ -63727,10 +63755,13 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       geofence_enabled != null ? geofence_enabled ? 1 : 0 : null,
       geofence_radius_m ?? null,
       pay_at_club_enabled != null ? pay_at_club_enabled ? 1 : 0 : null,
+      stitch_enabled != null ? stitch_enabled ? 1 : 0 : null,
+      wallet_enabled != null ? wallet_enabled ? 1 : 0 : null,
+      prepaid_enabled != null ? prepaid_enabled ? 1 : 0 : null,
       club.id
     ]
   );
-  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, wallet_enabled, prepaid_enabled FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
 });
 router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
@@ -68794,6 +68825,9 @@ async function createSchema() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_fee_pct INT NOT NULL DEFAULT 5");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS pay_at_club_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS stitch_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS wallet_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS prepaid_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (
       id         SERIAL PRIMARY KEY,

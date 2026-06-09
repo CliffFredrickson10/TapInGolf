@@ -1180,6 +1180,95 @@ function DeleteTeeTimesDialog({
 
 // ─── Counter Booking Dialog ────────────────────────────────────────────────────
 
+// ── Per-slot member search input ─────────────────────────────────────────────
+
+interface PlayerSlot { userId: number | null; name: string; email: string; }
+
+function PlayerSlotSearch({
+  slot, onChange, placeholder, autoFocus = false, onSwitchToGuest,
+}: {
+  slot: PlayerSlot;
+  onChange: (s: PlayerSlot) => void;
+  placeholder: string;
+  autoFocus?: boolean;
+  onSwitchToGuest?: () => void;
+}) {
+  const [query, setQuery] = useState("");
+  const [results, setResults] = useState<Array<{ id: number; name: string; email: string }>>([]);
+  const [searching, setSearching] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    if (timer.current) clearTimeout(timer.current);
+    if (query.length < 2) { setResults([]); return; }
+    timer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await api<Array<{ id: number; name: string; email: string }>>(
+          `/api/portal/users/search?q=${encodeURIComponent(query)}`
+        );
+        setResults(r);
+      } catch { /* silent */ } finally { setSearching(false); }
+    }, 300);
+  }, [query]);
+
+  if (slot.userId !== null) {
+    return (
+      <div className="flex items-center justify-between px-2.5 py-1.5 rounded-md border bg-[#1a5c38]/5 border-[#1a5c38]/20 h-8">
+        <div className="flex items-center gap-1.5 min-w-0">
+          <Users className="h-3.5 w-3.5 text-[#1a5c38] flex-shrink-0" />
+          <span className="text-sm font-medium truncate">{slot.name}</span>
+          <span className="text-xs text-muted-foreground truncate hidden sm:inline">{slot.email}</span>
+        </div>
+        <button
+          className="text-xs text-muted-foreground hover:text-foreground ml-2 flex-shrink-0"
+          onClick={() => { onChange({ userId: null, name: "", email: "" }); setQuery(""); setResults([]); }}
+        >
+          Change
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-muted-foreground" />
+      <Input
+        className="h-8 text-sm pl-7 pr-7"
+        placeholder={placeholder}
+        value={query}
+        onChange={e => { setQuery(e.target.value); onChange({ userId: null, name: e.target.value, email: "" }); }}
+        autoFocus={autoFocus}
+      />
+      {searching && <Loader2 className="absolute right-2 top-2 h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      {results.length > 0 && (
+        <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-44 overflow-y-auto">
+          {results.map(u => (
+            <button
+              key={u.id}
+              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors"
+              onClick={() => { onChange({ userId: u.id, name: u.name, email: u.email }); setQuery(""); setResults([]); }}
+            >
+              <Users className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium">{u.name}</p>
+                <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+              </div>
+            </button>
+          ))}
+        </div>
+      )}
+      {query.length >= 2 && !searching && results.length === 0 && onSwitchToGuest && (
+        <p className="mt-1 text-xs text-muted-foreground px-0.5">
+          No members found — <button className="underline" onClick={onSwitchToGuest}>switch to Guest</button>.
+        </p>
+      )}
+    </div>
+  );
+}
+
+// ── Counter booking dialog ────────────────────────────────────────────────────
+
 function CounterBookingDialog({
   open, onOpenChange, tee, onBooked,
 }: {
@@ -1190,79 +1279,49 @@ function CounterBookingDialog({
 }) {
   const { toast } = useToast();
   const [mode, setMode] = useState<"member" | "guest">("member");
-  const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<Array<{ id: number; name: string; email: string }>>([]);
-  const [searching, setSearching] = useState(false);
-  const [selectedUser, setSelectedUser] = useState<{ id: number; name: string; email: string } | null>(null);
   const [guestName, setGuestName] = useState("");
   const [guestEmail, setGuestEmail] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
   const [players, setPlayers] = useState(1);
-  const [playerNames, setPlayerNames] = useState<string[]>(["", "", "", ""]);
+  const emptySlot = (): PlayerSlot => ({ userId: null, name: "", email: "" });
+  const [slots, setSlots] = useState<PlayerSlot[]>([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
   const [submitting, setSubmitting] = useState(false);
-  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Reset on close
+  const resetSlots = () => setSlots([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
+
   useEffect(() => {
     if (!open) {
-      setMode("member"); setSearchQuery(""); setSearchResults([]); setSelectedUser(null);
-      setGuestName(""); setGuestEmail(""); setGuestPhone(""); setPlayers(1);
-      setPlayerNames(["", "", "", ""]);
+      setMode("member"); setGuestName(""); setGuestEmail(""); setGuestPhone(""); setPlayers(1); resetSlots();
     }
   }, [open]);
 
-  // Auto-fill player 1 name from selected member
-  useEffect(() => {
-    if (mode === "member" && selectedUser) {
-      setPlayerNames(p => { const n = [...p]; n[0] = selectedUser.name; return n; });
-    }
-  }, [selectedUser, mode]);
-
-  // Auto-fill player 1 from guest name field
-  useEffect(() => {
-    if (mode === "guest") {
-      setPlayerNames(p => { const n = [...p]; n[0] = guestName; return n; });
-    }
-  }, [guestName, mode]);
-
-  // Debounced member search
-  useEffect(() => {
-    if (mode !== "member") return;
-    if (searchTimer.current) clearTimeout(searchTimer.current);
-    if (searchQuery.length < 2) { setSearchResults([]); return; }
-    searchTimer.current = setTimeout(async () => {
-      setSearching(true);
-      try {
-        const r = await api<Array<{ id: number; name: string; email: string }>>(
-          `/api/portal/users/search?q=${encodeURIComponent(searchQuery)}`
-        );
-        setSearchResults(r);
-      } catch { /* silent */ } finally { setSearching(false); }
-    }, 300);
-  }, [searchQuery, mode]);
-
-  const updatePlayerName = (idx: number, val: string) =>
-    setPlayerNames(p => { const n = [...p]; n[idx] = val; return n; });
-
-  const applyNameToAll = () =>
-    setPlayerNames(p => { const n = [...p]; const first = n[0] || ""; for (let i = 1; i < players; i++) n[i] = first; return n; });
+  const updateSlot = (i: number, s: PlayerSlot) =>
+    setSlots(prev => { const n = [...prev]; n[i] = s; return n; });
 
   const handleSubmit = async () => {
     if (!tee) return;
-    if (mode === "member" && !selectedUser) { toast({ title: "Select a TapIn member first", variant: "destructive" }); return; }
-    if (mode === "guest" && !guestName.trim()) { toast({ title: "Guest name is required", variant: "destructive" }); return; }
+    if (mode === "member" && !slots[0].name.trim()) {
+      toast({ title: "Player 1 is required", variant: "destructive" }); return;
+    }
+    if (mode === "guest" && !guestName.trim()) {
+      toast({ title: "Guest name is required", variant: "destructive" }); return;
+    }
     setSubmitting(true);
     try {
-      const primaryName = mode === "member" ? selectedUser!.name : guestName.trim();
-      const names = playerNames.slice(0, players).map((n, i) => n.trim() || (i === 0 ? primaryName : primaryName));
+      const leadName = mode === "member" ? slots[0].name.trim() : guestName.trim();
+      const names = Array.from({ length: players }, (_, i) => {
+        if (mode === "guest") return i === 0 ? leadName : (slots[i]?.name.trim() || leadName);
+        return slots[i]?.name.trim() || leadName;
+      });
       await api("/api/portal/counter-bookings", {
         method: "POST",
         body: JSON.stringify({
-          tee_time_id: tee.id, players,
-          user_id:     mode === "member" ? selectedUser?.id : undefined,
-          guest_name:  mode === "guest"  ? guestName.trim() : undefined,
-          guest_email: mode === "guest"  ? guestEmail.trim() || undefined : undefined,
-          guest_phone: mode === "guest"  ? guestPhone.trim() || undefined : undefined,
+          tee_time_id:  tee.id,
+          players,
+          user_id:      mode === "member" ? (slots[0].userId ?? undefined) : undefined,
+          guest_name:   mode === "guest"  ? guestName.trim() : undefined,
+          guest_email:  mode === "guest"  ? guestEmail.trim() || undefined : undefined,
+          guest_phone:  mode === "guest"  ? guestPhone.trim() || undefined : undefined,
           player_names: names,
         }),
       });
@@ -1273,8 +1332,6 @@ function CounterBookingDialog({
       toast({ title: "Booking failed", description: e.message, variant: "destructive" });
     } finally { setSubmitting(false); }
   };
-
-  const primaryName = mode === "member" ? (selectedUser?.name ?? "") : guestName.trim();
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1298,60 +1355,14 @@ function CounterBookingDialog({
               <button key={m}
                 className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors
                   ${mode === m ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => { setMode(m); setSelectedUser(null); setSearchQuery(""); setSearchResults([]); setPlayerNames(["", "", "", ""]); }}
+                onClick={() => { setMode(m); resetSlots(); setGuestName(""); setGuestEmail(""); setGuestPhone(""); }}
               >
                 {m === "member" ? "TapIn Member" : "Guest"}
               </button>
             ))}
           </div>
 
-          {/* TapIn member search */}
-          {mode === "member" && (
-            <div className="space-y-2">
-              {selectedUser ? (
-                <div className="flex items-center justify-between p-2.5 rounded-lg border bg-[#1a5c38]/5 border-[#1a5c38]/20">
-                  <div className="flex items-center gap-2">
-                    <Users className="h-4 w-4 text-[#1a5c38] flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-sm font-medium">{selectedUser.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">{selectedUser.email}</p>
-                    </div>
-                  </div>
-                  <button className="text-xs text-muted-foreground hover:text-foreground px-2 py-1 rounded ml-2"
-                    onClick={() => { setSelectedUser(null); setPlayerNames(["", "", "", ""]); }}>Change</button>
-                </div>
-              ) : (
-                <div className="relative">
-                  <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                  <Input className="pl-8 pr-8" placeholder="Search name or email…"
-                    value={searchQuery} onChange={e => setSearchQuery(e.target.value)} autoFocus />
-                  {searching && <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />}
-                  {searchResults.length > 0 && (
-                    <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg max-h-48 overflow-y-auto">
-                      {searchResults.map(u => (
-                        <button key={u.id}
-                          className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/50 transition-colors"
-                          onClick={() => { setSelectedUser(u); setSearchResults([]); setSearchQuery(""); }}>
-                          <Users className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                          <div className="min-w-0">
-                            <p className="text-sm font-medium">{u.name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{u.email}</p>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
-                    <p className="mt-1.5 text-xs text-muted-foreground px-0.5">
-                      No TapIn members found — switch to <button className="underline" onClick={() => setMode("guest")}>Guest</button>.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Guest details */}
+          {/* Guest lead details (only in guest mode) */}
           {mode === "guest" && (
             <div className="space-y-3">
               <div>
@@ -1386,34 +1397,41 @@ function CounterBookingDialog({
             </div>
           </div>
 
-          {/* Per-player names */}
+          {/* Per-player slots */}
           <div className="space-y-2">
-            <div className="flex items-center justify-between">
-              <Label className="text-xs">Player Names</Label>
-              {players > 1 && primaryName && (
-                <button
-                  className="text-[11px] text-[#1a5c38] hover:underline font-medium"
-                  onClick={applyNameToAll}
-                >
-                  Apply "{primaryName.split(" ")[0]}" to all slots
-                </button>
-              )}
-            </div>
-            <div className="space-y-1.5">
+            <Label className="text-xs">Player Names</Label>
+            <div className="space-y-2">
               {Array.from({ length: players }, (_, i) => (
-                <div key={i} className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground w-16 flex-shrink-0">Player {i + 1}{i === 0 ? " *" : ""}</span>
-                  <Input
-                    className="h-8 text-sm"
-                    placeholder={i === 0 ? (primaryName || "Name required") : `Player ${i + 1} name (optional)`}
-                    value={playerNames[i] ?? ""}
-                    onChange={e => updatePlayerName(i, e.target.value)}
-                  />
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-xs text-muted-foreground w-16 flex-shrink-0 pt-2">
+                    Player {i + 1}{i === 0 ? " *" : ""}
+                  </span>
+                  {mode === "member" ? (
+                    <div className="flex-1 min-w-0">
+                      <PlayerSlotSearch
+                        slot={slots[i]}
+                        onChange={s => updateSlot(i, s)}
+                        placeholder={i === 0 ? "Search name or email…" : `Player ${i + 1} — search or type name`}
+                        autoFocus={i === 0}
+                        onSwitchToGuest={i === 0 ? () => setMode("guest") : undefined}
+                      />
+                    </div>
+                  ) : (
+                    <Input
+                      className="flex-1 h-8 text-sm"
+                      placeholder={i === 0 ? (guestName || "Name required") : `Player ${i + 1} name (optional)`}
+                      value={i === 0 ? guestName : (slots[i]?.name ?? "")}
+                      onChange={e => i === 0 ? setGuestName(e.target.value) : updateSlot(i, { userId: null, name: e.target.value, email: "" })}
+                    />
+                  )}
                 </div>
               ))}
             </div>
-            {players > 1 && (
-              <p className="text-[11px] text-muted-foreground">Leave additional player names blank to use the lead name for all slots.</p>
+            {mode === "member" && players > 1 && (
+              <p className="text-[11px] text-muted-foreground">Search TapIn members on any slot, or type a name to add a guest player.</p>
+            )}
+            {mode === "guest" && players > 1 && (
+              <p className="text-[11px] text-muted-foreground">Additional player names are optional — blank slots use the lead name.</p>
             )}
           </div>
 

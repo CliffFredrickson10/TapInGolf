@@ -450,16 +450,28 @@ function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshi
 
 function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
   const [open, setOpen] = useState(false);
-  const items = summary.line_items ?? [];
+  const [items, setItems] = useState<CounterSummaryLineItem[]>(summary.line_items ?? []);
+  const [loadingItems, setLoadingItems] = useState(false);
   const vatAmt  = summary.unbilled_vat;
   const exclVat = summary.unbilled_fee;
+
+  const handleToggle = () => {
+    if (!open && items.length === 0) {
+      setLoadingItems(true);
+      api<CounterSummary>(`/api/portal/counter-bookings/summary?t=${Date.now()}`)
+        .then(fresh => setItems(fresh.line_items ?? []))
+        .catch(() => {})
+        .finally(() => setLoadingItems(false));
+    }
+    setOpen(v => !v);
+  };
 
   return (
     <Card>
       <CardContent className="p-5">
         {/* Header row — always visible */}
         <button
-          onClick={() => setOpen(v => !v)}
+          onClick={handleToggle}
           className="w-full flex items-start gap-3 text-left"
         >
           <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
@@ -476,7 +488,12 @@ function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
         </button>
 
         {/* Expandable breakdown */}
-        {open && items.length > 0 && (
+        {open && loadingItems && (
+          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+            <RefreshCw className="h-4 w-4 animate-spin" /> Loading breakdown…
+          </div>
+        )}
+        {open && !loadingItems && items.length > 0 && (
           <div className="mt-4 rounded-lg border overflow-hidden bg-white">
             <table className="w-full text-sm">
               <thead>

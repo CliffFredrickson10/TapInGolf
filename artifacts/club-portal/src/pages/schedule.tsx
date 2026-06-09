@@ -12,7 +12,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
-  CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X, TicketX,
+  CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X,
   Zap, Play, Clock, ChevronDown, ChevronUp, AlertTriangle,
   Search, UserPlus, Users,
 } from "lucide-react";
@@ -1916,16 +1916,6 @@ export default function Schedule() {
               <span><span className="font-bold text-white">{Math.max(0, totalSlots - bookedSlots)}</span> open</span>
               <span><span className="font-bold text-white">{dayBookings.filter(b => b.status === "pending").length}</span> pending</span>
             </div>
-          )}
-          {bookedSlots > 0 && (
-            <button
-              onClick={() => navigate(`/vouchers?tab=cancellation&date=${selectedDate}`)}
-              className="shrink-0 flex items-center gap-1.5 text-xs font-medium bg-white/15 hover:bg-white/25 text-white border border-white/30 rounded-md px-3 py-1.5 transition-colors"
-              title="Cancel bookings and issue vouchers for this day"
-            >
-              <TicketX className="h-3.5 w-3.5" />
-              Issue Vouchers
-            </button>
           )}
         </div>
       </div>

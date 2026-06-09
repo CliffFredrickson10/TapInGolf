@@ -2439,10 +2439,31 @@ router.post("/portal/vouchers", requireClubAuth, async (req: Request, res: Respo
     "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
     [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null, resolvedUserId]
   );
-  res.json(await row<any>(
+  const newVoucher = await row<any>(
     `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
     [(result as any).insertId]
-  ));
+  );
+
+  // ── Notify the assigned user ─────────────────────────────────────────────
+  if (resolvedUserId != null) {
+    const discountLabel = discount_type === "percentage"
+      ? `${Number(discount_value)}% off`
+      : `R${Number(discount_value).toFixed(2)} off`;
+    const notifTitle = `🎟️ New voucher from ${club.name}`;
+    const notifBody  = `You've been gifted a discount voucher: ${code.toUpperCase()} — ${discountLabel}. Use it on your next booking!`;
+    const notifData  = { type: "voucher_issued", voucher_id: (result as any).insertId, code: code.toUpperCase(), discount_type, discount_value: Number(discount_value) };
+    await exec(
+      "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+      [resolvedUserId, "voucher_issued", notifTitle, notifBody, JSON.stringify(notifData)]
+    );
+    const recipient = await row<any>("SELECT push_token FROM users WHERE id = ?", [resolvedUserId]);
+    if (recipient?.push_token) {
+      const { sendPushNotifications } = await import("../lib/notifications");
+      sendPushNotifications([{ to: recipient.push_token, sound: "default", title: notifTitle, body: notifBody, data: notifData }]);
+    }
+  }
+
+  res.json(newVoucher);
 });
 
 router.put("/portal/vouchers/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

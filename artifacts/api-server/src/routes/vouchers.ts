@@ -200,4 +200,23 @@ router.get("/vouchers/available", async (req, res): Promise<void> => {
   res.json({ vouchers: results });
 });
 
+// ── Discount vouchers assigned to the current user ───────────────────────────
+router.get("/vouchers/my-discount", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const vouchers = await query<any>(
+    `SELECT v.id, v.code, v.discount_type, v.discount_value,
+            v.min_amount, v.max_uses, v.uses_count,
+            v.active, v.expires_at, v.created_at,
+            c.name AS club_name
+     FROM vouchers v
+     LEFT JOIN clubs c ON c.id = v.club_id
+     WHERE v.user_id = ?
+     ORDER BY v.created_at DESC`,
+    [user.id]
+  );
+  res.json(vouchers);
+});
+
 export default router;

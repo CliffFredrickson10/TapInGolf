@@ -61150,6 +61150,10 @@ router8.post("/vouchers/validate", async (req, res) => {
     res.status(404).json({ valid: false, message: "Voucher code not found or inactive" });
     return;
   }
+  if (voucher.user_id != null && voucher.user_id !== user.id) {
+    res.status(403).json({ valid: false, message: "This voucher is assigned to a different account" });
+    return;
+  }
   if (voucher.expires_at && new Date(voucher.expires_at) < /* @__PURE__ */ new Date()) {
     res.status(400).json({ valid: false, message: "This voucher has expired" });
     return;
@@ -61186,6 +61190,94 @@ router8.post("/vouchers/validate", async (req, res) => {
     discount_amount: discountAmount,
     final_amount: finalAmount
   });
+});
+router8.get("/vouchers/available", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const club_id = req.query.club_id ? parseInt(req.query.club_id) : null;
+  const amount = req.query.amount ? parseFloat(req.query.amount) : 0;
+  const results = [];
+  const cvRows = await query(
+    `SELECT cv.*, c.name AS club_name
+     FROM cancellation_vouchers cv
+     LEFT JOIN clubs c ON c.id = cv.club_id
+     WHERE cv.user_id = ?
+       AND (cv.redeemed_at IS NULL)
+       AND (cv.value_remaining IS NULL OR cv.value_remaining > 0)
+       AND (cv.expires_at IS NULL OR cv.expires_at > NOW())
+       ${club_id != null ? "AND (cv.club_id = ? OR cv.club_id IS NULL)" : ""}`,
+    club_id != null ? [user.id, club_id] : [user.id]
+  );
+  for (const cv of cvRows) {
+    const remaining = cv.value_remaining != null ? parseFloat(cv.value_remaining) : cv.value_rands ? parseFloat(cv.value_rands) : 0;
+    if (remaining <= 0) continue;
+    const discountAmount = Math.min(remaining, amount);
+    results.push({
+      code: cv.code,
+      label: "Cancellation Voucher",
+      sub: `R${remaining.toFixed(2)} credit${cv.club_name ? ` \xB7 ${cv.club_name}` : ""}`,
+      discount_type: "fixed",
+      discount_value: remaining,
+      discount_amount: discountAmount,
+      final_amount: Math.max(0, amount - discountAmount),
+      is_cancellation_voucher: true,
+      club_name: cv.club_name ?? null,
+      expires_at: cv.expires_at ?? null
+    });
+  }
+  const stdRows = await query(
+    `SELECT * FROM vouchers
+     WHERE active = 1
+       AND (expires_at IS NULL OR expires_at > NOW())
+       AND (max_uses IS NULL OR uses_count < max_uses)
+       AND (min_amount IS NULL OR CAST(min_amount AS DECIMAL(10,2)) = 0 OR ? >= CAST(min_amount AS DECIMAL(10,2)))
+       AND (user_id IS NULL OR user_id = ?)
+       ${club_id != null ? "AND (club_id = ? OR club_id IS NULL)" : ""}`,
+    club_id != null ? [amount, user.id, club_id] : [amount, user.id]
+  );
+  for (const v of stdRows) {
+    const discountValue = parseFloat(v.discount_value);
+    let discountAmount;
+    if (v.discount_type === "percentage") {
+      discountAmount = Math.round(amount * discountValue / 100 * 100) / 100;
+    } else {
+      discountAmount = Math.min(discountValue, amount);
+    }
+    results.push({
+      code: v.code,
+      label: v.discount_type === "percentage" ? `${discountValue}% off` : `R${discountValue.toFixed(2)} off`,
+      sub: `Save R${discountAmount.toFixed(2)} on this booking`,
+      discount_type: v.discount_type,
+      discount_value: discountValue,
+      discount_amount: discountAmount,
+      final_amount: Math.max(0, amount - discountAmount),
+      is_cancellation_voucher: false,
+      expires_at: v.expires_at ?? null
+    });
+  }
+  res.json({ vouchers: results });
+});
+router8.get("/vouchers/my-discount", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const vouchers = await query(
+    `SELECT v.id, v.code, v.discount_type, v.discount_value,
+            v.min_amount, v.max_uses, v.uses_count,
+            v.active, v.expires_at, v.created_at,
+            c.name AS club_name
+     FROM vouchers v
+     LEFT JOIN clubs c ON c.id = v.club_id
+     WHERE v.user_id = ?
+     ORDER BY v.created_at DESC`,
+    [user.id]
+  );
+  res.json(vouchers);
 });
 var vouchers_default = router8;
 
@@ -66047,11 +66139,20 @@ router14.delete("/portal/members/:id", requireClubAuth2, async (req, res) => {
 });
 router14.get("/portal/vouchers", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  res.json(await query("SELECT id, code, discount_type, discount_value, min_amount, max_uses, uses_count, active, expires_at, created_at FROM vouchers WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
+  res.json(await query(
+    `SELECT v.id, v.code, v.discount_type, v.discount_value, v.min_amount, v.max_uses, v.uses_count,
+            v.active, v.expires_at, v.created_at, v.user_id,
+            u.name AS user_name, u.email AS user_email
+     FROM vouchers v
+     LEFT JOIN users u ON u.id = v.user_id
+     WHERE v.club_id = ?
+     ORDER BY v.created_at DESC`,
+    [club.id]
+  ));
 });
 router14.post("/portal/vouchers", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { code, discount_type, discount_value, min_amount, max_uses, expires_at } = req.body ?? {};
+  const { code, discount_type, discount_value, min_amount, max_uses, expires_at, user_id } = req.body ?? {};
   if (!code || !discount_type || discount_value == null) {
     res.status(400).json({ message: "code, discount_type and discount_value required" });
     return;
@@ -66061,11 +66162,31 @@ router14.post("/portal/vouchers", requireClubAuth2, async (req, res) => {
     res.status(409).json({ message: "Code already exists" });
     return;
   }
+  const resolvedUserId = user_id != null ? Number(user_id) : null;
   const result = await exec(
-    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
-    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null]
+    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null, resolvedUserId]
   );
-  res.json(await row("SELECT * FROM vouchers WHERE id = ?", [result.insertId]));
+  const newVoucher = await row(
+    `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
+    [result.insertId]
+  );
+  if (resolvedUserId != null) {
+    const discountLabel = discount_type === "percentage" ? `${Number(discount_value)}% off` : `R${Number(discount_value).toFixed(2)} off`;
+    const notifTitle = `\u{1F39F}\uFE0F New voucher from ${club.name}`;
+    const notifBody = `You've been gifted a discount voucher: ${code.toUpperCase()} \u2014 ${discountLabel}. Use it on your next booking!`;
+    const notifData = { type: "voucher_issued", voucher_id: result.insertId, code: code.toUpperCase(), discount_type, discount_value: Number(discount_value) };
+    await exec(
+      "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+      [resolvedUserId, "voucher_issued", notifTitle, notifBody, JSON.stringify(notifData)]
+    );
+    const recipient = await row("SELECT push_token FROM users WHERE id = ?", [resolvedUserId]);
+    if (recipient?.push_token) {
+      const { sendPushNotifications: sendPushNotifications2 } = await Promise.resolve().then(() => (init_notifications(), notifications_exports));
+      sendPushNotifications2([{ to: recipient.push_token, sound: "default", title: notifTitle, body: notifBody, data: notifData }]);
+    }
+  }
+  res.json(newVoucher);
 });
 router14.put("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -66075,12 +66196,25 @@ router14.put("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
     res.status(404).json({ message: "Voucher not found" });
     return;
   }
-  const { discount_value, min_amount, max_uses, active, expires_at } = req.body ?? {};
-  await exec(
-    "UPDATE vouchers SET discount_value = COALESCE(?, discount_value), min_amount = ?, max_uses = ?, active = COALESCE(?, active), expires_at = ? WHERE id = ? AND club_id = ?",
-    [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? active ? 1 : 0 : null, expires_at ?? null, vId, club.id]
-  );
-  res.json(await row("SELECT * FROM vouchers WHERE id = ?", [vId]));
+  const { discount_value, min_amount, max_uses, active, expires_at, user_id } = req.body ?? {};
+  const resolvedUserId = "user_id" in (req.body ?? {}) ? user_id != null ? Number(user_id) : null : void 0;
+  const sets = [
+    "discount_value = COALESCE(?, discount_value)",
+    "min_amount = ?",
+    "max_uses = ?",
+    "active = COALESCE(?, active)",
+    "expires_at = ?"
+  ];
+  const vals = [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? active ? 1 : 0 : null, expires_at ?? null];
+  if (resolvedUserId !== void 0) {
+    sets.push("user_id = ?");
+    vals.push(resolvedUserId);
+  }
+  await exec(`UPDATE vouchers SET ${sets.join(", ")} WHERE id = ? AND club_id = ?`, [...vals, vId, club.id]);
+  res.json(await row(
+    `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
+    [vId]
+  ));
 });
 router14.delete("/portal/vouchers/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -69735,6 +69869,8 @@ async function reconcileSlotPlayerCounts() {
 }
 async function applyLateAlters() {
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+  await ddl("ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_vouchers_user_id ON vouchers (user_id)");
 }
 async function migrate() {
   await applyLateAlters();

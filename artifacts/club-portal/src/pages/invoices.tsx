@@ -450,30 +450,15 @@ function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshi
 
 function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<CounterSummaryLineItem[]>([]);
-  const [loadingItems, setLoadingItems] = useState(true);
+  const items = summary.line_items ?? [];
   const vatAmt  = summary.unbilled_vat;
   const exclVat = summary.unbilled_fee;
-
-  useEffect(() => {
-    api<CounterSummary>(`/api/portal/counter-bookings/summary?_=${Date.now()}`)
-      .then((fresh: CounterSummary) => {
-        setItems(fresh.line_items ?? []);
-      })
-      .catch(err => console.error("[UnbilledSummaryCard] fetch error:", err))
-      .finally(() => setLoadingItems(false));
-  }, []);
-
-  const handleToggle = () => setOpen(v => !v);
+  const summaryLabel = `${summary.unbilled_count} player slot${summary.unbilled_count !== 1 ? "s" : ""} across ${summary.unbilled_bookings} booking${summary.unbilled_bookings !== 1 ? "s" : ""}`;
 
   return (
     <Card>
       <CardContent className="p-5">
-        {/* Header row — always visible */}
-        <button
-          onClick={handleToggle}
-          className="w-full flex items-start gap-3 text-left"
-        >
+        <div className="flex items-start gap-3">
           <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
           <div className="flex-1 min-w-0">
             <p className="font-semibold">Unbilled walk-in bookings accumulating</p>
@@ -482,62 +467,64 @@ function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
             </p>
             <p className="text-xs text-muted-foreground mt-1">An invoice will be automatically generated on the 1st of next month.</p>
           </div>
-          <div className="flex-shrink-0 mt-0.5 text-muted-foreground">
-            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-          </div>
-        </button>
+        </div>
 
-        {/* Expandable breakdown */}
-        {open && loadingItems && (
-          <div className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
-            <RefreshCw className="h-4 w-4 animate-spin" /> Loading breakdown…
-          </div>
-        )}
-        {open && !loadingItems && items.length > 0 && (
-          <div className="mt-4 rounded-lg border overflow-hidden bg-white">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-muted/40 border-b">
-                  <th className="text-left px-3 py-2 font-medium text-muted-foreground">Booking</th>
-                  <th className="text-center px-3 py-2 font-medium text-muted-foreground">Players</th>
-                  <th className="text-right px-3 py-2 font-medium text-muted-foreground">Fee @ R{summary.fee_per_booking.toFixed(2)}/slot (incl. VAT)</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((li, i) => (
-                  <tr key={i} className={i < items.length - 1 ? "border-b" : ""}>
-                    <td className="px-3 py-2">
-                      <div className="flex items-center gap-2">
-                        <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <div>
-                          <p className="font-medium text-foreground">{li.guest_name}</p>
-                          <p className="text-xs text-muted-foreground font-mono">{li.booking_ref}</p>
-                          <p className="text-xs text-muted-foreground">{li.date} · {li.time}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-3 py-2 text-center text-muted-foreground">{li.players}</td>
-                    <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
+        {/* Breakdown toggle — same style as InvoiceBreakdown */}
+        <div className="mt-3 border-t pt-3">
+          <button
+            onClick={() => setOpen(v => !v)}
+            className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+          >
+            {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+            {open ? "Hide" : "View"} breakdown — {summaryLabel}
+          </button>
+
+          {open && items.length > 0 && (
+            <div className="mt-3 rounded-lg border overflow-hidden bg-white">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/40 border-b">
+                    <th className="text-left px-3 py-2 font-medium text-muted-foreground">Booking</th>
+                    <th className="text-center px-3 py-2 font-medium text-muted-foreground">Players</th>
+                    <th className="text-right px-3 py-2 font-medium text-muted-foreground">Fee @ R{summary.fee_per_booking.toFixed(2)}/slot (incl. VAT)</th>
                   </tr>
-                ))}
-              </tbody>
-              <tfoot>
-                <tr className="border-t bg-muted/20">
-                  <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">Excl. VAT</td>
-                  <td className="px-3 py-2 text-right text-sm">{fmtRand(exclVat)}</td>
-                </tr>
-                <tr>
-                  <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">VAT (15%)</td>
-                  <td className="px-3 py-2 text-right text-sm">{fmtRand(vatAmt)}</td>
-                </tr>
-                <tr className="border-t bg-muted/20 font-semibold">
-                  <td colSpan={2} className="px-3 py-2 text-right">Total (incl. VAT)</td>
-                  <td className="px-3 py-2 text-right">{fmtRand(summary.unbilled_total)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-        )}
+                </thead>
+                <tbody>
+                  {items.map((li, i) => (
+                    <tr key={i} className={i < items.length - 1 ? "border-b" : ""}>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                          <div>
+                            <p className="font-medium text-foreground">{li.guest_name}</p>
+                            <p className="text-xs text-muted-foreground font-mono">{li.booking_ref}</p>
+                            <p className="text-xs text-muted-foreground">{li.date} · {li.time}</p>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center text-muted-foreground">{li.players}</td>
+                      <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t bg-muted/20">
+                    <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">Excl. VAT</td>
+                    <td className="px-3 py-2 text-right text-sm">{fmtRand(exclVat)}</td>
+                  </tr>
+                  <tr>
+                    <td colSpan={2} className="px-3 py-2 text-xs text-muted-foreground text-right">VAT (15%)</td>
+                    <td className="px-3 py-2 text-right text-sm">{fmtRand(vatAmt)}</td>
+                  </tr>
+                  <tr className="border-t bg-muted/20 font-semibold">
+                    <td colSpan={2} className="px-3 py-2 text-right">Total (incl. VAT)</td>
+                    <td className="px-3 py-2 text-right">{fmtRand(summary.unbilled_total)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   );
@@ -557,7 +544,7 @@ export default function Invoices() {
     setLoading(true);
     Promise.all([
       api<{ invoices: ClubInvoice[] }>("/api/portal/invoices"),
-      api<CounterSummary>("/api/portal/counter-bookings/summary"),
+      api<CounterSummary>(`/api/portal/counter-bookings/summary?_=${Date.now()}`),
     ])
       .then(([d, s]) => { setInvoices(d.invoices); setCounterSummary(s); })
       .catch(() => toast({ title: "Failed to load invoices", variant: "destructive" }))

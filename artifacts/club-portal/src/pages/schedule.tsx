@@ -1278,50 +1278,45 @@ function CounterBookingDialog({
   onBooked: () => void;
 }) {
   const { toast } = useToast();
-  const [mode, setMode] = useState<"member" | "guest">("member");
-  const [guestName, setGuestName] = useState("");
-  const [guestEmail, setGuestEmail] = useState("");
-  const [guestPhone, setGuestPhone] = useState("");
   const [players, setPlayers] = useState(1);
   const emptySlot = (): PlayerSlot => ({ userId: null, name: "", email: "" });
   const [slots, setSlots] = useState<PlayerSlot[]>([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
+  const [leadEmail, setLeadEmail] = useState("");
+  const [leadPhone, setLeadPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
   const resetSlots = () => setSlots([emptySlot(), emptySlot(), emptySlot(), emptySlot()]);
 
   useEffect(() => {
-    if (!open) {
-      setMode("member"); setGuestName(""); setGuestEmail(""); setGuestPhone(""); setPlayers(1); resetSlots();
-    }
+    if (!open) { setPlayers(1); resetSlots(); setLeadEmail(""); setLeadPhone(""); }
   }, [open]);
 
   const updateSlot = (i: number, s: PlayerSlot) =>
     setSlots(prev => { const n = [...prev]; n[i] = s; return n; });
 
+  const lead = slots[0];
+  const leadIsGuest = lead.userId === null;
+
   const handleSubmit = async () => {
     if (!tee) return;
-    if (mode === "member" && !slots[0].name.trim()) {
-      toast({ title: "Player 1 is required", variant: "destructive" }); return;
-    }
-    if (mode === "guest" && !guestName.trim()) {
-      toast({ title: "Guest name is required", variant: "destructive" }); return;
+    if (!lead.name.trim()) {
+      toast({ title: "Player 1 name is required", variant: "destructive" }); return;
     }
     setSubmitting(true);
     try {
-      const leadName = mode === "member" ? slots[0].name.trim() : guestName.trim();
-      const names = Array.from({ length: players }, (_, i) => {
-        if (mode === "guest") return i === 0 ? leadName : (slots[i]?.name.trim() || leadName);
-        return slots[i]?.name.trim() || leadName;
-      });
+      const leadName = lead.name.trim();
+      const names = Array.from({ length: players }, (_, i) =>
+        slots[i]?.name.trim() || leadName
+      );
       await api("/api/portal/counter-bookings", {
         method: "POST",
         body: JSON.stringify({
           tee_time_id:  tee.id,
           players,
-          user_id:      mode === "member" ? (slots[0].userId ?? undefined) : undefined,
-          guest_name:   mode === "guest"  ? guestName.trim() : undefined,
-          guest_email:  mode === "guest"  ? guestEmail.trim() || undefined : undefined,
-          guest_phone:  mode === "guest"  ? guestPhone.trim() || undefined : undefined,
+          user_id:      leadIsGuest ? undefined : lead.userId,
+          guest_name:   leadIsGuest ? leadName : undefined,
+          guest_email:  leadIsGuest ? (leadEmail.trim() || undefined) : undefined,
+          guest_phone:  leadIsGuest ? (leadPhone.trim() || undefined) : undefined,
           player_names: names,
         }),
       });
@@ -1349,39 +1344,6 @@ function CounterBookingDialog({
         </DialogHeader>
 
         <div className="space-y-4 pt-1">
-          {/* Mode toggle */}
-          <div className="flex rounded-lg border p-0.5 bg-muted/40">
-            {(["member", "guest"] as const).map(m => (
-              <button key={m}
-                className={`flex-1 text-sm py-1.5 rounded-md font-medium transition-colors
-                  ${mode === m ? "bg-white shadow-sm text-foreground" : "text-muted-foreground hover:text-foreground"}`}
-                onClick={() => { setMode(m); resetSlots(); setGuestName(""); setGuestEmail(""); setGuestPhone(""); }}
-              >
-                {m === "member" ? "TapIn Member" : "Guest"}
-              </button>
-            ))}
-          </div>
-
-          {/* Guest lead details (only in guest mode) */}
-          {mode === "guest" && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs">Lead Guest Name *</Label>
-                <Input className="mt-1" placeholder="Full name" value={guestName} onChange={e => setGuestName(e.target.value)} autoFocus />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <Label className="text-xs">Email</Label>
-                  <Input className="mt-1" type="email" placeholder="Optional" value={guestEmail} onChange={e => setGuestEmail(e.target.value)} />
-                </div>
-                <div>
-                  <Label className="text-xs">Phone</Label>
-                  <Input className="mt-1" placeholder="Optional" value={guestPhone} onChange={e => setGuestPhone(e.target.value)} />
-                </div>
-              </div>
-            </div>
-          )}
-
           {/* Players count */}
           <div>
             <Label className="text-xs mb-1.5 block">Number of Players</Label>
@@ -1398,41 +1360,48 @@ function CounterBookingDialog({
           </div>
 
           {/* Per-player slots */}
-          <div className="space-y-2">
-            <Label className="text-xs">Player Names</Label>
-            <div className="space-y-2">
+          <div className="space-y-3">
+            <Label className="text-xs">Players</Label>
+            <div className="space-y-3">
               {Array.from({ length: players }, (_, i) => (
-                <div key={i} className="flex items-start gap-2">
-                  <span className="text-xs text-muted-foreground w-16 flex-shrink-0 pt-2">
-                    Player {i + 1}{i === 0 ? " *" : ""}
-                  </span>
-                  {mode === "member" ? (
+                <div key={i} className="space-y-1.5">
+                  <div className="flex items-start gap-2">
+                    <span className="text-xs text-muted-foreground w-16 flex-shrink-0 pt-2">
+                      Player {i + 1}{i === 0 ? " *" : ""}
+                    </span>
                     <div className="flex-1 min-w-0">
                       <PlayerSlotSearch
                         slot={slots[i]}
                         onChange={s => updateSlot(i, s)}
-                        placeholder={i === 0 ? "Search name or email…" : `Player ${i + 1} — search or type name`}
+                        placeholder={i === 0 ? "Search TapIn member or type name…" : `Player ${i + 1} — search member or type name`}
                         autoFocus={i === 0}
-                        onSwitchToGuest={i === 0 ? () => setMode("guest") : undefined}
                       />
                     </div>
-                  ) : (
-                    <Input
-                      className="flex-1 h-8 text-sm"
-                      placeholder={i === 0 ? (guestName || "Name required") : `Player ${i + 1} name (optional)`}
-                      value={i === 0 ? guestName : (slots[i]?.name ?? "")}
-                      onChange={e => i === 0 ? setGuestName(e.target.value) : updateSlot(i, { userId: null, name: e.target.value, email: "" })}
-                    />
+                  </div>
+                  {/* Lead guest contact fields — shown only when Player 1 is not a linked member */}
+                  {i === 0 && leadIsGuest && lead.name.trim() && (
+                    <div className="ml-[72px] grid grid-cols-2 gap-2">
+                      <Input
+                        className="h-7 text-xs"
+                        type="email"
+                        placeholder="Email (optional)"
+                        value={leadEmail}
+                        onChange={e => setLeadEmail(e.target.value)}
+                      />
+                      <Input
+                        className="h-7 text-xs"
+                        placeholder="Phone (optional)"
+                        value={leadPhone}
+                        onChange={e => setLeadPhone(e.target.value)}
+                      />
+                    </div>
                   )}
                 </div>
               ))}
             </div>
-            {mode === "member" && players > 1 && (
-              <p className="text-[11px] text-muted-foreground">Search TapIn members on any slot, or type a name to add a guest player.</p>
-            )}
-            {mode === "guest" && players > 1 && (
-              <p className="text-[11px] text-muted-foreground">Additional player names are optional — blank slots use the lead name.</p>
-            )}
+            <p className="text-[11px] text-muted-foreground">
+              Search to link a TapIn member, or type any name for a guest player. Blank additional slots use the lead name.
+            </p>
           </div>
 
           {/* Fee summary */}

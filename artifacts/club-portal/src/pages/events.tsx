@@ -1921,22 +1921,42 @@ export default function Events() {
                                           {submitted && !isDQ ? (submitted.verified ? " · ✓ Verified" : " · Submitted") : ""}
                                           {isDQ && submitted?.dq_reason ? ` · ${submitted.dq_reason}` : ""}
                                         </p>
-                                        {isDQ && submitted?.original_gross != null && (
-                                          <p className="text-[10px] text-muted-foreground">Was: {submitted.original_gross}{submitted.original_net != null ? ` / ${submitted.original_net}` : ""}{submitted.original_points != null ? ` / ${submitted.original_points}pts` : ""}</p>
-                                        )}
                                       </div>
-                                      {(["gross","net","points"] as const).map(field => (
-                                        <Input
-                                          key={field} type="number" min="0"
-                                          className="h-7 text-xs text-center"
-                                          placeholder="—"
-                                          value={editScores[r.user_id]?.[field] ?? ""}
-                                          onChange={e => setEditScores(prev => ({
-                                            ...prev,
-                                            [r.user_id]: { ...(prev[r.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value },
-                                          }))}
-                                        />
-                                      ))}
+                                      {isDQ ? (
+                                        <>
+                                          {(["gross","net","points"] as const).map(field => {
+                                            const origKey = `original_${field}` as keyof Score;
+                                            const orig = submitted?.[origKey] as number | null;
+                                            const corrected = submitted?.[field] as number | null;
+                                            const changed = orig != null && corrected != null && orig !== corrected;
+                                            return (
+                                              <div key={field} className="flex flex-col items-center justify-center gap-0.5">
+                                                {changed ? (
+                                                  <>
+                                                    <span className="text-xs text-red-500 line-through font-medium">{orig}</span>
+                                                    <span className="text-xs font-bold text-gray-700">{corrected}</span>
+                                                  </>
+                                                ) : (
+                                                  <span className="text-xs text-red-400">{orig ?? corrected ?? "—"}</span>
+                                                )}
+                                              </div>
+                                            );
+                                          })}
+                                        </>
+                                      ) : (
+                                        (["gross","net","points"] as const).map(field => (
+                                          <Input
+                                            key={field} type="number" min="0"
+                                            className="h-7 text-xs text-center"
+                                            placeholder="—"
+                                            value={editScores[r.user_id]?.[field] ?? ""}
+                                            onChange={e => setEditScores(prev => ({
+                                              ...prev,
+                                              [r.user_id]: { ...(prev[r.user_id] ?? { gross: "", net: "", points: "" }), [field]: e.target.value },
+                                            }))}
+                                          />
+                                        ))
+                                      )}
                                       <Button size="sm" variant="ghost"
                                         className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
                                         title="Disqualify player"

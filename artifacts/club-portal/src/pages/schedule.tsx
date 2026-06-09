@@ -2087,7 +2087,7 @@ export default function Schedule() {
                             {slot.booking.player_names?.[slot.playerIndex] ?? slot.booking.guest_name}
                           </span>
                           <span className="flex items-center gap-1 flex-shrink-0">
-                            {slot.playerIndex === 0 && slot.booking.booking_source === "club_counter" && (
+                            {slot.booking.booking_source === "club_counter" && (
                               <span className="text-[8px] px-1 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200 font-bold">Walk-in</span>
                             )}
                             <span className={`text-[9px] px-1 py-0.5 rounded border font-semibold ${STATUS_BADGE[slot.effectiveStatus] ?? ""}`}>

@@ -142,7 +142,7 @@ export default function StaffGuestLeads() {
                     {l.province && <span className="text-xs text-muted-foreground ml-1.5">· {l.province}</span>}
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">
-                    {l.booking_date} · {String(l.booking_time).slice(0, 5)}
+                    {format(parseISO(l.booking_date), "d MMM yyyy")} · {String(l.booking_time).slice(0, 5)}
                   </td>
                   <td className="px-4 py-3">
                     <Badge variant="outline" className="font-mono text-xs">{l.booking_ref}</Badge>

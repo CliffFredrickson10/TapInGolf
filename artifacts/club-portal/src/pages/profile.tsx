@@ -22,6 +22,7 @@ interface ClubProfile {
   cart_available: boolean; cart_compulsory: boolean; cart_price: number | null;
   latitude: number | null; longitude: number | null;
   geofence_enabled: boolean; geofence_radius_m: number | null;
+  pay_at_club_enabled: boolean;
 }
 
 type ClubImage = {
@@ -625,6 +626,21 @@ export default function Profile() {
           <div className="space-y-2">
             <Label>Cart Price (ZAR per player)</Label>
             <Input type="number" value={profile.cart_price ?? ""} onChange={e => update("cart_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader><CardTitle>Payment Options</CardTitle></CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label>Pay at Club</Label>
+              <p className="text-xs text-muted-foreground">
+                Allow golfers to book with a commitment fee online and pay the greens fee at the club
+              </p>
+            </div>
+            <Switch checked={!!profile.pay_at_club_enabled} onCheckedChange={v => update("pay_at_club_enabled", v)} />
           </div>
         </CardContent>
       </Card>

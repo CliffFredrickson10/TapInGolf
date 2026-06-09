@@ -58041,6 +58041,7 @@ router3.get("/clubs", async (req, res) => {
       c.cart_available = !!c.cart_available;
       c.cart_compulsory = !!c.cart_compulsory;
       c.cart_price = c.cart_price ? parseFloat(c.cart_price) : null;
+      c.pay_at_club_enabled = !!c.pay_at_club_enabled;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
     });
     return clubs2;
@@ -59205,7 +59206,7 @@ async function releaseStalePendingBookings() {
     WITH stale AS (
       UPDATE bookings SET status = 'cancelled'
       WHERE status = 'pending'
-        AND payment_method = 'stitch'
+        AND payment_method IN ('stitch','pay_at_club')
         AND created_at < NOW() - INTERVAL '15 minutes'
       RETURNING portal_slot_id, players
     ), agg AS (
@@ -59460,8 +59461,10 @@ router4.post("/bookings", async (req, res) => {
     include_cart = false,
     holes = 18,
     // 9 or 18
-    hna_number = null
+    hna_number = null,
     // HNA membership number — upgrades non-members to affiliated_visitor tier
+    event_id: bodyEventId
+    // optional: event being booked into (used for pay_at_club rounds calc)
   } = req.body ?? {};
   const rawPlayers = Array.isArray(players_data) ? players_data : friend_ids.map((id) => ({ user_id: id }));
   const numPlayers = Math.min(Math.max(parseInt(players), 1), 4);
@@ -59499,6 +59502,16 @@ router4.post("/bookings", async (req, res) => {
   if (parseInt(slot.available) < numPlayers) {
     res.status(409).json({ message: "Not enough slots available" });
     return;
+  }
+  if (payment_method === "pay_at_club") {
+    const clubRow = await row(
+      "SELECT pay_at_club_enabled FROM clubs WHERE id = ?",
+      [slot.club_id]
+    );
+    if (!clubRow?.pay_at_club_enabled) {
+      res.status(400).json({ message: "This club does not accept pay-at-club bookings." });
+      return;
+    }
   }
   if (payment_method === "prepaid") {
     if (numPlayers > 1 && !split_bill) {
@@ -59778,6 +59791,19 @@ router4.post("/bookings", async (req, res) => {
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
   const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
   const clubAmount = Math.round((totalAmount - platformFee) * 100) / 100;
+  let commitmentFee = platformFee;
+  if (payment_method === "pay_at_club") {
+    const eventIdForRounds = slot.event_id ?? (bodyEventId ? parseInt(bodyEventId) : null);
+    if (eventIdForRounds) {
+      const evRounds = await row(
+        "SELECT COALESCE(rounds, 1) AS rounds FROM golf_events WHERE id = ?",
+        [eventIdForRounds]
+      );
+      const numRounds = evRounds ? Math.max(1, parseInt(evRounds.rounds)) : 1;
+      commitmentFee = Math.round(platformFee * numRounds * 100) / 100;
+    }
+  }
+  const chargeAmount = payment_method === "pay_at_club" ? commitmentFee : splitAmount;
   if (effectivePaymentMethod === "wallet") {
     const walletRow = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
     const available = walletRow ? parseFloat(walletRow.balance) : 0;
@@ -59804,7 +59830,7 @@ router4.post("/bookings", async (req, res) => {
         numPlayers,
         split_bill ? 1 : 0,
         totalAmount,
-        splitAmount,
+        chargeAmount,
         ref,
         effectivePaymentMethod,
         appliedVoucher,
@@ -59819,7 +59845,7 @@ router4.post("/bookings", async (req, res) => {
     await clientQuery(
       client,
       "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
-      [bookingId, user.id, splitAmount]
+      [bookingId, user.id, chargeAmount]
     );
     for (let i = 0; i < normalised.length; i++) {
       const p = normalised[i];
@@ -59838,7 +59864,7 @@ router4.post("/bookings", async (req, res) => {
         );
       }
     }
-    if (effectivePaymentMethod !== "stitch") {
+    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -59872,7 +59898,7 @@ router4.post("/bookings", async (req, res) => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    if (effectivePaymentMethod !== "stitch") {
+    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
       await clientQuery(
         client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
@@ -59885,16 +59911,16 @@ router4.post("/bookings", async (req, res) => {
       [numPlayers, parseInt(tee_time_id)]
     );
   });
-  if (effectivePaymentMethod !== "stitch") {
+  if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
     fireInvoiceEmail(bookingId).catch(() => {
     });
   }
   let paymentUrl = null;
-  if (effectivePaymentMethod === "stitch") {
+  if (effectivePaymentMethod === "stitch" || effectivePaymentMethod === "pay_at_club") {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({
-        amount: splitAmount,
+        amount: chargeAmount,
         payerName: user.name,
         payerEmail: user.email,
         merchantReference: String(bookingId),
@@ -59967,7 +59993,8 @@ router4.post("/bookings", async (req, res) => {
     booking_id: bookingId,
     booking_ref: ref,
     payment_url: paymentUrl,
-    status: "confirmed"
+    status: "confirmed",
+    commitment_fee: payment_method === "pay_at_club" ? commitmentFee : void 0
   });
 });
 router4.post("/bookings/:id/pay", async (req, res) => {
@@ -61804,8 +61831,14 @@ router10.get("/admin/revenue/clubs/:id/bookings", async (req, res) => {
   });
 });
 router10.get("/settings", async (_req, res) => {
-  const vatSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
-  res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });
+  const [vatSetting, feeSetting] = await Promise.all([
+    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'"),
+    row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'")
+  ]);
+  res.json({
+    vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15,
+    platform_fee_flat: feeSetting ? parseFloat(feeSetting.setting_value) : 10
+  });
 });
 router10.put("/admin/revenue/vat", async (req, res) => {
   const user = await getUser(req);
@@ -63425,7 +63458,7 @@ async function requireClubAuth2(req, res, next) {
   const token = header.slice(7);
   const clubId = verifyClubToken2(token);
   if (clubId) {
-    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [clubId]);
     if (!club) {
       res.status(401).json({ message: "Club not found" });
       return;
@@ -63437,7 +63470,7 @@ async function requireClubAuth2(req, res, next) {
   }
   const userPayload = verifyClubUserToken(token);
   if (userPayload) {
-    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
     if (!club) {
       res.status(401).json({ message: "Club not found" });
       return;
@@ -63633,7 +63666,8 @@ router14.get("/portal/me", requireClubAuth2, async (req, res) => {
     latitude: club.latitude ? Number(club.latitude) : null,
     longitude: club.longitude ? Number(club.longitude) : null,
     geofence_enabled: !!club.geofence_enabled,
-    geofence_radius_m: club.geofence_radius_m
+    geofence_radius_m: club.geofence_radius_m,
+    pay_at_club_enabled: !!club.pay_at_club_enabled
   });
 });
 router14.put("/portal/me", requireClubAuth2, async (req, res) => {
@@ -63658,7 +63692,8 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
     latitude,
     longitude,
     geofence_enabled,
-    geofence_radius_m
+    geofence_radius_m,
+    pay_at_club_enabled
   } = req.body ?? {};
   await exec(
     `UPDATE clubs SET
@@ -63667,7 +63702,8 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       facilities = COALESCE(?, facilities), website = ?, description = ?, phone = ?, email = ?, address = ?,
       cart_available = COALESCE(?, cart_available), cart_compulsory = COALESCE(?, cart_compulsory),
       cart_price = ?, latitude = ?, longitude = ?,
-      geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m)
+      geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m),
+      pay_at_club_enabled = COALESCE(?, pay_at_club_enabled)
     WHERE id = ?`,
     [
       name ?? null,
@@ -63690,10 +63726,11 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       longitude ?? null,
       geofence_enabled != null ? geofence_enabled ? 1 : 0 : null,
       geofence_radius_m ?? null,
+      pay_at_club_enabled != null ? pay_at_club_enabled ? 1 : 0 : null,
       club.id
     ]
   );
-  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
 });
 router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
@@ -68756,6 +68793,7 @@ async function createSchema() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_payment_minutes INT NOT NULL DEFAULT 1440");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_other_policies TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cancel_fee_pct INT NOT NULL DEFAULT 5");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS pay_at_club_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (
       id         SERIAL PRIMARY KEY,

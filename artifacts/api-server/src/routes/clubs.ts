@@ -136,9 +136,10 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.price_from      = c.price_from ? parseFloat(c.price_from) : null;
       c.featured        = !!c.featured;
       c.distance_km     = c.distance != null ? parseFloat(c.distance) : null;
-      c.cart_available  = !!c.cart_available;
-      c.cart_compulsory = !!c.cart_compulsory;
-      c.cart_price      = c.cart_price ? parseFloat(c.cart_price) : null;
+      c.cart_available      = !!c.cart_available;
+      c.cart_compulsory     = !!c.cart_compulsory;
+      c.cart_price          = c.cart_price ? parseFloat(c.cart_price) : null;
+      c.pay_at_club_enabled = !!c.pay_at_club_enabled;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
     });
     return clubs;

@@ -290,8 +290,14 @@ router.get("/admin/revenue/clubs/:id/bookings", async (req, res): Promise<void> 
 // GET /api/settings — public endpoint for app-wide display settings
 // ─────────────────────────────────────────────────────────────────────
 router.get("/settings", async (_req, res): Promise<void> => {
-  const vatSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'");
-  res.json({ vat_pct: vatSetting ? parseFloat(vatSetting.setting_value) : 15 });
+  const [vatSetting, feeSetting] = await Promise.all([
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'vat_pct'"),
+    row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'"),
+  ]);
+  res.json({
+    vat_pct:          vatSetting  ? parseFloat(vatSetting.setting_value)  : 15,
+    platform_fee_flat: feeSetting ? parseFloat(feeSetting.setting_value)  : 10,
+  });
 });
 
 // ─────────────────────────────────────────────────────────────────────

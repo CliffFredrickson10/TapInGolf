@@ -89,7 +89,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try direct club login token first
   const clubId = verifyClubToken(token);
   if (clubId) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     (req as any).club = club;
     (req as any).clubUser = null; // direct admin login — no portal user record
@@ -100,7 +100,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try club portal user token
   const userPayload = verifyClubUserToken(token);
   if (userPayload) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     const clubUser = await row<any>("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ? AND club_id = ? AND active = 1", [userPayload.userId, userPayload.clubId]);
     if (!clubUser) { res.status(401).json({ message: "User not found or inactive" }); return; }
@@ -251,6 +251,7 @@ router.get("/portal/me", requireClubAuth, async (req: Request, res: Response): P
     latitude: club.latitude ? Number(club.latitude) : null,
     longitude: club.longitude ? Number(club.longitude) : null,
     geofence_enabled: !!club.geofence_enabled, geofence_radius_m: club.geofence_radius_m,
+    pay_at_club_enabled: !!club.pay_at_club_enabled,
   });
 });
 
@@ -258,7 +259,7 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
   const club = getClub(req);
   const { name, location, province, image_url, logo_url, holes, price_from, facilities, website, description,
           phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude,
-          geofence_enabled, geofence_radius_m } = req.body ?? {};
+          geofence_enabled, geofence_radius_m, pay_at_club_enabled } = req.body ?? {};
 
   await exec(
     `UPDATE clubs SET
@@ -267,7 +268,8 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
       facilities = COALESCE(?, facilities), website = ?, description = ?, phone = ?, email = ?, address = ?,
       cart_available = COALESCE(?, cart_available), cart_compulsory = COALESCE(?, cart_compulsory),
       cart_price = ?, latitude = ?, longitude = ?,
-      geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m)
+      geofence_enabled = COALESCE(?, geofence_enabled), geofence_radius_m = COALESCE(?, geofence_radius_m),
+      pay_at_club_enabled = COALESCE(?, pay_at_club_enabled)
     WHERE id = ?`,
     [name ?? null, location ?? null, province ?? null,
      image_url ?? null, logo_url ?? null, holes ?? null, price_from ?? null,
@@ -276,9 +278,10 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
      cart_compulsory != null ? (cart_compulsory ? 1 : 0) : null,
      cart_price ?? null, latitude ?? null, longitude ?? null,
      geofence_enabled != null ? (geofence_enabled ? 1 : 0) : null, geofence_radius_m ?? null,
+     pay_at_club_enabled != null ? (pay_at_club_enabled ? 1 : 0) : null,
      club.id]
   );
-  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 

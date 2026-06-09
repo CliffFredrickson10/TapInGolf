@@ -99,7 +99,7 @@ async function releaseStalePendingBookings(): Promise<void> {
     WITH stale AS (
       UPDATE bookings SET status = 'cancelled'
       WHERE status = 'pending'
-        AND payment_method = 'stitch'
+        AND payment_method IN ('stitch','pay_at_club')
         AND created_at < NOW() - INTERVAL '15 minutes'
       RETURNING portal_slot_id, players
     ), agg AS (
@@ -379,6 +379,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     payment_method = "stitch", voucher_code, include_cart = false,
     holes = 18,             // 9 or 18
     hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
+    event_id: bodyEventId,  // optional: event being booked into (used for pay_at_club rounds calc)
   } = req.body ?? {};
 
   // Normalise to players_data: prefer explicit players_data, fall back to friend_ids
@@ -430,6 +431,19 @@ router.post("/bookings", async (req, res): Promise<void> => {
     res.status(409).json({ message: "Not enough slots available" });
     return;
   }
+
+  // ── Pay-at-club validation ─────────────────────────────────────────
+  if (payment_method === "pay_at_club") {
+    const clubRow = await row<any>(
+      "SELECT pay_at_club_enabled FROM clubs WHERE id = ?",
+      [slot.club_id]
+    );
+    if (!clubRow?.pay_at_club_enabled) {
+      res.status(400).json({ message: "This club does not accept pay-at-club bookings." });
+      return;
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────
 
   // ── Prepaid validation ───────────────────────────────────────────
   if (payment_method === "prepaid") {
@@ -754,6 +768,25 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
   const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
 
+  // ── Pay-at-club: commitment fee calculation ─────────────────────────────────
+  // For pay_at_club the user only pays the TapIn platform fee online as a
+  // non-refundable commitment fee. The greens fee is settled directly at the club.
+  // Regular booking → 1 × platformFee. Multi-day tournament → rounds × platformFee.
+  let commitmentFee = platformFee;
+  if (payment_method === "pay_at_club") {
+    const eventIdForRounds = slot.event_id ?? (bodyEventId ? parseInt(bodyEventId) : null);
+    if (eventIdForRounds) {
+      const evRounds = await row<any>(
+        "SELECT COALESCE(rounds, 1) AS rounds FROM golf_events WHERE id = ?",
+        [eventIdForRounds]
+      );
+      const numRounds = evRounds ? Math.max(1, parseInt(evRounds.rounds)) : 1;
+      commitmentFee = Math.round(platformFee * numRounds * 100) / 100;
+    }
+  }
+  // The online charge for pay_at_club is only the commitment fee (platform fee × rounds)
+  const chargeAmount = payment_method === "pay_at_club" ? commitmentFee : splitAmount;
+
   // Pre-flight wallet balance check (outside transaction for a clear error response)
   if (effectivePaymentMethod === "wallet") {
     const walletRow = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
@@ -776,14 +809,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes)
        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
-       numPlayers, split_bill ? 1 : 0, totalAmount, splitAmount,
+       numPlayers, split_bill ? 1 : 0, totalAmount, chargeAmount,
        ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles]
     );
     bookingId = insertResult.rows[0].id;
 
     await clientQuery(client,
       "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
-      [bookingId, user.id, splitAmount]
+      [bookingId, user.id, chargeAmount]
     );
 
     for (let i = 0; i < normalised.length; i++) {
@@ -803,9 +836,8 @@ router.post("/bookings", async (req, res): Promise<void> => {
     }
 
     // Confirm immediately only for payments settled at creation (prepaid, wallet, voucher).
-    // Stitch bookings stay 'pending' until the payment webhook confirms them, so
-    // an abandoned checkout never permanently holds the slot.
-    if (effectivePaymentMethod !== "stitch") {
+    // Stitch bookings and pay_at_club stay 'pending' until the payment webhook confirms them.
+    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -839,8 +871,8 @@ router.post("/bookings", async (req, res): Promise<void> => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    // For non-Stitch payments (prepaid, wallet, voucher) the organizer is paid immediately
-    if (effectivePaymentMethod !== "stitch") {
+    // For non-Stitch/non-pay_at_club payments (prepaid, wallet, voucher) the organizer is paid immediately
+    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
       await clientQuery(client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
         [effectivePaymentMethod, bookingId, user.id]
@@ -854,16 +886,16 @@ router.post("/bookings", async (req, res): Promise<void> => {
   });
 
   // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
-  if (effectivePaymentMethod !== "stitch") {
+  if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
     fireInvoiceEmail(bookingId).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
-  if (effectivePaymentMethod === "stitch") {
+  if (effectivePaymentMethod === "stitch" || effectivePaymentMethod === "pay_at_club") {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({
-        amount:            splitAmount,
+        amount:            chargeAmount,
         payerName:         user.name,
         payerEmail:        user.email,
         merchantReference: String(bookingId),
@@ -952,10 +984,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
 
   res.status(201).json({
-    booking_id:  bookingId,
-    booking_ref: ref,
-    payment_url: paymentUrl,
-    status:      "confirmed",
+    booking_id:     bookingId,
+    booking_ref:    ref,
+    payment_url:    paymentUrl,
+    status:         "confirmed",
+    commitment_fee: payment_method === "pay_at_club" ? commitmentFee : undefined,
   });
 });
 

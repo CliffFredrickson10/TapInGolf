@@ -84,6 +84,7 @@ export default function NewBookingScreen() {
     cart_available?: string;
     cart_compulsory?: string;
     cart_price?: string;
+    pay_at_club_enabled?: string;
     event_id?: string;
     event_name?: string;
     event_holes?: string;
@@ -157,7 +158,7 @@ export default function NewBookingScreen() {
   const [numPlayers, setNumPlayers]   = useState(1);
   const [splitBill, setSplitBill]     = useState(false);
   const [includeCart, setIncludeCart] = useState(cartCompulsory);
-  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet">("stitch");
+  const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">("stitch");
   const [prepaidBalance, setPrepaidBalance] = useState<{ total: number; used: number; remaining: number } | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [isMember, setIsMember]       = useState(false);
@@ -202,9 +203,15 @@ export default function NewBookingScreen() {
     return hnaVerified ? "Affiliated Visitor" : "Non-Affiliated Visitor";
   }, [isMember, isJunior, isStudent, isPensioner, hnaVerified]);
 
-  // ── Fetch VAT rate ───────────────────────────────────────────────────────────
+  const payAtClubEnabled = params.pay_at_club_enabled === "1";
+  const [platformFee, setPlatformFee] = useState<number>(10);
+
+  // ── Fetch VAT rate + platform fee ───────────────────────────────────────────
   useEffect(() => {
-    apiFetch("/settings").then((d) => { if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct)); }).catch(() => {});
+    apiFetch("/settings").then((d) => {
+      if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct));
+      if (d?.platform_fee_flat != null) setPlatformFee(parseFloat(d.platform_fee_flat));
+    }).catch(() => {});
   }, []);
 
   // ── HNA useEffect (after all state declarations) ─────────────────────────────
@@ -463,7 +470,7 @@ export default function NewBookingScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (paymentMethod === "stitch" && data.payment_url) {
+      if ((paymentMethod === "stitch" || paymentMethod === "pay_at_club") && data.payment_url) {
         router.replace({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: data.booking_id } });
       } else {
         router.replace({ pathname: "/booking/[id]", params: { id: data.booking_id } });
@@ -743,6 +750,37 @@ export default function NewBookingScreen() {
               {paymentMethod === pm.id && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
             </TouchableOpacity>
           ))}
+
+          {/* Pay at Club option — shown only when club has enabled it */}
+          {payAtClubEnabled && (
+            <TouchableOpacity
+              style={[
+                styles.paymentOption,
+                {
+                  backgroundColor: paymentMethod === "pay_at_club" ? colors.primaryLight : colors.card,
+                  borderColor:     paymentMethod === "pay_at_club" ? colors.primary : colors.border,
+                },
+              ]}
+              onPress={() => { Haptics.selectionAsync(); setPaymentMethod("pay_at_club"); }}
+            >
+              <Ionicons name="golf-outline" size={22} color={paymentMethod === "pay_at_club" ? colors.primary : colors.mutedForeground} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.payLabel, { color: colors.foreground }]}>Pay at Club</Text>
+                <Text style={[styles.paySub, { color: colors.mutedForeground }]}>
+                  Pay commitment fee online · settle greens fee at the club
+                </Text>
+              </View>
+              {paymentMethod === "pay_at_club" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+            </TouchableOpacity>
+          )}
+          {paymentMethod === "pay_at_club" && (
+            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, marginTop: -4, backgroundColor: colors.primaryLight, borderRadius: 8, padding: 8 }}>
+              <Ionicons name="information-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
+              <Text style={{ flex: 1, fontSize: 12, color: colors.primary, lineHeight: 17 }}>
+                A non-refundable commitment fee of R{platformFee.toFixed(2)} is charged now to secure your booking. The greens fee is paid directly at the club.
+              </Text>
+            </View>
+          )}
 
           {/* Wallet option — always shown once balance is loaded */}
           {walletBalance !== null && (
@@ -1072,7 +1110,9 @@ export default function NewBookingScreen() {
                   <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Full total: R{totalAmount.toFixed(2)}</Text>
                 )}
               </View>
-              {paymentMethod === "prepaid" && isMember ? (
+              {paymentMethod === "pay_at_club" ? (
+                <Text style={[styles.totalAmount, { color: colors.primary }]}>R{platformFee.toFixed(2)}</Text>
+              ) : paymentMethod === "prepaid" && isMember ? (
                 <Text style={[styles.totalAmount, { color: colors.primary }]}>
                   {myAmount > 0 ? `R${myAmount.toFixed(2)}` : "Free (prepaid round)"}
                 </Text>
@@ -1082,12 +1122,23 @@ export default function NewBookingScreen() {
                 <Text style={[styles.totalAmount, { color: colors.primary }]}>R{myAmount.toFixed(2)}</Text>
               )}
             </View>
-            {!effectiveTierPriced && !(paymentMethod === "prepaid" && isMember) && myAmount > 0 && (
+            {paymentMethod === "pay_at_club" ? (
+              <>
+                <View style={[styles.totalLine, { marginTop: 4 }]}>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Commitment fee (charged now)</Text>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{platformFee.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.totalLine, { marginTop: 2 }]}>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Greens fee (pay at club)</Text>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{myAmount.toFixed(2)}</Text>
+                </View>
+              </>
+            ) : !effectiveTierPriced && !(paymentMethod === "prepaid" && isMember) && myAmount > 0 ? (
               <View style={[styles.totalLine, { marginTop: 4 }]}>
                 <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
                 <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{(myAmount * vatPct / (100 + vatPct)).toFixed(2)}</Text>
               </View>
-            )}
+            ) : null}
           </View>
 
           {/* Book error */}

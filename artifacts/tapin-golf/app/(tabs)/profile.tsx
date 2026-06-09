@@ -419,10 +419,17 @@ export default function ProfileScreen() {
 
         <View style={{ padding: 20, gap: 12 }}>
           {/* Edit profile */}
-          {editing ? (
+          <TouchableOpacity
+            style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => { if (editing) { setEditing(false); setSaveError(""); setShowProvincePicker(false); } else { initEdit(); } }}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="person-outline" size={20} color={colors.primary} />
+            <Text style={[styles.menuText, { color: colors.foreground }]}>Edit Profile</Text>
+            <Ionicons name={editing ? "chevron-down" : "chevron-forward"} size={18} color={colors.mutedForeground} />
+          </TouchableOpacity>
+          {editing && (
             <View style={[styles.editCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.cardTitle, { color: colors.foreground }]}>Edit Profile</Text>
-
               {/* ── Personal info ── */}
               <View style={styles.sectionDivider}>
                 <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
@@ -614,16 +621,6 @@ export default function ProfileScreen() {
                 </TouchableOpacity>
               </View>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
-              onPress={initEdit}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="person-outline" size={20} color={colors.primary} />
-              <Text style={[styles.menuText, { color: colors.foreground }]}>Edit Profile</Text>
-              <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
-            </TouchableOpacity>
           )}
 
           {/* HNA card verification — collapsible */}

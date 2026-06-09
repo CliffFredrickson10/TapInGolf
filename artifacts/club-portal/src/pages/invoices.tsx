@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
-  ChevronDown, ChevronUp, User, Download,
+  ChevronDown, ChevronUp, User, Download, TrendingUp,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -444,11 +444,15 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState<ClubInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
+  const [counterSummary, setCounterSummary] = useState<CounterSummary | null>(null);
 
   const load = () => {
     setLoading(true);
-    api<{ invoices: ClubInvoice[] }>("/api/portal/invoices")
-      .then(d => setInvoices(d.invoices))
+    Promise.all([
+      api<{ invoices: ClubInvoice[] }>("/api/portal/invoices"),
+      api<CounterSummary>("/api/portal/counter-bookings/summary"),
+    ])
+      .then(([d, s]) => { setInvoices(d.invoices); setCounterSummary(s); })
       .catch(() => toast({ title: "Failed to load invoices", variant: "destructive" }))
       .finally(() => setLoading(false));
   };
@@ -496,6 +500,24 @@ export default function Invoices() {
         </Button>
       </div>
 
+
+      {/* Unbilled counter bookings summary */}
+      {counterSummary && counterSummary.unbilled_bookings > 0 && (
+        <Card className="border-blue-200 bg-blue-50/40">
+          <CardContent className="p-5">
+            <div className="flex items-start gap-3">
+              <TrendingUp className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <div className="flex-1">
+                <p className="font-semibold text-blue-900">Unbilled walk-in bookings accumulating</p>
+                <p className="text-sm text-blue-700 mt-0.5">
+                  {counterSummary.unbilled_bookings} booking{counterSummary.unbilled_bookings !== 1 ? "s" : ""} · {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""} · platform fee due: <strong>{fmtRand(counterSummary.unbilled_total)}</strong> (incl. VAT)
+                </p>
+                <p className="text-xs text-blue-600 mt-1">An invoice will be automatically generated on the 1st of next month.</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Tabbed invoice list */}
       {loading ? (

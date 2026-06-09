@@ -503,16 +503,16 @@ export default function Invoices() {
 
       {/* Unbilled counter bookings summary */}
       {counterSummary && counterSummary.unbilled_bookings > 0 && (
-        <Card className="border-blue-200 bg-blue-50/40">
+        <Card>
           <CardContent className="p-5">
             <div className="flex items-start gap-3">
-              <TrendingUp className="h-5 w-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <TrendingUp className="h-5 w-5 text-muted-foreground flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold text-blue-900">Unbilled walk-in bookings accumulating</p>
-                <p className="text-sm text-blue-700 mt-0.5">
-                  {counterSummary.unbilled_bookings} booking{counterSummary.unbilled_bookings !== 1 ? "s" : ""} · {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""} · platform fee due: <strong>{fmtRand(counterSummary.unbilled_total)}</strong> (incl. VAT)
+                <p className="font-semibold">Unbilled walk-in bookings accumulating</p>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {counterSummary.unbilled_bookings} booking{counterSummary.unbilled_bookings !== 1 ? "s" : ""} · {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""} · platform fee due: <strong className="text-foreground">{fmtRand(counterSummary.unbilled_total)}</strong> (incl. VAT)
                 </p>
-                <p className="text-xs text-blue-600 mt-1">An invoice will be automatically generated on the 1st of next month.</p>
+                <p className="text-xs text-muted-foreground mt-1">An invoice will be automatically generated on the 1st of next month.</p>
               </div>
             </div>
           </CardContent>

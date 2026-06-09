@@ -345,6 +345,97 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
   );
 }
 
+// ── Invoice section (shared by both tabs) ────────────────────────────────────
+
+interface InvoiceSectionProps {
+  title: string;
+  invoices: ClubInvoice[];
+  status: "unpaid" | "paid";
+  clubName: string;
+  clubEmail: string;
+  refreshingId: number | null;
+  onPay: (inv: ClubInvoice) => void;
+  onDownload: (inv: ClubInvoice, name: string, email: string) => void;
+  emptyMessage: string;
+}
+
+function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshingId, onPay, onDownload, emptyMessage }: InvoiceSectionProps) {
+  const isUnpaid = status === "unpaid";
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center gap-2">
+        <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{title}</h3>
+        {invoices.length > 0 && (
+          <Badge
+            className={isUnpaid
+              ? "bg-orange-100 text-orange-700 border-orange-200 text-xs"
+              : "bg-green-100 text-green-700 border-green-200 text-xs"}
+          >
+            {invoices.length}
+          </Badge>
+        )}
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
+      {invoices.length === 0 ? (
+        <p className="text-sm text-muted-foreground italic px-1">{emptyMessage}</p>
+      ) : (
+        invoices.map(inv => (
+          <Card
+            key={inv.id}
+            className={isUnpaid ? "border-orange-200 bg-orange-50/40" : ""}
+          >
+            <CardContent className="p-5">
+              <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                <div className="space-y-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono text-sm font-semibold text-foreground">{inv.invoice_ref}</span>
+                    {isUnpaid
+                      ? <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Unpaid</Badge>
+                      : <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>}
+                  </div>
+                  <p className="text-sm text-muted-foreground">{inv.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
+                    {inv.paid_at && ` · Paid ${format(parseISO(inv.paid_at), "d MMM yyyy")}`}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                  <span className={`font-bold flex-shrink-0 ${isUnpaid ? "text-xl" : "text-lg"}`}>
+                    {fmtRand(inv.total_amount)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onDownload(inv, clubName, clubEmail)}
+                    className="gap-1.5"
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Download
+                  </Button>
+                  {isUnpaid && (
+                    <Button
+                      onClick={() => onPay(inv)}
+                      disabled={refreshingId === inv.id}
+                      className="bg-[#1a5c38] hover:bg-[#164d2f] text-white"
+                    >
+                      {refreshingId === inv.id
+                        ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                        : <ExternalLink className="h-4 w-4 mr-2" />}
+                      Pay Now
+                    </Button>
+                  )}
+                </div>
+              </div>
+              <InvoiceBreakdown inv={inv} />
+            </CardContent>
+          </Card>
+        ))
+      )}
+    </div>
+  );
+}
+
 // ── Main page ────────────────────────────────────────────────────────────────
 
 export default function Invoices() {
@@ -353,35 +444,16 @@ export default function Invoices() {
   const [invoices, setInvoices] = useState<ClubInvoice[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshingId, setRefreshingId] = useState<number | null>(null);
-  const [counterSummary, setCounterSummary] = useState<CounterSummary | null>(null);
-  const [generatingCounter, setGeneratingCounter] = useState(false);
 
   const load = () => {
     setLoading(true);
-    Promise.all([
-      api<{ invoices: ClubInvoice[] }>("/api/portal/invoices"),
-      api<CounterSummary>("/api/portal/counter-bookings/summary"),
-    ])
-      .then(([d, cs]) => { setInvoices(d.invoices); setCounterSummary(cs); })
+    api<{ invoices: ClubInvoice[] }>("/api/portal/invoices")
+      .then(d => setInvoices(d.invoices))
       .catch(() => toast({ title: "Failed to load invoices", variant: "destructive" }))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => { if (club) load(); }, [club]);
-
-  const generateCounterInvoice = async () => {
-    setGeneratingCounter(true);
-    try {
-      const data = await api<{ payment_url: string | null; count: number; total_amount: number }>(
-        "/api/portal/invoices/counter-monthly", { method: "POST" }
-      );
-      toast({ title: "Invoice generated", description: `${data.count} counter booking${data.count !== 1 ? "s" : ""} — ${fmtRand(data.total_amount)} incl. VAT` });
-      load();
-      if (data.payment_url) window.open(data.payment_url, "_blank", "noopener,noreferrer");
-    } catch (e: any) {
-      toast({ title: "Failed to generate invoice", description: e.message, variant: "destructive" });
-    } finally { setGeneratingCounter(false); }
-  };
 
   const refreshUrl = async (inv: ClubInvoice) => {
     setRefreshingId(inv.id);
@@ -450,58 +522,8 @@ export default function Invoices() {
           </TabsList>
 
           {/* ── Outstanding ── */}
-          <TabsContent value="outstanding" className="mt-4 space-y-4">
-            {unpaid.length > 0 ? (
-              <>
-                {unpaid.map(inv => (
-                  <Card key={inv.id} className="border-orange-200 bg-orange-50/40">
-                    <CardContent className="p-5">
-                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                        <div className="space-y-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="font-mono text-sm font-semibold text-foreground">{inv.invoice_ref}</span>
-                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Unpaid</Badge>
-                            <Badge variant="outline" className="text-xs">
-                              {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
-                            </Badge>
-                          </div>
-                          <p className="text-sm text-muted-foreground">{inv.description}</p>
-                          <p className="text-xs text-muted-foreground">
-                            Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
-                          </p>
-                        </div>
-                        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                          <span className="text-xl font-bold text-foreground">{fmtRand(inv.total_amount)}</span>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => downloadInvoice(inv, clubName, clubEmail)}
-                            className="gap-1.5"
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            Download
-                          </Button>
-                          <Button
-                            onClick={() => payNow(inv)}
-                            disabled={refreshingId === inv.id}
-                            className="bg-[#1a5c38] hover:bg-[#164d2f] text-white"
-                          >
-                            {refreshingId === inv.id
-                              ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                              : <ExternalLink className="h-4 w-4 mr-2" />}
-                            Pay Now
-                          </Button>
-                        </div>
-                      </div>
-                      <InvoiceBreakdown inv={inv} />
-                    </CardContent>
-                  </Card>
-                ))}
-                <p className="text-xs text-muted-foreground px-1">
-                  "Pay Now" opens the Stitch secure checkout in a new tab. Once payment is confirmed the invoice is automatically marked as paid.
-                </p>
-              </>
-            ) : (
+          <TabsContent value="outstanding" className="mt-4 space-y-6">
+            {unpaid.length === 0 ? (
               <Card className="border-green-200 bg-green-50/40">
                 <CardContent className="p-8 flex items-center gap-3">
                   <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0" />
@@ -511,54 +533,71 @@ export default function Invoices() {
                   </div>
                 </CardContent>
               </Card>
+            ) : (
+              <>
+                <InvoiceSection
+                  title="Counter Bookings"
+                  invoices={unpaid.filter(i => i.invoice_type === "counter_bookings")}
+                  status="unpaid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No outstanding counter booking invoices"
+                />
+                <InvoiceSection
+                  title="Prepaid Rounds"
+                  invoices={unpaid.filter(i => i.invoice_type === "prepaid_rounds")}
+                  status="unpaid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No outstanding prepaid round invoices"
+                />
+                <p className="text-xs text-muted-foreground px-1">
+                  "Pay Now" opens the Stitch secure checkout in a new tab. Once payment is confirmed the invoice is automatically marked as paid.
+                </p>
+              </>
             )}
           </TabsContent>
 
           {/* ── Paid ── */}
-          <TabsContent value="paid" className="mt-4 space-y-3">
-            {paid.length > 0 ? (
-              paid.map(inv => (
-                <Card key={inv.id}>
-                  <CardContent className="p-5">
-                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                      <div className="space-y-0.5 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-mono text-sm font-semibold">{inv.invoice_ref}</span>
-                          <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>
-                          <Badge variant="outline" className="text-xs">
-                            {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
-                          </Badge>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{inv.description}</p>
-                        <p className="text-xs text-muted-foreground">
-                          Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
-                          {inv.paid_at && ` · Paid ${format(parseISO(inv.paid_at), "d MMM yyyy")}`}
-                        </p>
-                      </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-lg font-bold">{fmtRand(inv.total_amount)}</span>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => downloadInvoice(inv, clubName, clubEmail)}
-                          className="gap-1.5"
-                        >
-                          <Download className="h-3.5 w-3.5" />
-                          Download
-                        </Button>
-                      </div>
-                    </div>
-                    <InvoiceBreakdown inv={inv} />
-                  </CardContent>
-                </Card>
-              ))
-            ) : (
+          <TabsContent value="paid" className="mt-4 space-y-6">
+            {paid.length === 0 ? (
               <Card>
                 <CardContent className="p-8 flex flex-col items-center text-center gap-3">
                   <Receipt className="h-8 w-8 text-muted-foreground/40" />
                   <p className="font-medium text-muted-foreground">No paid invoices yet</p>
                 </CardContent>
               </Card>
+            ) : (
+              <>
+                <InvoiceSection
+                  title="Counter Bookings"
+                  invoices={paid.filter(i => i.invoice_type === "counter_bookings")}
+                  status="paid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No paid counter booking invoices"
+                />
+                <InvoiceSection
+                  title="Prepaid Rounds"
+                  invoices={paid.filter(i => i.invoice_type === "prepaid_rounds")}
+                  status="paid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No paid prepaid round invoices"
+                />
+              </>
             )}
           </TabsContent>
         </Tabs>

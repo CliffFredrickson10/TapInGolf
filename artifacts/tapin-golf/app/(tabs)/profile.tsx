@@ -838,15 +838,20 @@ export default function ProfileScreen() {
                     );
                   })}
                   {discountList.map((v) => {
-                    const isExpired  = v.expires_at && new Date(v.expires_at) < new Date();
-                    const isUsedUp   = v.max_uses !== null && v.uses_count >= v.max_uses;
-                    const isInactive = !v.active;
-                    const dim        = isExpired || isUsedUp || isInactive;
-                    const statusColor = dim ? "#6b7280" : "#16a34a";
-                    const statusLabel = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
-                    const discountLabel = v.discount_type === "percentage"
-                      ? `${Number(v.discount_value)}% off`
-                      : `R${Number(v.discount_value).toFixed(2)} off`;
+                    const isExpired     = v.expires_at && new Date(v.expires_at) < new Date();
+                    const usesRemaining = v.max_uses != null ? (Number(v.max_uses) - Number(v.uses_count)) : null;
+                    const isUsedUp      = usesRemaining !== null && usesRemaining <= 0;
+                    const isInactive    = !v.active;
+                    const dim           = isExpired || isUsedUp || isInactive;
+                    const statusColor   = dim ? "#6b7280" : "#16a34a";
+                    const statusLabel   = isInactive ? "Inactive" : isUsedUp ? "Used" : isExpired ? "Expired" : "Active";
+                    const discountValue = Number(v.discount_value);
+                    const valueText     = v.discount_type === "percentage"
+                      ? `${discountValue}% off`
+                      : `R${discountValue.toFixed(2)} off`;
+                    const remainingText = usesRemaining != null
+                      ? `${usesRemaining} use${usesRemaining === 1 ? "" : "s"} remaining`
+                      : null;
                     const expDate = v.expires_at
                       ? new Date(v.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
                       : null;
@@ -855,7 +860,7 @@ export default function ProfileScreen() {
                         <View style={styles.voucherCardTop}>
                           <View style={{ flex: 1 }}>
                             <Text style={[styles.voucherClub, { color: colors.foreground }]}>{v.club_name ?? "Any Club"}</Text>
-                            <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>{discountLabel}</Text>
+                            <Text style={[styles.voucherReason, { color: colors.mutedForeground }]}>Discount voucher</Text>
                           </View>
                           <View style={[styles.voucherStatus, { backgroundColor: statusColor + "20" }]}>
                             <Text style={[styles.voucherStatusText, { color: statusColor }]}>{statusLabel}</Text>
@@ -866,6 +871,9 @@ export default function ProfileScreen() {
                           <Text style={[styles.voucherCopyHint, { color: colors.mutedForeground }]}>Auto-applied at checkout</Text>
                         </View>
                         <View style={styles.voucherCardMeta}>
+                          <Text style={[styles.voucherMeta, { color: colors.foreground }]}>
+                            {remainingText ? `${valueText} · ${remainingText}` : valueText}
+                          </Text>
                           {v.min_amount != null && Number(v.min_amount) > 0 && (
                             <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
                               Min booking R{Number(v.min_amount).toFixed(2)}
@@ -874,11 +882,6 @@ export default function ProfileScreen() {
                           {expDate && (
                             <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
                               {isExpired ? "Expired " : "Expires "}{expDate}
-                            </Text>
-                          )}
-                          {v.max_uses != null && (
-                            <Text style={[styles.voucherMeta, { color: colors.mutedForeground }]}>
-                              {v.uses_count}/{v.max_uses} uses
                             </Text>
                           )}
                         </View>

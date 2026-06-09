@@ -182,18 +182,23 @@ router.get("/vouchers/available", async (req, res): Promise<void> => {
     } else {
       discountAmount = Math.min(discountValue, amount);
     }
+    const usesRemaining = v.max_uses != null ? (Number(v.max_uses) - Number(v.uses_count)) : null;
+    const remainingTag  = usesRemaining != null
+      ? ` · ${usesRemaining} use${usesRemaining === 1 ? "" : "s"} remaining`
+      : "";
     results.push({
       code:                    v.code,
       label:                   v.discount_type === "percentage"
                                  ? `${discountValue}% off`
                                  : `R${discountValue.toFixed(2)} off`,
-      sub:                     `Save R${discountAmount.toFixed(2)} on this booking`,
+      sub:                     `Save R${discountAmount.toFixed(2)} on this booking${remainingTag}`,
       discount_type:           v.discount_type as "fixed" | "percentage",
       discount_value:          discountValue,
       discount_amount:         discountAmount,
       final_amount:            Math.max(0, amount - discountAmount),
       is_cancellation_voucher: false,
       expires_at:              v.expires_at ?? null,
+      uses_remaining:          usesRemaining,
     });
   }
 

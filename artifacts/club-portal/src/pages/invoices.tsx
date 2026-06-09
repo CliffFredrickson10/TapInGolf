@@ -454,7 +454,6 @@ function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
   const vatAmt  = summary.unbilled_vat;
   const exclVat = summary.unbilled_fee;
   const summaryLabel = `${summary.unbilled_count} player slot${summary.unbilled_count !== 1 ? "s" : ""} across ${summary.unbilled_bookings} booking${summary.unbilled_bookings !== 1 ? "s" : ""}`;
-
   return (
     <Card>
       <CardContent className="p-5">

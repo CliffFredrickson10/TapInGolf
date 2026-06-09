@@ -63874,7 +63874,7 @@ router14.put("/portal/cancellation-policy", requireClubAuth2, async (req, res) =
 router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
-  const [teeTimes, bookings, reviews, members, events, revenue] = await Promise.all([
+  const [teeTimes, bookings, reviews, members, events, revenue, bookingSources] = await Promise.all([
     row("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
     row("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
     row("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
@@ -63886,7 +63886,13 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
               FROM bookings b
               JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
               WHERE pts.club_id = ? AND b.status IN ('confirmed','completed')
-                AND b.payment_method != 'prepaid'`, [club.id])
+                AND b.payment_method != 'prepaid'`, [club.id]),
+    row(`SELECT
+               SUM(CASE WHEN b.booking_source = 'club_counter' THEN 1 ELSE 0 END) AS walkin_total,
+               SUM(CASE WHEN b.booking_source != 'club_counter' OR b.booking_source IS NULL THEN 1 ELSE 0 END) AS app_total
+             FROM bookings b
+             JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+             WHERE pts.club_id = ? AND b.status NOT IN ('cancelled')`, [club.id])
   ]);
   const recentBookings = await query(
     `SELECT b.id, b.booking_ref, b.players, b.total_amount, b.status, b.created_at,
@@ -63911,7 +63917,9 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
     recent_bookings: recentBookings.map((b) => ({ ...b, time: String(b.time).slice(0, 5) })),
     total_revenue: Number(revenue?.total_revenue ?? 0),
     club_earnings: Number(revenue?.club_earnings ?? 0),
-    platform_fees: Number(revenue?.platform_fees ?? 0)
+    platform_fees: Number(revenue?.platform_fees ?? 0),
+    walkin_bookings: Number(bookingSources?.walkin_total ?? 0),
+    app_bookings: Number(bookingSources?.app_total ?? 0)
   });
 });
 router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
@@ -65833,7 +65841,7 @@ router14.post("/portal/invoices/:id/refresh-url", requireClubAuth2, async (req, 
 });
 router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone, player_names } = req.body ?? {};
+  const { tee_time_id, players, user_id, guest_name, guest_email, guest_phone, player_names, player_emails } = req.body ?? {};
   if (!tee_time_id || !players || Number(players) < 1 || Number(players) > 4) {
     res.status(400).json({ message: "tee_time_id and players (1-4) required" });
     return;
@@ -65877,13 +65885,15 @@ router14.post("/portal/counter-bookings", requireClubAuth2, async (req, res) => 
   );
   const bookingId = result[0]?.id;
   const names = Array.isArray(player_names) ? player_names : [];
+  const emails = Array.isArray(player_emails) ? player_emails : [];
   const numPlayers = Number(players);
   for (let i = 0; i < numPlayers; i++) {
     const pName = (names[i] ?? "").trim() || guest_name || "Guest";
+    const pEmail = (emails[i] ?? "").trim() || null;
     const pUserId = i === 0 && user_id ? Number(user_id) : null;
     await exec(
-      `INSERT INTO booking_players (booking_id, user_id, guest_name, paid) VALUES (?, ?, ?, 1)`,
-      [bookingId, pUserId, pUserId ? null : pName]
+      `INSERT INTO booking_players (booking_id, user_id, guest_name, guest_email, paid) VALUES (?, ?, ?, ?, 1)`,
+      [bookingId, pUserId, pUserId ? null : pName, pUserId ? null : pEmail]
     );
   }
   await exec("UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?", [numPlayers, Number(tee_time_id)]);
@@ -65893,18 +65903,29 @@ router14.get("/portal/counter-bookings/summary", requireClubAuth2, async (req, r
   const club = getClub2(req);
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
   const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
-  const unbilled = await row(
-    `SELECT COALESCE(SUM(b.players), 0) AS total_slots, COUNT(*) AS total_bookings
+  const bookings = await query(
+    `SELECT b.id, b.booking_ref, b.players, pts.date, pts.tee_time AS time,
+            COALESCE(u.name, b.guest_name, 'Walk-in') AS guest_name
      FROM bookings b
      JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
-     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL`,
+     LEFT JOIN users u ON b.user_id = u.id
+     WHERE pts.club_id = ? AND b.booking_source = 'club_counter' AND b.status != 'cancelled' AND b.counter_invoice_id IS NULL
+     ORDER BY pts.date, pts.tee_time`,
     [club.id]
   );
-  const totalSlots = parseInt(unbilled?.total_slots ?? "0");
-  const totalBookings = parseInt(unbilled?.total_bookings ?? "0");
+  const totalSlots = bookings.reduce((s, b) => s + Number(b.players ?? 1), 0);
+  const totalBookings = bookings.length;
   const totalIncVat = Math.round(feePerSlot * totalSlots * 100) / 100;
   const vatAmount = Math.round(totalIncVat * 15 / 115 * 100) / 100;
   const exclVat = Math.round((totalIncVat - vatAmount) * 100) / 100;
+  const lineItems = bookings.map((b) => ({
+    booking_ref: b.booking_ref,
+    guest_name: b.guest_name,
+    date: String(b.date).slice(0, 10),
+    time: String(b.time).slice(0, 5),
+    players: Number(b.players ?? 1),
+    amount: Math.round(feePerSlot * Number(b.players ?? 1) * 100) / 100
+  }));
   res.json({
     unbilled_count: totalSlots,
     unbilled_bookings: totalBookings,
@@ -65912,7 +65933,8 @@ router14.get("/portal/counter-bookings/summary", requireClubAuth2, async (req, r
     unbilled_vat: vatAmount,
     unbilled_total: totalIncVat,
     fee_per_booking: feePerSlot,
-    vat_rate: 0.15
+    vat_rate: 0.15,
+    line_items: lineItems
   });
 });
 router14.post("/portal/invoices/counter-monthly", requireClubAuth2, async (req, res) => {
@@ -66959,6 +66981,64 @@ router14.post("/portal/bans/:id/respond", requireClubAuth2, async (req, res) => 
     saveUserNotification(ban.user_id, "club_ban", title, body, { club_id: club.id, ban_id: id });
   }
   res.json({ success: true });
+});
+router14.get("/staff/guest-leads", async (req, res) => {
+  const user = getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const { q = "", page = "1", limit = "50" } = req.query;
+  const pageNum = Math.max(1, parseInt(page, 10));
+  const pageSize = Math.min(100, Math.max(1, parseInt(limit, 10)));
+  const offset = (pageNum - 1) * pageSize;
+  const search = `%${q}%`;
+  const rows = await query(
+    `SELECT
+       bp.id,
+       bp.guest_name    AS player_name,
+       bp.guest_email   AS player_email,
+       c.name           AS club_name,
+       c.province,
+       pts.date         AS booking_date,
+       pts.tee_time     AS booking_time,
+       b.booking_ref,
+       b.created_at
+     FROM booking_players bp
+     JOIN bookings b        ON b.id = bp.booking_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN clubs c           ON c.id = pts.club_id
+     WHERE bp.user_id IS NULL
+       AND bp.guest_name IS NOT NULL
+       AND b.booking_source = 'club_counter'
+       AND b.status <> 'cancelled'
+       AND (
+         bp.guest_name  ILIKE ?
+         OR COALESCE(bp.guest_email, '') ILIKE ?
+         OR c.name ILIKE ?
+       )
+     ORDER BY b.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [search, search, search, pageSize, offset]
+  );
+  const total = await row(
+    `SELECT COUNT(*) AS cnt
+     FROM booking_players bp
+     JOIN bookings b        ON b.id = bp.booking_id
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN clubs c           ON c.id = pts.club_id
+     WHERE bp.user_id IS NULL
+       AND bp.guest_name IS NOT NULL
+       AND b.booking_source = 'club_counter'
+       AND b.status <> 'cancelled'
+       AND (
+         bp.guest_name  ILIKE ?
+         OR COALESCE(bp.guest_email, '') ILIKE ?
+         OR c.name ILIKE ?
+       )`,
+    [search, search, search]
+  );
+  res.json({ leads: rows, total: Number(total?.cnt ?? 0), page: pageNum, pageSize });
 });
 var portal_default = router14;
 
@@ -69653,7 +69733,11 @@ async function reconcileSlotPlayerCounts() {
   );
   if (fixed > 0) logger.info({ slots: fixed }, "Reconciled tee-slot player counts");
 }
+async function applyLateAlters() {
+  await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+}
 async function migrate() {
+  await applyLateAlters();
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();

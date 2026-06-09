@@ -450,21 +450,21 @@ function InvoiceSection({ title, invoices, status, clubName, clubEmail, refreshi
 
 function UnbilledSummaryCard({ summary }: { summary: CounterSummary }) {
   const [open, setOpen] = useState(false);
-  const [items, setItems] = useState<CounterSummaryLineItem[]>(summary.line_items ?? []);
-  const [loadingItems, setLoadingItems] = useState(false);
+  const [items, setItems] = useState<CounterSummaryLineItem[]>([]);
+  const [loadingItems, setLoadingItems] = useState(true);
   const vatAmt  = summary.unbilled_vat;
   const exclVat = summary.unbilled_fee;
 
-  const handleToggle = () => {
-    if (!open && items.length === 0) {
-      setLoadingItems(true);
-      api<CounterSummary>(`/api/portal/counter-bookings/summary?t=${Date.now()}`)
-        .then(fresh => setItems(fresh.line_items ?? []))
-        .catch(() => {})
-        .finally(() => setLoadingItems(false));
-    }
-    setOpen(v => !v);
-  };
+  useEffect(() => {
+    api<CounterSummary>(`/api/portal/counter-bookings/summary?_=${Date.now()}`)
+      .then((fresh: CounterSummary) => {
+        setItems(fresh.line_items ?? []);
+      })
+      .catch(err => console.error("[UnbilledSummaryCard] fetch error:", err))
+      .finally(() => setLoadingItems(false));
+  }, []);
+
+  const handleToggle = () => setOpen(v => !v);
 
   return (
     <Card>

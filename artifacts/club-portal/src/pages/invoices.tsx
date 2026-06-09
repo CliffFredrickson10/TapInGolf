@@ -9,7 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
-  ChevronDown, ChevronUp, User, ConciergeBell, AlertCircle, Download,
+  ChevronDown, ChevronUp, User, Download,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -424,40 +424,6 @@ export default function Invoices() {
         </Button>
       </div>
 
-      {/* Counter Bookings pending charges */}
-      {!loading && counterSummary && counterSummary.unbilled_count > 0 && (
-        <Card className="border-orange-200 bg-orange-50/40">
-          <CardContent className="p-5">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <ConciergeBell className="h-4 w-4 text-orange-600" />
-                  <span className="font-semibold text-orange-800">Counter Bookings — Pending Charges</span>
-                  <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">{counterSummary.unbilled_count} unbilled</Badge>
-                </div>
-                <p className="text-sm text-orange-700">
-                  {counterSummary.unbilled_count} player slot{counterSummary.unbilled_count !== 1 ? "s" : ""}
-                  {counterSummary.unbilled_bookings > 0 ? ` (${counterSummary.unbilled_bookings} booking${counterSummary.unbilled_bookings !== 1 ? "s" : ""})` : ""}
-                  {" "}at R{counterSummary.fee_per_booking.toFixed(2)}/slot (incl. VAT) = <strong>{fmtRand(counterSummary.unbilled_total)}</strong>
-                  <span className="text-orange-600/70 text-xs ml-1">({fmtRand(counterSummary.unbilled_fee)} + {Math.round((counterSummary.vat_rate ?? 0.15) * 100)}% VAT {fmtRand(counterSummary.unbilled_vat)})</span>
-                </p>
-                <p className="text-xs text-orange-600/80 flex items-center gap-1">
-                  <AlertCircle className="h-3 w-3" />
-                  Counter booking fees are invoiced monthly. Generate your invoice below to pay via Stitch.
-                </p>
-              </div>
-              <Button
-                onClick={generateCounterInvoice}
-                disabled={generatingCounter}
-                className="bg-orange-600 hover:bg-orange-700 text-white flex-shrink-0"
-              >
-                {generatingCounter ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Receipt className="h-4 w-4 mr-2" />}
-                {generatingCounter ? "Generating…" : "Generate Invoice"}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
       {/* Tabbed invoice list */}
       {loading ? (

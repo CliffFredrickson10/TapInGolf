@@ -69832,6 +69832,157 @@ function startEntryPaymentReminderWorker() {
   }, POLL_INTERVAL_MS3);
 }
 
+// src/worker/monthlyCounterInvoice.ts
+init_pg();
+init_stitch();
+init_logger();
+import { randomUUID as randomUUID3 } from "crypto";
+var POLL_INTERVAL_MS4 = 60 * 60 * 1e3;
+var lastInvoicedMonth = "";
+function nowSAST() {
+  return new Date(Date.now() + 2 * 60 * 60 * 1e3);
+}
+async function runMonthlyInvoiceCycle() {
+  const now = nowSAST();
+  const day = now.getUTCDate();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  if (day !== 1) return;
+  if (lastInvoicedMonth === monthKey) return;
+  const prevMonth = month === 1 ? 12 : month - 1;
+  const prevYear = month === 1 ? year - 1 : year;
+  const prevLabel = new Date(Date.UTC(prevYear, prevMonth - 1, 1)).toLocaleString("en-ZA", { month: "long", year: "numeric" });
+  logger.info({ monthKey, prevLabel }, "Monthly counter invoice worker: running");
+  const clubs = await query(
+    `SELECT pts.club_id
+     FROM bookings b
+     JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+     WHERE b.booking_source = 'club_counter'
+       AND b.status != 'cancelled'
+       AND b.counter_invoice_id IS NULL
+     GROUP BY pts.club_id
+     HAVING COUNT(*) > 0`
+  );
+  if (clubs.length === 0) {
+    logger.info("Monthly counter invoice worker: no clubs with unbilled bookings");
+    lastInvoicedMonth = monthKey;
+    return;
+  }
+  logger.info({ count: clubs.length }, "Monthly counter invoice worker: clubs to invoice");
+  const feeSetting = await row(
+    "SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'"
+  );
+  const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+  const redirectUrl = `${host}/api/portal/invoice-success`;
+  for (const { club_id } of clubs) {
+    try {
+      const club = await row("SELECT id, name, email FROM clubs WHERE id = ?", [club_id]);
+      if (!club) continue;
+      const unbilledBookings = await query(
+        `SELECT b.id, b.booking_ref, b.guest_name, b.players,
+                pts.date, pts.tee_time AS time
+         FROM bookings b
+         JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+         WHERE pts.club_id = ?
+           AND b.booking_source = 'club_counter'
+           AND b.status != 'cancelled'
+           AND b.counter_invoice_id IS NULL`,
+        [club_id]
+      );
+      if (unbilledBookings.length === 0) continue;
+      const totalSlots = unbilledBookings.reduce((s, b) => s + Number(b.players ?? 1), 0);
+      const totalAmount = Math.round(feePerSlot * totalSlots * 100) / 100;
+      const vatAmount = Math.round(totalAmount * 15 / 115 * 100) / 100;
+      const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `CINV-${club_id}-${dateStr}-${randomUUID3().slice(0, 6).toUpperCase()}`;
+      const description = `${totalSlots} player slot${totalSlots !== 1 ? "s" : ""} (${unbilledBookings.length} booking${unbilledBookings.length !== 1 ? "s" : ""}) \u2014 ${prevLabel} @ R${feePerSlot.toFixed(2)}/slot \u2014 TapIn platform fee (incl. 15% VAT)`;
+      const lineItems = unbilledBookings.map((b) => ({
+        booking_ref: b.booking_ref,
+        guest_name: b.guest_name,
+        date: String(b.date).slice(0, 10),
+        time: String(b.time).slice(0, 5),
+        players: Number(b.players ?? 1),
+        amount: Math.round(feePerSlot * Number(b.players ?? 1) * 100) / 100
+      }));
+      const invResult = await query(
+        `INSERT INTO club_invoices
+           (club_id, invoice_ref, description, total_rounds, platform_fee_rate,
+            vat_rate, vat_amount, total_amount, invoice_type, line_items)
+         VALUES (?, ?, ?, ?, ?, 0.15, ?, ?, 'counter_bookings', ?::jsonb) RETURNING id`,
+        [
+          club_id,
+          invoiceRef,
+          description,
+          totalSlots,
+          feePerSlot,
+          vatAmount,
+          totalAmount,
+          JSON.stringify(lineItems)
+        ]
+      );
+      const invoiceId = invResult[0]?.id;
+      const ids = unbilledBookings.map((b) => b.id);
+      const placeholders = ids.map(() => "?").join(",");
+      await exec(
+        `UPDATE bookings SET counter_invoice_id = ? WHERE id IN (${placeholders})`,
+        [invoiceId, ...ids]
+      );
+      let paymentUrl = null;
+      try {
+        const payment = await createStitchPayment({
+          amount: totalAmount,
+          payerName: club.name,
+          merchantReference: `invoice-${invoiceId}`,
+          redirectUrl,
+          payerEmail: club.email ?? void 0
+        });
+        await exec(
+          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+          [payment.id, payment.url, invoiceId]
+        );
+        paymentUrl = payment.url;
+      } catch (payErr) {
+        logger.warn({ err: payErr, invoiceId }, "Monthly counter invoice: Stitch link failed");
+      }
+      const notifBody = `Your ${prevLabel} counter booking invoice ${invoiceRef} for ${fmtRand(totalAmount)} (incl. VAT) is now available. Please pay via the Invoices page to avoid service interruption.`;
+      await exec(
+        `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+         VALUES (?, 'invoice', ?, ?, ?)`,
+        [
+          club_id,
+          `Invoice ${invoiceRef} \u2014 R${totalAmount.toFixed(2)} outstanding`,
+          notifBody,
+          JSON.stringify({ invoice_id: invoiceId, invoice_ref: invoiceRef, payment_url: paymentUrl })
+        ]
+      );
+      logger.info(
+        { club_id, club_name: club.name, invoiceRef, totalAmount },
+        "Monthly counter invoice worker: invoice created"
+      );
+    } catch (err) {
+      logger.error({ err, club_id }, "Monthly counter invoice worker: failed for club");
+    }
+  }
+  lastInvoicedMonth = monthKey;
+  logger.info({ monthKey }, "Monthly counter invoice worker: cycle complete");
+}
+function fmtRand(n) {
+  return `R ${Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+function startMonthlyCounterInvoiceWorker() {
+  logger.info("Monthly counter invoice worker started");
+  runMonthlyInvoiceCycle().catch(
+    (err) => logger.error({ err }, "Monthly counter invoice worker: startup cycle failed")
+  );
+  setInterval(() => {
+    runMonthlyInvoiceCycle().catch(
+      (err) => logger.error({ err }, "Monthly counter invoice worker: cycle failed")
+    );
+  }, POLL_INTERVAL_MS4);
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"];
 if (!rawPort) {
@@ -69855,11 +70006,13 @@ migrate().then(() => {
   startReminderWorker();
   startAutoTeeGenWorker();
   startEntryPaymentReminderWorker();
+  startMonthlyCounterInvoiceWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
   startAutoTeeGenWorker();
   startEntryPaymentReminderWorker();
+  startMonthlyCounterInvoiceWorker();
 });
 /*! Bundled license information:
 

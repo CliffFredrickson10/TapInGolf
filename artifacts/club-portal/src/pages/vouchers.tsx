@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearch, useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -14,7 +14,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { format } from "date-fns";
 import {
-  Plus, Pencil, Trash2,
+  Plus, Pencil, Trash2, X, Search, Loader2, User as UserIcon,
   Ticket, TicketX, Send, Users, CheckCircle2, Clock, Info, ChevronDown, ChevronRight,
 } from "lucide-react";
 
@@ -24,7 +24,10 @@ interface DiscountVoucher {
   id: number; code: string; discount_type: string; discount_value: number;
   min_amount: number | null; max_uses: number | null; uses_count: number;
   active: boolean; expires_at: string | null; created_at: string;
+  user_id: number | null; user_name: string | null; user_email: string | null;
 }
+
+interface UserResult { id: number; name: string; email: string; }
 
 interface PreviewUser {
   id: number; name: string; email: string;
@@ -49,6 +52,9 @@ interface BatchVoucher {
 const EMPTY_FORM = {
   code: "", discount_type: "percentage", discount_value: 10,
   min_amount: "" as any, max_uses: "" as any, expires_at: "",
+  user_id: null as number | null,
+  user_name: null as string | null,
+  user_email: null as string | null,
 };
 
 function generateCode() {
@@ -65,6 +71,35 @@ function DiscountVouchersTab() {
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
 
+  // ── User search state ──────────────────────────────────────────────────────
+  const [userQuery, setUserQuery]           = useState("");
+  const [userResults, setUserResults]       = useState<UserResult[]>([]);
+  const [userSearching, setUserSearching]   = useState(false);
+  const [userDropOpen, setUserDropOpen]     = useState(false);
+  const userDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const handleUserSearch = (q: string) => {
+    setUserQuery(q);
+    if (userDebounce.current) clearTimeout(userDebounce.current);
+    if (!q.trim() || q.length < 2) { setUserResults([]); setUserDropOpen(false); return; }
+    userDebounce.current = setTimeout(async () => {
+      setUserSearching(true);
+      try {
+        const results = await api<UserResult[]>(`/api/portal/users/search?q=${encodeURIComponent(q)}`);
+        setUserResults(Array.isArray(results) ? results : []);
+        setUserDropOpen(true);
+      } catch {} finally { setUserSearching(false); }
+    }, 300);
+  };
+
+  const clearUserSearch = () => {
+    setUserQuery(""); setUserResults([]); setUserDropOpen(false);
+  };
+
+  const resetDialog = () => {
+    clearUserSearch();
+  };
+
   const load = () =>
     api<DiscountVoucher[]>("/api/portal/vouchers")
       .then(setVouchers)
@@ -73,14 +108,20 @@ function DiscountVouchersTab() {
 
   useEffect(() => { load(); }, []);
 
-  const openAdd = () => { setForm({ ...EMPTY_FORM, code: generateCode() }); setEditId(null); setOpen(true); };
+  const openAdd = () => {
+    setForm({ ...EMPTY_FORM, code: generateCode() });
+    setEditId(null); resetDialog(); setOpen(true);
+  };
   const openEdit = (v: DiscountVoucher) => {
     setForm({
       code: v.code, discount_type: v.discount_type, discount_value: v.discount_value,
       min_amount: v.min_amount ?? "", max_uses: v.max_uses ?? "",
       expires_at: v.expires_at ? v.expires_at.split("T")[0] : "",
+      user_id: v.user_id ?? null,
+      user_name: v.user_name ?? null,
+      user_email: v.user_email ?? null,
     });
-    setEditId(v.id); setOpen(true);
+    setEditId(v.id); resetDialog(); setOpen(true);
   };
 
   const handleSave = async () => {
@@ -90,15 +131,18 @@ function DiscountVouchersTab() {
     setSaving(true);
     try {
       const body = {
-        ...form,
-        min_amount:  form.min_amount  === "" ? null : Number(form.min_amount),
-        max_uses:    form.max_uses    === "" ? null : Number(form.max_uses),
-        expires_at:  form.expires_at  || null,
+        code:          form.code,
+        discount_type: form.discount_type,
+        discount_value: form.discount_value,
+        min_amount:    form.min_amount  === "" ? null : Number(form.min_amount),
+        max_uses:      form.max_uses    === "" ? null : Number(form.max_uses),
+        expires_at:    form.expires_at  || null,
+        user_id:       form.user_id ?? null,
       };
       if (editId) await api(`/api/portal/vouchers/${editId}`, { method: "PUT", body: JSON.stringify(body) });
       else        await api("/api/portal/vouchers",             { method: "POST", body: JSON.stringify(body) });
       toast({ title: editId ? "Voucher updated" : "Voucher created" });
-      setOpen(false); load();
+      setOpen(false); resetDialog(); load();
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setSaving(false); }
   };
@@ -123,7 +167,7 @@ function DiscountVouchersTab() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <p className="text-muted-foreground text-sm">Create reusable discount codes golfers apply at checkout.</p>
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog open={open} onOpenChange={(v) => { setOpen(v); if (!v) resetDialog(); }}>
           <DialogTrigger asChild>
             <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd}>
               <Plus className="h-4 w-4" /> New Voucher
@@ -174,6 +218,72 @@ function DiscountVouchersTab() {
                   <Label>Expires On</Label>
                   <Input type="date" value={form.expires_at} onChange={e => setForm(f => ({ ...f, expires_at: e.target.value }))} />
                 </div>
+
+                {/* Assign to specific user */}
+                <div className="space-y-1.5 col-span-2">
+                  <Label>Assign to User <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                  {form.user_id ? (
+                    <div className="flex items-center gap-3 rounded-lg border bg-muted/40 px-3 py-2.5">
+                      <div className="flex h-8 w-8 items-center justify-center rounded-full bg-[#1a5c38]/10 flex-shrink-0">
+                        <UserIcon className="h-4 w-4 text-[#1a5c38]" />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-sm truncate">{form.user_name}</div>
+                        <div className="text-xs text-muted-foreground truncate">{form.user_email}</div>
+                      </div>
+                      <Button
+                        variant="ghost" size="icon" className="h-7 w-7 flex-shrink-0 text-muted-foreground hover:text-destructive"
+                        type="button"
+                        onClick={() => setForm(f => ({ ...f, user_id: null, user_name: null, user_email: null }))}
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <div className="relative">
+                        <Search className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                        <Input
+                          className="pl-8 pr-8"
+                          placeholder="Search golfer by name or email…"
+                          value={userQuery}
+                          onChange={e => handleUserSearch(e.target.value)}
+                          onBlur={() => setTimeout(() => setUserDropOpen(false), 150)}
+                          onFocus={() => userResults.length > 0 && setUserDropOpen(true)}
+                        />
+                        {userSearching && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+                      {userDropOpen && userResults.length > 0 && (
+                        <div className="absolute z-50 w-full mt-1 border rounded-md bg-popover shadow-md max-h-48 overflow-y-auto">
+                          {userResults.map(u => (
+                            <button
+                              key={u.id} type="button"
+                              className="w-full px-3 py-2.5 text-left hover:bg-accent flex items-center gap-3 border-b last:border-0"
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setForm(f => ({ ...f, user_id: u.id, user_name: u.name, user_email: u.email }));
+                                setUserQuery(""); setUserResults([]); setUserDropOpen(false);
+                              }}
+                            >
+                              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted flex-shrink-0 text-xs font-bold text-muted-foreground">
+                                {u.name.split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
+                              </div>
+                              <div className="min-w-0">
+                                <div className="font-medium text-sm truncate">{u.name}</div>
+                                <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                              </div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Leave empty for a public code any golfer can use.
+                  </p>
+                </div>
               </div>
               <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
                 {saving ? "Saving…" : editId ? "Update" : "Create"}
@@ -196,12 +306,23 @@ function DiscountVouchersTab() {
               <Card key={v.id} className={!v.active ? "opacity-60" : ""}>
                 <CardContent className="p-4 space-y-2">
                   <div className="flex items-start justify-between gap-2">
-                    <div>
+                    <div className="min-w-0 flex-1">
                       <code className="text-lg font-bold font-mono tracking-widest">{v.code}</code>
                       <p className="text-sm text-muted-foreground">
                         {v.discount_type === "percentage" ? `${v.discount_value}% off` : `R${v.discount_value} off`}
                         {v.min_amount ? ` · min R${v.min_amount}` : ""}
                       </p>
+                      {v.user_name ? (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-blue-700 bg-blue-50 border border-blue-200 rounded-full px-2.5 py-0.5 w-fit max-w-full">
+                          <UserIcon className="h-3 w-3 flex-shrink-0" />
+                          <span className="truncate">{v.user_name}</span>
+                        </div>
+                      ) : (
+                        <div className="mt-1.5 flex items-center gap-1.5 text-xs text-muted-foreground bg-muted rounded-full px-2.5 py-0.5 w-fit">
+                          <Users className="h-3 w-3 flex-shrink-0" />
+                          Public code
+                        </div>
+                      )}
                     </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium flex-shrink-0 ${v.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"}`}>
                       {v.active ? "Active" : "Inactive"}

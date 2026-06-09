@@ -2416,20 +2416,33 @@ router.delete("/portal/members/:id", requireClubAuth, async (req: Request, res: 
 
 router.get("/portal/vouchers", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  res.json(await query<any>("SELECT id, code, discount_type, discount_value, min_amount, max_uses, uses_count, active, expires_at, created_at FROM vouchers WHERE club_id = ? ORDER BY created_at DESC", [club.id]));
+  res.json(await query<any>(
+    `SELECT v.id, v.code, v.discount_type, v.discount_value, v.min_amount, v.max_uses, v.uses_count,
+            v.active, v.expires_at, v.created_at, v.user_id,
+            u.name AS user_name, u.email AS user_email
+     FROM vouchers v
+     LEFT JOIN users u ON u.id = v.user_id
+     WHERE v.club_id = ?
+     ORDER BY v.created_at DESC`,
+    [club.id]
+  ));
 });
 
 router.post("/portal/vouchers", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { code, discount_type, discount_value, min_amount, max_uses, expires_at } = req.body ?? {};
+  const { code, discount_type, discount_value, min_amount, max_uses, expires_at, user_id } = req.body ?? {};
   if (!code || !discount_type || discount_value == null) { res.status(400).json({ message: "code, discount_type and discount_value required" }); return; }
   const existing = await row<any>("SELECT id FROM vouchers WHERE code = ?", [code]);
   if (existing) { res.status(409).json({ message: "Code already exists" }); return; }
+  const resolvedUserId = user_id != null ? Number(user_id) : null;
   const result = await exec(
-    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at) VALUES (?, ?, ?, ?, ?, ?, 1, ?)",
-    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null]
+    "INSERT INTO vouchers (code, discount_type, discount_value, club_id, min_amount, max_uses, active, expires_at, user_id) VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)",
+    [code.toUpperCase(), discount_type, Number(discount_value), club.id, min_amount ?? null, max_uses ?? null, expires_at ?? null, resolvedUserId]
   );
-  res.json(await row<any>("SELECT * FROM vouchers WHERE id = ?", [(result as any).insertId]));
+  res.json(await row<any>(
+    `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
+    [(result as any).insertId]
+  ));
 });
 
 router.put("/portal/vouchers/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
@@ -2437,12 +2450,22 @@ router.put("/portal/vouchers/:id", requireClubAuth, async (req: Request, res: Re
   const vId = Number(req.params.id);
   const existing = await row<any>("SELECT id FROM vouchers WHERE id = ? AND club_id = ?", [vId, club.id]);
   if (!existing) { res.status(404).json({ message: "Voucher not found" }); return; }
-  const { discount_value, min_amount, max_uses, active, expires_at } = req.body ?? {};
-  await exec(
-    "UPDATE vouchers SET discount_value = COALESCE(?, discount_value), min_amount = ?, max_uses = ?, active = COALESCE(?, active), expires_at = ? WHERE id = ? AND club_id = ?",
-    [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? (active ? 1 : 0) : null, expires_at ?? null, vId, club.id]
-  );
-  res.json(await row<any>("SELECT * FROM vouchers WHERE id = ?", [vId]));
+  const { discount_value, min_amount, max_uses, active, expires_at, user_id } = req.body ?? {};
+  const resolvedUserId = 'user_id' in (req.body ?? {}) ? (user_id != null ? Number(user_id) : null) : undefined;
+  const sets: string[] = [
+    "discount_value = COALESCE(?, discount_value)",
+    "min_amount = ?",
+    "max_uses = ?",
+    "active = COALESCE(?, active)",
+    "expires_at = ?",
+  ];
+  const vals: any[] = [discount_value ?? null, min_amount ?? null, max_uses ?? null, active != null ? (active ? 1 : 0) : null, expires_at ?? null];
+  if (resolvedUserId !== undefined) { sets.push("user_id = ?"); vals.push(resolvedUserId); }
+  await exec(`UPDATE vouchers SET ${sets.join(", ")} WHERE id = ? AND club_id = ?`, [...vals, vId, club.id]);
+  res.json(await row<any>(
+    `SELECT v.*, u.name AS user_name, u.email AS user_email FROM vouchers v LEFT JOIN users u ON u.id = v.user_id WHERE v.id = ?`,
+    [vId]
+  ));
 });
 
 router.delete("/portal/vouchers/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

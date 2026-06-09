@@ -72,6 +72,12 @@ router.post("/vouchers/validate", async (req, res): Promise<void> => {
     return;
   }
 
+  // User-assigned vouchers can only be used by the assigned user
+  if (voucher.user_id != null && voucher.user_id !== user.id) {
+    res.status(403).json({ valid: false, message: "This voucher is assigned to a different account" });
+    return;
+  }
+
   if (voucher.expires_at && new Date(voucher.expires_at) < new Date()) {
     res.status(400).json({ valid: false, message: "This voucher has expired" });
     return;
@@ -157,15 +163,16 @@ router.get("/vouchers/available", async (req, res): Promise<void> => {
     });
   }
 
-  // ── Standard discount vouchers ────────────────────────────────────────────
+  // ── Standard discount vouchers (global or assigned to this user) ─────────
   const stdRows = await query<any>(
     `SELECT * FROM vouchers
      WHERE active = 1
        AND (expires_at IS NULL OR expires_at > NOW())
        AND (max_uses IS NULL OR uses_count < max_uses)
        AND (min_amount IS NULL OR CAST(min_amount AS DECIMAL(10,2)) = 0 OR ? >= CAST(min_amount AS DECIMAL(10,2)))
+       AND (user_id IS NULL OR user_id = ?)
        ${club_id != null ? "AND (club_id = ? OR club_id IS NULL)" : ""}`,
-    club_id != null ? [amount, club_id] : [amount]
+    club_id != null ? [amount, user.id, club_id] : [amount, user.id]
   );
   for (const v of stdRows) {
     const discountValue = parseFloat(v.discount_value);

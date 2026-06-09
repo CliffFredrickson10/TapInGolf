@@ -1395,6 +1395,8 @@ async function reconcileSlotPlayerCounts(): Promise<void> {
 
 async function applyLateAlters() {
   await ddl("ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS guest_email VARCHAR(255)");
+  await ddl("ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_vouchers_user_id ON vouchers (user_id)");
 }
 
 export async function migrate(): Promise<void> {

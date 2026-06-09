@@ -786,7 +786,7 @@ export default function NewBookingScreen() {
             <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, marginTop: -4, backgroundColor: colors.primaryLight, borderRadius: 8, padding: 8 }}>
               <Ionicons name="information-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
               <Text style={{ flex: 1, fontSize: 12, color: colors.primary, lineHeight: 17 }}>
-                A non-refundable commitment fee of R{platformFee.toFixed(2)} is charged now to secure your booking. The greens fee is paid directly at the club.
+                A commitment fee of R{platformFee.toFixed(2)} is charged now and deducted from your greens fee. You pay R{(myAmount - platformFee).toFixed(2)} at the club on the day.
               </Text>
             </View>
           )}
@@ -1117,9 +1117,11 @@ export default function NewBookingScreen() {
             <View style={styles.totalLine}>
               <View>
                 <Text style={[styles.totalLabel, { color: colors.mutedForeground }]}>
-                  {splitBill && numPlayers > 1 ? "Your share" : "Total"}
+                  {paymentMethod === "pay_at_club"
+                    ? "Due now"
+                    : splitBill && numPlayers > 1 ? "Your share" : "Total"}
                 </Text>
-                {splitBill && numPlayers > 1 && !effectiveTierPriced && (
+                {splitBill && numPlayers > 1 && !effectiveTierPriced && paymentMethod !== "pay_at_club" && (
                   <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Full total: R{totalAmount.toFixed(2)}</Text>
                 )}
               </View>
@@ -1138,12 +1140,17 @@ export default function NewBookingScreen() {
             {paymentMethod === "pay_at_club" ? (
               <>
                 <View style={[styles.totalLine, { marginTop: 4 }]}>
-                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Commitment fee (charged now)</Text>
-                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{platformFee.toFixed(2)}</Text>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Full greens fee</Text>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{myAmount.toFixed(2)}</Text>
                 </View>
                 <View style={[styles.totalLine, { marginTop: 2 }]}>
-                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>Greens fee (pay at club)</Text>
-                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>R{myAmount.toFixed(2)}</Text>
+                  <Text style={[styles.totalSub, { color: colors.mutedForeground }]}>− Commitment fee (paid now)</Text>
+                  <Text style={[styles.totalSub, { color: "#e53935" }]}>−R{platformFee.toFixed(2)}</Text>
+                </View>
+                <View style={[styles.totalDivider, { backgroundColor: colors.border, marginTop: 6 }]} />
+                <View style={[styles.totalLine, { marginTop: 4 }]}>
+                  <Text style={[styles.totalSub, { color: colors.foreground, fontWeight: "600" }]}>Due at club</Text>
+                  <Text style={[styles.totalSub, { color: colors.foreground, fontWeight: "600" }]}>R{(myAmount - platformFee).toFixed(2)}</Text>
                 </View>
               </>
             ) : !effectiveTierPriced && !(paymentMethod === "prepaid" && isMember) && myAmount > 0 ? (

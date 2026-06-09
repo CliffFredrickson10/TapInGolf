@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Receipt, RefreshCw, ExternalLink, CheckCircle2, Clock,
   ChevronDown, ChevronUp, User, ConciergeBell, AlertCircle, Download,
@@ -134,7 +135,6 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div>
           <div style="font-size:24px;font-weight:800;letter-spacing:-0.5px">TapIn Golf</div>
-          <div style="font-size:13px;opacity:0.75;margin-top:3px">Platform Services</div>
         </div>
         <div style="text-align:right">
           <div style="font-size:11px;opacity:0.6;text-transform:uppercase;letter-spacing:1.5px">Tax Invoice</div>
@@ -459,130 +459,143 @@ export default function Invoices() {
         </Card>
       )}
 
-      {/* Outstanding invoices */}
+      {/* Tabbed invoice list */}
       {loading ? (
         <div className="space-y-4">
           {[1, 2].map(i => <Skeleton key={i} className="h-32 w-full" />)}
         </div>
-      ) : unpaid.length > 0 ? (
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-orange-600 uppercase tracking-wide flex items-center gap-1.5">
-            <Clock className="h-4 w-4" /> Outstanding ({unpaid.length})
-          </h2>
-          {unpaid.map(inv => (
-            <Card key={inv.id} className="border-orange-200 bg-orange-50/40">
-              <CardContent className="p-5">
-                <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
-                  <div className="space-y-1 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-sm font-semibold text-foreground">{inv.invoice_ref}</span>
-                      <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Unpaid</Badge>
-                      <Badge variant="outline" className="text-xs">
-                        {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
-                      </Badge>
-                    </div>
-                    <p className="text-sm text-muted-foreground">{inv.description}</p>
-                    <p className="text-xs text-muted-foreground">
-                      Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
-                    <span className="text-xl font-bold text-foreground">{fmtRand(inv.total_amount)}</span>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => downloadInvoice(inv, clubName, clubEmail)}
-                      className="gap-1.5"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      Download
-                    </Button>
-                    <Button
-                      onClick={() => payNow(inv)}
-                      disabled={refreshingId === inv.id}
-                      className="bg-[#1a5c38] hover:bg-[#164d2f] text-white"
-                    >
-                      {refreshingId === inv.id
-                        ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                        : <ExternalLink className="h-4 w-4 mr-2" />}
-                      Pay Now
-                    </Button>
-                  </div>
-                </div>
-                <InvoiceBreakdown inv={inv} />
-              </CardContent>
-            </Card>
-          ))}
-          <p className="text-xs text-muted-foreground px-1">
-            Clicking "Pay Now" opens the Stitch secure checkout in a new tab. Once payment is confirmed the invoice is automatically marked as paid.
-          </p>
-        </div>
-      ) : !loading && invoices.length > 0 ? (
-        <Card className="border-green-200 bg-green-50/40">
-          <CardContent className="p-6 flex items-center gap-3">
-            <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0" />
-            <div>
-              <p className="font-medium text-green-800">All invoices paid</p>
-              <p className="text-sm text-green-700">Your account is up to date.</p>
-            </div>
-          </CardContent>
-        </Card>
-      ) : !loading && invoices.length === 0 ? (
-        <Card>
-          <CardContent className="p-12 flex flex-col items-center text-center gap-3">
-            <Receipt className="h-10 w-10 text-muted-foreground/40" />
-            <p className="font-medium text-muted-foreground">No invoices yet</p>
-            <p className="text-sm text-muted-foreground max-w-xs">
-              Invoices are generated when you record counter bookings or upload prepaid rounds during a member import.
-            </p>
-          </CardContent>
-        </Card>
-      ) : null}
+      ) : (
+        <Tabs defaultValue="outstanding">
+          <TabsList className="w-full sm:w-auto">
+            <TabsTrigger value="outstanding" className="flex-1 sm:flex-none gap-1.5">
+              <Clock className="h-3.5 w-3.5" />
+              Outstanding
+              {unpaid.length > 0 && (
+                <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs ml-1">{unpaid.length}</Badge>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="paid" className="flex-1 sm:flex-none gap-1.5">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              Paid
+              {paid.length > 0 && (
+                <Badge className="bg-green-100 text-green-700 border-green-200 text-xs ml-1">{paid.length}</Badge>
+              )}
+            </TabsTrigger>
+          </TabsList>
 
-      {/* Paid history */}
-      {paid.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
-            <CheckCircle2 className="h-4 w-4" /> Payment History
-          </h2>
-          <div className="space-y-3">
-            {paid.map(inv => (
-              <Card key={inv.id}>
-                <CardContent className="p-5">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-0.5 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono text-sm font-semibold">{inv.invoice_ref}</span>
-                        <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>
-                        <Badge variant="outline" className="text-xs">
-                          {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
-                        </Badge>
+          {/* ── Outstanding ── */}
+          <TabsContent value="outstanding" className="mt-4 space-y-4">
+            {unpaid.length > 0 ? (
+              <>
+                {unpaid.map(inv => (
+                  <Card key={inv.id} className="border-orange-200 bg-orange-50/40">
+                    <CardContent className="p-5">
+                      <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-4">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-mono text-sm font-semibold text-foreground">{inv.invoice_ref}</span>
+                            <Badge className="bg-orange-100 text-orange-700 border-orange-200 text-xs">Unpaid</Badge>
+                            <Badge variant="outline" className="text-xs">
+                              {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
+                            </Badge>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{inv.description}</p>
+                          <p className="text-xs text-muted-foreground">
+                            Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0 flex-wrap justify-end">
+                          <span className="text-xl font-bold text-foreground">{fmtRand(inv.total_amount)}</span>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => downloadInvoice(inv, clubName, clubEmail)}
+                            className="gap-1.5"
+                          >
+                            <Download className="h-3.5 w-3.5" />
+                            Download
+                          </Button>
+                          <Button
+                            onClick={() => payNow(inv)}
+                            disabled={refreshingId === inv.id}
+                            className="bg-[#1a5c38] hover:bg-[#164d2f] text-white"
+                          >
+                            {refreshingId === inv.id
+                              ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                              : <ExternalLink className="h-4 w-4 mr-2" />}
+                            Pay Now
+                          </Button>
+                        </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">{inv.description}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
-                        {inv.paid_at && ` · Paid ${format(parseISO(inv.paid_at), "d MMM yyyy")}`}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="text-lg font-bold">{fmtRand(inv.total_amount)}</span>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadInvoice(inv, clubName, clubEmail)}
-                        className="gap-1.5"
-                      >
-                        <Download className="h-3.5 w-3.5" />
-                        Download
-                      </Button>
-                    </div>
+                      <InvoiceBreakdown inv={inv} />
+                    </CardContent>
+                  </Card>
+                ))}
+                <p className="text-xs text-muted-foreground px-1">
+                  "Pay Now" opens the Stitch secure checkout in a new tab. Once payment is confirmed the invoice is automatically marked as paid.
+                </p>
+              </>
+            ) : (
+              <Card className="border-green-200 bg-green-50/40">
+                <CardContent className="p-8 flex items-center gap-3">
+                  <CheckCircle2 className="h-6 w-6 text-green-600 flex-shrink-0" />
+                  <div>
+                    <p className="font-medium text-green-800">No outstanding invoices</p>
+                    <p className="text-sm text-green-700">Your account is up to date.</p>
                   </div>
-                  <InvoiceBreakdown inv={inv} />
                 </CardContent>
               </Card>
-            ))}
-          </div>
-        </div>
+            )}
+          </TabsContent>
+
+          {/* ── Paid ── */}
+          <TabsContent value="paid" className="mt-4 space-y-3">
+            {paid.length > 0 ? (
+              paid.map(inv => (
+                <Card key={inv.id}>
+                  <CardContent className="p-5">
+                    <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+                      <div className="space-y-0.5 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-mono text-sm font-semibold">{inv.invoice_ref}</span>
+                          <Badge className="bg-green-100 text-green-700 border-green-200 text-xs">Paid</Badge>
+                          <Badge variant="outline" className="text-xs">
+                            {inv.invoice_type === "counter_bookings" ? "Counter Bookings" : "Prepaid Rounds"}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">{inv.description}</p>
+                        <p className="text-xs text-muted-foreground">
+                          Issued {format(parseISO(inv.created_at), "d MMM yyyy")}
+                          {inv.paid_at && ` · Paid ${format(parseISO(inv.paid_at), "d MMM yyyy")}`}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <span className="text-lg font-bold">{fmtRand(inv.total_amount)}</span>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => downloadInvoice(inv, clubName, clubEmail)}
+                          className="gap-1.5"
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Download
+                        </Button>
+                      </div>
+                    </div>
+                    <InvoiceBreakdown inv={inv} />
+                  </CardContent>
+                </Card>
+              ))
+            ) : (
+              <Card>
+                <CardContent className="p-8 flex flex-col items-center text-center gap-3">
+                  <Receipt className="h-8 w-8 text-muted-foreground/40" />
+                  <p className="font-medium text-muted-foreground">No paid invoices yet</p>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
       )}
     </div>
   );

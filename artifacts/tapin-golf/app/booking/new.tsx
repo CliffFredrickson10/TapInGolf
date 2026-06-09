@@ -29,6 +29,14 @@ interface AppliedVoucher {
   final_amount: number;
 }
 
+interface AvailableVoucher extends AppliedVoucher {
+  label: string;
+  sub: string;
+  is_cancellation_voucher: boolean;
+  club_name: string | null;
+  expires_at: string | null;
+}
+
 type AddedPlayer =
   | { type: "friend" | "user"; id: number; name: string; avatar?: string | null }
   | { type: "guest"; name: string };
@@ -188,10 +196,9 @@ export default function NewBookingScreen() {
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // ── Voucher state ───────────────────────────────────────────────────────────
-  const [voucherInput, setVoucherInput]     = useState("");
-  const [voucherLoading, setVoucherLoading] = useState(false);
-  const [voucherError, setVoucherError]     = useState<string | null>(null);
-  const [appliedVoucher, setAppliedVoucher] = useState<AppliedVoucher | null>(null);
+  const [availableVouchers, setAvailableVouchers] = useState<AvailableVoucher[]>([]);
+  const [vouchersLoading, setVouchersLoading]     = useState(false);
+  const [appliedVoucher, setAppliedVoucher]       = useState<AppliedVoucher | null>(null);
   const [vatPct, setVatPct]                 = useState(15);
 
   // Only a CLUB-VERIFIED HNA earns the affiliated-visitor rate. A number the golfer
@@ -284,6 +291,32 @@ export default function NewBookingScreen() {
     return pp != null ? pp.price : basePrice; // fallback to organizer's rate until fetched
   });
   const subtotal    = organizerGreens + invitedGreens.reduce((a, b) => a + b, 0);
+
+  // ── Fetch available vouchers for this user + club (after subtotal is known) ─
+  useEffect(() => {
+    if (!voucherEnabled || !user) return;
+    let cancelled = false;
+    setVouchersLoading(true);
+    apiFetch(
+      `/vouchers/available?club_id=${params.club_id}&amount=${subtotal}`,
+      user.token
+    )
+      .then((d) => {
+        if (cancelled) return;
+        setAvailableVouchers(d?.vouchers ?? []);
+        if (appliedVoucher) {
+          const still = (d?.vouchers ?? []).find(
+            (v: AvailableVoucher) => v.code === appliedVoucher.code
+          );
+          if (!still) setAppliedVoucher(null);
+        }
+      })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setVouchersLoading(false); });
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [voucherEnabled, user, params.club_id, subtotal]);
+
   const discount    = appliedVoucher ? appliedVoucher.discount_amount : 0;
   const greensTotal = Math.max(0, subtotal - discount);
   const numCarts    = numPlayers <= 2 ? 1 : 2;
@@ -427,30 +460,12 @@ export default function NewBookingScreen() {
     addedPlayers.some((p) => p && p.type !== "guest" && (p as any).id === id);
 
   // ── Voucher ─────────────────────────────────────────────────────────────────
-  const validateVoucher = async () => {
-    if (!voucherInput.trim() || !user) return;
-    setVoucherLoading(true);
-    setVoucherError(null);
-    setAppliedVoucher(null);
-    try {
-      const data = await apiFetch("/vouchers/validate", user.token, {
-        method: "POST",
-        body: JSON.stringify({ code: voucherInput.trim().toUpperCase(), amount: subtotal, club_id: parseInt(params.club_id) }),
-      });
-      if (data.valid) {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        setAppliedVoucher(data as AppliedVoucher);
-      } else {
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        setVoucherError(data.message ?? "Invalid voucher code");
-      }
-    } catch (err: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setVoucherError(err.message ?? "Invalid voucher code");
-    } finally { setVoucherLoading(false); }
+  const selectVoucher = (v: AvailableVoucher) => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setAppliedVoucher(v);
   };
 
-  const removeVoucher = () => { setAppliedVoucher(null); setVoucherInput(""); setVoucherError(null); };
+  const removeVoucher = () => { setAppliedVoucher(null); };
 
   // ── Book ────────────────────────────────────────────────────────────────────
   const handleBook = async () => {
@@ -956,55 +971,53 @@ export default function NewBookingScreen() {
             </View>
           ) : null}
 
-          {/* Voucher — shown only when club has enabled voucher codes */}
+          {/* Voucher — shown only when club has enabled vouchers */}
           {voucherEnabled && (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Voucher Code</Text>
-              {appliedVoucher ? (
-                <View style={[styles.voucherApplied, { backgroundColor: "#e8f5e9", borderColor: "#4caf50" }]}>
-                  <Ionicons name="checkmark-circle" size={20} color="#4caf50" />
-                  <View style={{ flex: 1 }}>
-                    <Text style={[styles.voucherAppliedCode, { color: "#2e7d32" }]}>{appliedVoucher.code}</Text>
-                    <Text style={[styles.voucherAppliedSub, { color: "#388e3c" }]}>
-                      {appliedVoucher.discount_type === "percentage"
-                        ? `${appliedVoucher.discount_value}% off`
-                        : `R${appliedVoucher.discount_value.toFixed(2)} off`}
-                      {" · "}saving R{appliedVoucher.discount_amount.toFixed(2)}
-                    </Text>
-                  </View>
-                  <TouchableOpacity onPress={removeVoucher}>
-                    <Ionicons name="close-circle" size={20} color="#e53935" />
-                  </TouchableOpacity>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Vouchers</Text>
+              {vouchersLoading ? (
+                <View style={[styles.voucherEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                  <Text style={[styles.voucherEmptyText, { color: colors.mutedForeground }]}>Loading your vouchers…</Text>
+                </View>
+              ) : availableVouchers.length === 0 ? (
+                <View style={[styles.voucherEmptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Ionicons name="ticket-outline" size={18} color={colors.mutedForeground} />
+                  <Text style={[styles.voucherEmptyText, { color: colors.mutedForeground }]}>No vouchers available for this booking</Text>
                 </View>
               ) : (
-                <View style={styles.voucherRow}>
-                  <TextInput
-                    style={[styles.voucherInput, { backgroundColor: colors.card, borderColor: voucherError ? "#e53935" : colors.border, color: colors.foreground }]}
-                    placeholder="Enter voucher code"
-                    placeholderTextColor={colors.mutedForeground}
-                    value={voucherInput}
-                    onChangeText={(t) => { setVoucherInput(t.toUpperCase()); setVoucherError(null); }}
-                    autoCapitalize="characters"
-                    autoCorrect={false}
-                    returnKeyType="done"
-                    onSubmitEditing={validateVoucher}
-                  />
-                  <TouchableOpacity
-                    style={[styles.voucherBtn, { backgroundColor: voucherInput.trim() ? colors.primary : colors.muted }]}
-                    onPress={validateVoucher}
-                    disabled={!voucherInput.trim() || voucherLoading}
-                  >
-                    {voucherLoading
-                      ? <ActivityIndicator size="small" color="#fff" />
-                      : <Text style={styles.voucherBtnText}>Apply</Text>}
-                  </TouchableOpacity>
-                </View>
-              )}
-              {voucherError && (
-                <View style={[styles.errorRow, { backgroundColor: "#ffebee", borderColor: "#e53935" }]}>
-                  <Ionicons name="alert-circle-outline" size={16} color="#e53935" />
-                  <Text style={[styles.errorText, { color: "#e53935" }]}>{voucherError}</Text>
-                </View>
+                availableVouchers.map((v) => {
+                  const isSelected = appliedVoucher?.code === v.code;
+                  return (
+                    <TouchableOpacity
+                      key={v.code}
+                      style={[
+                        styles.voucherOption,
+                        {
+                          backgroundColor: isSelected ? colors.primary + "10" : colors.card,
+                          borderColor: isSelected ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => isSelected ? removeVoucher() : selectVoucher(v)}
+                      activeOpacity={0.75}
+                    >
+                      <View style={[styles.voucherOptionIcon, { backgroundColor: isSelected ? colors.primary + "20" : colors.muted }]}>
+                        <Ionicons name="ticket-outline" size={18} color={isSelected ? colors.primary : colors.mutedForeground} />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.voucherOptionLabel, { color: isSelected ? colors.primary : colors.foreground }]}>
+                          {v.label}
+                        </Text>
+                        <Text style={[styles.voucherOptionSub, { color: colors.mutedForeground }]}>{v.sub}</Text>
+                      </View>
+                      <Ionicons
+                        name={isSelected ? "checkmark-circle" : "radio-button-off"}
+                        size={22}
+                        color={isSelected ? colors.primary : colors.border}
+                      />
+                    </TouchableOpacity>
+                  );
+                })
               )}
             </>
           )}
@@ -1429,13 +1442,12 @@ const styles = StyleSheet.create({
   hnaInput:            { flex: 1, fontSize: 15, fontFamily: "Inter_500Medium", letterSpacing: 0.5 },
   hnaBadge:            { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderTopWidth: 1 },
   hnaBadgeText:        { fontSize: 12, fontFamily: "Inter_500Medium", flex: 1 },
-  voucherRow:          { flexDirection: "row", gap: 10 },
-  voucherInput:        { flex: 1, minWidth: 0, height: 48, borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 14, fontSize: 16, fontFamily: "Inter_500Medium", letterSpacing: 1 },
-  voucherBtn:          { flexShrink: 0, height: 48, paddingHorizontal: 18, borderRadius: 12, alignItems: "center", justifyContent: "center" },
-  voucherBtnText:      { color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 15 },
-  voucherApplied:      { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 12 },
-  voucherAppliedCode:  { fontSize: 14, fontFamily: "Inter_700Bold" },
-  voucherAppliedSub:   { fontSize: 12, fontFamily: "Inter_400Regular" },
+  voucherEmptyCard:    { flexDirection: "row", alignItems: "center", gap: 10, borderRadius: 12, borderWidth: 1, padding: 14 },
+  voucherEmptyText:    { fontSize: 14, fontFamily: "Inter_400Regular", flex: 1 },
+  voucherOption:       { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 14, borderWidth: 1.5, padding: 14, marginBottom: 8 },
+  voucherOptionIcon:   { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  voucherOptionLabel:  { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  voucherOptionSub:    { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
   totalCard:           { borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
   totalLine:           { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   totalLineLabel:      { fontSize: 13, fontFamily: "Inter_400Regular" },

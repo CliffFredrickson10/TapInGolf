@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
 import { randomUUID } from "crypto";
+import { createStitchPayment } from "../lib/stitch";
 import path from "path";
 import bcrypt from "bcryptjs";
 import multer from "multer";
@@ -1956,6 +1957,7 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
   let added = 0;       // new active membership created for an existing account
   let renewed = 0;     // existing membership refreshed/renewed
   let pending = 0;     // staged for a golfer with no account yet
+  let invoicedRounds = 0; // prepaid rounds that were successfully committed
   const errors: string[] = [];
 
   for (const r of rows) {
@@ -1993,6 +1995,7 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
           [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
         );
         pending++;
+        invoicedRounds += prepaid_rounds;
         continue;
       }
 
@@ -2019,12 +2022,60 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
         [hnaClean, stuClean, stuClean, user.id]
       );
       if (existing) renewed++; else added++;
+      invoicedRounds += prepaid_rounds;
     } catch (err: any) {
       errors.push(`${email}: ${err.message}`);
     }
   }
 
-  res.json({ added, renewed, pending, errors });
+  // ── Generate invoice for the prepaid rounds platform fee ─────────────────
+  let invoice: Record<string, unknown> | null = null;
+  if (invoicedRounds > 0) {
+    try {
+      const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+      const feeRate    = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+      const totalAmount = Math.round(feeRate * invoicedRounds * 100) / 100;
+
+      const dateStr    = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `INV-${club.id}-${dateStr}-${randomUUID().slice(0, 6).toUpperCase()}`;
+      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round — TapIn platform fee`;
+
+      const invResult = await query(
+        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount)
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount]
+      );
+      const invoiceId: number = invResult.rows[0].id;
+
+      // Create Stitch payment link so the club can pay immediately
+      const host = process.env["REPLIT_DEV_DOMAIN"]
+        ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+        : "https://tapingolf.co.za";
+      const redirectUrl = `${host}/api/portal/invoice-success`;
+
+      try {
+        const payment = await createStitchPayment({
+          amount:            totalAmount,
+          payerName:         club.name,
+          merchantReference: `invoice-${invoiceId}`,
+          redirectUrl,
+          payerEmail:        club.email ?? undefined,
+        });
+        await exec(
+          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+          [payment.id, payment.url, invoiceId]
+        );
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: payment.url };
+      } catch (payErr: any) {
+        logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for club invoice");
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: null };
+      }
+    } catch (invErr: any) {
+      logger.error({ err: invErr }, "Failed to create club invoice after member import");
+    }
+  }
+
+  res.json({ added, renewed, pending, errors, invoice });
 });
 
 router.put("/portal/members/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
@@ -2075,6 +2126,72 @@ router.post("/portal/members/bulk-renew", requireClubAuth, async (req: Request, 
     [renewal_date, club.id, ...memberIds]
   );
   res.json({ message: "Renewed", renewed: memberIds.length });
+});
+
+// ─── CLUB INVOICES ───────────────────────────────────────────────────────────
+
+router.get("/portal/invoices", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const invoices = await query<any>(
+    `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount,
+            status, stitch_payment_url, paid_at, created_at
+     FROM club_invoices WHERE club_id = ? ORDER BY created_at DESC`,
+    [club.id]
+  );
+  const unpaidCount = invoices.filter(i => i.status === "unpaid").length;
+  res.json({ invoices, unpaid_count: unpaidCount });
+});
+
+// Refresh expired Stitch payment URL for an unpaid invoice
+router.post("/portal/invoices/:id/refresh-url", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const invId = Number(req.params.id);
+  const inv = await row<any>(
+    "SELECT id, invoice_ref, total_amount, status FROM club_invoices WHERE id = ? AND club_id = ?",
+    [invId, club.id]
+  );
+  if (!inv) { res.status(404).json({ message: "Invoice not found" }); return; }
+  if (inv.status === "paid") { res.status(400).json({ message: "Invoice is already paid" }); return; }
+
+  const host = process.env["REPLIT_DEV_DOMAIN"]
+    ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
+    : "https://tapingolf.co.za";
+
+  try {
+    const payment = await createStitchPayment({
+      amount:            parseFloat(inv.total_amount),
+      payerName:         club.name,
+      merchantReference: `invoice-${invId}`,
+      redirectUrl:       `${host}/api/portal/invoice-success`,
+      payerEmail:        club.email ?? undefined,
+    });
+    await exec(
+      "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+      [payment.id, payment.url, invId]
+    );
+    res.json({ payment_url: payment.url });
+  } catch (err: any) {
+    res.status(502).json({ message: `Failed to create payment link: ${err.message}` });
+  }
+});
+
+// Simple redirect-back page shown after the club pays via Stitch
+router.get("/portal/invoice-success", async (_req: Request, res: Response): Promise<void> => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment Received — TapIn Golf</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}
+.card{background:#fff;border-radius:16px;padding:40px 48px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:420px}
+.check{font-size:56px;margin-bottom:16px}.title{color:#1a5c38;font-size:1.5rem;font-weight:700;margin:0 0 8px}
+.sub{color:#555;font-size:.95rem;margin:0 0 24px}a{display:inline-block;background:#1a5c38;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-weight:600;font-size:.9rem}</style>
+</head><body><div class="card">
+<div class="check">✅</div>
+<h1 class="title">Payment Received</h1>
+<p class="sub">Thank you — your invoice will be marked as paid shortly. You can close this tab.</p>
+<a href="javascript:window.close()">Close Tab</a>
+</div></body></html>`);
 });
 
 // Pending members — roster rows for golfers who have not signed up yet.

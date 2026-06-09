@@ -16,6 +16,7 @@ import {
   CircleDollarSign,
   CreditCard,
   FileX2,
+  Receipt,
   ShieldCheck,
   UserCircle2,
   ShieldOff,
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/ads", label: "Advertisements", icon: Megaphone, section: "ads" },
   { href: "/events", label: "Tournaments", icon: Calendar, section: "events" },
   { href: "/members", label: "Members", icon: Users, section: "members" },
+  { href: "/invoices", label: "Invoices", icon: Receipt, section: "members", invoices: true },
   { href: "/bans", label: "Banned Golfers", icon: ShieldOff, section: "bans" },
   { href: "/cancelled-bookings", label: "Cancelled Bookings", icon: XCircle, section: "schedule" },
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign, section: "pricing" },
@@ -44,6 +46,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
   const { club, clubUser, isClubAdmin, canView, logout } = useAuth();
   const [unread, setUnread] = useState(0);
+  const [unpaidInvoices, setUnpaidInvoices] = useState(0);
 
   useEffect(() => {
     if (!club) return;
@@ -53,6 +56,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
         .catch(() => {});
     fetch();
     const timer = setInterval(fetch, 30_000);
+    return () => clearInterval(timer);
+  }, [club]);
+
+  useEffect(() => {
+    if (!club) return;
+    const fetchInvoices = () =>
+      api<{ unpaid_count: number }>("/api/portal/invoices")
+        .then(r => setUnpaidInvoices(r.unpaid_count))
+        .catch(() => {});
+    fetchInvoices();
+    const timer = setInterval(fetchInvoices, 60_000);
     return () => clearInterval(timer);
   }, [club]);
 
@@ -93,6 +107,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
                   {item.inbox && unread > 0 && (
                     <span className="bg-red-500 text-white text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                       {unread > 99 ? "99+" : unread}
+                    </span>
+                  )}
+                  {(item as any).invoices && unpaidInvoices > 0 && (
+                    <span className="bg-orange-500 text-white text-[10px] font-bold leading-none px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
+                      {unpaidInvoices}
                     </span>
                   )}
                 </div>

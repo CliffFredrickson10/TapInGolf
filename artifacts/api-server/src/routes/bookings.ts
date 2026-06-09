@@ -1334,6 +1334,19 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     return;
   }
 
+  // Club invoice payment: externalReference is "invoice-<invoiceId>"
+  if (externalRef.startsWith("invoice-")) {
+    const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);
+    if (!isNaN(invoiceId)) {
+      await run(
+        "UPDATE club_invoices SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'unpaid'",
+        [invoiceId]
+      );
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
   // Booking payment: externalReference is "<bookingId>" or "<bookingId>-player-<userId>"
   const [rawId] = externalRef.split("-player-");
   const bookingId = parseInt(rawId, 10);

@@ -773,6 +773,24 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS wallet_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS prepaid_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS voucher_enabled SMALLINT NOT NULL DEFAULT 1");
+  // ── Club invoices — TapIn platform fees owed by clubs for prepaid rounds ──
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_invoices (
+      id                 SERIAL PRIMARY KEY,
+      club_id            INT NOT NULL,
+      invoice_ref        VARCHAR(60) NOT NULL UNIQUE,
+      description        TEXT NOT NULL,
+      total_rounds       INT NOT NULL DEFAULT 0,
+      platform_fee_rate  DECIMAL(10,2) NOT NULL DEFAULT 10,
+      total_amount       DECIMAL(10,2) NOT NULL,
+      status             VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+      stitch_payment_id  VARCHAR(100),
+      stitch_payment_url TEXT,
+      paid_at            TIMESTAMP,
+      created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
   // club_inbox_notifications: system → club portal event feed (new bookings, cancellations, etc.)
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (

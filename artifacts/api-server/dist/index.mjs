@@ -60326,6 +60326,17 @@ router4.post("/stitch/webhook", async (req, res) => {
     res.status(200).json({ received: true });
     return;
   }
+  if (externalRef.startsWith("invoice-")) {
+    const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);
+    if (!isNaN(invoiceId)) {
+      await run(
+        "UPDATE club_invoices SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'unpaid'",
+        [invoiceId]
+      );
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
   const [rawId] = externalRef.split("-player-");
   const bookingId = parseInt(rawId, 10);
   if (!isNaN(bookingId)) {
@@ -63126,6 +63137,7 @@ var events_default = router13;
 
 // src/routes/portal.ts
 var import_express14 = __toESM(require_express2(), 1);
+init_stitch();
 init_bcryptjs();
 var import_multer = __toESM(require_multer(), 1);
 init_pg();
@@ -65547,6 +65559,7 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
   let added = 0;
   let renewed = 0;
   let pending = 0;
+  let invoicedRounds = 0;
   const errors = [];
   for (const r of rows) {
     const email = String(r.email ?? "").trim().toLowerCase();
@@ -65593,6 +65606,7 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
           [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
         );
         pending++;
+        invoicedRounds += prepaid_rounds;
         continue;
       }
       const existing = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
@@ -65618,11 +65632,50 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
       );
       if (existing) renewed++;
       else added++;
+      invoicedRounds += prepaid_rounds;
     } catch (err) {
       errors.push(`${email}: ${err.message}`);
     }
   }
-  res.json({ added, renewed, pending, errors });
+  let invoice = null;
+  if (invoicedRounds > 0) {
+    try {
+      const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
+      const feeRate = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+      const totalAmount = Math.round(feeRate * invoicedRounds * 100) / 100;
+      const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `INV-${club.id}-${dateStr}-${randomUUID2().slice(0, 6).toUpperCase()}`;
+      const description = `${invoicedRounds} prepaid round${invoicedRounds !== 1 ? "s" : ""} @ R${feeRate.toFixed(2)}/round \u2014 TapIn platform fee`;
+      const invResult = await query(
+        `INSERT INTO club_invoices (club_id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount)
+         VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+        [club.id, invoiceRef, description, invoicedRounds, feeRate, totalAmount]
+      );
+      const invoiceId = invResult.rows[0].id;
+      const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+      const redirectUrl = `${host}/api/portal/invoice-success`;
+      try {
+        const payment = await createStitchPayment({
+          amount: totalAmount,
+          payerName: club.name,
+          merchantReference: `invoice-${invoiceId}`,
+          redirectUrl,
+          payerEmail: club.email ?? void 0
+        });
+        await exec(
+          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+          [payment.id, payment.url, invoiceId]
+        );
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: payment.url };
+      } catch (payErr) {
+        logger.warn({ err: payErr, invoiceId }, "Stitch payment link creation failed for club invoice");
+        invoice = { id: invoiceId, ref: invoiceRef, rounds: invoicedRounds, fee_rate: feeRate, amount: totalAmount, payment_url: null };
+      }
+    } catch (invErr) {
+      logger.error({ err: invErr }, "Failed to create club invoice after member import");
+    }
+  }
+  res.json({ added, renewed, pending, errors, invoice });
 });
 router14.put("/portal/members/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -65689,6 +65742,67 @@ router14.post("/portal/members/bulk-renew", requireClubAuth2, async (req, res) =
     [renewal_date, club.id, ...memberIds]
   );
   res.json({ message: "Renewed", renewed: memberIds.length });
+});
+router14.get("/portal/invoices", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const invoices = await query(
+    `SELECT id, invoice_ref, description, total_rounds, platform_fee_rate, total_amount,
+            status, stitch_payment_url, paid_at, created_at
+     FROM club_invoices WHERE club_id = ? ORDER BY created_at DESC`,
+    [club.id]
+  );
+  const unpaidCount = invoices.filter((i) => i.status === "unpaid").length;
+  res.json({ invoices, unpaid_count: unpaidCount });
+});
+router14.post("/portal/invoices/:id/refresh-url", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const invId = Number(req.params.id);
+  const inv = await row(
+    "SELECT id, invoice_ref, total_amount, status FROM club_invoices WHERE id = ? AND club_id = ?",
+    [invId, club.id]
+  );
+  if (!inv) {
+    res.status(404).json({ message: "Invoice not found" });
+    return;
+  }
+  if (inv.status === "paid") {
+    res.status(400).json({ message: "Invoice is already paid" });
+    return;
+  }
+  const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+  try {
+    const payment = await createStitchPayment({
+      amount: parseFloat(inv.total_amount),
+      payerName: club.name,
+      merchantReference: `invoice-${invId}`,
+      redirectUrl: `${host}/api/portal/invoice-success`,
+      payerEmail: club.email ?? void 0
+    });
+    await exec(
+      "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+      [payment.id, payment.url, invId]
+    );
+    res.json({ payment_url: payment.url });
+  } catch (err) {
+    res.status(502).json({ message: `Failed to create payment link: ${err.message}` });
+  }
+});
+router14.get("/portal/invoice-success", async (_req, res) => {
+  res.setHeader("Content-Type", "text/html");
+  res.send(`<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Payment Received \u2014 TapIn Golf</title>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f0fdf4}
+.card{background:#fff;border-radius:16px;padding:40px 48px;text-align:center;box-shadow:0 4px 24px rgba(0,0,0,.08);max-width:420px}
+.check{font-size:56px;margin-bottom:16px}.title{color:#1a5c38;font-size:1.5rem;font-weight:700;margin:0 0 8px}
+.sub{color:#555;font-size:.95rem;margin:0 0 24px}a{display:inline-block;background:#1a5c38;color:#fff;text-decoration:none;padding:10px 28px;border-radius:8px;font-weight:600;font-size:.9rem}</style>
+</head><body><div class="card">
+<div class="check">\u2705</div>
+<h1 class="title">Payment Received</h1>
+<p class="sub">Thank you \u2014 your invoice will be marked as paid shortly. You can close this tab.</p>
+<a href="javascript:window.close()">Close Tab</a>
+</div></body></html>`);
 });
 router14.get("/portal/pending-members", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -68832,6 +68946,23 @@ async function createSchema() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS wallet_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS prepaid_enabled SMALLINT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS voucher_enabled SMALLINT NOT NULL DEFAULT 1");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_invoices (
+      id                 SERIAL PRIMARY KEY,
+      club_id            INT NOT NULL,
+      invoice_ref        VARCHAR(60) NOT NULL UNIQUE,
+      description        TEXT NOT NULL,
+      total_rounds       INT NOT NULL DEFAULT 0,
+      platform_fee_rate  DECIMAL(10,2) NOT NULL DEFAULT 10,
+      total_amount       DECIMAL(10,2) NOT NULL,
+      status             VARCHAR(20) NOT NULL DEFAULT 'unpaid',
+      stitch_payment_id  VARCHAR(100),
+      stitch_payment_url TEXT,
+      paid_at            TIMESTAMP,
+      created_at         TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_club_invoices_club ON club_invoices (club_id, created_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_inbox_notifications (
       id         SERIAL PRIMARY KEY,

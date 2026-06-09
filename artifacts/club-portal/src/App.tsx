@@ -34,6 +34,7 @@ import StaffAds from "@/pages/staff/ads";
 import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import Payments from "@/pages/payments";
+import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
 import CancelledBookings from "@/pages/cancelled-bookings";
 import PortalUsers from "@/pages/portal-users";
@@ -139,6 +140,9 @@ function Router() {
         </Route>
         <Route path="/payments">
           <SectionGuard section="payments"><Payments /></SectionGuard>
+        </Route>
+        <Route path="/invoices">
+          <SectionGuard section="members"><Invoices /></SectionGuard>
         </Route>
         <Route path="/notifications">
           <SectionGuard section="notifications"><Notifications /></SectionGuard>

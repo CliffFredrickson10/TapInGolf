@@ -68602,16 +68602,14 @@ app.use("/api/logos", import_express23.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
-app.get("/ping-html", (_req, res) => {
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send("<h1>ok</h1>");
-});
-app.get("/presentation", (_req, res) => {
+var servePresentation = (_req, res) => {
   const file = path2.resolve(__dirname2, "../presentation.html");
   const html = fs.readFileSync(file, "utf-8");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
-});
+};
+app.get("/presentation", servePresentation);
+app.get("/api/presentation", servePresentation);
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path2.resolve(__dirname2, "../../club-portal/dist/public");

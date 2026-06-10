@@ -47,19 +47,15 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
-// HTML smoke-test — tiny response to check if proxy allows non-/api HTML
-app.get("/ping-html", (_req, res) => {
-  res.setHeader("Content-Type", "text/html; charset=utf-8");
-  res.send("<h1>ok</h1>");
-});
-
-// Sales presentation — served at /presentation
-app.get("/presentation", (_req, res) => {
+// Sales presentation — served at both /presentation and /api/presentation
+const servePresentation = (_req: express.Request, res: express.Response) => {
   const file = path.resolve(__dirname, "../presentation.html");
   const html = fs.readFileSync(file, "utf-8");
   res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
-});
+};
+app.get("/presentation", servePresentation);
+app.get("/api/presentation", servePresentation);
 
 app.use("/api", router);
 

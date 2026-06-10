@@ -37,7 +37,8 @@ import StaffGuestLeads from "@/pages/staff/guest-leads";
 import Payments from "@/pages/payments";
 import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
-import CancelledBookings from "@/pages/cancelled-bookings";
+import Bookings from "@/pages/bookings";
+import { Redirect } from "wouter";
 import PortalUsers from "@/pages/portal-users";
 
 function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
@@ -117,7 +118,7 @@ function Router() {
           <SectionGuard section="schedule"><Schedule /></SectionGuard>
         </Route>
         <Route path="/bookings">
-          <SectionGuard section="schedule"><Schedule /></SectionGuard>
+          <SectionGuard section="schedule"><Bookings /></SectionGuard>
         </Route>
         <Route path="/reviews">
           <SectionGuard section="reviews"><Reviews /></SectionGuard>
@@ -153,7 +154,7 @@ function Router() {
           <SectionGuard section="cancellation_policy"><CancellationPolicy /></SectionGuard>
         </Route>
         <Route path="/cancelled-bookings">
-          <SectionGuard section="schedule"><CancelledBookings /></SectionGuard>
+          <Redirect to="/bookings" />
         </Route>
         <Route path="/portal-users" component={PortalUsers} />
         <Route>

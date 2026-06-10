@@ -57,9 +57,9 @@ function parseMeta(metaStr: string | null): Record<string, any> {
 function getDestination(type: string, meta: Record<string, any>): string | null {
   switch (type) {
     case "cancellation":
-      if (meta.booking_id) return `/cancelled-bookings?booking=${meta.booking_id}`;
-      if (meta.booking_ref) return `/cancelled-bookings?ref=${encodeURIComponent(meta.booking_ref)}`;
-      return "/cancelled-bookings";
+      if (meta.booking_id) return `/bookings?booking=${meta.booking_id}`;
+      if (meta.booking_ref) return `/bookings?ref=${encodeURIComponent(meta.booking_ref)}`;
+      return "/bookings";
     case "ban_appeal":
       return meta.ban_id ? `/bans?ban=${meta.ban_id}` : "/bans";
     case "ad_update":

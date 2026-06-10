@@ -20,7 +20,7 @@ import {
   ShieldCheck,
   UserCircle2,
   ShieldOff,
-  XCircle,
+  BookOpen,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
@@ -35,7 +35,7 @@ const navItems = [
   { href: "/members", label: "Members", icon: Users, section: "members" },
   { href: "/invoices", label: "Invoices", icon: Receipt, section: "members", invoices: true },
   { href: "/bans", label: "Banned Golfers", icon: ShieldOff, section: "bans" },
-  { href: "/cancelled-bookings", label: "Cancelled Bookings", icon: XCircle, section: "schedule" },
+  { href: "/bookings", label: "Bookings", icon: BookOpen, section: "schedule" },
   { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign, section: "pricing" },
   { href: "/vouchers", label: "Vouchers", icon: Ticket, section: "vouchers" },
   { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2, section: "cancellation_policy" },

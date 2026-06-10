@@ -82,6 +82,13 @@ function handleTap(notif: AppNotification) {
     case "club_broadcast":
       if (d.club_id) router.push({ pathname: "/club/[id]", params: { id: d.club_id } });
       break;
+    case "event_registration_update":
+    case "event_payment_confirmed":
+      if (d.event_id) router.push({ pathname: "/event/[id]", params: { id: d.event_id } });
+      break;
+    case "voucher_issued":
+      router.push("/payments");
+      break;
     default:
       break;
   }

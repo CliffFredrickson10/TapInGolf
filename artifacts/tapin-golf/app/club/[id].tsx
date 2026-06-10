@@ -521,10 +521,12 @@ export default function ClubDetailScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Ad */}
+        {/* Ads */}
         {ads.length > 0 && (
-          <View style={{ marginTop: 12 }}>
-            <AdBanner ad={ads[0]} />
+          <View style={{ marginTop: 12, gap: 10 }}>
+            {ads.map((ad) => (
+              <AdBanner key={ad.id} ad={ad} />
+            ))}
           </View>
         )}
 

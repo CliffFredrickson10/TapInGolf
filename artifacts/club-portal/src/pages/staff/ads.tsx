@@ -576,7 +576,6 @@ export default function StaffAds() {
                   staff_notes: cfNotes || null, payment_link: cfPaymentLink || null,
                 })}
                 cfPaymentLink={cfPaymentLink} setCfPaymentLink={setCfPaymentLink}
-                onPublish={() => action("publish", "Ad published! It is now live in the app.")}
                 onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
                 onUnpublish={() => action("unpublish", "Ad unpublished")}
               />
@@ -974,7 +973,7 @@ function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onPublish, onReject, onUnpublish }: {
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onReject, onUnpublish }: {
   req: AdRequest; cfPrice: string; setCfPrice: (v: string) => void;
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
@@ -982,7 +981,7 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
   cfPaymentLink: string; setCfPaymentLink: (v: string) => void;
   saving: boolean; actioning: boolean;
   onSave: () => void; onApprove: () => void;
-  onPublish: () => void; onReject: () => void; onUnpublish: () => void;
+  onReject: () => void; onUnpublish: () => void;
 }) {
   const st = STATUS[req.status] ?? STATUS.pending_review;
   const tp = AD_TYPE_META[req.ad_type];
@@ -1006,7 +1005,6 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
             <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={onReject} disabled={actioning}>Reject</Button>
           )}
           {req.status === "pending_review" && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onApprove} disabled={actioning}>{actioning ? "…" : "Approve & Send Payment Link →"}</Button>}
-          {(req.status === "payment_pending" || req.status === "approved") && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPublish} disabled={actioning}>{actioning ? "Publishing…" : "Confirm Payment & Publish →"}</Button>}
           {req.status === "live" && <Button size="sm" variant="destructive" onClick={onUnpublish} disabled={actioning}>{actioning ? "…" : "Unpublish"}</Button>}
         </div>
       </div>

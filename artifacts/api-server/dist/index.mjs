@@ -60591,6 +60591,68 @@ router4.post("/stitch/webhook", async (req, res) => {
     res.status(200).json({ received: true });
     return;
   }
+  if (externalRef.startsWith("ad-")) {
+    const reqId = parseInt(externalRef.slice(3), 10);
+    if (!isNaN(reqId)) {
+      const adReq = await row(
+        `SELECT ar.*, c.name AS club_name FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id WHERE ar.id = ?`,
+        [reqId]
+      );
+      if (adReq && adReq.status === "payment_pending") {
+        const placementMap = {
+          club_detail: "club",
+          featured_home: "home",
+          explore: "explore",
+          push: "home",
+          tournament: "home",
+          newsletter: "home",
+          nearby_alert: "home",
+          tee_time_deal: "home"
+        };
+        const placement = placementMap[adReq.ad_type] ?? "home";
+        const result = await exec(
+          `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+            ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+          [
+            adReq.club_id,
+            adReq.headline,
+            adReq.subtitle ?? null,
+            adReq.image_url ?? null,
+            adReq.cta_text ?? "Book Now",
+            adReq.link_url ?? null,
+            placement,
+            0,
+            reqId,
+            adReq.confirmed_start ?? null,
+            adReq.confirmed_end ?? null,
+            adReq.slot_duration ?? null,
+            adReq.sharing_tier ?? null
+          ]
+        );
+        const adId = result.insertId;
+        await exec(
+          "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
+          [adId, reqId]
+        );
+        if (adReq.ad_type === "featured_home") {
+          await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
+        }
+        const endNote = adReq.confirmed_end ? ` Your campaign runs until ${new Date(adReq.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.` : "";
+        await exec(
+          `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+          [
+            adReq.club_id,
+            "\u{1F680} Your Ad is Now Live!",
+            `Payment confirmed! "${adReq.headline}" is now live in the TapIn Golf app and visible to golfers across South Africa.${endNote}`,
+            JSON.stringify({ ad_request_id: reqId, ad_id: adId })
+          ]
+        );
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
   if (externalRef.startsWith("invoice-")) {
     const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);
     if (!isNaN(invoiceId)) {
@@ -61970,6 +62032,7 @@ var cancellationVouchers_default = router9;
 // src/routes/admin.ts
 var import_express10 = __toESM(require_express2(), 1);
 init_pg();
+init_stitch();
 var router10 = (0, import_express10.Router)();
 function isPlatformAdmin(user) {
   return isPlatform(user);
@@ -62560,7 +62623,22 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     res.status(400).json({ message: "Only pending_review requests can be approved" });
     return;
   }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink } = req.body ?? {};
+  let finalLink = manualLink ?? null;
+  if (!finalLink && confirmed_price && Number(confirmed_price) >= 1) {
+    try {
+      const host = `https://${req.get("host")}`;
+      const { url } = await createStitchPayment({
+        amount: Number(confirmed_price),
+        payerName: existing.headline,
+        merchantReference: `ad-${reqId}`,
+        redirectUrl: `${host}/api/portal/invoice-success`,
+        payerEmail: void 0
+      });
+      finalLink = url;
+    } catch {
+    }
+  }
   await exec(
     `UPDATE ad_requests SET status = 'payment_pending',
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
@@ -62575,20 +62653,20 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       slot_duration ?? null,
       sharing_tier ?? null,
       staff_notes ?? null,
-      payment_link ?? null,
+      finalLink,
       reqId
     ]
   );
   const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} is due.` : "";
-  const linkStr = payment_link ? ` Use this link to complete payment: ${payment_link}` : " TapIn staff will share a payment link with you via email or phone.";
+  const linkStr = finalLink ? ` Use this link to complete payment: ${finalLink}` : " TapIn staff will share a payment link with you via email or phone.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [
       existing.club_id,
       "\u{1F4B3} Payment Required \u2014 Complete Your Ad Booking",
-      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, TapIn staff will publish your ad to the app.`,
-      JSON.stringify({ ad_request_id: reqId, payment_link: payment_link ?? null })
+      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, your ad will publish automatically.`,
+      JSON.stringify({ ad_request_id: reqId, payment_link: finalLink })
     ]
   );
   res.json({ success: true });

@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
 import { getUser, isStaff, isPlatform } from "../lib/auth";
+import { createStitchPayment } from "../lib/stitch";
 
 const router: IRouter = Router();
 
@@ -594,7 +595,25 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   const existing = await row<any>("SELECT id, club_id, headline, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink } = req.body ?? {};
+
+  // Auto-generate a Stitch payment link with merchantReference=ad-<reqId> so the
+  // webhook can identify and auto-publish the ad when payment is confirmed.
+  let finalLink: string | null = manualLink ?? null;
+  if (!finalLink && confirmed_price && Number(confirmed_price) >= 1) {
+    try {
+      const host = `https://${req.get("host")}`;
+      const { url } = await createStitchPayment({
+        amount:            Number(confirmed_price),
+        payerName:         existing.headline,
+        merchantReference: `ad-${reqId}`,
+        redirectUrl:       `${host}/api/portal/invoice-success`,
+        payerEmail:        undefined,
+      });
+      finalLink = url;
+    } catch { /* Stitch not configured or unavailable — proceed without auto-link */ }
+  }
+
   await exec(
     `UPDATE ad_requests SET status = 'payment_pending',
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
@@ -603,19 +622,19 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       payment_link = COALESCE(?, payment_link), updated_at = NOW()
      WHERE id = ?`,
     [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
-     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, payment_link ?? null, reqId]
+     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, finalLink, reqId]
   );
   const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} is due.` : "";
-  const linkStr = payment_link
-    ? ` Use this link to complete payment: ${payment_link}`
+  const linkStr = finalLink
+    ? ` Use this link to complete payment: ${finalLink}`
     : " TapIn staff will share a payment link with you via email or phone.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [existing.club_id,
      "💳 Payment Required — Complete Your Ad Booking",
-     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, TapIn staff will publish your ad to the app.`,
-     JSON.stringify({ ad_request_id: reqId, payment_link: payment_link ?? null })]
+     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, your ad will publish automatically.`,
+     JSON.stringify({ ad_request_id: reqId, payment_link: finalLink })]
   );
   res.json({ success: true });
 });

@@ -1342,6 +1342,53 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     return;
   }
 
+  // Ad request payment: externalReference is "ad-<requestId>"
+  if (externalRef.startsWith("ad-")) {
+    const reqId = parseInt(externalRef.slice(3), 10);
+    if (!isNaN(reqId)) {
+      const adReq = await row<any>(
+        `SELECT ar.*, c.name AS club_name FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id WHERE ar.id = ?`,
+        [reqId]
+      );
+      if (adReq && adReq.status === "payment_pending") {
+        const placementMap: Record<string, string> = {
+          club_detail: "club", featured_home: "home", explore: "explore",
+          push: "home", tournament: "home", newsletter: "home", nearby_alert: "home", tee_time_deal: "home",
+        };
+        const placement = placementMap[adReq.ad_type] ?? "home";
+        const result = await exec(
+          `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+            ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+          [adReq.club_id, adReq.headline, adReq.subtitle ?? null, adReq.image_url ?? null,
+           adReq.cta_text ?? "Book Now", adReq.link_url ?? null, placement, 0, reqId,
+           adReq.confirmed_start ?? null, adReq.confirmed_end ?? null,
+           adReq.slot_duration ?? null, adReq.sharing_tier ?? null]
+        );
+        const adId = (result as any).insertId;
+        await exec(
+          "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
+          [adId, reqId]
+        );
+        if (adReq.ad_type === "featured_home") {
+          await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
+        }
+        const endNote = adReq.confirmed_end
+          ? ` Your campaign runs until ${new Date(adReq.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.`
+          : "";
+        await exec(
+          `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+          [adReq.club_id,
+           "🚀 Your Ad is Now Live!",
+           `Payment confirmed! "${adReq.headline}" is now live in the TapIn Golf app and visible to golfers across South Africa.${endNote}`,
+           JSON.stringify({ ad_request_id: reqId, ad_id: adId })]
+        );
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
   // Club invoice payment: externalReference is "invoice-<invoiceId>"
   if (externalRef.startsWith("invoice-")) {
     const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);

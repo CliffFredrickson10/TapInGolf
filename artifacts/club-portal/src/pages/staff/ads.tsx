@@ -339,10 +339,15 @@ function HomeBannerAdsTab() {
             </div>
 
             <div>
-              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">
-                Image
-                {form.layout === "bold" && <span className="text-muted-foreground font-normal normal-case ml-1">— optional for Impact</span>}
-              </Label>
+              <div className="flex items-center justify-between mb-1.5">
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">
+                  Image
+                  {form.layout === "bold" && <span className="text-muted-foreground font-normal normal-case ml-1">— optional for Impact</span>}
+                </Label>
+                <span className="text-[10px] font-semibold bg-blue-50 text-blue-700 border border-blue-100 px-2 py-0.5 rounded-full">
+                  16:9 · 1200×675 px
+                </span>
+              </div>
               <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
                 onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }} />
               {form.image_url ? (
@@ -361,9 +366,12 @@ function HomeBannerAdsTab() {
                   className="w-full border-2 border-dashed border-gray-300 hover:border-[#1a5c38] rounded-lg transition-colors py-4 flex flex-col items-center gap-1.5 text-gray-400 hover:text-[#1a5c38] text-xs disabled:opacity-60">
                   {imageUploading
                     ? <><div className="h-5 w-5 border-2 border-[#1a5c38] border-t-transparent rounded-full animate-spin" /><span>Uploading…</span></>
-                    : <><Upload className="h-5 w-5" /><span>Click to upload image</span><span className="text-[10px] text-gray-400">JPG · PNG · WebP · Max 8 MB</span></>}
+                    : <><Upload className="h-5 w-5" /><span>Click to upload image</span><span className="text-[10px] text-gray-400">WebP or JPG · 16:9 ratio · Max 8 MB</span></>}
                 </button>
               )}
+              <p className="text-[10px] text-muted-foreground mt-1.5 leading-relaxed">
+                <span className="font-semibold">Best results:</span> 1200×675 px or larger (16:9). WebP gives the smallest file size. Avoid text near the edges — the card crops on smaller screens.
+              </p>
             </div>
 
             <div className="grid grid-cols-2 gap-3">

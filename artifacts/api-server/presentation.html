@@ -195,6 +195,189 @@
     .dot  { width: 6px !important; height: 6px !important; }
   }
 
+  /* ═══════════════════════════════════════════
+     SLIDE sa1 — App in Action (phone mockups)
+  ═══════════════════════════════════════════ */
+  #sa1 {
+    background: var(--white);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3vh 5vw 2vh;
+  }
+  .sa1-top { text-align: center; margin-bottom: 2.5vh; }
+  .sa1-eyebrow { font-size: 0.9vw; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.8vh; }
+  .sa1-headline { font-family: 'Playfair Display', serif; font-size: 2.8vw; font-weight: 700; color: var(--green-dk); }
+  .sa1-phones { display: flex; gap: 3vw; align-items: flex-start; justify-content: center; }
+  .sa1-col { display: flex; flex-direction: column; align-items: center; gap: 1.2vh; }
+  .sa1-phone {
+    width: 13.5vw; height: 24vw;
+    background: #1c1c1e;
+    border-radius: 1.8vw;
+    overflow: hidden;
+    box-shadow: 0 0.8vw 2.5vw rgba(0,0,0,0.38), inset 0 0 0 0.2vw #333;
+    display: flex; flex-direction: column;
+  }
+  .ph-bar { background: var(--green-dk); padding: 0.4vh 1.2vw 0.2vh; display: flex; justify-content: space-between; font-size: 0.48vw; color: rgba(255,255,255,0.7); flex-shrink: 0; }
+  .ph-hdr { background: var(--green-dk); padding: 0.5vh 1.2vw 0.7vh; font-size: 1.05vw; font-weight: 700; color: white; flex-shrink: 0; }
+  .ph-screen { flex: 1; background: #f5f5f7; overflow: hidden; display: flex; flex-direction: column; }
+  .ph-nav { background: #1c1c1e; padding: 0.5vh 0; display: flex; justify-content: space-around; border-top: 1px solid #2c2c2e; flex-shrink: 0; }
+  .ph-nav-t { display: flex; flex-direction: column; align-items: center; gap: 0.1vh; font-size: 0.38vw; color: rgba(255,255,255,0.32); }
+  .ph-nav-t.on { color: var(--gold); }
+  .ph-nav-ico { font-size: 0.85vw; }
+  .sa1-lbl { font-size: 0.9vw; font-weight: 700; color: var(--green-dk); text-align: center; }
+  .sa1-sub { font-size: 0.75vw; color: var(--muted); text-align: center; }
+  /* phone 1 — Join a Game */
+  .ph-filters { display: flex; gap: 0.35vw; padding: 0.45vh 0.7vw; background: white; border-bottom: 1px solid #eee; flex-shrink: 0; }
+  .ph-chip { font-size: 0.45vw; background: rgba(26,92,56,0.1); color: var(--green); border-radius: 99vw; padding: 0.25vh 0.55vw; font-weight: 600; }
+  .ph-chip.on { background: var(--green); color: white; }
+  .ph-gcard { background: white; margin: 0.4vh 0.5vw; border-radius: 0.5vw; overflow: hidden; box-shadow: 0 0.12vw 0.4vw rgba(0,0,0,0.08); flex-shrink: 0; }
+  .ph-club-hdr { background: var(--green-dk); padding: 0.32vh 0.6vw; font-size: 0.48vw; font-weight: 700; color: white; }
+  .ph-slot-row { display: flex; align-items: center; gap: 0.35vw; padding: 0.38vh 0.6vw; border-bottom: 1px solid #f5f5f5; }
+  .ph-slot-row:last-child { border-bottom: none; }
+  .ph-stime { font-size: 0.55vw; font-weight: 700; color: var(--green-dk); white-space: nowrap; min-width: 1.8vw; }
+  .ph-sinfo { font-size: 0.42vw; color: var(--muted); flex: 1; }
+  .ph-pdots { display: flex; gap: 0.15vw; }
+  .ph-pdot { width: 0.72vw; height: 0.72vw; border-radius: 50%; border: 1.5px solid var(--green); }
+  .ph-pdot.filled { background: var(--green); }
+  .ph-open-lbl { font-size: 0.4vw; font-weight: 700; color: var(--gold); white-space: nowrap; }
+  .ph-join { font-size: 0.44vw; font-weight: 700; background: var(--gold); color: white; padding: 0.28vh 0.5vw; border-radius: 0.3vw; white-space: nowrap; flex-shrink: 0; }
+  /* phone 2 — Chat */
+  .ph-conv { display: flex; align-items: center; gap: 0.45vw; padding: 0.5vh 0.7vw; border-bottom: 1px solid #f0f0f0; background: white; flex-shrink: 0; }
+  .ph-ava { width: 1.8vw; height: 1.8vw; border-radius: 50%; background: var(--green); display: flex; align-items: center; justify-content: center; font-size: 0.5vw; color: white; font-weight: 700; flex-shrink: 0; }
+  .ph-ava.gd { background: var(--gold); }
+  .ph-ava.tl { background: #2d7f6b; }
+  .ph-cname { font-size: 0.5vw; font-weight: 700; color: #1c1c1e; }
+  .ph-cprev { font-size: 0.42vw; color: #8e8e93; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 7vw; }
+  .ph-cmeta { margin-left: auto; display: flex; flex-direction: column; align-items: flex-end; gap: 0.2vh; }
+  .ph-ctime { font-size: 0.38vw; color: #8e8e93; }
+  .ph-cbadge { width: 0.8vw; height: 0.8vw; border-radius: 50%; background: var(--green); font-size: 0.35vw; color: white; display: flex; align-items: center; justify-content: center; }
+  .ph-chat-pane { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: #f5f5f7; }
+  .ph-chat-bar { background: white; padding: 0.38vh 0.65vw; border-bottom: 1px solid #eee; display: flex; align-items: center; gap: 0.4vw; flex-shrink: 0; }
+  .ph-chat-who { font-size: 0.5vw; font-weight: 700; color: #1c1c1e; }
+  .ph-chat-status { font-size: 0.38vw; color: #8e8e93; }
+  .ph-msgs { flex: 1; overflow: hidden; padding: 0.4vh 0.55vw; display: flex; flex-direction: column; gap: 0.4vh; }
+  .ph-msg { max-width: 80%; padding: 0.38vh 0.58vw; border-radius: 0.55vw; font-size: 0.44vw; line-height: 1.45; }
+  .ph-msg.th { background: white; color: #1c1c1e; align-self: flex-start; box-shadow: 0 0.1vw 0.35vw rgba(0,0,0,0.09); }
+  .ph-msg.me { background: var(--green); color: white; align-self: flex-end; }
+  .ph-chat-inp { background: white; padding: 0.42vh 0.65vw; border-top: 1px solid #eee; font-size: 0.42vw; color: #8e8e93; flex-shrink: 0; }
+  /* phone 3 — Notifications */
+  .ph-notif { display: flex; gap: 0.45vw; padding: 0.5vh 0.65vw; border-bottom: 1px solid #f0f0f0; background: white; align-items: flex-start; flex-shrink: 0; }
+  .ph-nicon { width: 1.55vw; height: 1.55vw; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 0.62vw; flex-shrink: 0; }
+  .ph-nicon.gn { background: rgba(26,92,56,0.12); }
+  .ph-nicon.gd { background: rgba(200,168,75,0.15); }
+  .ph-ntitle { font-size: 0.5vw; font-weight: 700; color: #1c1c1e; margin-bottom: 0.12vh; }
+  .ph-ntext  { font-size: 0.42vw; color: #6e6e73; line-height: 1.4; }
+  .ph-ntime  { font-size: 0.38vw; color: #8e8e93; margin-top: 0.15vh; }
+  .ph-ndot   { width: 0.5vw; height: 0.5vw; border-radius: 50%; background: var(--green); flex-shrink: 0; margin-top: 0.55vh; }
+
+  /* ═══════════════════════════════════════════
+     SLIDE sp1 — Portal in Action (browser mockups)
+  ═══════════════════════════════════════════ */
+  #sp1 {
+    background: var(--cream);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3vh 3vw 2vh;
+  }
+  .sp1-top { text-align: center; margin-bottom: 2.5vh; }
+  .sp1-eyebrow { font-size: 0.9vw; font-weight: 700; letter-spacing: 0.25em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.8vh; }
+  .sp1-headline { font-family: 'Playfair Display', serif; font-size: 2.8vw; font-weight: 700; color: var(--green-dk); }
+  .sp1-panels { display: flex; gap: 2vw; align-items: flex-start; width: 100%; }
+  .sp1-pw { flex: 1; display: flex; flex-direction: column; align-items: stretch; gap: 1.2vh; min-width: 0; }
+  .sp1-browser { border-radius: 0.65vw; overflow: hidden; box-shadow: 0 0.45vw 1.8vw rgba(0,0,0,0.12); display: flex; flex-direction: column; }
+  .sp1-chrome { background: #e4e4e4; padding: 0.4vh 0.75vw; display: flex; align-items: center; gap: 0.38vw; border-bottom: 1px solid #d0d0d0; flex-shrink: 0; }
+  .sp1-dot { width: 0.55vw; height: 0.55vw; border-radius: 50%; flex-shrink: 0; }
+  .sp1-url { flex: 1; background: white; border-radius: 0.28vw; padding: 0.18vh 0.45vw; font-size: 0.4vw; color: #555; font-family: monospace; text-align: center; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .sp1-body { display: flex; height: 28vh; }
+  .sp1-sb { background: var(--green-dk); width: 3vw; display: flex; flex-direction: column; align-items: center; padding: 1vh 0; gap: 0.9vh; flex-shrink: 0; }
+  .sp1-sbi { font-size: 0.8vw; opacity: 0.42; }
+  .sp1-sbi.on { opacity: 1; }
+  .sp1-main { flex: 1; background: white; padding: 0.8vh 0.9vw; overflow: hidden; display: flex; flex-direction: column; min-width: 0; }
+  .sp1-mtitle { font-size: 0.72vw; font-weight: 700; color: var(--green-dk); margin-bottom: 0.7vh; padding-bottom: 0.4vh; border-bottom: 2px solid var(--green); display: flex; justify-content: space-between; align-items: center; flex-shrink: 0; }
+  .sp1-btn { font-size: 0.42vw; background: var(--green); color: white; padding: 0.28vh 0.55vw; border-radius: 0.28vw; font-weight: 700; flex-shrink: 0; }
+  .sp1-btn.gd { background: var(--gold); }
+  .sp1-plbl { font-size: 0.85vw; font-weight: 700; color: var(--green-dk); text-align: center; }
+  .sp1-psub { font-size: 0.72vw; color: var(--muted); text-align: center; }
+  /* tee sheet grid */
+  .sp1-tg { display: grid; grid-template-columns: 2.5vw 1fr 1fr; gap: 0.18vh 0.2vw; overflow: hidden; }
+  .sp1-tgh { font-size: 0.38vw; font-weight: 700; color: var(--muted); text-transform: uppercase; padding: 0.28vh 0.3vw; background: #f8f8f8; text-align: center; }
+  .sp1-tgt { font-size: 0.48vw; font-weight: 700; color: var(--green-dk); padding: 0.35vh 0.25vw; }
+  .sp1-tsl { padding: 0.3vh 0.35vw; border-radius: 0.22vw; font-size: 0.4vw; font-weight: 600; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  .sp1-tsl.bk { background: rgba(26,92,56,0.12); color: var(--green); }
+  .sp1-tsl.op { background: #f5f5f5; color: #bbb; }
+  .sp1-tsl.pe { background: rgba(200,168,75,0.15); color: #9a7420; }
+  .sp1-tsl.bl { background: #f0f0f0; color: #ccc; text-decoration: line-through; }
+  /* tournament form */
+  .sp1-frow { display: flex; flex-direction: column; gap: 0.08vh; margin-bottom: 0.55vh; flex-shrink: 0; }
+  .sp1-flbl { font-size: 0.38vw; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.07em; }
+  .sp1-fval { font-size: 0.5vw; color: var(--green-dk); background: #f8f8f8; padding: 0.3vh 0.45vw; border-radius: 0.28vw; border: 1px solid #e8e8e8; }
+  .sp1-tags { display: flex; gap: 0.35vw; flex-wrap: wrap; margin-top: 0.1vh; }
+  .sp1-tag { font-size: 0.38vw; background: rgba(26,92,56,0.1); color: var(--green); border-radius: 0.22vw; padding: 0.18vh 0.4vw; font-weight: 700; }
+  .sp1-tag.gd-tag { background: rgba(200,168,75,0.12); color: #9a7420; }
+  /* draw */
+  .sp1-dropts { display: flex; gap: 0.4vw; margin-bottom: 0.55vh; flex-shrink: 0; align-items: center; }
+  .sp1-dopt { font-size: 0.4vw; border-radius: 0.22vw; padding: 0.2vh 0.45vw; font-weight: 700; }
+  .sp1-dopt.rnd { background: rgba(26,92,56,0.1); color: var(--green); }
+  .sp1-dopt.sd  { background: rgba(200,168,75,0.12); color: #9a7420; }
+  .sp1-grp { margin-bottom: 0.5vh; border: 1px solid #eee; border-radius: 0.32vw; overflow: hidden; flex-shrink: 0; }
+  .sp1-ghdr { background: var(--green-dk); padding: 0.28vh 0.5vw; font-size: 0.42vw; font-weight: 700; color: white; display: flex; justify-content: space-between; }
+  .sp1-gply { display: flex; align-items: center; padding: 0.26vh 0.5vw; border-bottom: 1px solid #f5f5f5; font-size: 0.42vw; color: var(--green-dk); font-weight: 500; }
+  .sp1-gply:last-child { border-bottom: none; }
+  .sp1-ghcp { margin-left: auto; font-size: 0.38vw; color: var(--muted); }
+
+  /* Mobile overrides for new slides */
+  @media screen and (max-width: 900px) {
+    .sa1-eyebrow, .sp1-eyebrow { font-size: 11px !important; }
+    .sa1-headline, .sp1-headline { font-size: 20px !important; }
+    .sa1-lbl, .sp1-plbl { font-size: 11px !important; }
+    .sa1-sub, .sp1-psub { font-size: 10px !important; }
+    .sa1-phone { width: 26vw !important; height: 48vw !important; border-radius: 4vw !important; }
+    .sa1-phones { gap: 4vw !important; }
+    .ph-bar { font-size: 8px !important; }
+    .ph-hdr { font-size: 12px !important; }
+    .ph-nav-t { font-size: 7px !important; }
+    .ph-nav-ico { font-size: 13px !important; }
+    .ph-chip { font-size: 8px !important; }
+    .ph-club-hdr { font-size: 8px !important; }
+    .ph-stime { font-size: 9px !important; }
+    .ph-sinfo { font-size: 7px !important; }
+    .ph-pdot { width: 8px !important; height: 8px !important; }
+    .ph-open-lbl { font-size: 7px !important; }
+    .ph-join { font-size: 8px !important; }
+    .ph-ava { width: 24px !important; height: 24px !important; font-size: 8px !important; }
+    .ph-cname { font-size: 9px !important; }
+    .ph-cprev { font-size: 7px !important; max-width: 80px !important; }
+    .ph-ctime { font-size: 7px !important; }
+    .ph-cbadge { width: 10px !important; height: 10px !important; font-size: 7px !important; }
+    .ph-chat-who { font-size: 9px !important; }
+    .ph-chat-status { font-size: 7px !important; }
+    .ph-msg { font-size: 8px !important; border-radius: 6px !important; }
+    .ph-chat-inp { font-size: 7px !important; }
+    .ph-nicon { width: 20px !important; height: 20px !important; font-size: 10px !important; }
+    .ph-ntitle { font-size: 9px !important; }
+    .ph-ntext  { font-size: 7px !important; }
+    .ph-ntime  { font-size: 7px !important; }
+    .ph-ndot   { width: 6px !important; height: 6px !important; }
+    .sp1-url { font-size: 7px !important; }
+    .sp1-dot { width: 8px !important; height: 8px !important; }
+    .sp1-sbi { font-size: 11px !important; }
+    .sp1-mtitle { font-size: 11px !important; }
+    .sp1-btn { font-size: 8px !important; }
+    .sp1-tgh { font-size: 7px !important; }
+    .sp1-tgt { font-size: 8px !important; }
+    .sp1-tsl { font-size: 7px !important; }
+    .sp1-flbl { font-size: 7px !important; }
+    .sp1-fval { font-size: 9px !important; }
+    .sp1-tag, .sp1-dopt { font-size: 7px !important; }
+    .sp1-ghdr { font-size: 8px !important; }
+    .sp1-gply { font-size: 8px !important; }
+    .sp1-ghcp { font-size: 7px !important; }
+  }
+
   /* ── Print: show all slides stacked ── */
   @media print {
     body { background: white; overflow: visible; height: auto; }
@@ -1409,6 +1592,191 @@
     </div>
   </div>
 
+  <!-- ══ Slide A — App in Action ══ -->
+  <div class="slide" id="sa1">
+    <div class="sa1-top">
+      <div class="sa1-eyebrow">App in Action</div>
+      <h2 class="sa1-headline">Everything a Golfer Needs — In Their Pocket</h2>
+    </div>
+    <div class="sa1-phones">
+
+      <!-- Phone 1: Join a Game -->
+      <div class="sa1-col">
+        <div class="sa1-phone">
+          <div class="ph-bar"><span>9:41</span><span>▲▲▲ 🔋</span></div>
+          <div class="ph-hdr">🔍 Join a Game</div>
+          <div class="ph-screen">
+            <div class="ph-filters">
+              <div class="ph-chip on">Today</div>
+              <div class="ph-chip">10 km</div>
+              <div class="ph-chip">Gauteng</div>
+            </div>
+            <div class="ph-gcard">
+              <div class="ph-club-hdr">⛳ Royal JHB &amp; Kensington GC</div>
+              <div class="ph-slot-row">
+                <div class="ph-stime">08:30</div>
+                <div class="ph-sinfo">18-hole · R850</div>
+                <div class="ph-pdots">
+                  <div class="ph-pdot filled"></div><div class="ph-pdot filled"></div>
+                  <div class="ph-pdot"></div><div class="ph-pdot"></div>
+                </div>
+                <div class="ph-open-lbl">2 open</div>
+                <div class="ph-join">Join →</div>
+              </div>
+              <div class="ph-slot-row">
+                <div class="ph-stime">09:15</div>
+                <div class="ph-sinfo">9-hole · R420</div>
+                <div class="ph-pdots">
+                  <div class="ph-pdot filled"></div><div class="ph-pdot"></div>
+                  <div class="ph-pdot"></div><div class="ph-pdot"></div>
+                </div>
+                <div class="ph-open-lbl">3 open</div>
+                <div class="ph-join">Join →</div>
+              </div>
+            </div>
+            <div class="ph-gcard">
+              <div class="ph-club-hdr">⛳ Randpark Golf Club</div>
+              <div class="ph-slot-row">
+                <div class="ph-stime">10:00</div>
+                <div class="ph-sinfo">18-hole · R620</div>
+                <div class="ph-pdots">
+                  <div class="ph-pdot filled"></div><div class="ph-pdot filled"></div>
+                  <div class="ph-pdot filled"></div><div class="ph-pdot"></div>
+                </div>
+                <div class="ph-open-lbl">1 open</div>
+                <div class="ph-join">Join →</div>
+              </div>
+            </div>
+          </div>
+          <div class="ph-nav">
+            <div class="ph-nav-t"><div class="ph-nav-ico">🏠</div><div>Home</div></div>
+            <div class="ph-nav-t on"><div class="ph-nav-ico">🔍</div><div>Join</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">📅</div><div>Bookings</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">👥</div><div>Friends</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">👤</div><div>Profile</div></div>
+          </div>
+        </div>
+        <div class="sa1-lbl">Join Open Games</div>
+        <div class="sa1-sub">Find &amp; fill spots near you</div>
+      </div>
+
+      <!-- Phone 2: Friend Chat -->
+      <div class="sa1-col">
+        <div class="sa1-phone">
+          <div class="ph-bar"><span>9:41</span><span>▲▲▲ 🔋</span></div>
+          <div class="ph-hdr">💬 Messages</div>
+          <div class="ph-screen">
+            <div class="ph-conv">
+              <div class="ph-ava">MR</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-cname">Mike R.</div>
+                <div class="ph-cprev">Open spot at Royal JHB Sat 08:30 🏌️</div>
+              </div>
+              <div class="ph-cmeta">
+                <div class="ph-ctime">10:21</div>
+                <div class="ph-cbadge">2</div>
+              </div>
+            </div>
+            <div class="ph-conv">
+              <div class="ph-ava gd">4B</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-cname">Saturday 4-ball ⛳</div>
+                <div class="ph-cprev">I'll confirm payment now 👍</div>
+              </div>
+              <div class="ph-cmeta"><div class="ph-ctime">09:58</div></div>
+            </div>
+            <div class="ph-conv">
+              <div class="ph-ava tl">RC</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-cname">Randpark GC</div>
+                <div class="ph-cprev">Your Club Champs entry is pending</div>
+              </div>
+              <div class="ph-cmeta"><div class="ph-ctime">Tue</div></div>
+            </div>
+            <div class="ph-chat-pane">
+              <div class="ph-chat-bar">
+                <div class="ph-ava" style="width:1.3vw;height:1.3vw;font-size:0.42vw;flex-shrink:0">MR</div>
+                <div>
+                  <div class="ph-chat-who">Mike R.</div>
+                  <div class="ph-chat-status">● Online</div>
+                </div>
+              </div>
+              <div class="ph-msgs">
+                <div class="ph-msg th">Hey! Spot open at Royal JHB Sat 08:30 — 18-hole, R850. Want in?</div>
+                <div class="ph-msg me">Count me in! Booking now 🏌️</div>
+                <div class="ph-msg th">See you on the 1st tee! 🏆</div>
+              </div>
+              <div class="ph-chat-inp">💬  Type a message…</div>
+            </div>
+          </div>
+          <div class="ph-nav">
+            <div class="ph-nav-t"><div class="ph-nav-ico">🏠</div><div>Home</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">🔍</div><div>Join</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">📅</div><div>Bookings</div></div>
+            <div class="ph-nav-t on"><div class="ph-nav-ico">👥</div><div>Friends</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">👤</div><div>Profile</div></div>
+          </div>
+        </div>
+        <div class="sa1-lbl">Chat &amp; Organise</div>
+        <div class="sa1-sub">Coordinate rounds with friends</div>
+      </div>
+
+      <!-- Phone 3: Club Notifications -->
+      <div class="sa1-col">
+        <div class="sa1-phone">
+          <div class="ph-bar"><span>9:41</span><span>▲▲▲ 🔋</span></div>
+          <div class="ph-hdr">🔔 Notifications</div>
+          <div class="ph-screen">
+            <div class="ph-notif">
+              <div class="ph-nicon gd">📢</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-ntitle">Royal JHB &amp; Kensington GC</div>
+                <div class="ph-ntext">Club Champs 2025 now open — R300 + R50 cart. Entries close Sunday.</div>
+                <div class="ph-ntime">2 hours ago</div>
+              </div>
+              <div class="ph-ndot"></div>
+            </div>
+            <div class="ph-notif">
+              <div class="ph-nicon gn">✅</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-ntitle">Booking Confirmed</div>
+                <div class="ph-ntext">Sat 08:30 · Royal JHB · 18-hole · R850 paid ✓</div>
+                <div class="ph-ntime">Just now</div>
+              </div>
+              <div class="ph-ndot"></div>
+            </div>
+            <div class="ph-notif">
+              <div class="ph-nicon gn">👥</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-ntitle">Mike R. accepted your request</div>
+                <div class="ph-ntext">You are now friends. Invite them to a round.</div>
+                <div class="ph-ntime">1 hour ago</div>
+              </div>
+            </div>
+            <div class="ph-notif">
+              <div class="ph-nicon gd">🎟️</div>
+              <div style="flex:1;min-width:0">
+                <div class="ph-ntitle">Voucher from Randpark GC</div>
+                <div class="ph-ntext">R100 off your next round. Expires Sunday.</div>
+                <div class="ph-ntime">Yesterday</div>
+              </div>
+            </div>
+          </div>
+          <div class="ph-nav">
+            <div class="ph-nav-t on"><div class="ph-nav-ico">🏠</div><div>Home</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">🔍</div><div>Join</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">📅</div><div>Bookings</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">👥</div><div>Friends</div></div>
+            <div class="ph-nav-t"><div class="ph-nav-ico">👤</div><div>Profile</div></div>
+          </div>
+        </div>
+        <div class="sa1-lbl">Club Notifications</div>
+        <div class="sa1-sub">Stay in the loop, always</div>
+      </div>
+
+    </div>
+  </div>
+
   <!-- ══ Slide 5 — Split Billing ══ -->
   <div class="slide" id="s5">
     <div class="s5-stripe"></div>
@@ -1502,6 +1870,164 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide B — Portal in Action ══ -->
+  <div class="slide" id="sp1">
+    <div class="sp1-top">
+      <div class="sp1-eyebrow">Portal in Action</div>
+      <h2 class="sp1-headline">Powerful Tools for Every Club Operation</h2>
+    </div>
+    <div class="sp1-panels">
+
+      <!-- Panel 1: Tee Sheet Scheduler -->
+      <div class="sp1-pw">
+        <div class="sp1-browser">
+          <div class="sp1-chrome">
+            <div class="sp1-dot" style="background:#e74c3c"></div>
+            <div class="sp1-dot" style="background:#f39c12"></div>
+            <div class="sp1-dot" style="background:#2ecc71"></div>
+            <div class="sp1-url">portal.tapingolf.co.za/schedule</div>
+          </div>
+          <div class="sp1-body">
+            <div class="sp1-sb">
+              <div class="sp1-sbi">🏠</div>
+              <div class="sp1-sbi on">📅</div>
+              <div class="sp1-sbi">🏆</div>
+              <div class="sp1-sbi">👤</div>
+              <div class="sp1-sbi">📊</div>
+            </div>
+            <div class="sp1-main">
+              <div class="sp1-mtitle">
+                <span>Tee Sheet — Sat 14 Jun</span>
+                <div class="sp1-btn">+ Generate</div>
+              </div>
+              <div class="sp1-tg">
+                <div class="sp1-tgh">Time</div>
+                <div class="sp1-tgh">Tee 1</div>
+                <div class="sp1-tgh">Tee 10</div>
+                <div class="sp1-tgt">07:00</div>
+                <div class="sp1-tsl bk">✓ Adams J. (HCP 4)</div>
+                <div class="sp1-tsl bk">✓ Botha M. (HCP 8)</div>
+                <div class="sp1-tgt">07:15</div>
+                <div class="sp1-tsl bk">✓ Coetzee P. (HCP 12)</div>
+                <div class="sp1-tsl op">Open</div>
+                <div class="sp1-tgt">07:30</div>
+                <div class="sp1-tsl pe">⏳ Smith R. (HCP 6)</div>
+                <div class="sp1-tsl op">Open</div>
+                <div class="sp1-tgt">07:45</div>
+                <div class="sp1-tsl op">Open</div>
+                <div class="sp1-tsl op">Open</div>
+                <div class="sp1-tgt">08:00</div>
+                <div class="sp1-tsl bl">Blocked</div>
+                <div class="sp1-tsl bk">✓ Van der Berg</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sp1-plbl">Auto Tee Sheet Scheduler</div>
+        <div class="sp1-psub">Generate, block &amp; manage all tee times</div>
+      </div>
+
+      <!-- Panel 2: Tournament Builder -->
+      <div class="sp1-pw">
+        <div class="sp1-browser">
+          <div class="sp1-chrome">
+            <div class="sp1-dot" style="background:#e74c3c"></div>
+            <div class="sp1-dot" style="background:#f39c12"></div>
+            <div class="sp1-dot" style="background:#2ecc71"></div>
+            <div class="sp1-url">portal.tapingolf.co.za/events/new</div>
+          </div>
+          <div class="sp1-body">
+            <div class="sp1-sb">
+              <div class="sp1-sbi">🏠</div>
+              <div class="sp1-sbi">📅</div>
+              <div class="sp1-sbi on">🏆</div>
+              <div class="sp1-sbi">👤</div>
+              <div class="sp1-sbi">📊</div>
+            </div>
+            <div class="sp1-main">
+              <div class="sp1-mtitle">
+                <span>New Tournament</span>
+                <div class="sp1-btn gd">Create Event</div>
+              </div>
+              <div class="sp1-frow">
+                <div class="sp1-flbl">Event Name</div>
+                <div class="sp1-fval">Club Championship 2025</div>
+              </div>
+              <div class="sp1-frow">
+                <div class="sp1-flbl">Format · Rounds</div>
+                <div class="sp1-fval">Stableford · 2 rounds</div>
+              </div>
+              <div class="sp1-frow">
+                <div class="sp1-flbl">Date</div>
+                <div class="sp1-fval">28–29 June 2025</div>
+              </div>
+              <div class="sp1-frow">
+                <div class="sp1-flbl">Entry Fee</div>
+                <div class="sp1-fval">R300 entry + R50 cart</div>
+              </div>
+              <div class="sp1-frow">
+                <div class="sp1-flbl">Divisions</div>
+                <div class="sp1-tags">
+                  <div class="sp1-tag">A · HCP 0–12</div>
+                  <div class="sp1-tag">B · HCP 13–20</div>
+                  <div class="sp1-tag">C · HCP 21+</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sp1-plbl">Tournament Builder</div>
+        <div class="sp1-psub">Multi-round events with divisions &amp; entry fees</div>
+      </div>
+
+      <!-- Panel 3: Draw Builder -->
+      <div class="sp1-pw">
+        <div class="sp1-browser">
+          <div class="sp1-chrome">
+            <div class="sp1-dot" style="background:#e74c3c"></div>
+            <div class="sp1-dot" style="background:#f39c12"></div>
+            <div class="sp1-dot" style="background:#2ecc71"></div>
+            <div class="sp1-url">portal.tapingolf.co.za/events/42/draw</div>
+          </div>
+          <div class="sp1-body">
+            <div class="sp1-sb">
+              <div class="sp1-sbi">🏠</div>
+              <div class="sp1-sbi">📅</div>
+              <div class="sp1-sbi on">🏆</div>
+              <div class="sp1-sbi">👤</div>
+              <div class="sp1-sbi">📊</div>
+            </div>
+            <div class="sp1-main">
+              <div class="sp1-mtitle">
+                <span>Draw · Round 1</span>
+                <div class="sp1-btn gd">Publish Draw</div>
+              </div>
+              <div class="sp1-dropts">
+                <div class="sp1-dopt rnd">🎲 Random</div>
+                <div class="sp1-dopt sd">📊 Seeded by HCP</div>
+              </div>
+              <div class="sp1-grp">
+                <div class="sp1-ghdr"><span>Group 1 · 07:00 · Tee 1</span><span>Div A</span></div>
+                <div class="sp1-gply">🏌️ Adams J.<span class="sp1-ghcp">HCP 4</span></div>
+                <div class="sp1-gply">🏌️ Botha M.<span class="sp1-ghcp">HCP 7</span></div>
+                <div class="sp1-gply">🏌️ Coetzee P.<span class="sp1-ghcp">HCP 9</span></div>
+                <div class="sp1-gply">🏌️ De Beer A.<span class="sp1-ghcp">HCP 11</span></div>
+              </div>
+              <div class="sp1-grp">
+                <div class="sp1-ghdr"><span>Group 2 · 07:15 · Tee 10</span><span>Div B</span></div>
+                <div class="sp1-gply">🏌️ Edwards R.<span class="sp1-ghcp">HCP 14</span></div>
+                <div class="sp1-gply">🏌️ Fourie D.<span class="sp1-ghcp">HCP 16</span></div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="sp1-plbl">Tournament Draw Builder</div>
+        <div class="sp1-psub">Random or seeded — published live to the app</div>
+      </div>
+
     </div>
   </div>
 

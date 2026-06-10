@@ -611,50 +611,99 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   const existing = await row<any>("SELECT id, club_id, headline, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink, billing_frequency } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, billing_frequency } = req.body ?? {};
   const billingFreq: string = billing_frequency === "monthly" ? "monthly" : "once";
+  const amount = confirmed_price ? Number(confirmed_price) : 0;
 
-  // Auto-generate a Stitch payment link with merchantReference=ad-<reqId> so the
-  // webhook can identify and auto-publish the ad when payment is confirmed.
-  let finalLink: string | null = manualLink ?? null;
-  if (!finalLink && confirmed_price && Number(confirmed_price) >= 1) {
-    try {
-      const host = `https://${req.get("host")}`;
-      const { url } = await createStitchPayment({
-        amount:            Number(confirmed_price),
-        payerName:         existing.headline,
-        merchantReference: `ad-${reqId}`,
-        redirectUrl:       `${host}/api/portal/invoice-success`,
-        payerEmail:        undefined,
-      });
-      finalLink = url;
-    } catch { /* Stitch not configured or unavailable — proceed without auto-link */ }
-  }
-
+  // Update ad_request first so we have the final confirmed values
   await exec(
     `UPDATE ad_requests SET status = 'payment_pending', billing_frequency = ?,
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
       confirmed_end = COALESCE(?, confirmed_end), slot_duration = COALESCE(?, slot_duration),
       sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes),
-      payment_link = COALESCE(?, payment_link), updated_at = NOW()
+      updated_at = NOW()
      WHERE id = ?`,
     [billingFreq, confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
-     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, finalLink, reqId]
+     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, reqId]
   );
-  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} per month is due.` : "";
+
+  // Create a club_invoices record of type 'ad_campaign' so it appears on the
+  // club's Invoices page with a Pay Now button identical to other invoice types.
+  let invoiceId: number | null = null;
+  let invoiceRef = "";
+  let finalLink: string | null = null;
+
+  if (amount >= 1) {
+    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+    invoiceRef = `ADV-${reqId}-${dateStr}`;
+    const vatAmt = Math.round(amount * 15 / 115 * 100) / 100;
+    const adReqFull = await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
+    const lineItems = [{
+      headline:          adReqFull?.headline ?? existing.headline,
+      ad_type:           adReqFull?.ad_type ?? "ad",
+      start_date:        adReqFull?.confirmed_start ?? null,
+      end_date:          adReqFull?.confirmed_end   ?? null,
+      billing_frequency: billingFreq,
+      amount,
+    }];
+    const startLabel = adReqFull?.confirmed_start
+      ? new Date(adReqFull.confirmed_start).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+    const endLabel = adReqFull?.confirmed_end
+      ? new Date(adReqFull.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
+      : null;
+    const periodStr = startLabel && endLabel ? ` · ${startLabel} – ${endLabel}` : "";
+    const description = `Ad Campaign: ${existing.headline}${periodStr}${billingFreq === "monthly" ? " (initial payment)" : ""}`;
+
+    const invRows = await query<any>(
+      `INSERT INTO club_invoices
+         (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate,
+          vat_amount, total_amount, invoice_type, line_items, ad_request_id)
+       VALUES (?, ?, ?, 1, ?, 0.15, ?, ?, 'ad_campaign', ?::jsonb, ?)
+       RETURNING id`,
+      [existing.club_id, invoiceRef, description, amount, vatAmt, amount,
+       JSON.stringify(lineItems), reqId]
+    );
+    invoiceId = invRows?.[0]?.id ?? null;
+
+    // Try to auto-generate a Stitch payment link on the invoice
+    if (invoiceId) {
+      try {
+        const host = `https://${req.get("host")}`;
+        const payment = await createStitchPayment({
+          amount,
+          payerName:         existing.headline,
+          merchantReference: `invoice-${invoiceId}`,
+          redirectUrl:       `${host}/api/portal/invoice-success`,
+        });
+        await exec(
+          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+          [payment.id, payment.url, invoiceId]
+        );
+        finalLink = payment.url;
+      } catch { /* Stitch not configured — club will pay via portal Pay Now button */ }
+    }
+
+    // Keep payment_link on ad_requests pointing at the Stitch URL for staff reference
+    if (finalLink) {
+      await exec("UPDATE ad_requests SET payment_link = ? WHERE id = ?", [finalLink, reqId]);
+    }
+  }
+
+  const priceStr = amount >= 1 ? ` R ${amount.toLocaleString()} is due.` : "";
   const billingNote = billingFreq === "monthly"
-    ? " Monthly invoices will be sent on the 1st of each month for the duration of your campaign."
+    ? " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign."
     : " Once payment is received, your ad will publish automatically.";
-  const linkStr = finalLink
-    ? ` Use this link to complete your first payment: ${finalLink}`
-    : " TapIn staff will share a payment link with you via email or phone.";
+  const invoiceStr = invoiceId
+    ? ` An invoice (${invoiceRef}) has been added to your Invoices page — use the Pay Now button there to complete payment.`
+    : " TapIn staff will be in touch with payment details.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [existing.club_id,
      "💳 Payment Required — Complete Your Ad Booking",
-     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr}${billingNote}`,
-     JSON.stringify({ ad_request_id: reqId, payment_link: finalLink, billing_frequency: billingFreq })]
+     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${invoiceStr}${notesStr}${billingNote}`,
+     JSON.stringify({ ad_request_id: reqId, invoice_id: invoiceId, payment_link: finalLink, billing_frequency: billingFreq })]
   );
   res.json({ success: true });
 });

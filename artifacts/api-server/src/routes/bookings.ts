@@ -1427,10 +1427,87 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
   if (externalRef.startsWith("invoice-")) {
     const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);
     if (!isNaN(invoiceId)) {
-      await run(
+      const claimed = await run(
         "UPDATE club_invoices SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'unpaid'",
         [invoiceId]
       );
+      if (claimed === 1) {
+        const inv = await row<any>(
+          "SELECT ad_request_id, ad_billing_cycle_id FROM club_invoices WHERE id = ?",
+          [invoiceId]
+        );
+
+        // Ad campaign invoice → auto-publish the ad
+        if (inv?.ad_request_id) {
+          const reqId = inv.ad_request_id;
+          const adReq = await row<any>(
+            `SELECT ar.*, c.name AS club_name FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id WHERE ar.id = ?`,
+            [reqId]
+          );
+          if (adReq && adReq.status === "payment_pending") {
+            const placementMap: Record<string, string> = {
+              club_detail: "club", featured_home: "home", explore: "explore",
+              push: "home", tournament: "home", newsletter: "home", nearby_alert: "home", tee_time_deal: "home",
+            };
+            const placement = placementMap[adReq.ad_type] ?? "home";
+            const result = await exec(
+              `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+                ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+              [adReq.club_id, adReq.headline, adReq.subtitle ?? null, adReq.image_url ?? null,
+               adReq.cta_text ?? "Book Now", adReq.link_url ?? null, placement, 0, reqId,
+               adReq.confirmed_start ?? null, adReq.confirmed_end ?? null,
+               adReq.slot_duration ?? null, adReq.sharing_tier ?? null]
+            );
+            const adId = (result as any).insertId;
+            await exec(
+              "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
+              [adId, reqId]
+            );
+            if (adReq.ad_type === "featured_home") {
+              await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
+            }
+            const endNote = adReq.confirmed_end
+              ? ` Your campaign runs until ${new Date(adReq.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.`
+              : "";
+            await exec(
+              `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+              [adReq.club_id,
+               "🚀 Your Ad is Now Live!",
+               `Payment confirmed! "${adReq.headline}" is now live in the TapIn Golf app and visible to golfers across South Africa.${endNote}`,
+               JSON.stringify({ ad_request_id: reqId, ad_id: adId, invoice_id: invoiceId })]
+            );
+          }
+        }
+
+        // Monthly ad billing cycle invoice → mark cycle as paid
+        if (inv?.ad_billing_cycle_id) {
+          const cycleId = inv.ad_billing_cycle_id;
+          const claimed2 = await run(
+            "UPDATE ad_billing_cycles SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'pending'",
+            [cycleId]
+          );
+          if (claimed2 === 1) {
+            const cycle = await row<any>(
+              `SELECT abc.billing_month, ar.club_id, ar.headline
+               FROM ad_billing_cycles abc JOIN ad_requests ar ON ar.id = abc.ad_request_id
+               WHERE abc.id = ?`,
+              [cycleId]
+            );
+            if (cycle) {
+              const monthLabel = new Date(String(cycle.billing_month).slice(0, 10))
+                .toLocaleString("en-ZA", { month: "long", year: "numeric" });
+              await exec(
+                `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+                [cycle.club_id,
+                 "✅ Ad Payment Confirmed",
+                 `Payment for "${cycle.headline}" (${monthLabel}) received. Your ad continues to run — thank you!`,
+                 JSON.stringify({ billing_cycle_id: cycleId, invoice_id: invoiceId })]
+              );
+            }
+          }
+        }
+      }
     }
     res.status(200).json({ received: true });
     return;

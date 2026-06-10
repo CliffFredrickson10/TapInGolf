@@ -36,6 +36,7 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
   // Skip if confirmed_start's month === billing month (initial payment already covers that month).
   const liveAds = await query<any>(
     `SELECT ar.id, ar.club_id, ar.headline, ar.confirmed_price, ar.confirmed_start, ar.confirmed_end,
+            ar.ad_type,
             c.name AS club_name, c.email AS club_email
      FROM ad_requests ar
      JOIN clubs c ON c.id = ar.club_id
@@ -82,46 +83,71 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
 
       const cycleId: number = cycleRows[0].id;
 
-      // Try to generate a Stitch payment link
+      // Create a club_invoices record so the invoice appears on the club portal Invoices page
+      const dateStr    = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `ADV-${ad.id}-${dateStr}-M`;
+      const vatAmt     = Math.round(amount * 15 / 115 * 100) / 100;
+      const lineItems  = [{
+        headline:      ad.headline,
+        ad_type:       ad.ad_type ?? "ad",
+        billing_month: billingMonthStr,
+        amount,
+      }];
+      const description = `Monthly Ad Fee: ${ad.headline} — ${monthLabel}`;
+
+      const invRows = await query<any>(
+        `INSERT INTO club_invoices
+           (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate,
+            vat_amount, total_amount, invoice_type, line_items, ad_billing_cycle_id)
+         VALUES (?, ?, ?, 1, ?, 0.15, ?, ?, 'ad_campaign', ?::jsonb, ?)
+         RETURNING id`,
+        [ad.club_id, invoiceRef, description, amount, vatAmt, amount,
+         JSON.stringify(lineItems), cycleId]
+      );
+      const invoiceId: number | null = invRows?.[0]?.id ?? null;
+
+      // Try to generate a Stitch payment link on the invoice (merchantReference = invoice-<id>)
       let paymentUrl: string | null = null;
-      try {
-        const payment = await createStitchPayment({
-          amount,
-          payerName:         ad.club_name,
-          merchantReference: `ad-billing-${cycleId}`,
-          redirectUrl,
-          payerEmail:        ad.club_email ?? undefined,
-        });
-        await exec(
-          "UPDATE ad_billing_cycles SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-          [payment.id, payment.url, cycleId]
-        );
-        paymentUrl = payment.url;
-      } catch (payErr: any) {
-        logger.warn({ err: payErr, cycleId }, "Monthly ad billing: Stitch link failed");
+      if (invoiceId) {
+        try {
+          const payment = await createStitchPayment({
+            amount,
+            payerName:         ad.club_name,
+            merchantReference: `invoice-${invoiceId}`,
+            redirectUrl,
+            payerEmail:        ad.club_email ?? undefined,
+          });
+          await exec(
+            "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+            [payment.id, payment.url, invoiceId]
+          );
+          paymentUrl = payment.url;
+        } catch (payErr: any) {
+          logger.warn({ err: payErr, cycleId, invoiceId }, "Monthly ad billing: Stitch link failed");
+        }
       }
 
       // Send club inbox notification
       const endDate = ad.confirmed_end
         ? new Date(ad.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })
         : null;
-      const linkLine = paymentUrl
-        ? ` Pay now: ${paymentUrl}`
-        : " TapIn staff will be in touch with a payment link.";
       const endLine  = endDate ? ` Your campaign runs until ${endDate}.` : "";
+      const invoiceStr = invoiceId
+        ? ` An invoice has been added to your Invoices page — use the Pay Now button there to complete payment.`
+        : (paymentUrl ? ` Pay now: ${paymentUrl}` : " TapIn staff will be in touch with a payment link.");
       await exec(
         `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
          VALUES (?, 'ad_update', ?, ?, ?)`,
         [
           ad.club_id,
           `📅 Monthly Ad Invoice — ${monthLabel}`,
-          `Your monthly ad fee of ${fmtRand(amount)} for "${ad.headline}" is due for ${monthLabel}.${linkLine}${endLine}`,
-          JSON.stringify({ ad_request_id: ad.id, billing_cycle_id: cycleId, payment_url: paymentUrl }),
+          `Your monthly ad fee of ${fmtRand(amount)} for "${ad.headline}" is due for ${monthLabel}.${invoiceStr}${endLine}`,
+          JSON.stringify({ ad_request_id: ad.id, billing_cycle_id: cycleId, invoice_id: invoiceId, payment_url: paymentUrl }),
         ]
       );
 
-      logger.info({ ad_request_id: ad.id, club_id: ad.club_id, cycleId, amount, billingMonthStr },
-        "Monthly ad billing worker: invoice sent");
+      logger.info({ ad_request_id: ad.id, club_id: ad.club_id, cycleId, invoiceId, amount, billingMonthStr },
+        "Monthly ad billing worker: invoice created");
 
     } catch (err: any) {
       logger.error({ err, ad_request_id: ad.id }, "Monthly ad billing worker: failed for ad");

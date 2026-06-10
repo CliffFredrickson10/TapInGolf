@@ -55,7 +55,7 @@ interface ClubInvoice {
   vat_rate: number;
   vat_amount: number;
   total_amount: number;
-  invoice_type: "prepaid_rounds" | "counter_bookings";
+  invoice_type: "prepaid_rounds" | "counter_bookings" | "ad_campaign";
   status: "unpaid" | "paid" | "cancelled";
   stitch_payment_url: string | null;
   paid_at: string | null;
@@ -75,6 +75,7 @@ function capitalize(s: string) {
 
 function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEmail: string): string {
   const isCounter = inv.invoice_type === "counter_bookings";
+  const isAd      = inv.invoice_type === "ad_campaign";
   const vatPct    = Math.round((Number(inv.vat_rate) || 0.15) * 100);
   const total     = Number(inv.total_amount);
   const vatAmt    = Number(inv.vat_amount) || Math.round(total * vatPct / (100 + vatPct) * 100) / 100;
@@ -91,7 +92,24 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
     : "background:#fee2e2;color:#991b1b";
 
   const lineItemRows = inv.line_items.map(li => {
-    if (isCounter) {
+    if (isAd) {
+      const liAd = li as any;
+      const periodParts: string[] = [];
+      if (liAd.billing_month) {
+        periodParts.push(new Date(liAd.billing_month).toLocaleString("en-ZA", { month: "long", year: "numeric" }));
+      } else {
+        if (liAd.start_date) periodParts.push(new Date(liAd.start_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }));
+        if (liAd.end_date) periodParts.push(new Date(liAd.end_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }));
+      }
+      const periodStr = periodParts.length ? ` <span style="color:#6b7280;font-size:12px">&mdash; ${periodParts.join(" – ")}</span>` : "";
+      return `
+      <tr>
+        <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6">
+          <strong>${liAd.headline ?? "Ad Campaign"}</strong>${periodStr}
+        </td>
+        <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(li.amount).toFixed(2)}</td>
+      </tr>`;
+    } else if (isCounter) {
       const slots = Number(li.players ?? 1);
       return `
       <tr>
@@ -116,8 +134,10 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
     }
   }).join("");
 
-  const detailLabel = isCounter ? "Counter Bookings" : "Prepaid Rounds — Member Import";
-  const unitLabel   = isCounter
+  const detailLabel = isAd ? "Ad Campaign" : isCounter ? "Counter Bookings" : "Prepaid Rounds — Member Import";
+  const unitLabel   = isAd
+    ? inv.description
+    : isCounter
     ? `${inv.total_rounds} player slot${inv.total_rounds !== 1 ? "s" : ""}`
     : `${inv.total_rounds} round${inv.total_rounds !== 1 ? "s" : ""} across ${inv.line_items.length} member${inv.line_items.length !== 1 ? "s" : ""}`;
 
@@ -237,7 +257,88 @@ function downloadInvoice(inv: ClubInvoice, clubName: string, clubEmail: string) 
 
 // ── Invoice breakdown (expandable per-line table) ────────────────────────────
 
+function AdCampaignBreakdown({ inv }: { inv: ClubInvoice }) {
+  const [open, setOpen] = useState(false);
+  const items = inv.line_items ?? [];
+  const vatPct  = Math.round((Number(inv.vat_rate) || 0.15) * 100);
+  const total   = Number(inv.total_amount);
+  const vatAmt  = Number(inv.vat_amount) || Math.round(total * vatPct / (100 + vatPct) * 100) / 100;
+  const exclVat = Math.round((total - vatAmt) * 100) / 100;
+
+  return (
+    <div className="mt-3 border-t pt-3">
+      <button
+        onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground hover:text-foreground transition-colors"
+      >
+        {open ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+        {open ? "Hide" : "View"} campaign details
+      </button>
+
+      {open && (
+        <div className="mt-3 rounded-lg border overflow-hidden bg-white">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/40 border-b">
+                <th className="text-left px-3 py-2 font-medium text-muted-foreground">Campaign</th>
+                <th className="text-right px-3 py-2 font-medium text-muted-foreground">Amount (incl. VAT)</th>
+              </tr>
+            </thead>
+            <tbody>
+              {items.length === 0 ? (
+                <tr><td colSpan={2} className="px-3 py-3 text-muted-foreground text-xs italic">No breakdown available.</td></tr>
+              ) : items.map((li, i) => {
+                const liAd = li as any;
+                const periodParts: string[] = [];
+                if (liAd.billing_month) {
+                  periodParts.push(new Date(liAd.billing_month).toLocaleString("en-ZA", { month: "long", year: "numeric" }));
+                } else {
+                  if (liAd.start_date) periodParts.push(new Date(liAd.start_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }));
+                  if (liAd.end_date) periodParts.push(new Date(liAd.end_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }));
+                }
+                return (
+                  <tr key={i} className={i < items.length - 1 ? "border-b" : ""}>
+                    <td className="px-3 py-2">
+                      <p className="font-medium">{liAd.headline ?? "Ad Campaign"}</p>
+                      {periodParts.length > 0 && (
+                        <p className="text-xs text-muted-foreground">{periodParts.join(" – ")}</p>
+                      )}
+                      {liAd.billing_frequency === "monthly" && !liAd.billing_month && (
+                        <p className="text-xs text-muted-foreground">Initial payment · Monthly billing</p>
+                      )}
+                    </td>
+                    <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+            <tfoot>
+              <tr className="border-t bg-muted/20">
+                <td className="px-3 py-2 text-muted-foreground text-sm">Subtotal (excl. VAT)</td>
+                <td className="px-3 py-2 text-right text-muted-foreground text-sm">{fmtRand(exclVat)}</td>
+              </tr>
+              <tr className="bg-muted/20">
+                <td className="px-3 py-1.5 text-muted-foreground text-xs">VAT ({vatPct}%)</td>
+                <td className="px-3 py-1.5 text-right text-muted-foreground text-xs">{fmtRand(vatAmt)}</td>
+              </tr>
+              <tr className="bg-muted/10 border-t">
+                <td className="px-3 py-2 font-semibold text-foreground">Total (incl. VAT)</td>
+                <td className="px-3 py-2 text-right font-bold text-[#1a5c38]">{fmtRand(total)}</td>
+              </tr>
+            </tfoot>
+          </table>
+          <div className="px-3 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
+            TapIn advertising campaign fee — once paid your ad goes live automatically
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
+  if (inv.invoice_type === "ad_campaign") return <AdCampaignBreakdown inv={inv} />;
+
   const [open, setOpen] = useState(false);
   const isCounter = inv.invoice_type === "counter_bookings";
   const items = inv.line_items ?? [];
@@ -584,7 +685,7 @@ export default function Invoices() {
         <div>
           <h1 className="text-2xl font-bold">Invoices</h1>
           <p className="text-sm text-muted-foreground mt-1">
-            TapIn platform fee invoices — counter bookings &amp; prepaid rounds
+            TapIn platform fee invoices — counter bookings, prepaid rounds &amp; ad campaigns
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={load} disabled={loading}>
@@ -638,6 +739,17 @@ export default function Invoices() {
             ) : (
               <>
                 <InvoiceSection
+                  title="Ad Campaigns"
+                  invoices={unpaid.filter(i => i.invoice_type === "ad_campaign")}
+                  status="unpaid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No outstanding ad campaign invoices"
+                />
+                <InvoiceSection
                   title="Counter Bookings"
                   invoices={unpaid.filter(i => i.invoice_type === "counter_bookings")}
                   status="unpaid"
@@ -677,6 +789,17 @@ export default function Invoices() {
               </Card>
             ) : (
               <>
+                <InvoiceSection
+                  title="Ad Campaigns"
+                  invoices={paid.filter(i => i.invoice_type === "ad_campaign")}
+                  status="paid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No paid ad campaign invoices"
+                />
                 <InvoiceSection
                   title="Counter Bookings"
                   invoices={paid.filter(i => i.invoice_type === "counter_bookings")}

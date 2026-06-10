@@ -367,6 +367,7 @@ export default function StaffAds() {
   const [cfNotes, setCfNotes] = useState("");
   const [cfPaymentLink, setCfPaymentLink] = useState("");
   const [cfBillingFreq, setCfBillingFreq] = useState<"once"|"monthly">("once");
+  const [billingFreqReason, setBillingFreqReason] = useState<string | null>(null);
   const [billingCycles, setBillingCycles] = useState<BillingCycle[]>([]);
   const [saving, setSaving] = useState(false);
   const [actioning, setActioning] = useState(false);
@@ -424,7 +425,42 @@ export default function StaffAds() {
     setCfSharing(req.sharing_tier ?? "");
     setCfNotes(req.staff_notes ?? "");
     setCfPaymentLink(req.payment_link ?? "");
-    setCfBillingFreq((req.billing_frequency === "monthly" ? "monthly" : "once") as "once"|"monthly");
+
+    // ── Auto-detect billing frequency ────────────────────────────────────────
+    // Priority: 1) already explicitly set to monthly on the record
+    //           2) package price_period / price_display mentions "month"
+    //           3) date span > 31 days
+    //           4) fall back to once
+    let detectedFreq: "once" | "monthly" = "once";
+    let detectedReason: string | null = null;
+
+    if (req.billing_frequency === "monthly") {
+      detectedFreq   = "monthly";
+      detectedReason = null; // already saved — no need to label it auto-detected
+    } else {
+      const offering = allOfferings.find(o => o.ad_type === req.ad_type);
+      const pkg2     = offering?.packages.find(p => p.name === req.package_name);
+
+      if (pkg2 && /month|\/mo/i.test(`${pkg2.price_period ?? ""} ${pkg2.price_display ?? ""}`)) {
+        detectedFreq   = "monthly";
+        detectedReason = `Package "${pkg2.name}" is priced per month`;
+      } else {
+        const startStr = req.confirmed_start ?? req.requested_start;
+        const endStr   = req.confirmed_end   ?? req.requested_end;
+        if (startStr && endStr) {
+          const days = (new Date(endStr).getTime() - new Date(startStr).getTime()) / 86_400_000;
+          if (days > 31) {
+            detectedFreq   = "monthly";
+            detectedReason = `Campaign spans ${Math.round(days)} days (> 31)`;
+          }
+        }
+      }
+    }
+
+    setCfBillingFreq(detectedFreq);
+    setBillingFreqReason(detectedReason);
+    // ─────────────────────────────────────────────────────────────────────────
+
     // Load billing cycles for monthly ads that are live or payment_pending
     if (req.billing_frequency === "monthly" && (req.status === "live" || req.status === "payment_pending")) {
       api<BillingCycle[]>(`/api/admin/ad-requests/${req.id}/billing-cycles`)
@@ -599,7 +635,9 @@ export default function StaffAds() {
                   billing_frequency: cfBillingFreq,
                 })}
                 cfPaymentLink={cfPaymentLink} setCfPaymentLink={setCfPaymentLink}
-                cfBillingFreq={cfBillingFreq} setCfBillingFreq={setCfBillingFreq}
+                cfBillingFreq={cfBillingFreq}
+                setCfBillingFreq={(v) => { setCfBillingFreq(v); setBillingFreqReason(null); }}
+                billingFreqReason={billingFreqReason}
                 billingCycles={billingCycles}
                 onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
                 onUnpublish={() => action("unpublish", "Ad unpublished")}
@@ -998,13 +1036,14 @@ function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, cfBillingFreq, setCfBillingFreq, billingCycles, saving, actioning, onSave, onApprove, onReject, onUnpublish }: {
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, cfBillingFreq, setCfBillingFreq, billingFreqReason, billingCycles, saving, actioning, onSave, onApprove, onReject, onUnpublish }: {
   req: AdRequest; cfPrice: string; setCfPrice: (v: string) => void;
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
   cfNotes: string; setCfNotes: (v: string) => void;
   cfPaymentLink: string; setCfPaymentLink: (v: string) => void;
   cfBillingFreq: "once"|"monthly"; setCfBillingFreq: (v: "once"|"monthly") => void;
+  billingFreqReason: string | null;
   billingCycles: BillingCycle[];
   saving: boolean; actioning: boolean;
   onSave: () => void; onApprove: () => void;
@@ -1155,7 +1194,14 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                 </div>
               )}
               <div>
-                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Billing Frequency</Label>
+                <div className="flex items-center gap-2 mb-2">
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">Billing Frequency</Label>
+                  {billingFreqReason && (
+                    <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 leading-tight">
+                      ✦ Auto-detected
+                    </span>
+                  )}
+                </div>
                 <div className="flex gap-2">
                   {([["once", "One-time payment"], ["monthly", "📅 Monthly billing"]] as const).map(([val, label]) => (
                     <button key={val} onClick={() => setCfBillingFreq(val)}
@@ -1164,9 +1210,13 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                     </button>
                   ))}
                 </div>
-                {cfBillingFreq === "monthly" && (
+                {billingFreqReason ? (
+                  <p className="text-xs text-blue-600 mt-1">
+                    Auto-detected as monthly — {billingFreqReason}. You can override this above.
+                  </p>
+                ) : cfBillingFreq === "monthly" ? (
                   <p className="text-xs text-muted-foreground mt-1">Club will be invoiced monthly on the 1st. First payment activates the ad; each subsequent month is billed automatically.</p>
-                )}
+                ) : null}
               </div>
               <div>
                 <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Payment Link (optional)</Label>

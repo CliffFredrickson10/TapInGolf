@@ -569,7 +569,6 @@ export default function NewBookingScreen() {
                         Haptics.selectionAsync();
                         setHoles(h);
                         setAppliedVoucher(null);
-                        setVoucherError(null);
                       }}
                       style={[
                         styles.ballBtn,
@@ -606,7 +605,6 @@ export default function NewBookingScreen() {
                     setNumPlayers(n);
                     setAddedPlayers((prev) => prev.slice(0, n - 1));
                     setAppliedVoucher(null);
-                    setVoucherError(null);
                     if (n > 1 && paymentMethod === "prepaid") setSplitBill(true);
                   }}
                   style={[

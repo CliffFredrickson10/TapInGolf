@@ -155,6 +155,41 @@ async function createSchema(): Promise<void> {
   `);
 
   await ddl(`
+    CREATE TABLE IF NOT EXISTS ad_offerings (
+      id                SERIAL PRIMARY KEY,
+      ad_type           VARCHAR(30) UNIQUE NOT NULL,
+      icon              VARCHAR(20) DEFAULT '📢',
+      title             VARCHAR(200) NOT NULL,
+      description       TEXT,
+      where_shown       VARCHAR(200),
+      color             VARCHAR(20) DEFAULT '#1a5c38',
+      is_extra          SMALLINT DEFAULT 0,
+      extra_badge       VARCHAR(100),
+      extra_badge_color VARCHAR(20) DEFAULT '#1a5c38',
+      extra_price_label VARCHAR(200),
+      active            SMALLINT DEFAULT 1,
+      sort_order        INT DEFAULT 0,
+      created_at        TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS ad_packages (
+      id             SERIAL PRIMARY KEY,
+      ad_type        VARCHAR(30) NOT NULL,
+      name           VARCHAR(200) NOT NULL,
+      price_display  VARCHAR(100) NOT NULL,
+      price_period   VARCHAR(50),
+      slot_duration  VARCHAR(200),
+      reach_info     VARCHAR(300),
+      is_popular     SMALLINT DEFAULT 0,
+      active         SMALLINT DEFAULT 1,
+      sort_order     INT DEFAULT 0,
+      created_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
     CREATE TABLE IF NOT EXISTS ad_requests (
       id              SERIAL PRIMARY KEY,
       club_id         INT NOT NULL REFERENCES clubs(id),
@@ -1433,11 +1468,49 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
 }
 
+async function seedAdOfferings(): Promise<void> {
+  const [{ cnt }] = await query<{ cnt: string }>("SELECT COUNT(*) AS cnt FROM ad_offerings");
+  if (Number(cnt) > 0) return;
+
+  const offerings = [
+    ["club_detail",   "🏌️", "Club Detail Page Ad",          "A banner shown exclusively on your club's profile page inside the TapIn Golf app. Only your ad appears — no competitor sharing.", "Club detail page · Exclusive",          "#1a5c38", 0, null,           null,       null,                 1],
+    ["featured_home", "⭐",  "Home Screen Featured Club",    "Your club rotates through the Featured Clubs carousel on the app home screen. Slot shared with other clubs in your tier.",         "Home screen carousel · Shared rotation", "#c8a84b", 0, null,           null,       null,                 2],
+    ["explore",       "🔍", "Explore Screen Spotlight",      "Pinned to the top of the Explore tab with a highlighted card frame. Golfers browsing clubs see your club first.",                  "Explore tab · Top placement",           "#0891b2", 1, "Popular",      "#0891b2",  "From R 399/mo",      3],
+    ["push",          "📲", "Push Notification Campaign",    "Geo-targeted push to golfers within 50 km of your course. Perfect for last-minute tee time fills or special events.",              "All users · Geo-targeted",              "#7c3aed", 1, "High Impact",  "#7c3aed",  "From R 199/blast",   4],
+    ["tournament",    "🏆", "Tournament Sponsor Banner",     "Your logo and banner displayed in the in-app tournament leaderboard and results screens during your sponsored event.",             "Tournament screens · Event-based",      "#0891b2", 1, "Event-based",  "#0891b2",  "R 299/event",        5],
+    ["tee_time_deal", "🎯", "Tee Time Deal Promotion",       "Offer discounted green fees on specific slots. TapIn promotes these to deal-seekers and fills empty tee times.",                   "Deal seekers · Revenue tool",           "#c2410c", 1, "Revenue Tool", "#c2410c",  "Commission-based",   6],
+    ["newsletter",    "📧", "Newsletter Feature",            "Featured placement in the TapIn Golf weekly email newsletter sent to all registered golfers in your province.",                    "Email newsletter · Province-wide",      "#0f766e", 1, "Reach",        "#0f766e",  "R 249/edition",      7],
+    ["nearby_alert",  "🗺️", "Nearby Club Alert",            "When a golfer opens the app within 10 km of your course, they see a pop-up card promoting a current special or open slots.",      "Geo-triggered · Pop-up",               "#b45309", 1, "Geo-targeted", "#b45309",  "R 349/mo",           8],
+  ];
+  for (const [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order] of offerings) {
+    await exec(
+      `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order]
+    );
+  }
+
+  const packages = [
+    ["club_detail",   "Monthly Starter", "R 499",   "/month",   "10 sec display",      "~500 club views/month",          0, 1],
+    ["club_detail",   "Quarterly Pro",   "R 1 199", "/quarter", "15 sec display",      "~500 club views/month",          1, 2],
+    ["club_detail",   "Annual Club",     "R 3 999", "/year",    "20 sec display",      "~500 club views/month",          0, 3],
+    ["featured_home", "Bronze Spot",     "R 299",   "/month",   "5 sec / rotation",    "All users · 3 clubs share",      0, 1],
+    ["featured_home", "Silver Spot",     "R 699",   "/month",   "10 sec / rotation",   "All users · 2 clubs share",      1, 2],
+    ["featured_home", "Gold Spot",       "R 1 499", "/month",   "15 sec / rotation",   "All users · Exclusive slot",     0, 3],
+  ];
+  for (const [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order] of packages) {
+    await exec(
+      `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order]
+    );
+  }
+}
+
 export async function migrate(): Promise<void> {
   await applyLateAlters();
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();
+  await seedAdOfferings();
   await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

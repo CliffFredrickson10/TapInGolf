@@ -62695,6 +62695,184 @@ router10.delete("/admin/vouchers/:id", async (req, res) => {
   await exec("DELETE FROM vouchers WHERE id = ?", [parseInt(req.params.id, 10)]);
   res.json({ success: true });
 });
+router10.get("/admin/ad-offerings", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const offerings = await query("SELECT * FROM ad_offerings ORDER BY sort_order ASC, id ASC");
+  const packages = await query("SELECT * FROM ad_packages ORDER BY ad_type, sort_order ASC, id ASC");
+  const pkgByType = {};
+  for (const pkg of packages) {
+    if (!pkgByType[pkg.ad_type]) pkgByType[pkg.ad_type] = [];
+    pkgByType[pkg.ad_type].push(pkg);
+  }
+  res.json(offerings.map((o) => ({ ...o, packages: pkgByType[o.ad_type] ?? [] })));
+});
+router10.post("/admin/ad-offerings", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const {
+    ad_type,
+    icon = "\u{1F4E2}",
+    title,
+    description,
+    where_shown,
+    color = "#1a5c38",
+    is_extra = 0,
+    extra_badge,
+    extra_badge_color,
+    extra_price_label,
+    sort_order = 0
+  } = req.body ?? {};
+  if (!ad_type || !title) {
+    res.status(400).json({ message: "ad_type and title required" });
+    return;
+  }
+  const result = await exec(
+    `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      ad_type,
+      icon,
+      title,
+      description ?? null,
+      where_shown ?? null,
+      color,
+      is_extra ? 1 : 0,
+      extra_badge ?? null,
+      extra_badge_color ?? null,
+      extra_price_label ?? null,
+      sort_order
+    ]
+  );
+  res.status(201).json(await row("SELECT * FROM ad_offerings WHERE id = ?", [result.insertId]));
+});
+router10.put("/admin/ad-offerings/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const {
+    icon,
+    title,
+    description,
+    where_shown,
+    color,
+    is_extra,
+    extra_badge,
+    extra_badge_color,
+    extra_price_label,
+    sort_order
+  } = req.body ?? {};
+  await exec(
+    `UPDATE ad_offerings SET
+      icon = COALESCE(?, icon), title = COALESCE(?, title),
+      description = COALESCE(?, description), where_shown = COALESCE(?, where_shown),
+      color = COALESCE(?, color), is_extra = COALESCE(?, is_extra),
+      extra_badge = COALESCE(?, extra_badge), extra_badge_color = COALESCE(?, extra_badge_color),
+      extra_price_label = COALESCE(?, extra_price_label), sort_order = COALESCE(?, sort_order)
+     WHERE id = ?`,
+    [
+      icon ?? null,
+      title ?? null,
+      description ?? null,
+      where_shown ?? null,
+      color ?? null,
+      is_extra != null ? is_extra ? 1 : 0 : null,
+      extra_badge ?? null,
+      extra_badge_color ?? null,
+      extra_price_label ?? null,
+      sort_order ?? null,
+      id
+    ]
+  );
+  res.json(await row("SELECT * FROM ad_offerings WHERE id = ?", [id]));
+});
+router10.post("/admin/ad-offerings/:id/toggle", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE ad_offerings SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  res.json(await row("SELECT * FROM ad_offerings WHERE id = ?", [id]));
+});
+router10.delete("/admin/ad-offerings/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  await exec("DELETE FROM ad_packages WHERE ad_type = (SELECT ad_type FROM ad_offerings WHERE id = ?)", [id]);
+  await exec("DELETE FROM ad_offerings WHERE id = ?", [id]);
+  res.json({ success: true });
+});
+router10.post("/admin/ad-packages", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const { ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular = 0, sort_order = 0 } = req.body ?? {};
+  if (!ad_type || !name || !price_display) {
+    res.status(400).json({ message: "ad_type, name, price_display required" });
+    return;
+  }
+  const result = await exec(
+    `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ad_type, name, price_display, price_period ?? null, slot_duration ?? null, reach_info ?? null, is_popular ? 1 : 0, sort_order]
+  );
+  res.status(201).json(await row("SELECT * FROM ad_packages WHERE id = ?", [result.insertId]));
+});
+router10.put("/admin/ad-packages/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { name, price_display, price_period, slot_duration, reach_info, is_popular, active, sort_order } = req.body ?? {};
+  await exec(
+    `UPDATE ad_packages SET
+      name = COALESCE(?, name), price_display = COALESCE(?, price_display),
+      price_period = COALESCE(?, price_period), slot_duration = COALESCE(?, slot_duration),
+      reach_info = COALESCE(?, reach_info),
+      is_popular = COALESCE(?, is_popular), active = COALESCE(?, active),
+      sort_order = COALESCE(?, sort_order)
+     WHERE id = ?`,
+    [
+      name ?? null,
+      price_display ?? null,
+      price_period ?? null,
+      slot_duration ?? null,
+      reach_info ?? null,
+      is_popular != null ? is_popular ? 1 : 0 : null,
+      active != null ? active ? 1 : 0 : null,
+      sort_order ?? null,
+      id
+    ]
+  );
+  res.json(await row("SELECT * FROM ad_packages WHERE id = ?", [id]));
+});
+router10.delete("/admin/ad-packages/:id", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  await exec("DELETE FROM ad_packages WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
+});
 var admin_default = router10;
 
 // src/routes/geofencing.ts
@@ -64917,6 +65095,21 @@ router14.delete("/portal/ads/:id", requireClubAuth2, async (req, res) => {
   }
   await exec("DELETE FROM ads WHERE id = ? AND club_id = ?", [adId, club.id]);
   res.json({ message: "Deleted" });
+});
+router14.get("/portal/ad-offerings", requireClubAuth2, async (_req, res) => {
+  const offerings = await query(
+    "SELECT * FROM ad_offerings WHERE active = 1 ORDER BY sort_order ASC, id ASC"
+  );
+  const packages = await query(
+    "SELECT * FROM ad_packages WHERE active = 1 ORDER BY ad_type, sort_order ASC, id ASC"
+  );
+  const pkgByType = {};
+  for (const pkg of packages) {
+    if (!pkgByType[pkg.ad_type]) pkgByType[pkg.ad_type] = [];
+    pkgByType[pkg.ad_type].push(pkg);
+  }
+  const result = offerings.map((o) => ({ ...o, packages: pkgByType[o.ad_type] ?? [] }));
+  res.json(result);
 });
 router14.get("/portal/ad-requests", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -69354,6 +69547,39 @@ async function createSchema() {
     )
   `);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS ad_offerings (
+      id                SERIAL PRIMARY KEY,
+      ad_type           VARCHAR(30) UNIQUE NOT NULL,
+      icon              VARCHAR(20) DEFAULT '\u{1F4E2}',
+      title             VARCHAR(200) NOT NULL,
+      description       TEXT,
+      where_shown       VARCHAR(200),
+      color             VARCHAR(20) DEFAULT '#1a5c38',
+      is_extra          SMALLINT DEFAULT 0,
+      extra_badge       VARCHAR(100),
+      extra_badge_color VARCHAR(20) DEFAULT '#1a5c38',
+      extra_price_label VARCHAR(200),
+      active            SMALLINT DEFAULT 1,
+      sort_order        INT DEFAULT 0,
+      created_at        TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS ad_packages (
+      id             SERIAL PRIMARY KEY,
+      ad_type        VARCHAR(30) NOT NULL,
+      name           VARCHAR(200) NOT NULL,
+      price_display  VARCHAR(100) NOT NULL,
+      price_period   VARCHAR(50),
+      slot_duration  VARCHAR(200),
+      reach_info     VARCHAR(300),
+      is_popular     SMALLINT DEFAULT 0,
+      active         SMALLINT DEFAULT 1,
+      sort_order     INT DEFAULT 0,
+      created_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
     CREATE TABLE IF NOT EXISTS ad_requests (
       id              SERIAL PRIMARY KEY,
       club_id         INT NOT NULL REFERENCES clubs(id),
@@ -70445,11 +70671,46 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS slot_duration VARCHAR(100)");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
 }
+async function seedAdOfferings() {
+  const [{ cnt }] = await query("SELECT COUNT(*) AS cnt FROM ad_offerings");
+  if (Number(cnt) > 0) return;
+  const offerings = [
+    ["club_detail", "\u{1F3CC}\uFE0F", "Club Detail Page Ad", "A banner shown exclusively on your club's profile page inside the TapIn Golf app. Only your ad appears \u2014 no competitor sharing.", "Club detail page \xB7 Exclusive", "#1a5c38", 0, null, null, null, 1],
+    ["featured_home", "\u2B50", "Home Screen Featured Club", "Your club rotates through the Featured Clubs carousel on the app home screen. Slot shared with other clubs in your tier.", "Home screen carousel \xB7 Shared rotation", "#c8a84b", 0, null, null, null, 2],
+    ["explore", "\u{1F50D}", "Explore Screen Spotlight", "Pinned to the top of the Explore tab with a highlighted card frame. Golfers browsing clubs see your club first.", "Explore tab \xB7 Top placement", "#0891b2", 1, "Popular", "#0891b2", "From R 399/mo", 3],
+    ["push", "\u{1F4F2}", "Push Notification Campaign", "Geo-targeted push to golfers within 50 km of your course. Perfect for last-minute tee time fills or special events.", "All users \xB7 Geo-targeted", "#7c3aed", 1, "High Impact", "#7c3aed", "From R 199/blast", 4],
+    ["tournament", "\u{1F3C6}", "Tournament Sponsor Banner", "Your logo and banner displayed in the in-app tournament leaderboard and results screens during your sponsored event.", "Tournament screens \xB7 Event-based", "#0891b2", 1, "Event-based", "#0891b2", "R 299/event", 5],
+    ["tee_time_deal", "\u{1F3AF}", "Tee Time Deal Promotion", "Offer discounted green fees on specific slots. TapIn promotes these to deal-seekers and fills empty tee times.", "Deal seekers \xB7 Revenue tool", "#c2410c", 1, "Revenue Tool", "#c2410c", "Commission-based", 6],
+    ["newsletter", "\u{1F4E7}", "Newsletter Feature", "Featured placement in the TapIn Golf weekly email newsletter sent to all registered golfers in your province.", "Email newsletter \xB7 Province-wide", "#0f766e", 1, "Reach", "#0f766e", "R 249/edition", 7],
+    ["nearby_alert", "\u{1F5FA}\uFE0F", "Nearby Club Alert", "When a golfer opens the app within 10 km of your course, they see a pop-up card promoting a current special or open slots.", "Geo-triggered \xB7 Pop-up", "#b45309", 1, "Geo-targeted", "#b45309", "R 349/mo", 8]
+  ];
+  for (const [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order] of offerings) {
+    await exec(
+      `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order]
+    );
+  }
+  const packages = [
+    ["club_detail", "Monthly Starter", "R 499", "/month", "10 sec display", "~500 club views/month", 0, 1],
+    ["club_detail", "Quarterly Pro", "R 1 199", "/quarter", "15 sec display", "~500 club views/month", 1, 2],
+    ["club_detail", "Annual Club", "R 3 999", "/year", "20 sec display", "~500 club views/month", 0, 3],
+    ["featured_home", "Bronze Spot", "R 299", "/month", "5 sec / rotation", "All users \xB7 3 clubs share", 0, 1],
+    ["featured_home", "Silver Spot", "R 699", "/month", "10 sec / rotation", "All users \xB7 2 clubs share", 1, 2],
+    ["featured_home", "Gold Spot", "R 1 499", "/month", "15 sec / rotation", "All users \xB7 Exclusive slot", 0, 3]
+  ];
+  for (const [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order] of packages) {
+    await exec(
+      `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order]
+    );
+  }
+}
 async function migrate() {
   await applyLateAlters();
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();
+  await seedAdOfferings();
   await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

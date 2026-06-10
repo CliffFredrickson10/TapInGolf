@@ -828,6 +828,24 @@ router.delete("/portal/ads/:id", requireClubAuth, async (req: Request, res: Resp
   res.json({ message: "Deleted" });
 });
 
+// ─── AD OFFERINGS (dynamic pricing catalogue) ────────────────────────────────
+
+router.get("/portal/ad-offerings", requireClubAuth, async (_req: Request, res: Response): Promise<void> => {
+  const offerings = await query<any>(
+    "SELECT * FROM ad_offerings WHERE active = 1 ORDER BY sort_order ASC, id ASC"
+  );
+  const packages = await query<any>(
+    "SELECT * FROM ad_packages WHERE active = 1 ORDER BY ad_type, sort_order ASC, id ASC"
+  );
+  const pkgByType: Record<string, any[]> = {};
+  for (const pkg of packages) {
+    if (!pkgByType[pkg.ad_type]) pkgByType[pkg.ad_type] = [];
+    pkgByType[pkg.ad_type].push(pkg);
+  }
+  const result = offerings.map(o => ({ ...o, packages: pkgByType[o.ad_type] ?? [] }));
+  res.json(result);
+});
+
 // ─── AD REQUESTS (new workflow) ───────────────────────────────────────────────
 
 router.get("/portal/ad-requests", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

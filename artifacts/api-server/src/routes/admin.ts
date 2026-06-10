@@ -672,4 +672,117 @@ router.delete("/admin/vouchers/:id", async (req, res): Promise<void> => {
   res.json({ success: true });
 });
 
+// ─────────────────────────────────────────────────────────────────────
+// Ad Offerings & Packages — pricing catalogue management
+// ─────────────────────────────────────────────────────────────────────
+
+router.get("/admin/ad-offerings", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const offerings = await query<any>("SELECT * FROM ad_offerings ORDER BY sort_order ASC, id ASC");
+  const packages  = await query<any>("SELECT * FROM ad_packages ORDER BY ad_type, sort_order ASC, id ASC");
+  const pkgByType: Record<string, any[]> = {};
+  for (const pkg of packages) {
+    if (!pkgByType[pkg.ad_type]) pkgByType[pkg.ad_type] = [];
+    pkgByType[pkg.ad_type].push(pkg);
+  }
+  res.json(offerings.map(o => ({ ...o, packages: pkgByType[o.ad_type] ?? [] })));
+});
+
+router.post("/admin/ad-offerings", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const { ad_type, icon = "📢", title, description, where_shown, color = "#1a5c38",
+          is_extra = 0, extra_badge, extra_badge_color, extra_price_label, sort_order = 0 } = req.body ?? {};
+  if (!ad_type || !title) { res.status(400).json({ message: "ad_type and title required" }); return; }
+  const result = await exec(
+    `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ad_type, icon, title, description ?? null, where_shown ?? null, color,
+     is_extra ? 1 : 0, extra_badge ?? null, extra_badge_color ?? null, extra_price_label ?? null, sort_order]
+  );
+  res.status(201).json(await row<any>("SELECT * FROM ad_offerings WHERE id = ?", [(result as any).insertId]));
+});
+
+router.put("/admin/ad-offerings/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { icon, title, description, where_shown, color, is_extra, extra_badge,
+          extra_badge_color, extra_price_label, sort_order } = req.body ?? {};
+  await exec(
+    `UPDATE ad_offerings SET
+      icon = COALESCE(?, icon), title = COALESCE(?, title),
+      description = COALESCE(?, description), where_shown = COALESCE(?, where_shown),
+      color = COALESCE(?, color), is_extra = COALESCE(?, is_extra),
+      extra_badge = COALESCE(?, extra_badge), extra_badge_color = COALESCE(?, extra_badge_color),
+      extra_price_label = COALESCE(?, extra_price_label), sort_order = COALESCE(?, sort_order)
+     WHERE id = ?`,
+    [icon ?? null, title ?? null, description ?? null, where_shown ?? null, color ?? null,
+     is_extra != null ? (is_extra ? 1 : 0) : null,
+     extra_badge ?? null, extra_badge_color ?? null, extra_price_label ?? null,
+     sort_order ?? null, id]
+  );
+  res.json(await row<any>("SELECT * FROM ad_offerings WHERE id = ?", [id]));
+});
+
+router.post("/admin/ad-offerings/:id/toggle", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE ad_offerings SET active = CASE WHEN active = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
+  res.json(await row<any>("SELECT * FROM ad_offerings WHERE id = ?", [id]));
+});
+
+router.delete("/admin/ad-offerings/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  await exec("DELETE FROM ad_packages WHERE ad_type = (SELECT ad_type FROM ad_offerings WHERE id = ?)", [id]);
+  await exec("DELETE FROM ad_offerings WHERE id = ?", [id]);
+  res.json({ success: true });
+});
+
+router.post("/admin/ad-packages", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const { ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular = 0, sort_order = 0 } = req.body ?? {};
+  if (!ad_type || !name || !price_display) { res.status(400).json({ message: "ad_type, name, price_display required" }); return; }
+  const result = await exec(
+    `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    [ad_type, name, price_display, price_period ?? null, slot_duration ?? null, reach_info ?? null, is_popular ? 1 : 0, sort_order]
+  );
+  res.status(201).json(await row<any>("SELECT * FROM ad_packages WHERE id = ?", [(result as any).insertId]));
+});
+
+router.put("/admin/ad-packages/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { name, price_display, price_period, slot_duration, reach_info, is_popular, active, sort_order } = req.body ?? {};
+  await exec(
+    `UPDATE ad_packages SET
+      name = COALESCE(?, name), price_display = COALESCE(?, price_display),
+      price_period = COALESCE(?, price_period), slot_duration = COALESCE(?, slot_duration),
+      reach_info = COALESCE(?, reach_info),
+      is_popular = COALESCE(?, is_popular), active = COALESCE(?, active),
+      sort_order = COALESCE(?, sort_order)
+     WHERE id = ?`,
+    [name ?? null, price_display ?? null, price_period ?? null, slot_duration ?? null,
+     reach_info ?? null,
+     is_popular != null ? (is_popular ? 1 : 0) : null,
+     active != null ? (active ? 1 : 0) : null,
+     sort_order ?? null, id]
+  );
+  res.json(await row<any>("SELECT * FROM ad_packages WHERE id = ?", [id]));
+});
+
+router.delete("/admin/ad-packages/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  await exec("DELETE FROM ad_packages WHERE id = ?", [parseInt(req.params.id, 10)]);
+  res.json({ success: true });
+});
+
 export default router;

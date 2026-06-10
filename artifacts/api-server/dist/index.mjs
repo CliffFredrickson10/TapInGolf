@@ -62813,9 +62813,30 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       proRataNote = ` (pro-rata: ${proRataDays}/${daysInStartMonth} days)`;
     }
   }
+  if (billingFreq === "quarterly" && effectiveStart) {
+    const startDate = new Date(effectiveStart);
+    const startMonth = startDate.getUTCMonth();
+    const year = startDate.getUTCFullYear();
+    const qStartMonth = Math.floor(startMonth / 3) * 3;
+    const qEndMonth = qStartMonth + 2;
+    const qEndDate = new Date(Date.UTC(year, qEndMonth + 1, 0));
+    const isFirstDayOfQ = startDate.getUTCDate() === 1 && startMonth === qStartMonth;
+    if (!isFirstDayOfQ) {
+      let daysInQuarter = 0;
+      for (let i = 0; i < 3; i++) {
+        daysInQuarter += new Date(Date.UTC(year, qStartMonth + i + 1, 0)).getUTCDate();
+      }
+      const remainingDays = Math.floor((qEndDate.getTime() - startDate.getTime()) / (1e3 * 60 * 60 * 24)) + 1;
+      invoiceAmount = Math.round(amount * remainingDays / daysInQuarter * 100) / 100;
+      isProRata = true;
+      proRataDays = remainingDays;
+      daysInStartMonth = daysInQuarter;
+      proRataNote = ` (pro-rata: ${remainingDays}/${daysInQuarter} days)`;
+    }
+  }
   if (amount >= 1) {
     const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
-    invoiceRef = `ADV-${reqId}-${dateStr}${isProRata ? "-PR" : ""}`;
+    invoiceRef = `ADV-${reqId}-${dateStr}${billingFreq === "quarterly" ? "-Q" : ""}${isProRata ? "-PR" : ""}`;
     const vatAmt = Math.round(invoiceAmount * 15 / 115 * 100) / 100;
     const lineItems = [{
       headline: adReqFull?.headline ?? existing.headline,
@@ -62834,7 +62855,7 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     const startLabel = adReqFull?.confirmed_start ? new Date(adReqFull.confirmed_start).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : null;
     const endLabel = adReqFull?.confirmed_end ? new Date(adReqFull.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : null;
     const periodStr = startLabel && endLabel ? ` \xB7 ${startLabel} \u2013 ${endLabel}` : "";
-    const billingLabel = billingFreq === "monthly" ? isProRata ? ` (pro-rata first month${proRataNote})` : " (initial payment)" : "";
+    const billingLabel = billingFreq === "monthly" ? isProRata ? ` (pro-rata first month${proRataNote})` : " (initial payment)" : billingFreq === "quarterly" ? isProRata ? ` (pro-rata first quarter${proRataNote})` : " (quarterly initial payment)" : "";
     const description = `Ad Campaign: ${existing.headline}${periodStr}${billingLabel}`;
     const invRows = await query(
       `INSERT INTO club_invoices
@@ -62876,8 +62897,8 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     }
   }
   const displayAmount = invoiceAmount;
-  const priceStr = displayAmount >= 1 ? isProRata ? ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due for the remainder of this month${proRataNote}.` : ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due.` : "";
-  const billingNote = billingFreq === "monthly" ? isProRata ? ` Full monthly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each subsequent month.` : " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign." : " Once payment is received, your ad will publish automatically.";
+  const priceStr = displayAmount >= 1 ? isProRata ? ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due for the remainder of this ${billingFreq === "quarterly" ? "quarter" : "month"}${proRataNote}.` : ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due.` : "";
+  const billingNote = billingFreq === "monthly" ? isProRata ? ` Full monthly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each subsequent month.` : " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign." : billingFreq === "quarterly" ? isProRata ? ` Full quarterly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each quarter.` : " Quarterly invoices will appear on your Invoices page on the 1st of each quarter (Jan, Apr, Jul, Oct) for the duration of your campaign." : " Once payment is received, your ad will publish automatically.";
   const invoiceStr = invoiceId ? ` An invoice (${invoiceRef}) has been added to your Invoices page \u2014 use the Pay Now button there to complete payment.` : " TapIn staff will be in touch with payment details.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
@@ -65679,6 +65700,40 @@ router14.delete("/portal/ad-requests/:id", requireClubAuth2, async (req, res) =>
   }
   await exec("DELETE FROM ad_requests WHERE id = ? AND club_id = ?", [reqId, club.id]);
   res.json({ message: "Deleted" });
+});
+router14.post("/portal/ad-requests/:id/cancel", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const reqId = Number(req.params.id);
+  const existing = await row(
+    "SELECT id, status, published_ad_id, headline FROM ad_requests WHERE id = ? AND club_id = ?",
+    [reqId, club.id]
+  );
+  if (!existing) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
+  if (!["live", "payment_pending"].includes(existing.status)) {
+    res.status(400).json({ message: "Only live or payment-pending ads can be cancelled" });
+    return;
+  }
+  if (existing.published_ad_id) {
+    await exec("UPDATE ads SET active = 0 WHERE id = ?", [existing.published_ad_id]);
+  }
+  await exec("UPDATE ad_requests SET status = 'cancelled', updated_at = NOW() WHERE id = ?", [reqId]);
+  try {
+    await exec(
+      `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+       VALUES (?, 'ad_update', ?, ?, ?)`,
+      [
+        club.id,
+        "\u{1F4E2} Ad Campaign Cancelled",
+        `Your ad campaign "${existing.headline}" has been cancelled and taken offline immediately. No refunds will be issued for amounts already paid. No further invoices will be generated.`,
+        JSON.stringify({ ad_request_id: reqId, action: "cancelled" })
+      ]
+    );
+  } catch (_) {
+  }
+  res.json({ success: true });
 });
 router14.get("/portal/events", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -71689,6 +71744,111 @@ async function runMonthlyAdBillingCycle() {
   }
   lastBilledMonth = monthKey;
   logger.info({ monthKey }, "Monthly ad billing worker: cycle complete");
+  const QUARTER_START_MONTHS = [1, 4, 7, 10];
+  if (!QUARTER_START_MONTHS.includes(month)) return;
+  const quarterBillingStr = billingMonthStr;
+  const quarterLabel = `Q${Math.ceil(month / 3)} ${year}`;
+  logger.info({ monthKey, quarterLabel }, "Quarterly ad billing worker: running");
+  const quarterlyAds = await query(
+    `SELECT ar.id, ar.club_id, ar.headline, ar.confirmed_price, ar.confirmed_start, ar.confirmed_end,
+            ar.ad_type,
+            c.name AS club_name, c.email AS club_email
+     FROM ad_requests ar
+     JOIN clubs c ON c.id = ar.club_id
+     WHERE ar.status = 'live'
+       AND ar.billing_frequency = 'quarterly'
+       AND ar.confirmed_price IS NOT NULL
+       AND ar.confirmed_end >= ?
+       AND DATE_TRUNC('month', ar.confirmed_start::DATE) < ?::DATE`,
+    [quarterBillingStr, quarterBillingStr]
+  );
+  if (quarterlyAds.length === 0) {
+    logger.info("Quarterly ad billing worker: no ads to bill this quarter");
+    return;
+  }
+  logger.info({ count: quarterlyAds.length }, "Quarterly ad billing worker: ads to bill");
+  for (const ad of quarterlyAds) {
+    try {
+      const amount = Number(ad.confirmed_price);
+      const cycleRows = await query(
+        `INSERT INTO ad_billing_cycles
+           (ad_request_id, billing_month, amount, status, invoice_sent_at)
+         VALUES (?, ?, ?, 'pending', NOW())
+         ON CONFLICT (ad_request_id, billing_month) DO NOTHING
+         RETURNING id`,
+        [ad.id, quarterBillingStr, amount]
+      );
+      if (!cycleRows || cycleRows.length === 0) {
+        logger.info({ ad_request_id: ad.id, quarterBillingStr }, "Quarterly ad billing: already billed, skipping");
+        continue;
+      }
+      const cycleId = cycleRows[0].id;
+      const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `ADV-${ad.id}-${dateStr}-Q`;
+      const vatAmt = Math.round(amount * 15 / 115 * 100) / 100;
+      const lineItems = [{
+        headline: ad.headline,
+        ad_type: ad.ad_type ?? "ad",
+        billing_quarter: quarterLabel,
+        amount
+      }];
+      const description = `Quarterly Ad Fee: ${ad.headline} \u2014 ${quarterLabel}`;
+      const invRows = await query(
+        `INSERT INTO club_invoices
+           (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate,
+            vat_amount, total_amount, invoice_type, line_items, ad_billing_cycle_id)
+         VALUES (?, ?, ?, 1, ?, 0.15, ?, ?, 'ad_campaign', ?::jsonb, ?)
+         RETURNING id`,
+        [
+          ad.club_id,
+          invoiceRef,
+          description,
+          amount,
+          vatAmt,
+          amount,
+          JSON.stringify(lineItems),
+          cycleId
+        ]
+      );
+      const invoiceId = invRows?.[0]?.id ?? null;
+      let paymentUrl = null;
+      if (invoiceId) {
+        try {
+          const payment = await createStitchPayment({
+            amount,
+            payerName: ad.club_name,
+            merchantReference: `invoice-${invoiceId}`,
+            redirectUrl,
+            payerEmail: ad.club_email ?? void 0
+          });
+          await exec(
+            "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+            [payment.id, payment.url, invoiceId]
+          );
+          paymentUrl = payment.url;
+        } catch (payErr) {
+          logger.warn({ err: payErr, cycleId, invoiceId }, "Quarterly ad billing: Stitch link failed");
+        }
+      }
+      const invoiceStr = invoiceId ? ` An invoice has been added to your Invoices page \u2014 use the Pay Now button there to complete payment.` : paymentUrl ? ` Pay now: ${paymentUrl}` : " TapIn staff will be in touch with a payment link.";
+      await exec(
+        `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+         VALUES (?, 'ad_update', ?, ?, ?)`,
+        [
+          ad.club_id,
+          `\u{1F4C5} Quarterly Ad Invoice \u2014 ${quarterLabel}`,
+          `Your quarterly ad fee of ${fmtRand2(amount)} for "${ad.headline}" is due for ${quarterLabel}.${invoiceStr}`,
+          JSON.stringify({ ad_request_id: ad.id, billing_cycle_id: cycleId, invoice_id: invoiceId, payment_url: paymentUrl })
+        ]
+      );
+      logger.info(
+        { ad_request_id: ad.id, club_id: ad.club_id, cycleId, invoiceId, amount, quarterBillingStr },
+        "Quarterly ad billing worker: invoice created"
+      );
+    } catch (err) {
+      logger.error({ err, ad_request_id: ad.id }, "Quarterly ad billing worker: failed for ad");
+    }
+  }
 }
 function startMonthlyAdBillingWorker() {
   logger.info("Monthly ad billing worker started");

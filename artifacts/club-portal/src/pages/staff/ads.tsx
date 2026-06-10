@@ -100,6 +100,7 @@ const STATUS: Record<string, { bg: string; text: string; label: string }> = {
   live:            { bg: "bg-green-100",  text: "text-green-800",  label: "Live" },
   expired:         { bg: "bg-gray-100",   text: "text-gray-500",   label: "Expired" },
   rejected:        { bg: "bg-red-100",    text: "text-red-700",    label: "Rejected" },
+  cancelled:       { bg: "bg-gray-100",   text: "text-gray-500",   label: "Cancelled" },
 };
 
 const AD_TYPE_META: Record<string, { label: string; color: string; icon: string }> = {
@@ -113,7 +114,7 @@ const AD_TYPE_META: Record<string, { label: string; color: string; icon: string 
   tee_time_deal:  { label: "Tee Time Deal",        color: "#c2410c", icon: "🎯" },
 };
 
-const STATUS_FILTERS = ["all", "pending_review", "approved", "payment_pending", "live", "expired", "rejected"];
+const STATUS_FILTERS = ["all", "pending_review", "approved", "payment_pending", "live", "expired", "rejected", "cancelled"];
 
 // ─── Featured Carousel Tab ────────────────────────────────────────────────────
 
@@ -367,7 +368,7 @@ export default function StaffAds() {
   const [cfSlot, setCfSlot] = useState("");
   const [cfSharing, setCfSharing] = useState("");
   const [cfNotes, setCfNotes] = useState("");
-  const [cfBillingFreq, setCfBillingFreq] = useState<"once"|"monthly">("once");
+  const [cfBillingFreq, setCfBillingFreq] = useState<"once"|"monthly"|"quarterly">("once");
   const [billingFreqReason, setBillingFreqReason] = useState<string | null>(null);
   const [billingCycles, setBillingCycles] = useState<BillingCycle[]>([]);
   const [saving, setSaving] = useState(false);
@@ -430,12 +431,15 @@ export default function StaffAds() {
     //           2) package price_period / price_display mentions "month"
     //           3) date span > 31 days
     //           4) fall back to once
-    let detectedFreq: "once" | "monthly" = "once";
+    let detectedFreq: "once" | "monthly" | "quarterly" = "once";
     let detectedReason: string | null = null;
 
-    if (req.billing_frequency === "monthly") {
+    if (req.billing_frequency === "quarterly") {
+      detectedFreq   = "quarterly";
+      detectedReason = null;
+    } else if (req.billing_frequency === "monthly") {
       detectedFreq   = "monthly";
-      detectedReason = null; // already saved — no need to label it auto-detected
+      detectedReason = null;
     } else {
       const offering = allOfferings.find(o => o.ad_type === req.ad_type);
       const pkg2     = offering?.packages.find(p => p.name === req.package_name);
@@ -460,8 +464,8 @@ export default function StaffAds() {
     setBillingFreqReason(detectedReason);
     // ─────────────────────────────────────────────────────────────────────────
 
-    // Load billing cycles for monthly ads that are live or payment_pending
-    if (req.billing_frequency === "monthly" && (req.status === "live" || req.status === "payment_pending")) {
+    // Load billing cycles for monthly/quarterly ads that are live or payment_pending
+    if ((req.billing_frequency === "monthly" || req.billing_frequency === "quarterly") && (req.status === "live" || req.status === "payment_pending")) {
       api<BillingCycle[]>(`/api/admin/ad-requests/${req.id}/billing-cycles`)
         .then(setBillingCycles)
         .catch(() => setBillingCycles([]));
@@ -1040,7 +1044,7 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
   cfNotes: string; setCfNotes: (v: string) => void;
-  cfBillingFreq: "once"|"monthly"; setCfBillingFreq: (v: "once"|"monthly") => void;
+  cfBillingFreq: "once"|"monthly"|"quarterly"; setCfBillingFreq: (v: "once"|"monthly"|"quarterly") => void;
   billingFreqReason: string | null;
   billingCycles: BillingCycle[];
   saving: boolean; actioning: boolean;
@@ -1115,16 +1119,19 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   {req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} → {req.confirmed_end ? format(new Date(req.confirmed_end), "d MMM yyyy") : "—"}
                 </div>
               </div>
-              <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}${req.billing_frequency === "monthly" ? "/mo" : ""}` : "—"} />
-              <InfoRow label="Billing" value={req.billing_frequency === "monthly" ? "📅 Monthly" : "One-time"} />
+              <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}${req.billing_frequency === "monthly" ? "/mo" : req.billing_frequency === "quarterly" ? "/qtr" : ""}` : "—"} />
+              <InfoRow label="Billing" value={req.billing_frequency === "monthly" ? "📅 Monthly" : req.billing_frequency === "quarterly" ? "📅 Quarterly" : "One-time"} />
               {req.ad_type !== "club_detail" && <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />}
               {req.ad_type !== "club_detail" && <InfoRow label="Sharing Tier" value={req.sharing_tier ?? "—"} />}
-              {req.billing_frequency === "monthly" && billingCycles.length > 0 && (
+              {(req.billing_frequency === "monthly" || req.billing_frequency === "quarterly") && billingCycles.length > 0 && (
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">Billing Cycles</p>
                   <div className="space-y-1.5">
                     {billingCycles.map(c => {
-                      const month = format(new Date(String(c.billing_month).slice(0, 10) + "T12:00:00"), "MMM yyyy");
+                      const billingDate = new Date(String(c.billing_month).slice(0, 10) + "T12:00:00");
+                      const month = req.billing_frequency === "quarterly"
+                        ? `Q${Math.ceil((billingDate.getMonth() + 1) / 3)} ${billingDate.getFullYear()}`
+                        : format(billingDate, "MMM yyyy");
                       const isPaid = c.status === "paid";
                       return (
                         <div key={c.id} className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs ${isPaid ? "bg-green-50 border border-green-200" : "bg-amber-50 border border-amber-200"}`}>
@@ -1148,6 +1155,7 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                 <div className="text-sm text-amber-700 mt-0.5">
                   Quoted: <strong>R {req.confirmed_price ? Number(req.confirmed_price).toLocaleString() : "—"}</strong>
                   {req.billing_frequency === "monthly" && <span className="ml-1 text-amber-600">/month · Monthly billing</span>}
+                  {req.billing_frequency === "quarterly" && <span className="ml-1 text-amber-600">/quarter · Quarterly billing</span>}
                 </div>
               </div>
               <InfoRow label="Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
@@ -1165,6 +1173,11 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   </a>
                 )}
               </div>
+            </div>
+          ) : req.status === "cancelled" ? (
+            <div className="bg-gray-50 border border-gray-200 rounded-lg p-3">
+              <div className="font-semibold text-sm text-gray-700">⛔ Campaign Cancelled</div>
+              <div className="text-sm text-gray-600 mt-0.5">This ad was cancelled by the club and taken offline immediately. No further invoices will be generated.</div>
             </div>
           ) : req.status === "rejected" || req.status === "expired" ? (
             <div className="text-sm text-muted-foreground">No configuration needed for this status.</div>
@@ -1201,7 +1214,7 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   )}
                 </div>
                 <div className="flex gap-2">
-                  {([["once", "One-time payment"], ["monthly", "📅 Monthly billing"]] as const).map(([val, label]) => (
+                  {([["once", "One-time payment"], ["monthly", "📅 Monthly billing"], ["quarterly", "📅 Quarterly billing"]] as const).map(([val, label]) => (
                     <button key={val} onClick={() => setCfBillingFreq(val)}
                       className={`flex-1 text-xs font-semibold border rounded-lg py-2 transition-colors ${cfBillingFreq === val ? "bg-[#e8f5ee] border-[#1a5c38] text-[#1a5c38]" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
                       {label}
@@ -1214,6 +1227,8 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   </p>
                 ) : cfBillingFreq === "monthly" ? (
                   <p className="text-xs text-muted-foreground mt-1">Club will be invoiced monthly on the 1st. First payment activates the ad; each subsequent month is billed automatically.</p>
+                ) : cfBillingFreq === "quarterly" ? (
+                  <p className="text-xs text-muted-foreground mt-1">Club will be invoiced quarterly on the 1st of Jan, Apr, Jul, and Oct. First payment activates the ad; each subsequent quarter is billed automatically.</p>
                 ) : null}
               </div>
               <div>

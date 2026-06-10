@@ -156,6 +156,120 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
 
   lastBilledMonth = monthKey;
   logger.info({ monthKey }, "Monthly ad billing worker: cycle complete");
+
+  // ── Quarterly billing ─────────────────────────────────────────────────────
+  // Only runs on the 1st of Jan (1), Apr (4), Jul (7), Oct (10).
+  const QUARTER_START_MONTHS = [1, 4, 7, 10];
+  if (!QUARTER_START_MONTHS.includes(month)) return;
+
+  const quarterBillingStr = billingMonthStr; // first day of this quarter
+  const quarterLabel = `Q${Math.ceil(month / 3)} ${year}`;
+  logger.info({ monthKey, quarterLabel }, "Quarterly ad billing worker: running");
+
+  const quarterlyAds = await query<any>(
+    `SELECT ar.id, ar.club_id, ar.headline, ar.confirmed_price, ar.confirmed_start, ar.confirmed_end,
+            ar.ad_type,
+            c.name AS club_name, c.email AS club_email
+     FROM ad_requests ar
+     JOIN clubs c ON c.id = ar.club_id
+     WHERE ar.status = 'live'
+       AND ar.billing_frequency = 'quarterly'
+       AND ar.confirmed_price IS NOT NULL
+       AND ar.confirmed_end >= ?
+       AND DATE_TRUNC('month', ar.confirmed_start::DATE) < ?::DATE`,
+    [quarterBillingStr, quarterBillingStr]
+  );
+
+  if (quarterlyAds.length === 0) {
+    logger.info("Quarterly ad billing worker: no ads to bill this quarter");
+    return;
+  }
+
+  logger.info({ count: quarterlyAds.length }, "Quarterly ad billing worker: ads to bill");
+
+  for (const ad of quarterlyAds) {
+    try {
+      const amount = Number(ad.confirmed_price);
+
+      const cycleRows = await query<any>(
+        `INSERT INTO ad_billing_cycles
+           (ad_request_id, billing_month, amount, status, invoice_sent_at)
+         VALUES (?, ?, ?, 'pending', NOW())
+         ON CONFLICT (ad_request_id, billing_month) DO NOTHING
+         RETURNING id`,
+        [ad.id, quarterBillingStr, amount]
+      );
+
+      if (!cycleRows || cycleRows.length === 0) {
+        logger.info({ ad_request_id: ad.id, quarterBillingStr }, "Quarterly ad billing: already billed, skipping");
+        continue;
+      }
+
+      const cycleId: number = cycleRows[0].id;
+      const dateStr    = new Date().toISOString().slice(0, 10).replace(/-/g, "");
+      const invoiceRef = `ADV-${ad.id}-${dateStr}-Q`;
+      const vatAmt     = Math.round(amount * 15 / 115 * 100) / 100;
+      const lineItems  = [{
+        headline:        ad.headline,
+        ad_type:         ad.ad_type ?? "ad",
+        billing_quarter: quarterLabel,
+        amount,
+      }];
+      const description = `Quarterly Ad Fee: ${ad.headline} — ${quarterLabel}`;
+
+      const invRows = await query<any>(
+        `INSERT INTO club_invoices
+           (club_id, invoice_ref, description, total_rounds, platform_fee_rate, vat_rate,
+            vat_amount, total_amount, invoice_type, line_items, ad_billing_cycle_id)
+         VALUES (?, ?, ?, 1, ?, 0.15, ?, ?, 'ad_campaign', ?::jsonb, ?)
+         RETURNING id`,
+        [ad.club_id, invoiceRef, description, amount, vatAmt, amount,
+         JSON.stringify(lineItems), cycleId]
+      );
+      const invoiceId: number | null = invRows?.[0]?.id ?? null;
+
+      let paymentUrl: string | null = null;
+      if (invoiceId) {
+        try {
+          const payment = await createStitchPayment({
+            amount,
+            payerName:         ad.club_name,
+            merchantReference: `invoice-${invoiceId}`,
+            redirectUrl,
+            payerEmail:        ad.club_email ?? undefined,
+          });
+          await exec(
+            "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+            [payment.id, payment.url, invoiceId]
+          );
+          paymentUrl = payment.url;
+        } catch (payErr: any) {
+          logger.warn({ err: payErr, cycleId, invoiceId }, "Quarterly ad billing: Stitch link failed");
+        }
+      }
+
+      const invoiceStr = invoiceId
+        ? ` An invoice has been added to your Invoices page — use the Pay Now button there to complete payment.`
+        : (paymentUrl ? ` Pay now: ${paymentUrl}` : " TapIn staff will be in touch with a payment link.");
+
+      await exec(
+        `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+         VALUES (?, 'ad_update', ?, ?, ?)`,
+        [
+          ad.club_id,
+          `📅 Quarterly Ad Invoice — ${quarterLabel}`,
+          `Your quarterly ad fee of ${fmtRand(amount)} for "${ad.headline}" is due for ${quarterLabel}.${invoiceStr}`,
+          JSON.stringify({ ad_request_id: ad.id, billing_cycle_id: cycleId, invoice_id: invoiceId, payment_url: paymentUrl }),
+        ]
+      );
+
+      logger.info({ ad_request_id: ad.id, club_id: ad.club_id, cycleId, invoiceId, amount, quarterBillingStr },
+        "Quarterly ad billing worker: invoice created");
+
+    } catch (err: any) {
+      logger.error({ err, ad_request_id: ad.id }, "Quarterly ad billing worker: failed for ad");
+    }
+  }
 }
 
 export function startMonthlyAdBillingWorker(): void {

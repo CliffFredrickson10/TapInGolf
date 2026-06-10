@@ -917,6 +917,41 @@ router.delete("/portal/ad-requests/:id", requireClubAuth, async (req: Request, r
   res.json({ message: "Deleted" });
 });
 
+// ── POST /portal/ad-requests/:id/cancel ──────────────────────────────────────
+// Immediately cancel a live or payment-pending ad (no notice period, no refund).
+// Takes the published ad offline and stops future billing cycles.
+router.post("/portal/ad-requests/:id/cancel", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const reqId = Number(req.params.id);
+  const existing = await row<any>(
+    "SELECT id, status, published_ad_id, headline FROM ad_requests WHERE id = ? AND club_id = ?",
+    [reqId, club.id]
+  );
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
+  if (!["live", "payment_pending"].includes(existing.status)) {
+    res.status(400).json({ message: "Only live or payment-pending ads can be cancelled" }); return;
+  }
+  // Take ad offline immediately if it was published
+  if (existing.published_ad_id) {
+    await exec("UPDATE ads SET active = 0 WHERE id = ?", [existing.published_ad_id]);
+  }
+  await exec("UPDATE ad_requests SET status = 'cancelled', updated_at = NOW() WHERE id = ?", [reqId]);
+  // Confirm via club inbox
+  try {
+    await exec(
+      `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+       VALUES (?, 'ad_update', ?, ?, ?)`,
+      [
+        club.id,
+        "📢 Ad Campaign Cancelled",
+        `Your ad campaign "${existing.headline}" has been cancelled and taken offline immediately. No refunds will be issued for amounts already paid. No further invoices will be generated.`,
+        JSON.stringify({ ad_request_id: reqId, action: "cancelled" }),
+      ]
+    );
+  } catch (_) {}
+  res.json({ success: true });
+});
+
 // ─── EVENTS ──────────────────────────────────────────────────────────────────
 
 // Portal proxies to admin/events routes — all event management uses the same

@@ -68,6 +68,7 @@ const STATUS: Record<string, { bg: string; text: string; label: string }> = {
   live:            { bg: "bg-green-100",  text: "text-green-800",  label: "Live" },
   expired:         { bg: "bg-gray-100",   text: "text-gray-500",   label: "Expired" },
   rejected:        { bg: "bg-red-100",    text: "text-red-700",    label: "Rejected" },
+  cancelled:       { bg: "bg-gray-100",   text: "text-gray-500",   label: "Cancelled" },
 };
 
 const WORKFLOW = [
@@ -204,6 +205,17 @@ export default function Ads() {
     }
   };
 
+  const handleCancelAd = async (id: number) => {
+    if (!confirm("Cancel this ad campaign?\n\nYour ad will be taken offline immediately. No refunds will be issued for amounts already paid, and no further invoices will be generated.")) return;
+    try {
+      await api(`/api/portal/ad-requests/${id}/cancel`, { method: "POST" });
+      toast({ title: "Ad cancelled", description: "Your campaign has been taken offline." });
+      load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
   const setF = (k: keyof ReturnType<typeof emptyForm>, v: string) => setForm(f => ({ ...f, [k]: v }));
 
   const detailAds  = requests.filter(r => r.ad_type === "club_detail");
@@ -237,14 +249,14 @@ export default function Ads() {
             <>
               <AdSection icon="🏌️" title="Club Detail Page Ads" color="#1a5c38"
                 badge={`${detailAds.length} ad${detailAds.length !== 1 ? "s" : ""}`}
-                ads={detailAds} onDelete={handleDelete} onNew={() => startWizard("club_detail")} />
+                ads={detailAds} onDelete={handleDelete} onCancel={handleCancelAd} onNew={() => startWizard("club_detail")} />
               <AdSection icon="⭐" title="Home Screen Featured Clubs" color="#c8a84b"
                 badge={`${featuredAds.length} ad${featuredAds.length !== 1 ? "s" : ""}`}
-                ads={featuredAds} onDelete={handleDelete} onNew={() => startWizard("featured_home")} />
+                ads={featuredAds} onDelete={handleDelete} onCancel={handleCancelAd} onNew={() => startWizard("featured_home")} />
               {otherAds.length > 0 && (
                 <AdSection icon="💡" title="Other Ad Campaigns" color="#374151"
                   badge={`${otherAds.length}`}
-                  ads={otherAds} onDelete={handleDelete} onNew={() => startWizard()} />
+                  ads={otherAds} onDelete={handleDelete} onCancel={handleCancelAd} onNew={() => startWizard()} />
               )}
               {requests.length === 0 && (
                 <div className="text-center py-16 text-muted-foreground">
@@ -674,9 +686,9 @@ export default function Ads() {
   );
 }
 
-function AdSection({ icon, title, color, badge, ads, onDelete, onNew }: {
+function AdSection({ icon, title, color, badge, ads, onDelete, onCancel, onNew }: {
   icon: string; title: string; color: string; badge: string;
-  ads: AdRequest[]; onDelete: (id: number) => void; onNew: () => void;
+  ads: AdRequest[]; onDelete: (id: number) => void; onCancel: (id: number) => void; onNew: () => void;
 }) {
   return (
     <div>
@@ -735,6 +747,11 @@ function AdSection({ icon, title, color, badge, ads, onDelete, onNew }: {
                 {["pending_review","rejected"].includes(ad.status) && (
                   <button onClick={() => onDelete(ad.id)} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
                     <Trash2 className="h-3 w-3" /> Cancel
+                  </button>
+                )}
+                {["live","payment_pending"].includes(ad.status) && (
+                  <button onClick={() => onCancel(ad.id)} className="text-xs text-red-500 hover:text-red-700 flex items-center gap-1">
+                    <X className="h-3 w-3" /> Cancel Ad
                   </button>
                 )}
               </div>

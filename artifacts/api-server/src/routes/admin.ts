@@ -667,11 +667,32 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       proRataNote      = ` (pro-rata: ${proRataDays}/${daysInStartMonth} days)`;
     }
   }
+  if (billingFreq === "quarterly" && effectiveStart) {
+    const startDate      = new Date(effectiveStart);
+    const startMonth     = startDate.getUTCMonth(); // 0-11
+    const year           = startDate.getUTCFullYear();
+    const qStartMonth    = Math.floor(startMonth / 3) * 3; // 0, 3, 6, or 9
+    const qEndMonth      = qStartMonth + 2;
+    const qEndDate       = new Date(Date.UTC(year, qEndMonth + 1, 0));
+    const isFirstDayOfQ  = startDate.getUTCDate() === 1 && startMonth === qStartMonth;
+    if (!isFirstDayOfQ) {
+      let daysInQuarter = 0;
+      for (let i = 0; i < 3; i++) {
+        daysInQuarter += new Date(Date.UTC(year, qStartMonth + i + 1, 0)).getUTCDate();
+      }
+      const remainingDays = Math.floor((qEndDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+      invoiceAmount    = Math.round((amount * remainingDays / daysInQuarter) * 100) / 100;
+      isProRata        = true;
+      proRataDays      = remainingDays;
+      daysInStartMonth = daysInQuarter;
+      proRataNote      = ` (pro-rata: ${remainingDays}/${daysInQuarter} days)`;
+    }
+  }
   // ─────────────────────────────────────────────────────────────────────────
 
   if (amount >= 1) {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    invoiceRef = `ADV-${reqId}-${dateStr}${isProRata ? "-PR" : ""}`;
+    invoiceRef = `ADV-${reqId}-${dateStr}${billingFreq === "quarterly" ? "-Q" : ""}${isProRata ? "-PR" : ""}`;
     const vatAmt = Math.round(invoiceAmount * 15 / 115 * 100) / 100;
     const lineItems = [{
       headline:          adReqFull?.headline ?? existing.headline,
@@ -695,9 +716,9 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       : null;
     const periodStr = startLabel && endLabel ? ` · ${startLabel} – ${endLabel}` : "";
     const billingLabel = billingFreq === "monthly"
-      ? isProRata
-        ? ` (pro-rata first month${proRataNote})`
-        : " (initial payment)"
+      ? isProRata ? ` (pro-rata first month${proRataNote})` : " (initial payment)"
+      : billingFreq === "quarterly"
+      ? isProRata ? ` (pro-rata first quarter${proRataNote})` : " (quarterly initial payment)"
       : "";
     const description = `Ad Campaign: ${existing.headline}${periodStr}${billingLabel}`;
 
@@ -739,13 +760,17 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   const displayAmount = invoiceAmount;
   const priceStr = displayAmount >= 1
     ? isProRata
-      ? ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due for the remainder of this month${proRataNote}.`
+      ? ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due for the remainder of this ${billingFreq === "quarterly" ? "quarter" : "month"}${proRataNote}.`
       : ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due.`
     : "";
   const billingNote = billingFreq === "monthly"
     ? isProRata
       ? ` Full monthly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each subsequent month.`
       : " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign."
+    : billingFreq === "quarterly"
+    ? isProRata
+      ? ` Full quarterly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each quarter.`
+      : " Quarterly invoices will appear on your Invoices page on the 1st of each quarter (Jan, Apr, Jul, Oct) for the duration of your campaign."
     : " Once payment is received, your ad will publish automatically.";
   const invoiceStr = invoiceId
     ? ` An invoice (${invoiceRef}) has been added to your Invoices page — use the Pay Now button there to complete payment.`

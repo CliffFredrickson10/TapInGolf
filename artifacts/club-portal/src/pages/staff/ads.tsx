@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { api } from "@/lib/api";
+import { api, getToken } from "@/lib/api";
 import { AdPreviewCard } from "@/components/AdPreviewCard";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -9,7 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { RefreshCw, Bell, ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
+import { RefreshCw, Bell, ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Search, Upload } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -115,6 +115,303 @@ const AD_TYPE_META: Record<string, { label: string; color: string; icon: string 
 };
 
 const STATUS_FILTERS = ["all", "pending_review", "approved", "payment_pending", "live", "expired", "rejected", "cancelled"];
+
+// ─── Home Banner Ads Tab ──────────────────────────────────────────────────────
+
+interface BannerAd {
+  id: number;
+  title: string;
+  subtitle: string | null;
+  image_url: string | null;
+  cta_text: string | null;
+  link_url: string | null;
+  layout: string;
+  placement: string;
+  priority: number;
+  active: number;
+  club_id: number | null;
+}
+
+const BANNER_LAYOUTS = [
+  { value: "classic", label: "Classic" },
+  { value: "hero",    label: "Cinematic" },
+  { value: "bold",    label: "Impact" },
+];
+
+function HomeBannerAdsTab() {
+  const { toast } = useToast();
+  const [ads, setAds]                     = useState<BannerAd[]>([]);
+  const [loading, setLoading]             = useState(true);
+  const [editingId, setEditingId]         = useState<number | "new" | null>(null);
+  const [saving, setSaving]               = useState(false);
+  const [deleting, setDeleting]           = useState<number | null>(null);
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef                      = useRef<HTMLInputElement>(null);
+
+  const emptyForm = () => ({ title: "", subtitle: "", image_url: "", cta_text: "Shop Now", link_url: "", layout: "classic", priority: 0, active: true });
+  const [form, setForm] = useState(emptyForm());
+  const setF = (k: keyof typeof form, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api<{ ads: BannerAd[] }>("/api/admin/ads");
+      setAds((data.ads ?? data as any).filter((a: BannerAd) => a.placement === "home"));
+    } catch (e: any) {
+      toast({ title: "Error loading ads", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const openNew = () => { setForm(emptyForm()); setEditingId("new"); };
+  const openEdit = (ad: BannerAd) => {
+    setForm({
+      title: ad.title,
+      subtitle: ad.subtitle ?? "",
+      image_url: ad.image_url ?? "",
+      cta_text: ad.cta_text ?? "",
+      link_url: ad.link_url ?? "",
+      layout: ad.layout ?? "classic",
+      priority: ad.priority ?? 0,
+      active: !!ad.active,
+    });
+    setEditingId(ad.id);
+  };
+
+  const handleImageUpload = async (file: File) => {
+    if (!["image/jpeg","image/png","image/webp"].includes(file.type)) {
+      toast({ title: "Unsupported format", description: "Please upload JPG, PNG, or WebP.", variant: "destructive" });
+      return;
+    }
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const token = getToken();
+      const res = await fetch("/api/admin/ad-image/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message ?? "Upload failed");
+      }
+      const data = await res.json();
+      setF("image_url", data.url);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally { setImageUploading(false); }
+  };
+
+  const handleSave = async () => {
+    if (!form.title.trim()) { toast({ title: "Headline is required", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const body = {
+        title: form.title,
+        subtitle: form.subtitle || null,
+        image_url: form.image_url || null,
+        cta_text: form.cta_text || null,
+        link_url: form.link_url || null,
+        placement: "home",
+        layout: form.layout,
+        priority: Number(form.priority) || 0,
+        active: form.active,
+      };
+      if (editingId === "new") {
+        await api("/api/admin/ads", { method: "POST", body: JSON.stringify(body) });
+        toast({ title: "Ad created" });
+      } else {
+        await api(`/api/admin/ads/${editingId}`, { method: "PUT", body: JSON.stringify(body) });
+        toast({ title: "Ad updated" });
+      }
+      setEditingId(null);
+      await load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const handleDelete = async (id: number) => {
+    setDeleting(id);
+    try {
+      await api(`/api/admin/ads/${id}`, { method: "DELETE" });
+      toast({ title: "Ad deleted" });
+      await load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setDeleting(null); }
+  };
+
+  return (
+    <div className="flex gap-6">
+      {/* Left: list */}
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="font-semibold text-lg">Home Screen Banner Ads</h2>
+            <p className="text-xs text-muted-foreground mt-0.5">These ads appear in the rotating banner on every golfer&apos;s home screen.</p>
+          </div>
+          <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1.5" onClick={openNew}>
+            <Plus className="h-3.5 w-3.5" /> New Ad
+          </Button>
+        </div>
+
+        {loading ? (
+          <div className="space-y-3">{[1,2,3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>
+        ) : ads.length === 0 ? (
+          <div className="text-center py-16 text-muted-foreground border-2 border-dashed rounded-xl">
+            <div className="text-3xl mb-2">📢</div>
+            <p className="font-semibold">No home banner ads yet</p>
+            <p className="text-sm mt-1">Click "New Ad" to create your first platform banner.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {ads.map(ad => (
+              <div key={ad.id} className={`border rounded-xl p-4 bg-white flex gap-4 items-center ${!ad.active ? "opacity-60" : ""}`}>
+                {ad.image_url ? (
+                  <img src={ad.image_url} alt="" className="w-16 h-12 object-cover rounded-lg flex-shrink-0" />
+                ) : (
+                  <div className="w-16 h-12 bg-gray-100 rounded-lg flex-shrink-0 flex items-center justify-center text-gray-400 text-xs">No img</div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-semibold text-sm truncate">{ad.title}</span>
+                    {!ad.active && <span className="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded-full font-semibold">Inactive</span>}
+                    <span className="text-[10px] bg-blue-50 text-blue-700 px-2 py-0.5 rounded-full font-semibold capitalize">{ad.layout}</span>
+                    {ad.priority > 0 && <span className="text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full font-semibold">Priority {ad.priority}</span>}
+                  </div>
+                  {ad.subtitle && <p className="text-xs text-muted-foreground mt-0.5 truncate">{ad.subtitle}</p>}
+                  {ad.cta_text && <p className="text-xs text-[#1a5c38] font-medium mt-0.5">CTA: {ad.cta_text}</p>}
+                </div>
+                <div className="flex gap-2 flex-shrink-0">
+                  <Button size="sm" variant="outline" className="h-8 w-8 p-0" onClick={() => openEdit(ad)}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button size="sm" variant="outline"
+                    className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:border-red-300"
+                    onClick={() => handleDelete(ad.id)} disabled={deleting === ad.id}>
+                    {deleting === ad.id
+                      ? <div className="h-3.5 w-3.5 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
+                      : <Trash2 className="h-3.5 w-3.5" />}
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Right: form + preview */}
+      {editingId !== null && (
+        <div className="w-[420px] flex-shrink-0 border rounded-xl bg-white p-5 space-y-4 self-start sticky top-6">
+          <div className="flex items-center justify-between">
+            <h3 className="font-semibold text-base">{editingId === "new" ? "New Banner Ad" : "Edit Ad"}</h3>
+            <button onClick={() => setEditingId(null)} className="text-gray-400 hover:text-gray-700"><X className="h-4 w-4" /></button>
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Headline *</Label>
+              <Input value={form.title} onChange={e => setF("title", e.target.value)} placeholder="e.g. Callaway Golf Sale — Up to 40% Off" />
+            </div>
+            <div>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Subtitle</Label>
+              <Input value={form.subtitle} onChange={e => setF("subtitle", e.target.value)} placeholder="Shop the latest clubs at unbeatable prices" />
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Layout</Label>
+              <div className="flex gap-2">
+                {BANNER_LAYOUTS.map(opt => (
+                  <button key={opt.value} type="button" onClick={() => setF("layout", opt.value)}
+                    className={`flex-1 text-center py-1.5 rounded-lg border-2 text-xs font-semibold transition-colors ${
+                      form.layout === opt.value
+                        ? "border-[#1a5c38] bg-green-50 text-[#1a5c38]"
+                        : "border-gray-200 text-gray-600 hover:border-gray-300"
+                    }`}>
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">
+                Image
+                {form.layout === "bold" && <span className="text-muted-foreground font-normal normal-case ml-1">— optional for Impact</span>}
+              </Label>
+              <input ref={fileInputRef} type="file" accept="image/jpeg,image/png,image/webp" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }} />
+              {form.image_url ? (
+                <div className="relative rounded-lg overflow-hidden border border-gray-200 h-[120px]">
+                  <img src={form.image_url} alt="" className="w-full h-full object-cover" />
+                  <button type="button" onClick={() => setF("image_url", "")}
+                    className="absolute top-1.5 right-1.5 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors">
+                    <X className="h-3 w-3" />
+                  </button>
+                  <div className="absolute bottom-1.5 left-1.5 bg-green-600 text-white text-[10px] font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <Check className="h-2.5 w-2.5" /> Uploaded
+                  </div>
+                </div>
+              ) : (
+                <button type="button" onClick={() => fileInputRef.current?.click()} disabled={imageUploading}
+                  className="w-full border-2 border-dashed border-gray-300 hover:border-[#1a5c38] rounded-lg transition-colors py-4 flex flex-col items-center gap-1.5 text-gray-400 hover:text-[#1a5c38] text-xs disabled:opacity-60">
+                  {imageUploading
+                    ? <><div className="h-5 w-5 border-2 border-[#1a5c38] border-t-transparent rounded-full animate-spin" /><span>Uploading…</span></>
+                    : <><Upload className="h-5 w-5" /><span>Click to upload image</span><span className="text-[10px] text-gray-400">JPG · PNG · WebP · Max 8 MB</span></>}
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">CTA Button</Label>
+                <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Shop Now" />
+              </div>
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Priority</Label>
+                <Input type="number" min="0" max="100" value={form.priority} onChange={e => setF("priority", e.target.value)} />
+              </div>
+            </div>
+            <div>
+              <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Link / Deep Link URL</Label>
+              <Input value={form.link_url} onChange={e => setF("link_url", e.target.value)} placeholder="https://example.com or tapin://clubs/42" />
+            </div>
+
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+              <span className="text-sm font-medium">Active (show in app)</span>
+              <button type="button" onClick={() => setF("active", !form.active)}
+                className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${form.active ? "bg-[#1a5c38]" : "bg-gray-300"}`}>
+                <span className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${form.active ? "translate-x-4" : "translate-x-0.5"}`} />
+              </button>
+            </div>
+          </div>
+
+          <div>
+            <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">Live Preview</div>
+            <AdPreviewCard
+              layout={(form.layout || "classic") as "classic" | "hero" | "bold"}
+              title={form.title || "Ad Headline"}
+              subtitle={form.subtitle || undefined}
+              image_url={form.image_url || undefined}
+              cta_text={form.cta_text || undefined}
+            />
+          </div>
+
+          <div className="flex gap-2 pt-1">
+            <Button variant="outline" onClick={() => setEditingId(null)} className="flex-1">Cancel</Button>
+            <Button className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving}>
+              {saving ? "Saving…" : editingId === "new" ? "Create Ad" : "Save Changes"}
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 // ─── Featured Carousel Tab ────────────────────────────────────────────────────
 
@@ -555,6 +852,7 @@ export default function StaffAds() {
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="pricing">Manage Pricing</TabsTrigger>
             <TabsTrigger value="carousel" className="gap-1.5">⭐ Featured Carousel</TabsTrigger>
+            <TabsTrigger value="banners" className="gap-1.5">📢 Home Banners</TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics" className="pt-4">
@@ -567,6 +865,10 @@ export default function StaffAds() {
 
           <TabsContent value="carousel" className="pt-4 pb-8">
             <FeaturedCarouselTab />
+          </TabsContent>
+
+          <TabsContent value="banners" className="pt-4 pb-8">
+            <HomeBannerAdsTab />
           </TabsContent>
 
           {["queue","all","live"].map(tabId => (

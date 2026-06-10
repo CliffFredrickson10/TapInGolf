@@ -2,6 +2,12 @@ import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
 import { getUser, isStaff, isPlatform } from "../lib/auth";
 import { createStitchPayment } from "../lib/stitch";
+import { randomUUID } from "crypto";
+import path from "path";
+import multer from "multer";
+import { objectStorageClient } from "../lib/objectStorage";
+
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 8 * 1024 * 1024 } });
 
 const router: IRouter = Router();
 
@@ -490,13 +496,13 @@ router.get("/admin/ads", async (req, res): Promise<void> => {
 router.post("/admin/ads", async (req, res): Promise<void> => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
-  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  const { title, subtitle, image_url, cta_text, link_url, placement, layout, priority, active, club_id } = req.body ?? {};
   if (!title || !placement) { res.status(400).json({ message: "title and placement are required" }); return; }
   const id = await exec(
-    `INSERT INTO ads (title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO ads (title, subtitle, image_url, cta_text, link_url, placement, layout, priority, active, club_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [title, subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
-     placement, priority ?? 0, active !== false ? 1 : 0, club_id ?? null]
+     placement, layout ?? null, priority ?? 0, active !== false ? 1 : 0, club_id ?? null]
   );
   res.status(201).json({ id });
 });
@@ -505,12 +511,12 @@ router.put("/admin/ads/:id", async (req, res): Promise<void> => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const id = parseInt(req.params.id, 10);
-  const { title, subtitle, image_url, cta_text, link_url, placement, priority, active, club_id } = req.body ?? {};
+  const { title, subtitle, image_url, cta_text, link_url, placement, layout, priority, active, club_id } = req.body ?? {};
   await exec(
     `UPDATE ads SET title=?, subtitle=?, image_url=?, cta_text=?, link_url=?,
-     placement=?, priority=?, active=?, club_id=? WHERE id=?`,
+     placement=?, layout=?, priority=?, active=?, club_id=? WHERE id=?`,
     [title, subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
-     placement, priority ?? 0, active ? 1 : 0, club_id ?? null, id]
+     placement, layout ?? null, priority ?? 0, active ? 1 : 0, club_id ?? null, id]
   );
   res.json({ success: true });
 });
@@ -520,6 +526,39 @@ router.delete("/admin/ads/:id", async (req, res): Promise<void> => {
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   await exec("DELETE FROM ads WHERE id = ?", [parseInt(req.params.id, 10)]);
   res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────
+// Admin banner-ad image upload
+// ─────────────────────────────────────────────────────────────────────
+router.post("/admin/ad-image/upload", upload.single("image"), async (req: any, res: any): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const file = req.file;
+  if (!file) { res.status(400).json({ message: "No image file provided" }); return; }
+
+  const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
+  if (!privateDir) { res.status(500).json({ message: "Object storage not configured" }); return; }
+
+  const fileUuid = randomUUID();
+  const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "") || "jpg";
+
+  const cleanDir = privateDir.replace(/^\/+/, "").replace(/\/+$/, "");
+  const slashIdx = cleanDir.indexOf("/");
+  const parsedBucket = slashIdx >= 0 ? cleanDir.slice(0, slashIdx) : cleanDir;
+  const basePath = slashIdx >= 0 ? cleanDir.slice(slashIdx + 1) : "";
+
+  const objectKey = basePath
+    ? `${basePath}/ad-images/staff/${fileUuid}.${ext}`
+    : `ad-images/staff/${fileUuid}.${ext}`;
+
+  const bucket = objectStorageClient.bucket(parsedBucket);
+  await bucket.file(objectKey).save(file.buffer, { contentType: file.mimetype });
+  await bucket.file(objectKey).setMetadata({ cacheControl: "public, max-age=86400" });
+
+  const host = req.get("host") ?? "localhost";
+  const url = `https://${host}/api/storage/objects/ad-images/staff/${fileUuid}.${ext}`;
+  res.json({ url });
 });
 
 // ─────────────────────────────────────────────────────────────────────

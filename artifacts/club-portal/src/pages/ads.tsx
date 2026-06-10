@@ -55,6 +55,7 @@ interface AdRequest {
   slot_duration: string | null;
   sharing_tier: string | null;
   staff_notes: string | null;
+  payment_link: string | null;
   created_at: string;
 }
 
@@ -571,9 +572,29 @@ function AdSection({ icon, title, color, badge, ads, onDelete, onNew }: {
                 <div className="text-xs text-green-700 font-semibold mt-2">✓ Live · R {Number(ad.confirmed_price).toLocaleString()}</div>
               )}
               {ad.status === "approved" && ad.confirmed_price && (
-                <div className="text-xs text-blue-700 mt-1">Quote: R {Number(ad.confirmed_price).toLocaleString()} — awaiting payment</div>
+                <div className="text-xs text-blue-700 mt-1">Quote: R {Number(ad.confirmed_price).toLocaleString()} — awaiting payment link</div>
               )}
-              {ad.staff_notes && (
+              {ad.status === "payment_pending" && (
+                <div className="mt-2 rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-2">
+                  <div className="text-xs font-semibold text-orange-800">
+                    💳 Payment required{ad.confirmed_price ? ` — R ${Number(ad.confirmed_price).toLocaleString()}` : ""}
+                  </div>
+                  {ad.payment_link ? (
+                    <a
+                      href={ad.payment_link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block w-full text-center text-sm font-semibold text-white rounded-lg py-2 px-3"
+                      style={{ backgroundColor: "#1a5c38" }}
+                    >
+                      Pay Now →
+                    </a>
+                  ) : (
+                    <div className="text-xs text-orange-700">TapIn staff will send you a payment link shortly.</div>
+                  )}
+                </div>
+              )}
+              {ad.staff_notes && ad.status !== "payment_pending" && (
                 <div className="text-xs text-muted-foreground bg-gray-50 rounded p-2 mt-2">Staff: {ad.staff_notes}</div>
               )}
               <div className="flex items-center justify-between mt-2">

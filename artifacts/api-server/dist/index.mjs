@@ -62986,9 +62986,9 @@ router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
     resolvedLinkUrl = resolvedLinkUrl.replace(/tapin:\/\/clubs\/self\b/, `tapin://clubs/${adReq.club_id}`);
   }
   const result = await exec(
-    `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+    `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, layout, placement, priority, active,
       ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [
       adReq.club_id,
       adReq.headline,
@@ -62996,6 +62996,7 @@ router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
       adReq.image_url ?? null,
       adReq.cta_text ?? "Book Now",
       resolvedLinkUrl,
+      adReq.layout ?? "classic",
       placement,
       0,
       reqId,
@@ -71180,6 +71181,8 @@ async function applyLateAlters() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_ad_billing_cycles_request ON ad_billing_cycles (ad_request_id)");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS ad_request_id INT REFERENCES ad_requests(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS ad_billing_cycle_id INT REFERENCES ad_billing_cycles(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
+  await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

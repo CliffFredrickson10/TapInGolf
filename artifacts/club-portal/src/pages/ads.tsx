@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api, getToken } from "@/lib/api";
+import { AdPreviewCard, AdPreviewShell } from "@/components/AdPreviewCard";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ interface AdRequest {
   image_url: string | null;
   cta_text: string | null;
   link_url: string | null;
+  layout: string | null;
   requested_start: string | null;
   requested_end: string | null;
   club_notes: string | null;
@@ -78,6 +80,7 @@ const WORKFLOW = [
 
 const emptyForm = () => ({
   headline: "", subtitle: "", image_url: "", cta_text: "Book Now", link_url: "",
+  layout: "classic",
   requested_start: "", requested_end: "", club_notes: "",
 });
 
@@ -175,6 +178,7 @@ export default function Ads() {
           image_url: form.image_url || null,
           cta_text: form.cta_text || null,
           link_url: form.link_url || null,
+          layout: form.layout || "classic",
           requested_start: form.requested_start || null,
           requested_end: form.requested_end || null,
           club_notes: form.club_notes || null,
@@ -262,7 +266,7 @@ export default function Ads() {
         </TabsContent>
 
         {/* ── REQUEST WIZARD ── */}
-        <TabsContent value="new-ad" className="pt-4 max-w-3xl">
+        <TabsContent value="new-ad" className="pt-4 max-w-5xl">
           <div className="flex items-center mb-8">
             {["Choose Ad Type","Select Package","Ad Details"].map((label, i) => (
               <div key={i} className="flex items-center flex-1">
@@ -353,154 +357,227 @@ export default function Ads() {
           {wizardStep === 2 && (
             <div className="space-y-5">
               <h2 className="text-lg font-bold">Ad Details</h2>
-              <div className="bg-white border rounded-xl p-6 space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="col-span-2 space-y-1.5">
-                    <Label>Ad Headline *</Label>
-                    <Input value={form.headline} onChange={e => setF("headline", e.target.value)} placeholder="Summer Twilight Deals" />
-                  </div>
-                  <div className="col-span-2 space-y-1.5">
-                    <Label>Tagline / Subtitle</Label>
-                    <Input value={form.subtitle} onChange={e => setF("subtitle", e.target.value)} placeholder="R 299 green fee after 15:00" />
-                  </div>
-                  <div className="col-span-2 space-y-1.5">
-                    <Label>Ad Image</Label>
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/jpeg,image/png,image/webp"
-                      className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }}
-                    />
-                    {form.image_url ? (
-                      <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50" style={{ aspectRatio: "16/9", maxHeight: 220 }}>
-                        <img src={form.image_url} alt="Ad preview" className="w-full h-full object-cover" />
-                        <button
-                          type="button"
-                          onClick={() => setF("image_url", "")}
-                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
-                          title="Remove image"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                        <div className="absolute bottom-2 left-2 bg-green-600 text-white text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
-                          <Check className="h-3 w-3" /> Image uploaded
+              <div className="flex gap-6 items-start">
+
+                {/* ── Form ── */}
+                <div className="flex-1 min-w-0 space-y-4">
+                  <div className="bg-white border rounded-xl p-6 space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="col-span-2 space-y-1.5">
+                        <Label>Ad Headline *</Label>
+                        <Input value={form.headline} onChange={e => setF("headline", e.target.value)} placeholder="Summer Twilight Deals" />
+                      </div>
+                      <div className="col-span-2 space-y-1.5">
+                        <Label>Tagline / Subtitle</Label>
+                        <Input value={form.subtitle} onChange={e => setF("subtitle", e.target.value)} placeholder="R 299 green fee after 15:00" />
+                      </div>
+
+                      {/* ── Layout / Style ── */}
+                      <div className="col-span-2 space-y-2">
+                        <Label>Ad Style <span className="text-muted-foreground font-normal text-xs">— choose a layout for your ad</span></Label>
+                        <div className="grid grid-cols-3 gap-3">
+                          {[
+                            {
+                              value: "classic", label: "Classic", desc: "Image above, text below — clear and readable",
+                              preview: (
+                                <div className="bg-gray-100 rounded overflow-hidden">
+                                  <div className="h-7 bg-gray-300" />
+                                  <div className="p-1.5 space-y-1">
+                                    <div className="h-1.5 bg-gray-500 rounded w-full" />
+                                    <div className="h-1 bg-gray-300 rounded w-3/4" />
+                                    <div className="h-3 w-10 bg-[#1a5c38] rounded-full mt-1" />
+                                  </div>
+                                </div>
+                              ),
+                            },
+                            {
+                              value: "hero", label: "Cinematic", desc: "Full image with text overlaid",
+                              preview: (
+                                <div className="relative bg-gray-300 rounded overflow-hidden h-[52px]">
+                                  <div className="absolute inset-0" style={{ background: "linear-gradient(to bottom, transparent 30%, rgba(0,0,0,0.65) 100%)" }} />
+                                  <div className="absolute bottom-1.5 left-1.5 right-1.5">
+                                    <div className="h-1.5 bg-white rounded w-full mb-0.5" />
+                                    <div className="h-1 bg-white/70 rounded w-2/3" />
+                                  </div>
+                                </div>
+                              ),
+                            },
+                            {
+                              value: "bold", label: "Impact", desc: "Bold text on brand colour — no image needed",
+                              preview: (
+                                <div className="bg-[#1a5c38] rounded h-[52px] flex flex-col items-center justify-center gap-1 px-2">
+                                  <div className="h-1.5 bg-white rounded w-3/4" />
+                                  <div className="h-1 bg-white/70 rounded w-1/2" />
+                                  <div className="h-3 w-10 bg-white rounded-full mt-0.5" />
+                                </div>
+                              ),
+                            },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => setF("layout", opt.value)}
+                              className={`text-left p-2.5 rounded-xl border-2 transition-all ${form.layout === opt.value ? "border-[#1a5c38] bg-green-50 shadow-sm" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                            >
+                              <div className="mb-2">{opt.preview}</div>
+                              <div className="text-xs font-bold text-gray-800">{opt.label}</div>
+                              <div className="text-[10px] text-muted-foreground leading-snug mt-0.5">{opt.desc}</div>
+                            </button>
+                          ))}
                         </div>
                       </div>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => fileInputRef.current?.click()}
-                        disabled={imageUploading}
-                        className="w-full border-2 border-dashed border-gray-300 hover:border-[#1a5c38] hover:bg-green-50 rounded-xl transition-colors p-6 flex flex-col items-center gap-2 text-gray-500 hover:text-[#1a5c38] disabled:opacity-60 disabled:cursor-not-allowed"
-                      >
-                        {imageUploading ? (
-                          <>
-                            <div className="h-8 w-8 rounded-full border-2 border-[#1a5c38] border-t-transparent animate-spin" />
-                            <span className="text-sm font-medium">Uploading…</span>
-                          </>
-                        ) : (
-                          <>
-                            <Upload className="h-8 w-8" />
-                            <span className="text-sm font-semibold">Click to upload ad image</span>
-                            <span className="text-xs text-gray-400">JPG · PNG · WebP &nbsp;·&nbsp; Max 8 MB</span>
-                          </>
-                        )}
-                      </button>
-                    )}
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
-                      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-800">
-                        <ImageIcon className="h-3.5 w-3.5" /> Image guidelines for best results
-                      </div>
-                      <ul className="text-xs text-blue-700 space-y-0.5 list-disc list-inside">
-                        <li><strong>Dimensions:</strong> 1920 × 1080 px (16:9 landscape) — mandatory for Featured Home carousel cards</li>
-                        <li><strong>Safe zone:</strong> Keep text and logo in the centre 70% — edges may be cropped on smaller screens</li>
-                        <li><strong>Format:</strong> JPG or WebP preferred for best compression; PNG for graphics with transparency</li>
-                        <li><strong>File size:</strong> Under 3 MB recommended (max 8 MB accepted)</li>
-                        <li><strong>Content:</strong> No phone numbers, URLs, or QR codes — use the CTA button and link fields instead</li>
-                      </ul>
-                    </div>
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>CTA Button Text</Label>
-                    <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Book Now" />
-                  </div>
-                  <div className="col-span-2 space-y-2">
-                    <Label>Button Action <span className="text-muted-foreground font-normal text-xs">(what happens when golfers tap the button)</span></Label>
-                    <div className="grid grid-cols-3 gap-2">
-                      {[
-                        { value: "none",      icon: "🚫", label: "No action",       desc: "Button is decorative only" },
-                        { value: "book-day",  icon: "📅", label: "Book a day",      desc: "Jump to tee times on a set day" },
-                        { value: "club-page", icon: "🏌️", label: "My club page",   desc: "Open your full club profile" },
-                        { value: "custom",    icon: "🔗", label: "Custom link",     desc: "Any URL (website, booking page…)" },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => {
-                            setCtaActionType(opt.value as any);
-                            if (opt.value === "book-day")  setF("link_url", `tapin://clubs/self?weekday=${ctaDay}`);
-                            if (opt.value === "club-page") setF("link_url", "tapin://clubs/self");
-                            if (opt.value === "none")      setF("link_url", "");
-                            if (opt.value === "custom")    setF("link_url", form.link_url.startsWith("tapin://") ? "" : form.link_url);
-                          }}
-                          className={`text-left p-3 rounded-lg border-2 transition-colors ${ctaActionType === opt.value ? "border-[#1a5c38] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                        >
-                          <div className="text-base mb-0.5">{opt.icon}</div>
-                          <div className="text-xs font-semibold">{opt.label}</div>
-                          <div className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</div>
-                        </button>
-                      ))}
-                    </div>
-                    {ctaActionType === "book-day" && (
-                      <div className="flex items-center gap-3 mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
-                        <span className="text-sm font-medium text-[#1a5c38]">Send golfers to tee times on</span>
-                        <select
-                          value={ctaDay}
-                          onChange={e => { setCtaDay(e.target.value); setF("link_url", `tapin://clubs/self?weekday=${e.target.value}`); }}
-                          className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
-                        >
-                          {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d => (
-                            <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
-                          ))}
-                        </select>
-                        <span className="text-xs text-green-700">The app will jump to the next {ctaDay.charAt(0).toUpperCase() + ctaDay.slice(1)} in the date selector</span>
-                      </div>
-                    )}
-                    {ctaActionType === "custom" && (
-                      <div className="mt-1">
-                        <Input
-                          value={form.link_url.startsWith("tapin://") ? "" : form.link_url}
-                          onChange={e => setF("link_url", e.target.value)}
-                          placeholder="https://yourclub.co.za/book"
+
+                      {/* ── Image ── */}
+                      <div className="col-span-2 space-y-1.5">
+                        <Label>
+                          Ad Image
+                          {form.layout === "bold" && <span className="text-muted-foreground font-normal text-xs ml-1.5">— optional for Impact style</span>}
+                        </Label>
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          className="hidden"
+                          onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }}
                         />
+                        {form.image_url ? (
+                          <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50" style={{ aspectRatio: "16/9", maxHeight: 180 }}>
+                            <img src={form.image_url} alt="Ad preview" className="w-full h-full object-cover" />
+                            <button
+                              type="button"
+                              onClick={() => setF("image_url", "")}
+                              className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                              title="Remove image"
+                            >
+                              <X className="h-4 w-4" />
+                            </button>
+                            <div className="absolute bottom-2 left-2 bg-green-600 text-white text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                              <Check className="h-3 w-3" /> Image uploaded
+                            </div>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => fileInputRef.current?.click()}
+                            disabled={imageUploading}
+                            className="w-full border-2 border-dashed border-gray-300 hover:border-[#1a5c38] hover:bg-green-50 rounded-xl transition-colors p-5 flex flex-col items-center gap-2 text-gray-500 hover:text-[#1a5c38] disabled:opacity-60 disabled:cursor-not-allowed"
+                          >
+                            {imageUploading ? (
+                              <>
+                                <div className="h-8 w-8 rounded-full border-2 border-[#1a5c38] border-t-transparent animate-spin" />
+                                <span className="text-sm font-medium">Uploading…</span>
+                              </>
+                            ) : (
+                              <>
+                                <Upload className="h-8 w-8" />
+                                <span className="text-sm font-semibold">Click to upload ad image</span>
+                                <span className="text-xs text-gray-400">JPG · PNG · WebP &nbsp;·&nbsp; Max 8 MB · Recommended 1920×1080</span>
+                              </>
+                            )}
+                          </button>
+                        )}
                       </div>
-                    )}
+
+                      {/* ── CTA ── */}
+                      <div className="space-y-1.5">
+                        <Label>CTA Button Text</Label>
+                        <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Book Now" />
+                      </div>
+                      <div className="col-span-2 space-y-2">
+                        <Label>Button Action <span className="text-muted-foreground font-normal text-xs">(what happens when golfers tap the button)</span></Label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[
+                            { value: "none",      icon: "🚫", label: "No action",   desc: "Decorative only" },
+                            { value: "book-day",  icon: "📅", label: "Book a day",  desc: "Jump to tee times" },
+                            { value: "club-page", icon: "🏌️", label: "Club page",  desc: "Full club profile" },
+                            { value: "custom",    icon: "🔗", label: "Custom link", desc: "Any URL" },
+                          ].map(opt => (
+                            <button
+                              key={opt.value}
+                              type="button"
+                              onClick={() => {
+                                setCtaActionType(opt.value as any);
+                                if (opt.value === "book-day")  setF("link_url", `tapin://clubs/self?weekday=${ctaDay}`);
+                                if (opt.value === "club-page") setF("link_url", "tapin://clubs/self");
+                                if (opt.value === "none")      setF("link_url", "");
+                                if (opt.value === "custom")    setF("link_url", form.link_url.startsWith("tapin://") ? "" : form.link_url);
+                              }}
+                              className={`text-left p-2.5 rounded-lg border-2 transition-colors ${ctaActionType === opt.value ? "border-[#1a5c38] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                            >
+                              <div className="text-sm mb-0.5">{opt.icon}</div>
+                              <div className="text-[11px] font-semibold">{opt.label}</div>
+                              <div className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</div>
+                            </button>
+                          ))}
+                        </div>
+                        {ctaActionType === "book-day" && (
+                          <div className="flex items-center gap-3 mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
+                            <span className="text-sm font-medium text-[#1a5c38]">Send golfers to tee times on</span>
+                            <select
+                              value={ctaDay}
+                              onChange={e => { setCtaDay(e.target.value); setF("link_url", `tapin://clubs/self?weekday=${e.target.value}`); }}
+                              className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
+                            >
+                              {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d => (
+                                <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                        {ctaActionType === "custom" && (
+                          <div className="mt-1">
+                            <Input
+                              value={form.link_url.startsWith("tapin://") ? "" : form.link_url}
+                              onChange={e => setF("link_url", e.target.value)}
+                              placeholder="https://yourclub.co.za/book"
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      {/* ── Dates ── */}
+                      <div className="space-y-1.5">
+                        <Label>Campaign Start Date</Label>
+                        <Input type="date" value={form.requested_start} onChange={e => setF("requested_start", e.target.value)} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Campaign End Date</Label>
+                        <Input type="date" value={form.requested_end} onChange={e => setF("requested_end", e.target.value)} />
+                      </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label>Notes for TapIn Staff</Label>
+                      <Textarea value={form.club_notes} onChange={e => setF("club_notes", e.target.value)} placeholder="Any special scheduling requests, target audience notes, or creative preferences…" rows={3} />
+                    </div>
+                    <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
+                      📬 Once submitted, TapIn staff will review your request within 1 business day and contact you to confirm pricing and scheduling before any payment is required.
+                    </div>
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Campaign Start Date</Label>
-                    <Input type="date" value={form.requested_start} onChange={e => setF("requested_start", e.target.value)} />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Campaign End Date</Label>
-                    <Input type="date" value={form.requested_end} onChange={e => setF("requested_end", e.target.value)} />
+                  <div className="flex justify-between">
+                    <Button variant="outline" onClick={() => setWizardStep(selectedOffering && selectedOffering.packages.length > 0 ? 1 : 0)}>
+                      <ChevronLeft className="h-4 w-4" /> Back
+                    </Button>
+                    <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSubmit} disabled={submitting}>
+                      {submitting ? "Submitting…" : "Submit Request →"}
+                    </Button>
                   </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label>Notes for TapIn Staff</Label>
-                  <Textarea value={form.club_notes} onChange={e => setF("club_notes", e.target.value)} placeholder="Any special scheduling requests, target audience notes, or creative preferences…" rows={3} />
+
+                {/* ── Live Preview ── */}
+                <div className="w-[260px] flex-shrink-0 sticky top-6">
+                  <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">📱 Live Preview</div>
+                  <AdPreviewShell>
+                    <AdPreviewCard
+                      layout={(form.layout || "classic") as "classic" | "hero" | "bold"}
+                      title={form.headline || "Your Headline"}
+                      subtitle={form.subtitle || undefined}
+                      image_url={form.image_url || undefined}
+                      cta_text={form.cta_text || undefined}
+                    />
+                  </AdPreviewShell>
+                  <p className="text-xs text-gray-400 mt-2 text-center">Updates as you type</p>
                 </div>
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800">
-                  📬 Once submitted, TapIn staff will review your request within 1 business day and contact you to confirm pricing and scheduling before any payment is required.
-                </div>
-              </div>
-              <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setWizardStep(selectedOffering && selectedOffering.packages.length > 0 ? 1 : 0)}>
-                  <ChevronLeft className="h-4 w-4" /> Back
-                </Button>
-                <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSubmit} disabled={submitting}>
-                  {submitting ? "Submitting…" : "Submit Request →"}
-                </Button>
+
               </div>
             </div>
           )}

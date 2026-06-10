@@ -823,11 +823,11 @@ router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> =>
     resolvedLinkUrl = resolvedLinkUrl.replace(/tapin:\/\/clubs\/self\b/, `tapin://clubs/${adReq.club_id}`);
   }
   const result = await exec(
-    `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+    `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, layout, placement, priority, active,
       ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [adReq.club_id, adReq.headline, adReq.subtitle ?? null, adReq.image_url ?? null,
-     adReq.cta_text ?? "Book Now", resolvedLinkUrl, placement, 0, reqId,
+     adReq.cta_text ?? "Book Now", resolvedLinkUrl, adReq.layout ?? "classic", placement, 0, reqId,
      adReq.confirmed_start ?? null, adReq.confirmed_end ?? null,
      adReq.slot_duration ?? null, adReq.sharing_tier ?? null]
   );

@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
+import { AdPreviewCard } from "@/components/AdPreviewCard";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,6 +26,7 @@ interface AdRequest {
   image_url: string | null;
   cta_text: string | null;
   link_url: string | null;
+  layout: string;
   requested_start: string | null;
   requested_end: string | null;
   club_notes: string | null;
@@ -1090,16 +1092,16 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
             </div>
           )}
           <SectionLabel className="mt-5">Ad Preview</SectionLabel>
-          <div className="border rounded-xl overflow-hidden">
-            <div className={`bg-gray-100 flex items-center justify-center text-muted-foreground text-sm ${req.image_url ? "" : "h-20"}`}>
-              {req.image_url ? <img src={req.image_url} alt="" className="w-full max-h-32 object-cover" /> : "📷 No image provided"}
-            </div>
-            <div className="p-3">
-              <div className="font-bold text-sm">{req.headline}</div>
-              {req.subtitle && <div className="text-xs text-muted-foreground">{req.subtitle}</div>}
-              <div className="mt-2 inline-block bg-[#1a5c38] text-white text-xs font-semibold rounded px-2.5 py-1">{req.cta_text ?? "Book Now"}</div>
-            </div>
+          <div className="rounded-xl overflow-hidden">
+            <AdPreviewCard
+              layout={(req.layout || "classic") as "classic" | "hero" | "bold"}
+              title={req.headline}
+              subtitle={req.subtitle ?? undefined}
+              image_url={req.image_url ?? undefined}
+              cta_text={req.cta_text ?? "Book Now"}
+            />
           </div>
+          <p className="text-[11px] text-muted-foreground mt-1">Layout: <span className="font-semibold capitalize">{req.layout || "classic"}</span></p>
         </div>
 
         <div>

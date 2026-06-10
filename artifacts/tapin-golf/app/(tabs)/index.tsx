@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
   FlatList,
   Image,
@@ -57,6 +57,8 @@ export default function HomeScreen() {
   const [upcomingBooking, setUpcomingBooking] = useState<UpcomingBooking | null>(null);
   const [openGamesCount, setOpenGamesCount] = useState<number | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [adIndex, setAdIndex] = useState(0);
+  const adTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const load = async () => {
     try {
@@ -115,6 +117,23 @@ export default function HomeScreen() {
   };
 
   useEffect(() => { load(); }, [user]);
+
+  // Rotate through ads using each ad's slot_duration (falls back to 8 s)
+  useEffect(() => {
+    if (ads.length < 2) return;
+    const scheduleNext = (idx: number) => {
+      const ad = ads[idx] as any;
+      const match = String(ad?.slot_duration ?? "").match(/^(\d+)/);
+      const ms = match ? parseInt(match[1]) * 1000 : 8000;
+      adTimerRef.current = setTimeout(() => {
+        const next = (idx + 1) % ads.length;
+        setAdIndex(next);
+        scheduleNext(next);
+      }, ms);
+    };
+    scheduleNext(adIndex);
+    return () => { if (adTimerRef.current) clearTimeout(adTimerRef.current); };
+  }, [ads]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -275,10 +294,10 @@ export default function HomeScreen() {
         )}
       </View>
 
-      {/* Ad */}
+      {/* Ad — rotates through all returned ads */}
       {ads.length > 0 && (
         <View style={[styles.section, { paddingHorizontal: 20 }]}>
-          <AdBanner ad={ads[0]} />
+          <AdBanner key={adIndex} ad={ads[adIndex % ads.length]} />
         </View>
       )}
 

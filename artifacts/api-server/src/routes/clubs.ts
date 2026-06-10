@@ -143,7 +143,11 @@ router.get("/clubs", async (req, res): Promise<void> => {
     (SELECT a.cta_text FROM ads a
      WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
        AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
-     ORDER BY a.id DESC LIMIT 1) AS ad_cta_text
+     ORDER BY a.id DESC LIMIT 1) AS ad_cta_text,
+    (SELECT a.layout FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_layout
   `;
 
   const baseSelect = `
@@ -177,7 +181,7 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.slot_seconds = slotMatch
         ? parseInt(slotMatch[1])
         : (c.featured_slot_seconds ? parseInt(c.featured_slot_seconds) : null);
-      if (c.ad_title || c.ad_image_url) {
+      if (c.ad_layout !== 'profile' && (c.ad_title || c.ad_image_url)) {
         c.ad_creative = {
           title:     c.ad_title     ?? null,
           subtitle:  c.ad_subtitle  ?? null,
@@ -190,6 +194,7 @@ router.get("/clubs", async (req, res): Promise<void> => {
       delete c.ad_subtitle;
       delete c.ad_image_url;
       delete c.ad_cta_text;
+      delete c.ad_layout;
       delete c.featured_slot_seconds;
     });
     return clubs;

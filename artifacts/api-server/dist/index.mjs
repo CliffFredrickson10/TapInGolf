@@ -58290,7 +58290,11 @@ router3.get("/clubs", async (req, res) => {
     (SELECT a.cta_text FROM ads a
      WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
        AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
-     ORDER BY a.id DESC LIMIT 1) AS ad_cta_text
+     ORDER BY a.id DESC LIMIT 1) AS ad_cta_text,
+    (SELECT a.layout FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_layout
   `;
   const baseSelect = `
     SELECT c.*,
@@ -58320,7 +58324,7 @@ router3.get("/clubs", async (req, res) => {
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
       const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
       c.slot_seconds = slotMatch ? parseInt(slotMatch[1]) : c.featured_slot_seconds ? parseInt(c.featured_slot_seconds) : null;
-      if (c.ad_title || c.ad_image_url) {
+      if (c.ad_layout !== "profile" && (c.ad_title || c.ad_image_url)) {
         c.ad_creative = {
           title: c.ad_title ?? null,
           subtitle: c.ad_subtitle ?? null,
@@ -58333,6 +58337,7 @@ router3.get("/clubs", async (req, res) => {
       delete c.ad_subtitle;
       delete c.ad_image_url;
       delete c.ad_cta_text;
+      delete c.ad_layout;
       delete c.featured_slot_seconds;
     });
     return clubs2;

@@ -166,7 +166,7 @@ export default function Ads() {
   };
 
   const handleSubmit = async () => {
-    if (!form.headline.trim()) { toast({ title: "Headline required", variant: "destructive" }); return; }
+    if (form.layout !== "profile" && !form.headline.trim()) { toast({ title: "Headline required", variant: "destructive" }); return; }
     setSubmitting(true);
     try {
       await api("/api/portal/ad-requests", {
@@ -375,6 +375,7 @@ export default function Ads() {
                 <div className="flex-1 min-w-0 space-y-4">
                   <div className="bg-white border rounded-xl p-6 space-y-4">
                     <div className="grid grid-cols-2 gap-4">
+                      {form.layout !== "profile" && (<>
                       <div className="col-span-2 space-y-1.5">
                         <Label>Ad Headline *</Label>
                         <Input value={form.headline} onChange={e => setF("headline", e.target.value)} placeholder="Summer Twilight Deals" />
@@ -383,11 +384,12 @@ export default function Ads() {
                         <Label>Tagline / Subtitle</Label>
                         <Input value={form.subtitle} onChange={e => setF("subtitle", e.target.value)} placeholder="R 299 green fee after 15:00" />
                       </div>
+                      </>)}
 
                       {/* ── Layout / Style ── */}
                       <div className="col-span-2 space-y-2">
                         <Label>Ad Style <span className="text-muted-foreground font-normal text-xs">— choose a layout for your ad</span></Label>
-                        <div className="grid grid-cols-3 gap-3">
+                        <div className="grid grid-cols-2 gap-3">
                           {[
                             {
                               value: "classic", label: "Classic", desc: "Image above, text below — clear and readable",
@@ -424,6 +426,25 @@ export default function Ads() {
                                 </div>
                               ),
                             },
+                            {
+                              value: "profile", label: "Club Profile", desc: "Show your standard club card — no custom creative needed",
+                              preview: (
+                                <div className="bg-gray-100 rounded overflow-hidden">
+                                  <div className="h-7 bg-gray-300 relative">
+                                    <div className="absolute top-1 right-1 bg-[#1a5c38] rounded-full px-1.5 py-0.5">
+                                      <div className="h-1 bg-white rounded w-5" />
+                                    </div>
+                                  </div>
+                                  <div className="p-1.5 space-y-1">
+                                    <div className="h-1.5 bg-gray-600 rounded w-3/4" />
+                                    <div className="h-1 bg-gray-300 rounded w-1/2" />
+                                    <div className="flex gap-0.5 mt-0.5">
+                                      {[0,1,2,3,4].map(i => <div key={i} className="h-1.5 w-1.5 bg-amber-400 rounded-sm" />)}
+                                    </div>
+                                  </div>
+                                </div>
+                              ),
+                            },
                           ].map(opt => (
                             <button
                               key={opt.value}
@@ -440,7 +461,7 @@ export default function Ads() {
                       </div>
 
                       {/* ── Image ── */}
-                      <div className="col-span-2 space-y-1.5">
+                      {form.layout !== "profile" && <div className="col-span-2 space-y-1.5">
                         <Label>
                           Ad Image
                           {form.layout === "bold" && <span className="text-muted-foreground font-normal text-xs ml-1.5">— optional for Impact style</span>}
@@ -488,64 +509,77 @@ export default function Ads() {
                             )}
                           </button>
                         )}
-                      </div>
+                      </div>}
+
+                      {/* ── Profile layout info banner ── */}
+                      {form.layout === "profile" && (
+                        <div className="col-span-2 bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800 flex gap-3 items-start">
+                          <span className="text-lg leading-none mt-0.5">🏌️</span>
+                          <div>
+                            <div className="font-semibold mb-1">Your club's standard profile card will be shown</div>
+                            <div className="text-xs text-amber-700">Golfers will see your club photo, name, location, and rating — no custom creative required. You can still set campaign dates and notes below.</div>
+                          </div>
+                        </div>
+                      )}
 
                       {/* ── CTA ── */}
-                      <div className="space-y-1.5">
-                        <Label>CTA Button Text</Label>
-                        <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Book Now" />
-                      </div>
-                      <div className="col-span-2 space-y-2">
-                        <Label>Button Action <span className="text-muted-foreground font-normal text-xs">(what happens when golfers tap the button)</span></Label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {[
-                            { value: "none",      icon: "🚫", label: "No action",   desc: "Decorative only" },
-                            { value: "book-day",  icon: "📅", label: "Book a day",  desc: "Jump to tee times" },
-                            { value: "club-page", icon: "🏌️", label: "Club page",  desc: "Full club profile" },
-                            { value: "custom",    icon: "🔗", label: "Custom link", desc: "Any URL" },
-                          ].map(opt => (
-                            <button
-                              key={opt.value}
-                              type="button"
-                              onClick={() => {
-                                setCtaActionType(opt.value as any);
-                                if (opt.value === "book-day")  setF("link_url", `tapin://clubs/self?weekday=${ctaDay}`);
-                                if (opt.value === "club-page") setF("link_url", "tapin://clubs/self");
-                                if (opt.value === "none")      setF("link_url", "");
-                                if (opt.value === "custom")    setF("link_url", form.link_url.startsWith("tapin://") ? "" : form.link_url);
-                              }}
-                              className={`text-left p-2.5 rounded-lg border-2 transition-colors ${ctaActionType === opt.value ? "border-[#1a5c38] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
-                            >
-                              <div className="text-sm mb-0.5">{opt.icon}</div>
-                              <div className="text-[11px] font-semibold">{opt.label}</div>
-                              <div className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</div>
-                            </button>
-                          ))}
+                      {form.layout !== "profile" && <>
+                        <div className="space-y-1.5">
+                          <Label>CTA Button Text</Label>
+                          <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Book Now" />
                         </div>
-                        {ctaActionType === "book-day" && (
-                          <div className="flex items-center gap-3 mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
-                            <span className="text-sm font-medium text-[#1a5c38]">Send golfers to tee times on</span>
-                            <select
-                              value={ctaDay}
-                              onChange={e => { setCtaDay(e.target.value); setF("link_url", `tapin://clubs/self?weekday=${e.target.value}`); }}
-                              className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
-                            >
-                              {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d => (
-                                <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
-                              ))}
-                            </select>
+                        <div className="col-span-2 space-y-2">
+                          <Label>Button Action <span className="text-muted-foreground font-normal text-xs">(what happens when golfers tap the button)</span></Label>
+                          <div className="grid grid-cols-4 gap-2">
+                            {[
+                              { value: "none",      icon: "🚫", label: "No action",   desc: "Decorative only" },
+                              { value: "book-day",  icon: "📅", label: "Book a day",  desc: "Jump to tee times" },
+                              { value: "club-page", icon: "🏌️", label: "Club page",  desc: "Full club profile" },
+                              { value: "custom",    icon: "🔗", label: "Custom link", desc: "Any URL" },
+                            ].map(opt => (
+                              <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => {
+                                  setCtaActionType(opt.value as any);
+                                  if (opt.value === "book-day")  setF("link_url", `tapin://clubs/self?weekday=${ctaDay}`);
+                                  if (opt.value === "club-page") setF("link_url", "tapin://clubs/self");
+                                  if (opt.value === "none")      setF("link_url", "");
+                                  if (opt.value === "custom")    setF("link_url", form.link_url.startsWith("tapin://") ? "" : form.link_url);
+                                }}
+                                className={`text-left p-2.5 rounded-lg border-2 transition-colors ${ctaActionType === opt.value ? "border-[#1a5c38] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                              >
+                                <div className="text-sm mb-0.5">{opt.icon}</div>
+                                <div className="text-[11px] font-semibold">{opt.label}</div>
+                                <div className="text-[10px] text-muted-foreground leading-snug">{opt.desc}</div>
+                              </button>
+                            ))}
                           </div>
-                        )}
-                        {ctaActionType === "custom" && (
-                          <div className="mt-1">
-                            <Input
-                              value={form.link_url.startsWith("tapin://") ? "" : form.link_url}
-                              onChange={e => setF("link_url", e.target.value)}
-                              placeholder="https://yourclub.co.za/book"
-                            />
-                          </div>
-                        )}
-                      </div>
+                          {ctaActionType === "book-day" && (
+                            <div className="flex items-center gap-3 mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
+                              <span className="text-sm font-medium text-[#1a5c38]">Send golfers to tee times on</span>
+                              <select
+                                value={ctaDay}
+                                onChange={e => { setCtaDay(e.target.value); setF("link_url", `tapin://clubs/self?weekday=${e.target.value}`); }}
+                                className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
+                              >
+                                {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d => (
+                                  <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                          {ctaActionType === "custom" && (
+                            <div className="mt-1">
+                              <Input
+                                value={form.link_url.startsWith("tapin://") ? "" : form.link_url}
+                                onChange={e => setF("link_url", e.target.value)}
+                                placeholder="https://yourclub.co.za/book"
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </>}
 
                       {/* ── Dates ── */}
                       <div className="space-y-1.5">
@@ -579,13 +613,30 @@ export default function Ads() {
                 <div className="w-[260px] flex-shrink-0 sticky top-6">
                   <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-3">📱 Live Preview</div>
                   <AdPreviewShell>
-                    <AdPreviewCard
-                      layout={(form.layout || "classic") as "classic" | "hero" | "bold"}
-                      title={form.headline || "Your Headline"}
-                      subtitle={form.subtitle || undefined}
-                      image_url={form.image_url || undefined}
-                      cta_text={form.cta_text || undefined}
-                    />
+                    {form.layout === "profile" ? (
+                      <div className="rounded-2xl overflow-hidden bg-white shadow-sm border border-gray-100">
+                        <div className="bg-gray-200 h-28 relative flex items-center justify-center">
+                          <span className="text-3xl">⛳</span>
+                          <div className="absolute top-2 right-2 bg-[#1a5c38] text-white text-[9px] font-bold px-2 py-0.5 rounded-full">18 holes</div>
+                        </div>
+                        <div className="p-3 space-y-1.5">
+                          <div className="font-bold text-sm text-gray-900">Your Club Name</div>
+                          <div className="text-xs text-gray-400 flex items-center gap-1">📍 Location, Province</div>
+                          <div className="flex items-center gap-1">
+                            {[0,1,2,3,4].map(i => <span key={i} className="text-amber-400 text-[10px]">★</span>)}
+                            <span className="text-[10px] text-gray-400 ml-1">4.5 (12)</span>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <AdPreviewCard
+                        layout={(form.layout || "classic") as "classic" | "hero" | "bold"}
+                        title={form.headline || "Your Headline"}
+                        subtitle={form.subtitle || undefined}
+                        image_url={form.image_url || undefined}
+                        cta_text={form.cta_text || undefined}
+                      />
+                    )}
                   </AdPreviewShell>
                   <p className="text-xs text-gray-400 mt-2 text-center">Updates as you type</p>
                 </div>

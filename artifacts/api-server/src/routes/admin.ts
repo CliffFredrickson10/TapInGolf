@@ -588,18 +588,20 @@ router.put("/admin/ad-requests/:id", async (req, res): Promise<void> => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const reqId = parseInt(req.params.id, 10);
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link, billing_frequency } = req.body ?? {};
   await exec(
     `UPDATE ad_requests SET confirmed_price = COALESCE(?, confirmed_price),
       confirmed_start = COALESCE(?, confirmed_start), confirmed_end = COALESCE(?, confirmed_end),
       slot_duration = COALESCE(?, slot_duration), sharing_tier = COALESCE(?, sharing_tier),
       staff_notes = COALESCE(?, staff_notes),
       payment_link = CASE WHEN ? IS NOT NULL THEN ? ELSE payment_link END,
+      billing_frequency = CASE WHEN ? IS NOT NULL THEN ? ELSE billing_frequency END,
       updated_at = NOW()
      WHERE id = ?`,
     [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
      slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null,
-     payment_link ?? null, payment_link ?? null, reqId]
+     payment_link ?? null, payment_link ?? null,
+     billing_frequency ?? null, billing_frequency ?? null, reqId]
   );
   res.json(await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]));
 });
@@ -613,9 +615,10 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
   const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, billing_frequency } = req.body ?? {};
   const billingFreq: string = billing_frequency === "monthly" ? "monthly" : "once";
-  const amount = confirmed_price ? Number(confirmed_price) : 0;
 
-  // Update ad_request first so we have the final confirmed values
+  // Update the record first — COALESCE keeps any previously-saved values when
+  // the body field is null (e.g. staff already saved start date via Save Config
+  // then clicked Approve without re-entering it).
   await exec(
     `UPDATE ad_requests SET status = 'payment_pending', billing_frequency = ?,
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
@@ -626,6 +629,14 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     [billingFreq, confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
      slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, reqId]
   );
+
+  // Read the effective post-COALESCE values from the DB.  We must NOT use the
+  // raw body fields for billing calculations — staff may have previously saved
+  // price/start via "Save Config" and then clicked Approve without re-filling
+  // the form, leaving those body fields null.
+  const adReqFull = await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
+  const amount = Number(adReqFull?.confirmed_price ?? 0);
+  const effectiveStart: string | null = adReqFull?.confirmed_start ?? null;
 
   // Create a club_invoices record of type 'ad_campaign' so it appears on the
   // club's Invoices page with a Pay Now button identical to other invoice types.
@@ -643,8 +654,8 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   let proRataDays = 0;
   let daysInStartMonth = 0;
 
-  if (billingFreq === "monthly" && confirmed_start) {
-    const startDate = new Date(confirmed_start as string);
+  if (billingFreq === "monthly" && effectiveStart) {
+    const startDate = new Date(effectiveStart);
     const startDay  = startDate.getUTCDate();
     if (startDay > 1) {
       const y = startDate.getUTCFullYear();
@@ -662,7 +673,6 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
     invoiceRef = `ADV-${reqId}-${dateStr}${isProRata ? "-PR" : ""}`;
     const vatAmt = Math.round(invoiceAmount * 15 / 115 * 100) / 100;
-    const adReqFull = await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
     const lineItems = [{
       headline:          adReqFull?.headline ?? existing.headline,
       ad_type:           adReqFull?.ad_type ?? "ad",

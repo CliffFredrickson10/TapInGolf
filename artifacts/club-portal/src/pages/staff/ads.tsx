@@ -483,6 +483,7 @@ export default function StaffAds() {
           slot_duration: cfSlot || null,
           sharing_tier: cfSharing || null,
           staff_notes: cfNotes || null,
+          billing_frequency: cfBillingFreq,
         }),
       });
       setSelected(updated);

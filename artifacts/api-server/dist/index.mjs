@@ -62727,13 +62727,14 @@ router10.put("/admin/ad-requests/:id", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link, billing_frequency } = req.body ?? {};
   await exec(
     `UPDATE ad_requests SET confirmed_price = COALESCE(?, confirmed_price),
       confirmed_start = COALESCE(?, confirmed_start), confirmed_end = COALESCE(?, confirmed_end),
       slot_duration = COALESCE(?, slot_duration), sharing_tier = COALESCE(?, sharing_tier),
       staff_notes = COALESCE(?, staff_notes),
       payment_link = CASE WHEN ? IS NOT NULL THEN ? ELSE payment_link END,
+      billing_frequency = CASE WHEN ? IS NOT NULL THEN ? ELSE billing_frequency END,
       updated_at = NOW()
      WHERE id = ?`,
     [
@@ -62745,6 +62746,8 @@ router10.put("/admin/ad-requests/:id", async (req, res) => {
       staff_notes ?? null,
       payment_link ?? null,
       payment_link ?? null,
+      billing_frequency ?? null,
+      billing_frequency ?? null,
       reqId
     ]
   );
@@ -62768,7 +62771,6 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
   }
   const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, billing_frequency } = req.body ?? {};
   const billingFreq = billing_frequency === "monthly" ? "monthly" : "once";
-  const amount = confirmed_price ? Number(confirmed_price) : 0;
   await exec(
     `UPDATE ad_requests SET status = 'payment_pending', billing_frequency = ?,
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
@@ -62787,6 +62789,9 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       reqId
     ]
   );
+  const adReqFull = await row("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
+  const amount = Number(adReqFull?.confirmed_price ?? 0);
+  const effectiveStart = adReqFull?.confirmed_start ?? null;
   let invoiceId = null;
   let invoiceRef = "";
   let finalLink = null;
@@ -62795,8 +62800,8 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
   let proRataNote = "";
   let proRataDays = 0;
   let daysInStartMonth = 0;
-  if (billingFreq === "monthly" && confirmed_start) {
-    const startDate = new Date(confirmed_start);
+  if (billingFreq === "monthly" && effectiveStart) {
+    const startDate = new Date(effectiveStart);
     const startDay = startDate.getUTCDate();
     if (startDay > 1) {
       const y = startDate.getUTCFullYear();
@@ -62812,7 +62817,6 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     const dateStr = (/* @__PURE__ */ new Date()).toISOString().slice(0, 10).replace(/-/g, "");
     invoiceRef = `ADV-${reqId}-${dateStr}${isProRata ? "-PR" : ""}`;
     const vatAmt = Math.round(invoiceAmount * 15 / 115 * 100) / 100;
-    const adReqFull = await row("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
     const lineItems = [{
       headline: adReqFull?.headline ?? existing.headline,
       ad_type: adReqFull?.ad_type ?? "ad",

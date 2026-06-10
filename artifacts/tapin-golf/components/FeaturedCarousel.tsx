@@ -6,11 +6,14 @@ import {
   Dimensions,
   FlatList,
   StyleSheet,
+  Text,
   TouchableOpacity,
   View,
 } from "react-native";
 import ClubCard, { Club } from "@/components/ClubCard";
+import CachedImage from "@/components/CachedImage";
 import { useColors } from "@/hooks/useColors";
+import { toAbsoluteUrl } from "@/lib/api";
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window");
 const CARD_WIDTH   = SCREEN_WIDTH * 0.72;
@@ -19,7 +22,115 @@ const SNAP         = CARD_WIDTH + CARD_MARGIN;
 const DEFAULT_SECS = 8;
 const LOOP_COUNT   = 200; // 100 reps each side — practically infinite
 
-export type FeaturedClub = Club & { slot_seconds?: number | null };
+export interface AdCreative {
+  title:     string | null;
+  subtitle:  string | null;
+  image_url: string | null;
+  cta_text:  string | null;
+}
+
+export type FeaturedClub = Club & { slot_seconds?: number | null; ad_creative?: AdCreative | null };
+
+function FeaturedAdCard({ club, onPress }: { club: FeaturedClub; onPress: () => void }) {
+  const colors = useColors();
+  const ad = club.ad_creative!;
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      style={[adStyles.card, { backgroundColor: colors.card }]}
+      activeOpacity={0.88}
+    >
+      <View style={adStyles.imageWrap}>
+        {ad.image_url ? (
+          <CachedImage uri={toAbsoluteUrl(ad.image_url)} style={adStyles.image} />
+        ) : (
+          <View style={[adStyles.imagePlaceholder, { backgroundColor: colors.primary + "20" }]} />
+        )}
+        <View style={adStyles.sponsoredBadge}>
+          <Text style={adStyles.sponsoredText}>Sponsored</Text>
+        </View>
+      </View>
+      <View style={adStyles.content}>
+        <Text style={[adStyles.title, { color: colors.foreground }]} numberOfLines={1}>
+          {ad.title ?? club.name}
+        </Text>
+        {ad.subtitle ? (
+          <Text style={[adStyles.subtitle, { color: colors.mutedForeground }]} numberOfLines={2}>
+            {ad.subtitle}
+          </Text>
+        ) : null}
+        {ad.cta_text ? (
+          <View style={[adStyles.ctaWrap, { backgroundColor: colors.primary }]}>
+            <Text style={adStyles.ctaText}>{ad.cta_text}</Text>
+          </View>
+        ) : null}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+const adStyles = StyleSheet.create({
+  card: {
+    width: CARD_WIDTH,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginRight: CARD_MARGIN,
+  },
+  imageWrap: {
+    width: "100%",
+    height: 160,
+    overflow: "hidden",
+    position: "relative",
+  },
+  image: {
+    width: "100%",
+    height: 160,
+    resizeMode: "cover",
+  },
+  imagePlaceholder: {
+    width: "100%",
+    height: 160,
+  },
+  sponsoredBadge: {
+    position: "absolute",
+    top: 10,
+    left: 10,
+    backgroundColor: "rgba(200,168,75,0.92)",
+    borderRadius: 20,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+  },
+  sponsoredText: {
+    color: "#fff",
+    fontSize: 11,
+    fontFamily: "Inter_600SemiBold",
+  },
+  content: {
+    padding: 14,
+    gap: 6,
+  },
+  title: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  subtitle: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    lineHeight: 18,
+  },
+  ctaWrap: {
+    alignSelf: "flex-start",
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    marginTop: 2,
+  },
+  ctaText: {
+    color: "#fff",
+    fontSize: 12,
+    fontFamily: "Inter_600SemiBold",
+  },
+});
 
 interface Props {
   clubs: FeaturedClub[];
@@ -130,15 +241,15 @@ export default function FeaturedCarousel({ clubs }: Props) {
           setLoopIndex(clamped);
           pausedRef.current = false;
         }}
-        renderItem={({ item }) => (
-          <ClubCard
-            club={item}
-            onPress={() => {
-              Haptics.selectionAsync();
-              router.push({ pathname: "/club/[id]", params: { id: item.id } });
-            }}
-          />
-        )}
+        renderItem={({ item }) => {
+          const onPress = () => {
+            Haptics.selectionAsync();
+            router.push({ pathname: "/club/[id]", params: { id: item.id } });
+          };
+          return item.ad_creative
+            ? <FeaturedAdCard club={item} onPress={onPress} />
+            : <ClubCard club={item} onPress={onPress} />;
+        }}
       />
 
       {n > 1 && (

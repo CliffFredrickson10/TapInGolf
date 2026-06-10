@@ -123,11 +123,27 @@ router.get("/clubs", async (req, res): Promise<void> => {
     ? "ORDER BY (c.latitude IS NULL) ASC, distance ASC"
     : "ORDER BY c.featured DESC, c.name ASC";
 
-  const slotSubquery = `
+  const adCreativeSubqueries = `
     (SELECT a.slot_duration FROM ads a
-     WHERE a.club_id = c.id AND a.placement = 'home' AND a.active = 1
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
        AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
-     ORDER BY a.id DESC LIMIT 1) AS ad_slot_duration
+     ORDER BY a.id DESC LIMIT 1) AS ad_slot_duration,
+    (SELECT a.title FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_title,
+    (SELECT a.subtitle FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_subtitle,
+    (SELECT a.image_url FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_image_url,
+    (SELECT a.cta_text FROM ads a
+     WHERE a.club_id = c.id AND a.placement = 'featured_home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_cta_text
   `;
 
   const baseSelect = `
@@ -135,7 +151,7 @@ router.get("/clubs", async (req, res): Promise<void> => {
       ROUND(AVG(r.rating)::numeric, 1) as rating,
       COUNT(DISTINCT r.id) as review_count,
       ${distanceExpr} as distance,
-      ${slotSubquery}
+      ${adCreativeSubqueries}
     FROM clubs c
     LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
   `;
@@ -161,7 +177,19 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.slot_seconds = slotMatch
         ? parseInt(slotMatch[1])
         : (c.featured_slot_seconds ? parseInt(c.featured_slot_seconds) : null);
+      if (c.ad_title || c.ad_image_url) {
+        c.ad_creative = {
+          title:     c.ad_title     ?? null,
+          subtitle:  c.ad_subtitle  ?? null,
+          image_url: c.ad_image_url ?? null,
+          cta_text:  c.ad_cta_text  ?? null,
+        };
+      }
       delete c.ad_slot_duration;
+      delete c.ad_title;
+      delete c.ad_subtitle;
+      delete c.ad_image_url;
+      delete c.ad_cta_text;
       delete c.featured_slot_seconds;
     });
     return clubs;

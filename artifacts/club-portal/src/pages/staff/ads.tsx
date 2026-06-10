@@ -342,6 +342,7 @@ export default function StaffAds() {
   const { toast } = useToast();
   const [allRequests, setAllRequests] = useState<AdRequest[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
+  const [allOfferings, setAllOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<AdRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -360,12 +361,14 @@ export default function StaffAds() {
   const loadRequests = useCallback(async () => {
     setLoading(true);
     try {
-      const [reqs, statsData] = await Promise.all([
+      const [reqs, statsData, offeringsData] = await Promise.all([
         api<AdRequest[]>("/api/admin/ad-requests"),
         api<Stats>("/api/admin/ad-requests/stats"),
+        api<Offering[]>("/api/admin/ad-offerings"),
       ]);
       setAllRequests(reqs);
       setStats(statsData);
+      setAllOfferings(offeringsData);
       if (selected) {
         const refreshed = reqs.find(r => r.id === selected.id);
         if (refreshed) setSelected(refreshed);
@@ -377,15 +380,34 @@ export default function StaffAds() {
 
   useEffect(() => { loadRequests(); }, []);
 
+  // Parse "R 1,199/month" or "R 999" → numeric string "1199"
+  function parsePriceDisplay(display: string): string {
+    const match = display.match(/[\d,]+/);
+    if (!match) return "";
+    return match[0].replace(/,/g, "");
+  }
+
   const selectReq = (req: AdRequest) => {
     setSelected(req);
-    setCfPrice(req.confirmed_price ? String(req.confirmed_price) : "");
+    // Pre-fill price: use confirmed price if already set, otherwise fall back to the advertised package price
+    let priceVal = req.confirmed_price ? String(req.confirmed_price) : "";
+    // Pre-fill slot: use saved slot_duration, otherwise fall back to the package's slot_duration
+    let slotVal = req.slot_duration ?? "";
+    if (req.package_name) {
+      const offering = allOfferings.find(o => o.ad_type === req.ad_type);
+      const pkg = offering?.packages.find(p => p.name === req.package_name);
+      if (pkg) {
+        if (!priceVal && pkg.price_display) priceVal = parsePriceDisplay(pkg.price_display);
+        if (!slotVal && pkg.slot_duration)  slotVal  = pkg.slot_duration;
+      }
+    }
+    setCfPrice(priceVal);
     // Pre-fill dates from club's requested dates when not yet confirmed
     const startSrc = req.confirmed_start ?? req.requested_start;
     const endSrc   = req.confirmed_end   ?? req.requested_end;
     setCfStart(startSrc ? startSrc.slice(0, 10) : "");
     setCfEnd(endSrc   ? endSrc.slice(0, 10)   : "");
-    setCfSlot(req.slot_duration ?? "");
+    setCfSlot(slotVal);
     setCfSharing(req.sharing_tier ?? "");
     setCfNotes(req.staff_notes ?? "");
     setCfPaymentLink(req.payment_link ?? "");

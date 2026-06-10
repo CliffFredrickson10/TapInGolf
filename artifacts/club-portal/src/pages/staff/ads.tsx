@@ -107,7 +107,6 @@ export default function StaffAds() {
   const { toast } = useToast();
   const [allRequests, setAllRequests] = useState<AdRequest[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
-  const [offerings, setOfferings] = useState<Offering[]>([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState<AdRequest | null>(null);
   const [statusFilter, setStatusFilter] = useState("all");
@@ -140,16 +139,7 @@ export default function StaffAds() {
     } finally { setLoading(false); }
   }, [toast, selected?.id]);
 
-  const loadOfferings = useCallback(async () => {
-    try {
-      const data = await api<Offering[]>("/api/admin/ad-offerings");
-      setOfferings(data);
-    } catch (e: any) {
-      toast({ title: "Error loading offerings", description: e.message, variant: "destructive" });
-    }
-  }, [toast]);
-
-  useEffect(() => { loadRequests(); loadOfferings(); }, []);
+  useEffect(() => { loadRequests(); }, []);
 
   const selectReq = (req: AdRequest) => {
     setSelected(req);
@@ -213,7 +203,7 @@ export default function StaffAds() {
             <h1 className="text-2xl font-bold tracking-tight">Ad Management</h1>
             <p className="text-sm text-muted-foreground mt-1">Review club ad requests, set pricing, and publish approved campaigns.</p>
           </div>
-          <Button variant="outline" size="sm" onClick={() => { loadRequests(); loadOfferings(); }} className="gap-1.5">
+          <Button variant="outline" size="sm" onClick={() => { loadRequests(); }} className="gap-1.5">
             <RefreshCw className="h-3.5 w-3.5" /> Refresh
           </Button>
         </div>
@@ -247,7 +237,7 @@ export default function StaffAds() {
           </TabsContent>
 
           <TabsContent value="pricing" className="pt-4 pb-8">
-            <PricingManager offerings={offerings} onRefresh={loadOfferings} toast={toast} />
+            <PricingManager />
           </TabsContent>
 
           {["queue","all","live"].map(tabId => (
@@ -329,68 +319,46 @@ export default function StaffAds() {
   );
 }
 
-// ─── Pricing Manager ─────────────────────────────────────────────────────────
+// ─── Pricing Manager (self-contained) ────────────────────────────────────────
 
-function PricingManager({ offerings, onRefresh, toast }: {
-  offerings: Offering[];
-  onRefresh: () => void;
-  toast: (opts: any) => void;
-}) {
-  const [expandedId, setExpandedId] = useState<number | null>(null);
-  const [editingOffering, setEditingOffering] = useState<number | null>(null);
-  const [editingPackage, setEditingPackage] = useState<number | null>(null);
-  const [addingPkgFor, setAddingPkgFor] = useState<string | null>(null);
+function PricingManager() {
+  const { toast } = useToast();
+  const [offerings, setOfferings] = useState<Offering[]>([]);
+  const [loading, setLoading] = useState(true);
   const [showAddOffering, setShowAddOffering] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  // Offering edit form
-  const [oForm, setOForm] = useState({ icon: "", title: "", description: "", where_shown: "", color: "", is_extra: false, extra_badge: "", extra_badge_color: "", extra_price_label: "" });
-
-  // Package edit/add form
-  const [pForm, setPForm] = useState({ name: "", price_display: "", price_period: "", slot_duration: "", reach_info: "", is_popular: false });
-
-  // New offering form
   const [nForm, setNForm] = useState({ ad_type: "", icon: "📢", title: "", description: "", where_shown: "", color: "#1a5c38", is_extra: false, extra_badge: "", extra_badge_color: "#1a5c38", extra_price_label: "" });
 
-  const startEditOffering = (o: Offering) => {
-    setEditingOffering(o.id);
-    setOForm({ icon: o.icon, title: o.title, description: o.description ?? "", where_shown: o.where_shown ?? "", color: o.color, is_extra: !!o.is_extra, extra_badge: o.extra_badge ?? "", extra_badge_color: o.extra_badge_color ?? "#1a5c38", extra_price_label: o.extra_price_label ?? "" });
+  const load = async () => {
+    setLoading(true);
+    try {
+      const data = await api<Offering[]>("/api/admin/ad-offerings");
+      setOfferings(data);
+    } catch (e: any) {
+      toast({ title: "Error loading offerings", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
   };
 
-  const startEditPackage = (pkg: Package) => {
-    setEditingPackage(pkg.id);
-    setPForm({ name: pkg.name, price_display: pkg.price_display, price_period: pkg.price_period ?? "", slot_duration: pkg.slot_duration ?? "", reach_info: pkg.reach_info ?? "", is_popular: !!pkg.is_popular });
-  };
+  useEffect(() => { load(); }, []);
 
-  const startAddPackage = (adType: string) => {
-    setAddingPkgFor(adType);
-    setPForm({ name: "", price_display: "", price_period: "/month", slot_duration: "", reach_info: "", is_popular: false });
-  };
-
-  const call = async (fn: () => Promise<any>, successMsg: string) => {
+  const addOffering = async () => {
     setSaving(true);
     try {
-      await fn();
-      toast({ title: successMsg });
-      onRefresh();
-      setEditingOffering(null); setEditingPackage(null); setAddingPkgFor(null); setShowAddOffering(false);
+      await api("/api/admin/ad-offerings", { method: "POST", body: JSON.stringify({ ...nForm, is_extra: nForm.is_extra ? 1 : 0 }) });
+      toast({ title: "Offering added" });
+      setShowAddOffering(false);
+      setNForm({ ad_type: "", icon: "📢", title: "", description: "", where_shown: "", color: "#1a5c38", is_extra: false, extra_badge: "", extra_badge_color: "#1a5c38", extra_price_label: "" });
+      load();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setSaving(false); }
   };
 
-  const saveOffering = (id: number) => call(() => api(`/api/admin/ad-offerings/${id}`, { method: "PUT", body: JSON.stringify({ ...oForm, is_extra: oForm.is_extra ? 1 : 0 }) }), "Offering updated");
-  const toggleOffering = (id: number) => call(() => api(`/api/admin/ad-offerings/${id}/toggle`, { method: "POST" }), "Visibility toggled");
-  const deleteOffering = (id: number) => { if (!confirm("Delete this offering and all its packages?")) return; call(() => api(`/api/admin/ad-offerings/${id}`, { method: "DELETE" }), "Offering deleted"); };
-
-  const savePackage = (id: number) => call(() => api(`/api/admin/ad-packages/${id}`, { method: "PUT", body: JSON.stringify({ ...pForm, is_popular: pForm.is_popular ? 1 : 0 }) }), "Package updated");
-  const addPackage  = (adType: string) => call(() => api("/api/admin/ad-packages", { method: "POST", body: JSON.stringify({ ...pForm, ad_type: adType, is_popular: pForm.is_popular ? 1 : 0 }) }), "Package added");
-  const deletePackage = (id: number) => { if (!confirm("Delete this package?")) return; call(() => api(`/api/admin/ad-packages/${id}`, { method: "DELETE" }), "Package deleted"); };
-
-  const addOffering = () => call(() => api("/api/admin/ad-offerings", { method: "POST", body: JSON.stringify({ ...nForm, is_extra: nForm.is_extra ? 1 : 0 }) }), "Offering added");
-
   const mainOfferings  = offerings.filter(o => !o.is_extra);
   const extraOfferings = offerings.filter(o => !!o.is_extra);
+
+  if (loading) return <div className="space-y-3">{Array.from({length:3}).map((_,i) => <Skeleton key={i} className="h-32 w-full rounded-xl" />)}</div>;
 
   return (
     <div className="space-y-8">
@@ -399,66 +367,30 @@ function PricingManager({ offerings, onRefresh, toast }: {
           <h2 className="text-lg font-bold">Advertising Offerings & Pricing</h2>
           <p className="text-sm text-muted-foreground mt-0.5">Manage the ad types, packages, and pricing shown to clubs in the Options &amp; Pricing tab.</p>
         </div>
-        <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1.5" onClick={() => setShowAddOffering(v => !v)}>
-          <Plus className="h-3.5 w-3.5" /> Add Offering
-        </Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={load} className="gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button>
+          <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1.5" onClick={() => setShowAddOffering(v => !v)}>
+            <Plus className="h-3.5 w-3.5" /> Add Offering
+          </Button>
+        </div>
       </div>
 
-      {/* Add new offering form */}
       {showAddOffering && (
         <div className="border-2 border-dashed border-[#1a5c38] rounded-xl p-5 bg-[#f0faf4] space-y-4">
           <div className="font-bold text-[#1a5c38]">New Ad Offering</div>
           <div className="grid grid-cols-3 gap-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Ad Type Slug *</Label>
-              <Input placeholder="e.g. podcast_ad" value={nForm.ad_type} onChange={e => setNForm(f => ({ ...f, ad_type: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Icon (emoji)</Label>
-              <Input placeholder="📢" value={nForm.icon} onChange={e => setNForm(f => ({ ...f, icon: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Color (hex)</Label>
-              <div className="flex gap-1.5">
-                <Input type="color" value={nForm.color} onChange={e => setNForm(f => ({ ...f, color: e.target.value }))} className="h-8 w-10 p-0.5 cursor-pointer" />
-                <Input value={nForm.color} onChange={e => setNForm(f => ({ ...f, color: e.target.value }))} className="h-8 text-sm flex-1" />
-              </div>
-            </div>
-            <div className="col-span-3 space-y-1">
-              <Label className="text-xs">Title *</Label>
-              <Input placeholder="e.g. Podcast Sponsor Spot" value={nForm.title} onChange={e => setNForm(f => ({ ...f, title: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="col-span-3 space-y-1">
-              <Label className="text-xs">Description</Label>
-              <Textarea rows={2} value={nForm.description} onChange={e => setNForm(f => ({ ...f, description: e.target.value }))} className="text-sm" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label className="text-xs">Where Shown (badge text)</Label>
-              <Input placeholder="e.g. Podcast · Niche audience" value={nForm.where_shown} onChange={e => setNForm(f => ({ ...f, where_shown: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="flex items-end pb-1 gap-2">
-              <input type="checkbox" id="new-is-extra" checked={nForm.is_extra} onChange={e => setNForm(f => ({ ...f, is_extra: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" />
-              <Label htmlFor="new-is-extra" className="text-xs cursor-pointer">Show as "Extra Option" (not main offering)</Label>
-            </div>
-            {nForm.is_extra && (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-xs">Extra Badge Label</Label>
-                  <Input placeholder="Popular" value={nForm.extra_badge} onChange={e => setNForm(f => ({ ...f, extra_badge: e.target.value }))} className="h-8 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Badge Color</Label>
-                  <div className="flex gap-1.5">
-                    <Input type="color" value={nForm.extra_badge_color} onChange={e => setNForm(f => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 w-10 p-0.5" />
-                    <Input value={nForm.extra_badge_color} onChange={e => setNForm(f => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 text-sm flex-1" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Price Label</Label>
-                  <Input placeholder="From R 399/mo" value={nForm.extra_price_label} onChange={e => setNForm(f => ({ ...f, extra_price_label: e.target.value }))} className="h-8 text-sm" />
-                </div>
-              </>
-            )}
+            <div className="space-y-1"><Label className="text-xs">Ad Type Slug *</Label><Input placeholder="podcast_ad" value={nForm.ad_type} onChange={e => setNForm(f => ({ ...f, ad_type: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="space-y-1"><Label className="text-xs">Icon</Label><Input placeholder="📢" value={nForm.icon} onChange={e => setNForm(f => ({ ...f, icon: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="space-y-1"><Label className="text-xs">Color</Label><div className="flex gap-1.5"><Input type="color" value={nForm.color} onChange={e => setNForm(f => ({ ...f, color: e.target.value }))} className="h-8 w-10 p-0.5" /><Input value={nForm.color} onChange={e => setNForm(f => ({ ...f, color: e.target.value }))} className="h-8 text-sm flex-1" /></div></div>
+            <div className="col-span-3 space-y-1"><Label className="text-xs">Title *</Label><Input placeholder="Podcast Sponsor Spot" value={nForm.title} onChange={e => setNForm(f => ({ ...f, title: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="col-span-3 space-y-1"><Label className="text-xs">Description</Label><Textarea rows={2} value={nForm.description} onChange={e => setNForm(f => ({ ...f, description: e.target.value }))} className="text-sm" /></div>
+            <div className="col-span-2 space-y-1"><Label className="text-xs">Where Shown (badge)</Label><Input placeholder="Podcast · Niche audience" value={nForm.where_shown} onChange={e => setNForm(f => ({ ...f, where_shown: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="flex items-end pb-1 gap-2"><input type="checkbox" id="nf-extra" checked={nForm.is_extra} onChange={e => setNForm(f => ({ ...f, is_extra: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" /><Label htmlFor="nf-extra" className="text-xs cursor-pointer">Show as Extra Option</Label></div>
+            {nForm.is_extra && (<>
+              <div className="space-y-1"><Label className="text-xs">Badge Label</Label><Input placeholder="Popular" value={nForm.extra_badge} onChange={e => setNForm(f => ({ ...f, extra_badge: e.target.value }))} className="h-8 text-sm" /></div>
+              <div className="space-y-1"><Label className="text-xs">Badge Color</Label><div className="flex gap-1.5"><Input type="color" value={nForm.extra_badge_color} onChange={e => setNForm(f => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 w-10 p-0.5" /><Input value={nForm.extra_badge_color} onChange={e => setNForm(f => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 text-sm flex-1" /></div></div>
+              <div className="space-y-1"><Label className="text-xs">Price Label</Label><Input placeholder="From R 399/mo" value={nForm.extra_price_label} onChange={e => setNForm(f => ({ ...f, extra_price_label: e.target.value }))} className="h-8 text-sm" /></div>
+            </>)}
           </div>
           <div className="flex gap-2 pt-1">
             <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={addOffering} disabled={saving || !nForm.ad_type || !nForm.title}>{saving ? "Adding…" : "Add Offering"}</Button>
@@ -467,255 +399,245 @@ function PricingManager({ offerings, onRefresh, toast }: {
         </div>
       )}
 
-      {/* Main Ad Types */}
-      <Section title="Main Ad Types" subtitle="Full ad types shown as primary offerings with selectable packages.">
-        {mainOfferings.map(o => (
-          <OfferingRow key={o.id} o={o} expanded={expandedId === o.id}
-            onToggleExpand={() => setExpandedId(expandedId === o.id ? null : o.id)}
-            editing={editingOffering === o.id}
-            onEdit={() => startEditOffering(o)}
-            onCancelEdit={() => setEditingOffering(null)}
-            onSaveEdit={() => saveOffering(o.id)}
-            onToggleActive={() => toggleOffering(o.id)}
-            onDelete={() => deleteOffering(o.id)}
-            saving={saving}
-            oForm={oForm} setOForm={setOForm}
-            editingPackage={editingPackage}
-            onEditPackage={startEditPackage}
-            onCancelEditPackage={() => setEditingPackage(null)}
-            onSavePackage={(id) => savePackage(id)}
-            onDeletePackage={deletePackage}
-            addingPkg={addingPkgFor === o.ad_type}
-            onStartAddPkg={() => startAddPackage(o.ad_type)}
-            onCancelAddPkg={() => setAddingPkgFor(null)}
-            onAddPkg={() => addPackage(o.ad_type)}
-            pForm={pForm} setPForm={setPForm}
-          />
-        ))}
-      </Section>
-
-      {/* Extra Options */}
-      <Section title="Extra Options" subtitle="Shown in the 'More Ways to Promote' section — enquiry-only, no package selection.">
-        {extraOfferings.map(o => (
-          <OfferingRow key={o.id} o={o} expanded={expandedId === o.id}
-            onToggleExpand={() => setExpandedId(expandedId === o.id ? null : o.id)}
-            editing={editingOffering === o.id}
-            onEdit={() => startEditOffering(o)}
-            onCancelEdit={() => setEditingOffering(null)}
-            onSaveEdit={() => saveOffering(o.id)}
-            onToggleActive={() => toggleOffering(o.id)}
-            onDelete={() => deleteOffering(o.id)}
-            saving={saving}
-            oForm={oForm} setOForm={setOForm}
-            editingPackage={null}
-            onEditPackage={() => {}}
-            onCancelEditPackage={() => {}}
-            onSavePackage={() => {}}
-            onDeletePackage={() => {}}
-            addingPkg={false}
-            onStartAddPkg={() => {}}
-            onCancelAddPkg={() => {}}
-            onAddPkg={() => {}}
-            pForm={pForm} setPForm={setPForm}
-          />
-        ))}
-      </Section>
-    </div>
-  );
-}
-
-function Section({ title, subtitle, children }: { title: string; subtitle: string; children: React.ReactNode }) {
-  return (
-    <div>
-      <div className="mb-3">
-        <div className="text-base font-bold">{title}</div>
-        <div className="text-xs text-muted-foreground">{subtitle}</div>
+      <div>
+        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Main Ad Types</div>
+        <p className="text-xs text-muted-foreground mb-3">Full ad types shown as primary offerings with selectable packages.</p>
+        <div className="space-y-4">
+          {mainOfferings.map(o => <OfferingCard key={o.id} offering={o} onRefresh={load} toast={toast} />)}
+        </div>
       </div>
-      <div className="border rounded-xl overflow-hidden bg-white divide-y">{children}</div>
+
+      <div>
+        <div className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Extra Options</div>
+        <p className="text-xs text-muted-foreground mb-3">Shown in the 'More Ways to Promote' section — enquiry-only, no packages.</p>
+        <div className="space-y-2 border rounded-xl overflow-hidden bg-white divide-y">
+          {extraOfferings.map(o => <OfferingCard key={o.id} offering={o} onRefresh={load} toast={toast} compact />)}
+        </div>
+      </div>
     </div>
   );
 }
 
-function OfferingRow({ o, expanded, onToggleExpand, editing, onEdit, onCancelEdit, onSaveEdit, onToggleActive, onDelete, saving, oForm, setOForm, editingPackage, onEditPackage, onCancelEditPackage, onSavePackage, onDeletePackage, addingPkg, onStartAddPkg, onCancelAddPkg, onAddPkg, pForm, setPForm }: {
-  o: Offering; expanded: boolean; onToggleExpand: () => void;
-  editing: boolean; onEdit: () => void; onCancelEdit: () => void; onSaveEdit: () => void;
-  onToggleActive: () => void; onDelete: () => void; saving: boolean;
-  oForm: any; setOForm: (f: any) => void;
-  editingPackage: number | null; onEditPackage: (p: Package) => void;
-  onCancelEditPackage: () => void; onSavePackage: (id: number) => void;
-  onDeletePackage: (id: number) => void;
-  addingPkg: boolean; onStartAddPkg: () => void; onCancelAddPkg: () => void; onAddPkg: () => void;
-  pForm: any; setPForm: (f: any) => void;
+// ─── Self-contained Offering Card ─────────────────────────────────────────────
+
+function OfferingCard({ offering, onRefresh, toast, compact = false }: {
+  offering: Offering;
+  onRefresh: () => void;
+  toast: (opts: any) => void;
+  compact?: boolean;
 }) {
+  const [editingOffering, setEditingOffering] = useState(false);
+  const [editingPkgId, setEditingPkgId] = useState<number | null>(null);
+  const [addingPkg, setAddingPkg] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  const [oForm, setOF] = useState({
+    icon: offering.icon, title: offering.title, description: offering.description ?? "",
+    where_shown: offering.where_shown ?? "", color: offering.color,
+    extra_badge: offering.extra_badge ?? "", extra_badge_color: offering.extra_badge_color ?? "#1a5c38",
+    extra_price_label: offering.extra_price_label ?? "",
+  });
+
+  const [pForm, setPF] = useState({ name: "", price_display: "", price_period: "/month", slot_duration: "", reach_info: "", is_popular: false });
+
+  const do_ = async (fn: () => Promise<any>, msg: string, after?: () => void) => {
+    setSaving(true);
+    try {
+      await fn();
+      toast({ title: msg });
+      onRefresh();
+      after?.();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const saveOffering = () => do_(
+    () => api(`/api/admin/ad-offerings/${offering.id}`, { method: "PUT", body: JSON.stringify({ ...oForm, is_extra: offering.is_extra ? 1 : 0 }) }),
+    "Offering saved", () => setEditingOffering(false)
+  );
+
+  const toggleActive = () => do_(
+    () => api(`/api/admin/ad-offerings/${offering.id}/toggle`, { method: "POST" }),
+    offering.active ? "Offering hidden" : "Offering visible"
+  );
+
+  const deleteOffering = () => {
+    if (!confirm(`Delete "${offering.title}" and all its packages?`)) return;
+    do_(() => api(`/api/admin/ad-offerings/${offering.id}`, { method: "DELETE" }), "Offering deleted");
+  };
+
+  const startEditPkg = (pkg: Package) => {
+    setEditingPkgId(pkg.id);
+    setAddingPkg(false);
+    setPF({ name: pkg.name, price_display: pkg.price_display, price_period: pkg.price_period ?? "", slot_duration: pkg.slot_duration ?? "", reach_info: pkg.reach_info ?? "", is_popular: !!pkg.is_popular });
+  };
+
+  const savePkg = (pkgId: number) => do_(
+    () => api(`/api/admin/ad-packages/${pkgId}`, { method: "PUT", body: JSON.stringify({ ...pForm, is_popular: pForm.is_popular ? 1 : 0 }) }),
+    "Package saved", () => setEditingPkgId(null)
+  );
+
+  const addPkg = () => do_(
+    () => api("/api/admin/ad-packages", { method: "POST", body: JSON.stringify({ ...pForm, ad_type: offering.ad_type, is_popular: pForm.is_popular ? 1 : 0 }) }),
+    "Package added", () => { setAddingPkg(false); setPF({ name: "", price_display: "", price_period: "/month", slot_duration: "", reach_info: "", is_popular: false }); }
+  );
+
+  const deletePkg = (pkgId: number) => {
+    if (!confirm("Delete this package?")) return;
+    do_(() => api(`/api/admin/ad-packages/${pkgId}`, { method: "DELETE" }), "Package deleted");
+  };
+
   return (
-    <div>
-      {/* Offering header row */}
-      <div className={`flex items-center gap-3 px-4 py-3 ${!o.active ? "opacity-50" : ""}`}>
-        <button onClick={onToggleExpand} className="text-muted-foreground hover:text-foreground transition-colors">
-          {expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-        </button>
-        <span className="text-xl w-7">{o.icon}</span>
+    <div className={`border rounded-xl overflow-hidden bg-white ${!offering.active ? "opacity-60" : ""}`}>
+      {/* Header row */}
+      <div className="flex items-center gap-3 px-4 py-3 border-b bg-gray-50">
+        <span className="text-xl">{offering.icon}</span>
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="font-semibold text-sm">{o.title}</span>
-            <span className="text-xs text-muted-foreground font-mono bg-gray-100 px-1.5 py-0.5 rounded">{o.ad_type}</span>
-            {!o.active && <span className="text-xs text-gray-400 font-medium">Hidden</span>}
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="font-bold text-sm">{offering.title}</span>
+            <span className="text-[11px] font-mono bg-white border px-1.5 py-0.5 rounded text-gray-500">{offering.ad_type}</span>
+            {!offering.active && <span className="text-[11px] font-semibold text-gray-400">Hidden</span>}
           </div>
-          {o.is_extra && o.extra_price_label && (
-            <div className="text-xs font-bold mt-0.5" style={{ color: o.color }}>{o.extra_price_label}</div>
-          )}
-          {!o.is_extra && o.packages.length > 0 && (
-            <div className="text-xs text-muted-foreground mt-0.5">{o.packages.length} package{o.packages.length !== 1 ? "s" : ""}</div>
+          {compact && offering.extra_price_label && (
+            <span className="text-xs font-bold" style={{ color: offering.color }}>{offering.extra_price_label}</span>
           )}
         </div>
-        <div className="w-4 h-4 rounded-full flex-shrink-0" style={{ background: o.color }} />
+        <div className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ background: offering.color }} />
         <div className="flex gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={onEdit}><Pencil className="h-3 w-3" /> Edit</Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onToggleActive}>{o.active ? "Hide" : "Show"}</Button>
-          <Button size="sm" variant="outline" className="h-7 px-2 text-red-500 hover:text-red-700 hover:bg-red-50 border-red-200" onClick={onDelete}><Trash2 className="h-3 w-3" /></Button>
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs gap-1" onClick={() => { setEditingOffering(v => !v); setEditingPkgId(null); setAddingPkg(false); }}>
+            <Pencil className="h-3 w-3" /> Edit
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={toggleActive} disabled={saving}>
+            {offering.active ? "Hide" : "Show"}
+          </Button>
+          <Button size="sm" variant="outline" className="h-7 px-2 text-red-500 hover:bg-red-50 border-red-100" onClick={deleteOffering} disabled={saving}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
         </div>
       </div>
 
       {/* Offering edit form */}
-      {editing && (
-        <div className="px-4 pb-4 pt-0 bg-blue-50 border-t">
-          <div className="grid grid-cols-3 gap-3 pt-3">
-            <div className="space-y-1">
-              <Label className="text-xs">Icon</Label>
-              <Input value={oForm.icon} onChange={e => setOForm((f: any) => ({ ...f, icon: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label className="text-xs">Title</Label>
-              <Input value={oForm.title} onChange={e => setOForm((f: any) => ({ ...f, title: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="col-span-3 space-y-1">
-              <Label className="text-xs">Description</Label>
-              <Textarea rows={2} value={oForm.description} onChange={e => setOForm((f: any) => ({ ...f, description: e.target.value }))} className="text-sm" />
-            </div>
-            <div className="col-span-2 space-y-1">
-              <Label className="text-xs">Where Shown (badge)</Label>
-              <Input value={oForm.where_shown} onChange={e => setOForm((f: any) => ({ ...f, where_shown: e.target.value }))} className="h-8 text-sm" />
-            </div>
-            <div className="space-y-1">
-              <Label className="text-xs">Color</Label>
-              <div className="flex gap-1.5">
-                <Input type="color" value={oForm.color} onChange={e => setOForm((f: any) => ({ ...f, color: e.target.value }))} className="h-8 w-10 p-0.5 cursor-pointer" />
-                <Input value={oForm.color} onChange={e => setOForm((f: any) => ({ ...f, color: e.target.value }))} className="h-8 text-sm flex-1" />
-              </div>
-            </div>
-            {oForm.is_extra && (
-              <>
-                <div className="space-y-1">
-                  <Label className="text-xs">Extra Badge Label</Label>
-                  <Input value={oForm.extra_badge} onChange={e => setOForm((f: any) => ({ ...f, extra_badge: e.target.value }))} className="h-8 text-sm" />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Badge Color</Label>
-                  <div className="flex gap-1.5">
-                    <Input type="color" value={oForm.extra_badge_color} onChange={e => setOForm((f: any) => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 w-10 p-0.5" />
-                    <Input value={oForm.extra_badge_color} onChange={e => setOForm((f: any) => ({ ...f, extra_badge_color: e.target.value }))} className="h-8 text-sm flex-1" />
-                  </div>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Price Label</Label>
-                  <Input value={oForm.extra_price_label} onChange={e => setOForm((f: any) => ({ ...f, extra_price_label: e.target.value }))} className="h-8 text-sm" placeholder="From R 399/mo" />
-                </div>
-              </>
-            )}
+      {editingOffering && (
+        <div className="px-4 py-4 border-b bg-blue-50 space-y-3">
+          <div className="text-xs font-bold text-blue-700 uppercase tracking-wide">Edit Offering Details</div>
+          <div className="grid grid-cols-4 gap-3">
+            <div className="space-y-1"><Label className="text-xs">Icon</Label><Input value={oForm.icon} onChange={e => setOF(f => ({ ...f, icon: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="col-span-2 space-y-1"><Label className="text-xs">Title</Label><Input value={oForm.title} onChange={e => setOF(f => ({ ...f, title: e.target.value }))} className="h-8 text-sm" /></div>
+            <div className="space-y-1"><Label className="text-xs">Color</Label><div className="flex gap-1.5"><Input type="color" value={oForm.color} onChange={e => setOF(f => ({ ...f, color: e.target.value }))} className="h-8 w-10 p-0.5 cursor-pointer" /><Input value={oForm.color} onChange={e => setOF(f => ({ ...f, color: e.target.value }))} className="h-8 text-sm flex-1" /></div></div>
+            <div className="col-span-4 space-y-1"><Label className="text-xs">Description</Label><Textarea rows={2} value={oForm.description} onChange={e => setOF(f => ({ ...f, description: e.target.value }))} className="text-sm" /></div>
+            <div className="col-span-2 space-y-1"><Label className="text-xs">Where Shown (badge text)</Label><Input value={oForm.where_shown} onChange={e => setOF(f => ({ ...f, where_shown: e.target.value }))} className="h-8 text-sm" /></div>
+            {offering.is_extra ? (<>
+              <div className="space-y-1"><Label className="text-xs">Badge Label</Label><Input value={oForm.extra_badge} onChange={e => setOF(f => ({ ...f, extra_badge: e.target.value }))} className="h-8 text-sm" /></div>
+              <div className="space-y-1"><Label className="text-xs">Price Label</Label><Input value={oForm.extra_price_label} onChange={e => setOF(f => ({ ...f, extra_price_label: e.target.value }))} className="h-8 text-sm" placeholder="From R 399/mo" /></div>
+            </>) : <div />}
           </div>
-          <div className="flex gap-2 mt-3">
-            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1" onClick={onSaveEdit} disabled={saving}><Check className="h-3.5 w-3.5" /> {saving ? "Saving…" : "Save Changes"}</Button>
-            <Button size="sm" variant="outline" onClick={onCancelEdit} className="gap-1"><X className="h-3.5 w-3.5" /> Cancel</Button>
+          <div className="flex gap-2">
+            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1" onClick={saveOffering} disabled={saving}><Check className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save"}</Button>
+            <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditingOffering(false)}><X className="h-3.5 w-3.5" />Cancel</Button>
           </div>
         </div>
       )}
 
-      {/* Packages section (expanded, main offerings only) */}
-      {expanded && !o.is_extra && (
-        <div className="bg-gray-50 border-t px-4 py-3 space-y-2">
-          <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Packages</div>
-          {o.packages.length === 0 && <div className="text-xs text-muted-foreground italic">No packages yet — add one below.</div>}
-          {o.packages.map(pkg => (
-            <PackageRow key={pkg.id} pkg={pkg} o={o}
-              editing={editingPackage === pkg.id}
-              onEdit={() => onEditPackage(pkg)}
-              onCancelEdit={onCancelEditPackage}
-              onSave={() => onSavePackage(pkg.id)}
-              onDelete={() => onDeletePackage(pkg.id)}
-              saving={saving} pForm={pForm} setPForm={setPForm}
-            />
-          ))}
-          {/* Add package form */}
-          {addingPkg ? (
-            <div className="border-2 border-dashed rounded-lg p-3 bg-white space-y-2">
-              <div className="text-xs font-bold text-[#1a5c38]">New Package</div>
-              <div className="grid grid-cols-3 gap-2">
-                <div className="col-span-3 space-y-1"><Label className="text-xs">Name *</Label><Input placeholder="Gold Spot" value={pForm.name} onChange={e => setPForm((f: any) => ({ ...f, name: e.target.value }))} className="h-7 text-xs" /></div>
-                <div className="space-y-1"><Label className="text-xs">Price *</Label><Input placeholder="R 499" value={pForm.price_display} onChange={e => setPForm((f: any) => ({ ...f, price_display: e.target.value }))} className="h-7 text-xs" /></div>
-                <div className="space-y-1"><Label className="text-xs">Period</Label><Input placeholder="/month" value={pForm.price_period} onChange={e => setPForm((f: any) => ({ ...f, price_period: e.target.value }))} className="h-7 text-xs" /></div>
-                <div className="space-y-1"><Label className="text-xs">Slot</Label><Input placeholder="10 sec" value={pForm.slot_duration} onChange={e => setPForm((f: any) => ({ ...f, slot_duration: e.target.value }))} className="h-7 text-xs" /></div>
-                <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input placeholder="All users · 2 clubs share" value={pForm.reach_info} onChange={e => setPForm((f: any) => ({ ...f, reach_info: e.target.value }))} className="h-7 text-xs" /></div>
-                <div className="flex items-end gap-1.5 pb-0.5">
-                  <input type="checkbox" checked={pForm.is_popular} onChange={e => setPForm((f: any) => ({ ...f, is_popular: e.target.checked }))} className="accent-[#1a5c38]" />
-                  <Label className="text-xs">Popular</Label>
+      {/* Packages section (main offerings only) */}
+      {!compact && (
+        <div className="divide-y">
+          {offering.packages.length === 0 && !addingPkg && (
+            <div className="px-4 py-3 text-sm text-muted-foreground italic">No packages yet.</div>
+          )}
+          {offering.packages.map(pkg => (
+            <div key={pkg.id}>
+              {editingPkgId === pkg.id ? (
+                /* Edit form for this package */
+                <div className="px-4 py-4 bg-amber-50 space-y-3">
+                  <div className="text-xs font-bold text-amber-700 uppercase tracking-wide">Editing — {pkg.name}</div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="col-span-3 space-y-1"><Label className="text-xs">Package Name</Label><Input value={pForm.name} onChange={e => setPF(f => ({ ...f, name: e.target.value }))} className="h-8 text-sm" /></div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Price *</Label>
+                      <Input value={pForm.price_display} onChange={e => setPF(f => ({ ...f, price_display: e.target.value }))} className="h-8 text-sm" placeholder="R 499" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Period</Label>
+                      <Input value={pForm.price_period} onChange={e => setPF(f => ({ ...f, price_period: e.target.value }))} className="h-8 text-sm" placeholder="/month" />
+                    </div>
+                    <div className="space-y-1">
+                      <Label className="text-xs font-semibold">Slot Duration</Label>
+                      <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec display" />
+                    </div>
+                    <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
+                    <div className="flex items-end gap-2 pb-1"><input type="checkbox" checked={pForm.is_popular} onChange={e => setPF(f => ({ ...f, is_popular: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" /><Label className="text-xs font-semibold">Mark as Popular</Label></div>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1" onClick={() => savePkg(pkg.id)} disabled={saving}><Check className="h-3.5 w-3.5" />{saving ? "Saving…" : "Save Changes"}</Button>
+                    <Button size="sm" variant="outline" className="gap-1" onClick={() => setEditingPkgId(null)}><X className="h-3.5 w-3.5" />Cancel</Button>
+                  </div>
                 </div>
+              ) : (
+                /* Display row */
+                <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
+                  {pkg.is_popular === 1 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ background: offering.color }}>Popular</span>}
+                  <div className="flex-1 min-w-0 grid grid-cols-4 gap-4 items-center">
+                    <div className="font-semibold text-sm">{pkg.name}</div>
+                    <div>
+                      <span className="text-base font-black" style={{ color: offering.color }}>{pkg.price_display}</span>
+                      <span className="text-xs text-muted-foreground ml-1">{pkg.price_period}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{pkg.slot_duration && `⏱ ${pkg.slot_duration}`}</div>
+                    <div className="text-xs text-muted-foreground">{pkg.reach_info && `👥 ${pkg.reach_info}`}</div>
+                  </div>
+                  <div className="flex gap-1.5 flex-shrink-0">
+                    <Button size="sm" variant="outline" className="h-7 px-2 gap-1 text-xs" onClick={() => startEditPkg(pkg)}>
+                      <Pencil className="h-3 w-3" /> Edit
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 px-2 text-red-500 hover:bg-red-50 border-red-100" onClick={() => deletePkg(pkg.id)} disabled={saving}>
+                      <Trash2 className="h-3 w-3" />
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+
+          {/* Add package form */}
+          {addingPkg && (
+            <div className="px-4 py-4 bg-green-50 space-y-3">
+              <div className="text-xs font-bold text-green-700 uppercase tracking-wide">New Package</div>
+              <div className="grid grid-cols-3 gap-3">
+                <div className="col-span-3 space-y-1"><Label className="text-xs">Package Name *</Label><Input value={pForm.name} onChange={e => setPF(f => ({ ...f, name: e.target.value }))} className="h-8 text-sm" placeholder="e.g. Gold Spot" /></div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Price *</Label>
+                  <Input value={pForm.price_display} onChange={e => setPF(f => ({ ...f, price_display: e.target.value }))} className="h-8 text-sm" placeholder="R 499" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Period</Label>
+                  <Input value={pForm.price_period} onChange={e => setPF(f => ({ ...f, price_period: e.target.value }))} className="h-8 text-sm" placeholder="/month" />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs font-semibold">Slot Duration</Label>
+                  <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec display" />
+                </div>
+                <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
+                <div className="flex items-end gap-2 pb-1"><input type="checkbox" checked={pForm.is_popular} onChange={e => setPF(f => ({ ...f, is_popular: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" /><Label className="text-xs">Mark as Popular</Label></div>
               </div>
               <div className="flex gap-2">
-                <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] h-7 text-xs gap-1" onClick={onAddPkg} disabled={saving}><Check className="h-3 w-3" /> Add</Button>
-                <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onCancelAddPkg}><X className="h-3 w-3" /> Cancel</Button>
+                <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] gap-1" onClick={addPkg} disabled={saving || !pForm.name || !pForm.price_display}><Check className="h-3.5 w-3.5" />{saving ? "Adding…" : "Add Package"}</Button>
+                <Button size="sm" variant="outline" className="gap-1" onClick={() => setAddingPkg(false)}><X className="h-3.5 w-3.5" />Cancel</Button>
               </div>
             </div>
-          ) : (
-            <button onClick={onStartAddPkg} className="flex items-center gap-1.5 text-xs text-[#1a5c38] font-semibold hover:underline mt-1">
-              <Plus className="h-3.5 w-3.5" /> Add Package
-            </button>
+          )}
+
+          {/* Add package button */}
+          {!addingPkg && (
+            <div className="px-4 py-2.5 bg-gray-50">
+              <button onClick={() => { setAddingPkg(true); setEditingPkgId(null); setPF({ name: "", price_display: "", price_period: "/month", slot_duration: "", reach_info: "", is_popular: false }); }}
+                className="flex items-center gap-1.5 text-xs text-[#1a5c38] font-semibold hover:underline">
+                <Plus className="h-3.5 w-3.5" /> Add Package
+              </button>
+            </div>
           )}
         </div>
       )}
-    </div>
-  );
-}
-
-function PackageRow({ pkg, o, editing, onEdit, onCancelEdit, onSave, onDelete, saving, pForm, setPForm }: {
-  pkg: Package; o: Offering; editing: boolean;
-  onEdit: () => void; onCancelEdit: () => void; onSave: () => void; onDelete: () => void;
-  saving: boolean; pForm: any; setPForm: (f: any) => void;
-}) {
-  if (editing) {
-    return (
-      <div className="border rounded-lg p-3 bg-white space-y-2">
-        <div className="grid grid-cols-3 gap-2">
-          <div className="col-span-3 space-y-1"><Label className="text-xs">Name</Label><Input value={pForm.name} onChange={e => setPForm((f: any) => ({ ...f, name: e.target.value }))} className="h-7 text-xs" /></div>
-          <div className="space-y-1"><Label className="text-xs">Price</Label><Input value={pForm.price_display} onChange={e => setPForm((f: any) => ({ ...f, price_display: e.target.value }))} className="h-7 text-xs" /></div>
-          <div className="space-y-1"><Label className="text-xs">Period</Label><Input value={pForm.price_period} onChange={e => setPForm((f: any) => ({ ...f, price_period: e.target.value }))} className="h-7 text-xs" /></div>
-          <div className="space-y-1"><Label className="text-xs">Slot</Label><Input value={pForm.slot_duration} onChange={e => setPForm((f: any) => ({ ...f, slot_duration: e.target.value }))} className="h-7 text-xs" /></div>
-          <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPForm((f: any) => ({ ...f, reach_info: e.target.value }))} className="h-7 text-xs" /></div>
-          <div className="flex items-end gap-1.5 pb-0.5">
-            <input type="checkbox" checked={pForm.is_popular} onChange={e => setPForm((f: any) => ({ ...f, is_popular: e.target.checked }))} className="accent-[#1a5c38]" />
-            <Label className="text-xs">Popular</Label>
-          </div>
-        </div>
-        <div className="flex gap-2">
-          <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] h-7 text-xs gap-1" onClick={onSave} disabled={saving}><Check className="h-3 w-3" /> {saving ? "…" : "Save"}</Button>
-          <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={onCancelEdit}><X className="h-3 w-3" /> Cancel</Button>
-        </div>
-      </div>
-    );
-  }
-  return (
-    <div className="flex items-center gap-3 bg-white border rounded-lg px-3 py-2">
-      {pkg.is_popular === 1 && <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full text-white flex-shrink-0" style={{ background: o.color }}>Popular</span>}
-      <div className="flex-1 min-w-0">
-        <span className="text-sm font-semibold">{pkg.name}</span>
-        <span className="text-sm font-black ml-2" style={{ color: o.color }}>{pkg.price_display}</span>
-        <span className="text-xs text-muted-foreground">{pkg.price_period}</span>
-        {pkg.slot_duration && <span className="text-xs text-muted-foreground ml-2">· {pkg.slot_duration}</span>}
-        {pkg.reach_info && <span className="text-xs text-muted-foreground ml-2">· {pkg.reach_info}</span>}
-      </div>
-      <div className="flex gap-1 flex-shrink-0">
-        <Button size="sm" variant="outline" className="h-6 px-1.5" onClick={onEdit}><Pencil className="h-3 w-3" /></Button>
-        <Button size="sm" variant="outline" className="h-6 px-1.5 text-red-500 hover:bg-red-50" onClick={onDelete}><Trash2 className="h-3 w-3" /></Button>
-      </div>
     </div>
   );
 }

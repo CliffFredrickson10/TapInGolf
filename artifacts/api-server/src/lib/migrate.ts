@@ -1469,10 +1469,9 @@ async function applyLateAlters() {
 }
 
 async function seedAdOfferings(): Promise<void> {
-  const [{ cnt }] = await query<{ cnt: string }>("SELECT COUNT(*) AS cnt FROM ad_offerings");
-  if (Number(cnt) > 0) return;
-
-  const offerings = [
+  const [{ ocnt }] = await query<{ ocnt: string }>("SELECT COUNT(*) AS ocnt FROM ad_offerings");
+  if (Number(ocnt) === 0) {
+    const offerings = [
     ["club_detail",   "🏌️", "Club Detail Page Ad",          "A banner shown exclusively on your club's profile page inside the TapIn Golf app. Only your ad appears — no competitor sharing.", "Club detail page · Exclusive",          "#1a5c38", 0, null,           null,       null,                 1],
     ["featured_home", "⭐",  "Home Screen Featured Club",    "Your club rotates through the Featured Clubs carousel on the app home screen. Slot shared with other clubs in your tier.",         "Home screen carousel · Shared rotation", "#c8a84b", 0, null,           null,       null,                 2],
     ["explore",       "🔍", "Explore Screen Spotlight",      "Pinned to the top of the Explore tab with a highlighted card frame. Golfers browsing clubs see your club first.",                  "Explore tab · Top placement",           "#0891b2", 1, "Popular",      "#0891b2",  "From R 399/mo",      3],
@@ -1482,26 +1481,30 @@ async function seedAdOfferings(): Promise<void> {
     ["newsletter",    "📧", "Newsletter Feature",            "Featured placement in the TapIn Golf weekly email newsletter sent to all registered golfers in your province.",                    "Email newsletter · Province-wide",      "#0f766e", 1, "Reach",        "#0f766e",  "R 249/edition",      7],
     ["nearby_alert",  "🗺️", "Nearby Club Alert",            "When a golfer opens the app within 10 km of your course, they see a pop-up card promoting a current special or open slots.",      "Geo-triggered · Pop-up",               "#b45309", 1, "Geo-targeted", "#b45309",  "R 349/mo",           8],
   ];
-  for (const [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order] of offerings) {
-    await exec(
-      `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order]
-    );
+    for (const [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order] of offerings) {
+      await exec(
+        `INSERT INTO ad_offerings (ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [ad_type, icon, title, description, where_shown, color, is_extra, extra_badge, extra_badge_color, extra_price_label, sort_order]
+      );
+    }
   }
 
-  const packages = [
-    ["club_detail",   "Monthly Starter", "R 499",   "/month",   "10 sec display",      "~500 club views/month",          0, 1],
-    ["club_detail",   "Quarterly Pro",   "R 1 199", "/quarter", "15 sec display",      "~500 club views/month",          1, 2],
-    ["club_detail",   "Annual Club",     "R 3 999", "/year",    "20 sec display",      "~500 club views/month",          0, 3],
-    ["featured_home", "Bronze Spot",     "R 299",   "/month",   "5 sec / rotation",    "All users · 3 clubs share",      0, 1],
-    ["featured_home", "Silver Spot",     "R 699",   "/month",   "10 sec / rotation",   "All users · 2 clubs share",      1, 2],
-    ["featured_home", "Gold Spot",       "R 1 499", "/month",   "15 sec / rotation",   "All users · Exclusive slot",     0, 3],
-  ];
-  for (const [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order] of packages) {
-    await exec(
-      `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-      [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order]
-    );
+  const [{ pcnt }] = await query<{ pcnt: string }>("SELECT COUNT(*) AS pcnt FROM ad_packages");
+  if (Number(pcnt) === 0) {
+    const packages = [
+      ["club_detail",   "Monthly Starter", "R 499",   "/month",   "10 sec display",    "~500 club views/month",       0, 1],
+      ["club_detail",   "Quarterly Pro",   "R 1 199", "/quarter", "15 sec display",    "~500 club views/month",       1, 2],
+      ["club_detail",   "Annual Club",     "R 3 999", "/year",    "20 sec display",    "~500 club views/month",       0, 3],
+      ["featured_home", "Bronze Spot",     "R 299",   "/month",   "5 sec / rotation",  "All users · 3 clubs share",  0, 1],
+      ["featured_home", "Silver Spot",     "R 699",   "/month",   "10 sec / rotation", "All users · 2 clubs share",  1, 2],
+      ["featured_home", "Gold Spot",       "R 1 499", "/month",   "15 sec / rotation", "All users · Exclusive slot", 0, 3],
+    ];
+    for (const [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order] of packages) {
+      await exec(
+        `INSERT INTO ad_packages (ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [ad_type, name, price_display, price_period, slot_duration, reach_info, is_popular, sort_order]
+      );
+    }
   }
 }
 

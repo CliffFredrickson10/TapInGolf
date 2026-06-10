@@ -147,7 +147,7 @@ async function createSchema(): Promise<void> {
       cta_text   VARCHAR(100),
       link_url   VARCHAR(500),
       placement  VARCHAR(20) DEFAULT 'home'
-                   CHECK (placement IN ('home','club','explore')),
+                   CHECK (placement IN ('home','club','explore','featured_home')),
       priority   INT DEFAULT 0,
       active     SMALLINT DEFAULT 1,
       created_at TIMESTAMP DEFAULT NOW()

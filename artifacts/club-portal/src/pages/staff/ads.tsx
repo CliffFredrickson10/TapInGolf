@@ -521,8 +521,9 @@ export default function StaffAds() {
                     <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${st.bg} ${st.text}`}>{st.label}</span>
                   </div>
                   <div className="text-xs text-muted-foreground truncate mb-1.5">{req.headline}</div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     {tp && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: tp.color + "18", color: tp.color }}>{tp.icon} {tp.label}</span>}
+                    {req.package_name && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">{req.package_name}</span>}
                     <span className="text-[10px] text-muted-foreground">{format(new Date(req.created_at), "d MMM")}</span>
                   </div>
                 </div>
@@ -994,7 +995,8 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
       <div className="grid grid-cols-2 gap-6">
         <div>
           <SectionLabel>Club Submission</SectionLabel>
-          <InfoRow label="Package" value={req.package_name ?? "—"} />
+          <InfoRow label="Ad Option" value={tp ? `${tp.icon} ${tp.label}` : req.ad_type} />
+          {req.package_name && <InfoRow label="Package" value={req.package_name} />}
           <InfoRow label="Headline" value={req.headline} />
           {req.subtitle && <InfoRow label="Subtitle" value={req.subtitle} />}
           <InfoRow label="Requested Start" value={req.requested_start ? format(new Date(req.requested_start), "d MMM yyyy") : "—"} />

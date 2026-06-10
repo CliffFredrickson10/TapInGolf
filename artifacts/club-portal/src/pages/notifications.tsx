@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Bell, Inbox, XCircle, CheckCheck, ShieldOff } from "lucide-react";
+import { Send, Bell, Inbox, XCircle, CheckCheck, ShieldOff, ChevronRight, Megaphone, Receipt } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -41,11 +41,42 @@ const INBOX_ICON: Record<string, { bg: string; text: string }> = {
   cancellation: { bg: "bg-red-100",    text: "text-red-600"   },
   booking:      { bg: "bg-green-100",  text: "text-green-700" },
   ban_appeal:   { bg: "bg-amber-100",  text: "text-amber-700" },
+  ad_update:    { bg: "bg-purple-100", text: "text-purple-700"},
+  invoice:      { bg: "bg-blue-100",   text: "text-blue-700"  },
   info:         { bg: "bg-blue-100",   text: "text-blue-700"  },
 };
 
 function inboxStyle(type: string) {
   return INBOX_ICON[type] ?? INBOX_ICON.info;
+}
+
+function parseMeta(metaStr: string | null): Record<string, any> {
+  try { return JSON.parse(metaStr ?? "{}"); } catch { return {}; }
+}
+
+function getDestination(type: string, meta: Record<string, any>): string | null {
+  switch (type) {
+    case "cancellation":
+      if (meta.booking_id) return `/cancelled-bookings?booking=${meta.booking_id}`;
+      if (meta.booking_ref) return `/cancelled-bookings?ref=${encodeURIComponent(meta.booking_ref)}`;
+      return "/cancelled-bookings";
+    case "ban_appeal":
+      return meta.ban_id ? `/bans?ban=${meta.ban_id}` : "/bans";
+    case "ad_update":
+      return "/ads";
+    case "invoice":
+      return "/invoices";
+    default:
+      return null;
+  }
+}
+
+function InboxIcon({ type, style }: { type: string; style: { bg: string; text: string } }) {
+  if (type === "cancellation") return <XCircle className={`h-4 w-4 ${style.text}`} />;
+  if (type === "ban_appeal")   return <ShieldOff className={`h-4 w-4 ${style.text}`} />;
+  if (type === "ad_update")    return <Megaphone className={`h-4 w-4 ${style.text}`} />;
+  if (type === "invoice")      return <Receipt className={`h-4 w-4 ${style.text}`} />;
+  return <Bell className={`h-4 w-4 ${style.text}`} />;
 }
 
 export default function Notifications() {
@@ -175,21 +206,21 @@ export default function Notifications() {
               {inbox.map(n => {
                 const style = inboxStyle(n.type);
                 const isUnread = !n.read_at;
-                const isCancellation = n.type === "cancellation";
+                const meta = parseMeta(n.meta);
+                const dest = getDestination(n.type, meta);
+                const handleCardClick = dest
+                  ? async () => { if (isUnread) await markRead(n.id); navigate(dest); }
+                  : undefined;
                 return (
                   <Card
                     key={n.id}
-                    className={`transition-colors ${isUnread ? "border-[#1a5c38]/30 bg-[#1a5c38]/[0.03]" : "opacity-75"}`}
+                    onClick={handleCardClick}
+                    className={`transition-colors ${isUnread ? "border-[#1a5c38]/30 bg-[#1a5c38]/[0.03]" : "opacity-75"} ${dest ? "cursor-pointer hover:shadow-md hover:border-[#1a5c38]/40" : ""}`}
                   >
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <div className={`w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 ${style.bg}`}>
-                          {isCancellation
-                            ? <XCircle className={`h-4 w-4 ${style.text}`} />
-                            : n.type === "ban_appeal"
-                            ? <ShieldOff className={`h-4 w-4 ${style.text}`} />
-                            : <Bell className={`h-4 w-4 ${style.text}`} />
-                          }
+                          <InboxIcon type={n.type} style={style} />
                         </div>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-start justify-between gap-2">
@@ -200,59 +231,26 @@ export default function Notifications() {
                               </p>
                               <p className="text-sm text-muted-foreground mt-0.5 whitespace-pre-line leading-relaxed">{n.body}</p>
                             </div>
-                            <div className="flex flex-col items-end gap-1.5 shrink-0">
+                            <div className="flex flex-col items-center gap-1.5 shrink-0">
+                              {dest && (
+                                <ChevronRight className="h-4 w-4 text-muted-foreground/50 mt-0.5" />
+                              )}
                               {isUnread ? (
-                                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7 px-2" onClick={() => markRead(n.id)}>
+                                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7 px-2"
+                                  onClick={e => { e.stopPropagation(); markRead(n.id); }}>
                                   Dismiss
                                 </Button>
                               ) : (
-                                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7 px-2" onClick={() => markUnread(n.id)}>
+                                <Button variant="ghost" size="sm" className="text-xs text-muted-foreground h-7 px-2"
+                                  onClick={e => { e.stopPropagation(); markUnread(n.id); }}>
                                   Mark unread
                                 </Button>
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3 mt-2 flex-wrap">
-                            <p className="text-xs text-muted-foreground">
-                              {format(new Date(n.created_at), "dd MMM yyyy HH:mm")}
-                            </p>
-                            {n.type === "ban_appeal" && (() => {
-                              let banId: number | null = null;
-                              try { banId = JSON.parse(n.meta ?? "{}").ban_id ?? null; } catch {}
-                              return banId ? (
-                                <Button
-                                  variant="outline" size="sm"
-                                  className="h-6 px-2.5 text-xs gap-1 border-amber-300 text-amber-700 hover:bg-amber-50"
-                                  onClick={async () => { if (isUnread) await markRead(n.id); navigate(`/bans?ban=${banId}`); }}
-                                >
-                                  <ShieldOff className="h-3.5 w-3.5" />View Appeal
-                                </Button>
-                              ) : null;
-                            })()}
-                            {isCancellation && (() => {
-                              let bookingId: number | null = null;
-                              let bookingRef: string | null = null;
-                              try {
-                                const m = JSON.parse(n.meta ?? "{}");
-                                bookingId = m.booking_id ?? null;
-                                bookingRef = m.booking_ref ?? null;
-                              } catch {}
-                              const dest = bookingId
-                                ? `/cancelled-bookings?booking=${bookingId}`
-                                : bookingRef
-                                ? `/cancelled-bookings?ref=${encodeURIComponent(bookingRef)}`
-                                : null;
-                              return dest ? (
-                                <Button
-                                  variant="outline" size="sm"
-                                  className="h-6 px-2.5 text-xs gap-1 border-red-300 text-red-700 hover:bg-red-50"
-                                  onClick={async () => { if (isUnread) await markRead(n.id); navigate(dest); }}
-                                >
-                                  <XCircle className="h-3.5 w-3.5" />View Booking
-                                </Button>
-                              ) : null;
-                            })()}
-                          </div>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            {format(new Date(n.created_at), "dd MMM yyyy HH:mm")}
+                          </p>
                         </div>
                       </div>
                     </CardContent>

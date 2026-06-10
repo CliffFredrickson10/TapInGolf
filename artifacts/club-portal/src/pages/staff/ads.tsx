@@ -380,8 +380,11 @@ export default function StaffAds() {
   const selectReq = (req: AdRequest) => {
     setSelected(req);
     setCfPrice(req.confirmed_price ? String(req.confirmed_price) : "");
-    setCfStart(req.confirmed_start ? req.confirmed_start.slice(0, 10) : "");
-    setCfEnd(req.confirmed_end ? req.confirmed_end.slice(0, 10) : "");
+    // Pre-fill dates from club's requested dates when not yet confirmed
+    const startSrc = req.confirmed_start ?? req.requested_start;
+    const endSrc   = req.confirmed_end   ?? req.requested_end;
+    setCfStart(startSrc ? startSrc.slice(0, 10) : "");
+    setCfEnd(endSrc   ? endSrc.slice(0, 10)   : "");
     setCfSlot(req.slot_duration ?? "");
     setCfSharing(req.sharing_tier ?? "");
     setCfNotes(req.staff_notes ?? "");

@@ -62981,6 +62981,10 @@ router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
     tee_time_deal: "home"
   };
   const placement = placementMap[adReq.ad_type] ?? "home";
+  let resolvedLinkUrl = adReq.link_url ?? null;
+  if (resolvedLinkUrl && adReq.club_id) {
+    resolvedLinkUrl = resolvedLinkUrl.replace(/tapin:\/\/clubs\/self\b/, `tapin://clubs/${adReq.club_id}`);
+  }
   const result = await exec(
     `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
       ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
@@ -62991,7 +62995,7 @@ router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
       adReq.subtitle ?? null,
       adReq.image_url ?? null,
       adReq.cta_text ?? "Book Now",
-      adReq.link_url ?? null,
+      resolvedLinkUrl,
       placement,
       0,
       reqId,

@@ -95,6 +95,8 @@ export default function Ads() {
   const [submitting, setSubmitting] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [ctaActionType, setCtaActionType] = useState<"none" | "book-day" | "club-page" | "custom">("none");
+  const [ctaDay, setCtaDay] = useState("wednesday");
 
   const mainOfferings = offerings.filter(o => !o.is_extra);
   const extraOfferings = offerings.filter(o => !!o.is_extra);
@@ -121,6 +123,8 @@ export default function Ads() {
     setSelectedPackage(packageName ?? null);
     setForm(emptyForm());
     setImageUploading(false);
+    setCtaActionType("none");
+    setCtaDay("wednesday");
     setActiveTab("new-ad");
   };
 
@@ -420,6 +424,58 @@ export default function Ads() {
                   <div className="space-y-1.5">
                     <Label>CTA Button Text</Label>
                     <Input value={form.cta_text} onChange={e => setF("cta_text", e.target.value)} placeholder="Book Now" />
+                  </div>
+                  <div className="col-span-2 space-y-2">
+                    <Label>Button Action <span className="text-muted-foreground font-normal text-xs">(what happens when golfers tap the button)</span></Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {[
+                        { value: "none",      icon: "🚫", label: "No action",       desc: "Button is decorative only" },
+                        { value: "book-day",  icon: "📅", label: "Book a day",      desc: "Jump to tee times on a set day" },
+                        { value: "club-page", icon: "🏌️", label: "My club page",   desc: "Open your full club profile" },
+                        { value: "custom",    icon: "🔗", label: "Custom link",     desc: "Any URL (website, booking page…)" },
+                      ].map(opt => (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => {
+                            setCtaActionType(opt.value as any);
+                            if (opt.value === "book-day")  setF("link_url", `tapin://clubs/self?weekday=${ctaDay}`);
+                            if (opt.value === "club-page") setF("link_url", "tapin://clubs/self");
+                            if (opt.value === "none")      setF("link_url", "");
+                            if (opt.value === "custom")    setF("link_url", form.link_url.startsWith("tapin://") ? "" : form.link_url);
+                          }}
+                          className={`text-left p-3 rounded-lg border-2 transition-colors ${ctaActionType === opt.value ? "border-[#1a5c38] bg-green-50" : "border-gray-200 bg-white hover:border-gray-300"}`}
+                        >
+                          <div className="text-base mb-0.5">{opt.icon}</div>
+                          <div className="text-xs font-semibold">{opt.label}</div>
+                          <div className="text-[11px] text-muted-foreground leading-snug">{opt.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                    {ctaActionType === "book-day" && (
+                      <div className="flex items-center gap-3 mt-1 p-3 bg-green-50 rounded-lg border border-green-200">
+                        <span className="text-sm font-medium text-[#1a5c38]">Send golfers to tee times on</span>
+                        <select
+                          value={ctaDay}
+                          onChange={e => { setCtaDay(e.target.value); setF("link_url", `tapin://clubs/self?weekday=${e.target.value}`); }}
+                          className="text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
+                        >
+                          {["monday","tuesday","wednesday","thursday","friday","saturday","sunday"].map(d => (
+                            <option key={d} value={d}>{d.charAt(0).toUpperCase() + d.slice(1)}</option>
+                          ))}
+                        </select>
+                        <span className="text-xs text-green-700">The app will jump to the next {ctaDay.charAt(0).toUpperCase() + ctaDay.slice(1)} in the date selector</span>
+                      </div>
+                    )}
+                    {ctaActionType === "custom" && (
+                      <div className="mt-1">
+                        <Input
+                          value={form.link_url.startsWith("tapin://") ? "" : form.link_url}
+                          onChange={e => setF("link_url", e.target.value)}
+                          placeholder="https://yourclub.co.za/book"
+                        />
+                      </div>
+                    )}
                   </div>
                   <div className="space-y-1.5">
                     <Label>Campaign Start Date</Label>

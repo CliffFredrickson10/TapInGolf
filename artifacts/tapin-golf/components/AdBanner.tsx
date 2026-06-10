@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import { router } from "expo-router";
 import React from "react";
 import {
   Dimensions,
@@ -34,8 +35,21 @@ export default function AdBanner({ ad, onPress }: Props) {
 
   const handlePress = () => {
     if (onPress) { onPress(); return; }
-    if (ad.link_url) Linking.openURL(ad.link_url);
+    if (!ad.link_url) return;
+    if (ad.link_url.startsWith("tapin://")) {
+      const match = ad.link_url.match(/^tapin:\/\/clubs\/(\w+)(?:\?(.*))?$/);
+      if (match) {
+        const clubId = match[1];
+        const params: Record<string, string> = {};
+        if (match[2]) new URLSearchParams(match[2]).forEach((v, k) => { params[k] = v; });
+        router.push({ pathname: `/club/${clubId}`, params } as any);
+      }
+    } else {
+      Linking.openURL(ad.link_url);
+    }
   };
+
+  const hasAction = !!(onPress || ad.link_url);
 
   return (
     <TouchableOpacity

@@ -45,6 +45,17 @@ function openDirections(club: { name: string; latitude?: number | null; longitud
   }
 }
 
+function nextWeekdayIndex(weekday: string, days: Date[]): number {
+  const map: Record<string, number> = {
+    sunday: 0, monday: 1, tuesday: 2, wednesday: 3,
+    thursday: 4, friday: 5, saturday: 6,
+  };
+  const target = map[weekday.toLowerCase()];
+  if (target === undefined) return 0;
+  const idx = days.findIndex(d => d.getDay() === target);
+  return idx >= 0 ? idx : 0;
+}
+
 function buildDays() {
   const days = [];
   const now = new Date();
@@ -95,15 +106,18 @@ export default function ClubDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const { id, date: dateParam, event_holes: eventHolesParam } = useLocalSearchParams<{ id: string; date?: string; event_holes?: string }>();
+  const { id, date: dateParam, weekday: weekdayParam, event_holes: eventHolesParam } = useLocalSearchParams<{ id: string; date?: string; weekday?: string; event_holes?: string }>();
 
   const DAYS = useMemo(() => buildDays(), []);
 
   const initialDay = useMemo(() => {
-    if (!dateParam) return 0;
-    const idx = DAYS.findIndex(d => formatDate(d) === dateParam);
-    return idx >= 0 ? idx : 0;
-  }, [DAYS, dateParam]);
+    if (dateParam) {
+      const idx = DAYS.findIndex(d => formatDate(d) === dateParam);
+      return idx >= 0 ? idx : 0;
+    }
+    if (weekdayParam) return nextWeekdayIndex(weekdayParam, DAYS);
+    return 0;
+  }, [DAYS, dateParam, weekdayParam]);
 
   const [club, setClub] = useState<Club | null>(null);
   const [selectedDay, setSelectedDay] = useState(initialDay);
@@ -510,7 +524,7 @@ export default function ClubDetailScreen() {
         {/* Ad */}
         {ads.length > 0 && (
           <View style={{ marginTop: 12 }}>
-            <AdBanner ad={ads[0]} onPress={() => {}} />
+            <AdBanner ad={ads[0]} />
           </View>
         )}
 

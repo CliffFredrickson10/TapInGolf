@@ -817,12 +817,17 @@ router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> =>
     push: "home", tournament: "home", newsletter: "home", nearby_alert: "home", tee_time_deal: "home",
   };
   const placement = placementMap[adReq.ad_type] ?? "home";
+  // Resolve "self" placeholder inserted by the club portal when the club doesn't know their own ID
+  let resolvedLinkUrl = adReq.link_url ?? null;
+  if (resolvedLinkUrl && adReq.club_id) {
+    resolvedLinkUrl = resolvedLinkUrl.replace(/tapin:\/\/clubs\/self\b/, `tapin://clubs/${adReq.club_id}`);
+  }
   const result = await exec(
     `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
       ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
     [adReq.club_id, adReq.headline, adReq.subtitle ?? null, adReq.image_url ?? null,
-     adReq.cta_text ?? "Book Now", adReq.link_url ?? null, placement, 0, reqId,
+     adReq.cta_text ?? "Book Now", resolvedLinkUrl, placement, 0, reqId,
      adReq.confirmed_start ?? null, adReq.confirmed_end ?? null,
      adReq.slot_duration ?? null, adReq.sharing_tier ?? null]
   );

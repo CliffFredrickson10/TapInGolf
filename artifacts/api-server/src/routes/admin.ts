@@ -633,10 +633,35 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   let invoiceRef = "";
   let finalLink: string | null = null;
 
+  // ── Pro-rata calculation ──────────────────────────────────────────────────
+  // For monthly campaigns that start mid-month, the initial invoice covers only
+  // the remaining days of that first month.  Subsequent full months are billed
+  // by the monthly worker on the 1st of each month.
+  let invoiceAmount = amount;
+  let isProRata = false;
+  let proRataNote = "";
+  let proRataDays = 0;
+  let daysInStartMonth = 0;
+
+  if (billingFreq === "monthly" && confirmed_start) {
+    const startDate = new Date(confirmed_start as string);
+    const startDay  = startDate.getUTCDate();
+    if (startDay > 1) {
+      const y = startDate.getUTCFullYear();
+      const m = startDate.getUTCMonth();
+      daysInStartMonth = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+      proRataDays      = daysInStartMonth - startDay + 1;
+      invoiceAmount    = Math.round((amount * proRataDays / daysInStartMonth) * 100) / 100;
+      isProRata        = true;
+      proRataNote      = ` (pro-rata: ${proRataDays}/${daysInStartMonth} days)`;
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   if (amount >= 1) {
     const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, "");
-    invoiceRef = `ADV-${reqId}-${dateStr}`;
-    const vatAmt = Math.round(amount * 15 / 115 * 100) / 100;
+    invoiceRef = `ADV-${reqId}-${dateStr}${isProRata ? "-PR" : ""}`;
+    const vatAmt = Math.round(invoiceAmount * 15 / 115 * 100) / 100;
     const adReqFull = await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]);
     const lineItems = [{
       headline:          adReqFull?.headline ?? existing.headline,
@@ -644,7 +669,13 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       start_date:        adReqFull?.confirmed_start ?? null,
       end_date:          adReqFull?.confirmed_end   ?? null,
       billing_frequency: billingFreq,
-      amount,
+      amount:            invoiceAmount,
+      ...(isProRata && {
+        pro_rata:            true,
+        pro_rata_days:       proRataDays,
+        days_in_month:       daysInStartMonth,
+        full_monthly_price:  amount,
+      }),
     }];
     const startLabel = adReqFull?.confirmed_start
       ? new Date(adReqFull.confirmed_start).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
@@ -653,7 +684,12 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       ? new Date(adReqFull.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })
       : null;
     const periodStr = startLabel && endLabel ? ` · ${startLabel} – ${endLabel}` : "";
-    const description = `Ad Campaign: ${existing.headline}${periodStr}${billingFreq === "monthly" ? " (initial payment)" : ""}`;
+    const billingLabel = billingFreq === "monthly"
+      ? isProRata
+        ? ` (pro-rata first month${proRataNote})`
+        : " (initial payment)"
+      : "";
+    const description = `Ad Campaign: ${existing.headline}${periodStr}${billingLabel}`;
 
     const invRows = await query<any>(
       `INSERT INTO club_invoices
@@ -661,7 +697,7 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
           vat_amount, total_amount, invoice_type, line_items, ad_request_id)
        VALUES (?, ?, ?, 1, ?, 0.15, ?, ?, 'ad_campaign', ?::jsonb, ?)
        RETURNING id`,
-      [existing.club_id, invoiceRef, description, amount, vatAmt, amount,
+      [existing.club_id, invoiceRef, description, amount, vatAmt, invoiceAmount,
        JSON.stringify(lineItems), reqId]
     );
     invoiceId = invRows?.[0]?.id ?? null;
@@ -671,7 +707,7 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
       try {
         const host = `https://${req.get("host")}`;
         const payment = await createStitchPayment({
-          amount,
+          amount:            invoiceAmount,
           payerName:         existing.headline,
           merchantReference: `invoice-${invoiceId}`,
           redirectUrl:       `${host}/api/portal/invoice-success`,
@@ -690,9 +726,16 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     }
   }
 
-  const priceStr = amount >= 1 ? ` R ${amount.toLocaleString()} is due.` : "";
+  const displayAmount = invoiceAmount;
+  const priceStr = displayAmount >= 1
+    ? isProRata
+      ? ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due for the remainder of this month${proRataNote}.`
+      : ` R ${displayAmount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} is due.`
+    : "";
   const billingNote = billingFreq === "monthly"
-    ? " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign."
+    ? isProRata
+      ? ` Full monthly invoices of R ${amount.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} will then appear on your Invoices page on the 1st of each subsequent month.`
+      : " Monthly invoices will appear on your Invoices page on the 1st of each month for the duration of your campaign."
     : " Once payment is received, your ad will publish automatically.";
   const invoiceStr = invoiceId
     ? ` An invoice (${invoiceRef}) has been added to your Invoices page — use the Pay Now button there to complete payment.`
@@ -703,7 +746,7 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     [existing.club_id,
      "💳 Payment Required — Complete Your Ad Booking",
      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${invoiceStr}${notesStr}${billingNote}`,
-     JSON.stringify({ ad_request_id: reqId, invoice_id: invoiceId, payment_link: finalLink, billing_frequency: billingFreq })]
+     JSON.stringify({ ad_request_id: reqId, invoice_id: invoiceId, payment_link: finalLink, billing_frequency: billingFreq, is_pro_rata: isProRata, invoice_amount: displayAmount })]
   );
   res.json({ success: true });
 });

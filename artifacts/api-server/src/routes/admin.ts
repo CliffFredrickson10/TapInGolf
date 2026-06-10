@@ -571,6 +571,19 @@ router.get("/admin/ad-requests/:id", async (req, res): Promise<void> => {
   res.json(request);
 });
 
+router.get("/admin/ad-requests/:id/billing-cycles", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const cycles = await query<any>(
+    `SELECT id, billing_month, amount, status, stitch_payment_url,
+            invoice_sent_at, paid_at, created_at
+     FROM ad_billing_cycles WHERE ad_request_id = ? ORDER BY billing_month ASC`,
+    [reqId]
+  );
+  res.json(cycles);
+});
+
 router.put("/admin/ad-requests/:id", async (req, res): Promise<void> => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
@@ -595,7 +608,8 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   const existing = await row<any>("SELECT id, club_id, headline, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink, billing_frequency } = req.body ?? {};
+  const billingFreq: string = billing_frequency === "monthly" ? "monthly" : "once";
 
   // Auto-generate a Stitch payment link with merchantReference=ad-<reqId> so the
   // webhook can identify and auto-publish the ad when payment is confirmed.
@@ -615,26 +629,29 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   }
 
   await exec(
-    `UPDATE ad_requests SET status = 'payment_pending',
+    `UPDATE ad_requests SET status = 'payment_pending', billing_frequency = ?,
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
       confirmed_end = COALESCE(?, confirmed_end), slot_duration = COALESCE(?, slot_duration),
       sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes),
       payment_link = COALESCE(?, payment_link), updated_at = NOW()
      WHERE id = ?`,
-    [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
+    [billingFreq, confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
      slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, finalLink, reqId]
   );
-  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} is due.` : "";
+  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} per month is due.` : "";
+  const billingNote = billingFreq === "monthly"
+    ? " Monthly invoices will be sent on the 1st of each month for the duration of your campaign."
+    : " Once payment is received, your ad will publish automatically.";
   const linkStr = finalLink
-    ? ` Use this link to complete payment: ${finalLink}`
+    ? ` Use this link to complete your first payment: ${finalLink}`
     : " TapIn staff will share a payment link with you via email or phone.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [existing.club_id,
      "💳 Payment Required — Complete Your Ad Booking",
-     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, your ad will publish automatically.`,
-     JSON.stringify({ ad_request_id: reqId, payment_link: finalLink })]
+     `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr}${billingNote}`,
+     JSON.stringify({ ad_request_id: reqId, payment_link: finalLink, billing_frequency: billingFreq })]
   );
   res.json({ success: true });
 });

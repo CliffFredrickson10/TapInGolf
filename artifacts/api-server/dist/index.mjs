@@ -32253,50 +32253,50 @@ var require_result = __commonJS({
         }
       }
       _parseRowAsArray(rowData) {
-        const row2 = new Array(rowData.length);
+        const row3 = new Array(rowData.length);
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           if (rawValue !== null) {
-            row2[i] = this._parsers[i](rawValue);
+            row3[i] = this._parsers[i](rawValue);
           } else {
-            row2[i] = null;
+            row3[i] = null;
           }
         }
-        return row2;
+        return row3;
       }
       parseRow(rowData) {
-        const row2 = { ...this._prebuiltEmptyResultObject };
+        const row3 = { ...this._prebuiltEmptyResultObject };
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           const field = this.fields[i].name;
           if (rawValue !== null) {
             const v = this.fields[i].format === "binary" ? Buffer.from(rawValue) : rawValue;
-            row2[field] = this._parsers[i](v);
+            row3[field] = this._parsers[i](v);
           } else {
-            row2[field] = null;
+            row3[field] = null;
           }
         }
-        return row2;
+        return row3;
       }
-      addRow(row2) {
-        this.rows.push(row2);
+      addRow(row3) {
+        this.rows.push(row3);
       }
       addFields(fieldDescriptions) {
         this.fields = fieldDescriptions;
         if (this.fields.length) {
           this._parsers = new Array(fieldDescriptions.length);
         }
-        const row2 = {};
+        const row3 = {};
         for (let i = 0; i < fieldDescriptions.length; i++) {
           const desc = fieldDescriptions[i];
-          row2[desc.name] = null;
+          row3[desc.name] = null;
           if (this._types) {
             this._parsers[i] = this._types.getTypeParser(desc.dataTypeID, desc.format || "text");
           } else {
             this._parsers[i] = types2.getTypeParser(desc.dataTypeID, desc.format || "text");
           }
         }
-        this._prebuiltEmptyResultObject = { ...row2 };
+        this._prebuiltEmptyResultObject = { ...row3 };
       }
     };
     module.exports = Result2;
@@ -32367,19 +32367,19 @@ var require_query = __commonJS({
         this._accumulateRows = this.callback || !this.listeners("row").length;
       }
       handleDataRow(msg) {
-        let row2;
+        let row3;
         if (this._canceledDueToError) {
           return;
         }
         try {
-          row2 = this._result.parseRow(msg.fields);
+          row3 = this._result.parseRow(msg.fields);
         } catch (err) {
           this._canceledDueToError = err;
           return;
         }
-        this.emit("row", row2, this._result);
+        this.emit("row", row3, this._result);
         if (this._accumulateRows) {
-          this._result.addRow(row2);
+          this._result.addRow(row3);
         }
       }
       handleCommandComplete(msg, connection) {
@@ -35035,13 +35035,13 @@ var require_query2 = __commonJS({
         if (self2._emitRowEvents) {
           if (results.length > 1) {
             rows.forEach((rowOfRows, i) => {
-              rowOfRows.forEach((row2) => {
-                self2.emit("row", row2, results[i]);
+              rowOfRows.forEach((row3) => {
+                self2.emit("row", row3, results[i]);
               });
             });
           } else {
-            rows.forEach(function(row2) {
-              self2.emit("row", row2, results);
+            rows.forEach(function(row3) {
+              self2.emit("row", row3, results);
             });
           }
         }
@@ -36084,7 +36084,7 @@ function confirmationEmailHtml(booking, clubName, vatPct) {
   const myAmount = Number(booking.my_amount ?? booking.total_amount);
   const firstName = (booking.user_name ?? "").split(" ")[0] || "Golfer";
   const dateStr = (/* @__PURE__ */ new Date(`${booking.tee_date}T12:00:00`)).toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
-  const row2 = (label, val) => `<tr><td style="padding:8px 16px;color:#6b7280;font-size:13px;width:160px">${label}</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${val}</td></tr>`;
+  const row22 = (label, val) => `<tr><td style="padding:8px 16px;color:#6b7280;font-size:13px;width:160px">${label}</td><td style="padding:8px 16px;font-weight:600;font-size:13px;color:#111827">${val}</td></tr>`;
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><title>Booking Confirmed \u2014 ${booking.booking_ref}</title></head>
@@ -36106,12 +36106,12 @@ function confirmationEmailHtml(booking, clubName, vatPct) {
       <div style="background:#f9fafb;border-radius:8px;border:1px solid #e5e7eb;overflow:hidden;margin-bottom:28px">
         <div style="padding:10px 16px;background:#f3f4f6;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:1px;color:#6b7280">Booking Summary</div>
         <table style="width:100%;border-collapse:collapse">
-          ${row2("Club", clubName)}
-          ${row2("Date", dateStr)}
-          ${row2("Tee Time", booking.tee_time)}
-          ${row2("Players", String(booking.players))}
-          ${row2("Payment Method", fmtMethod(booking.payment_method))}
-          ${row2("Reference", booking.booking_ref)}
+          ${row22("Club", clubName)}
+          ${row22("Date", dateStr)}
+          ${row22("Tee Time", booking.tee_time)}
+          ${row22("Players", String(booking.players))}
+          ${row22("Payment Method", fmtMethod(booking.payment_method))}
+          ${row22("Reference", booking.booking_ref)}
           <tr style="background:#f0fdf4"><td style="padding:10px 16px;color:#166534;font-weight:700;font-size:13px">Total Paid</td><td style="padding:10px 16px;font-weight:800;font-size:15px;color:#1a5c38">R ${myAmount.toFixed(2)}</td></tr>
         </table>
       </div>
@@ -60591,6 +60591,39 @@ router4.post("/stitch/webhook", async (req, res) => {
     res.status(200).json({ received: true });
     return;
   }
+  if (externalRef.startsWith("ad-billing-")) {
+    const cycleId = parseInt(externalRef.slice(11), 10);
+    if (!isNaN(cycleId)) {
+      const claimed = await run(
+        "UPDATE ad_billing_cycles SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'pending'",
+        [cycleId]
+      );
+      if (claimed === 1) {
+        const cycle = await row(
+          `SELECT abc.billing_month, ar.club_id, ar.headline
+           FROM ad_billing_cycles abc
+           JOIN ad_requests ar ON ar.id = abc.ad_request_id
+           WHERE abc.id = ?`,
+          [cycleId]
+        );
+        if (cycle) {
+          const monthLabel = new Date(String(cycle.billing_month).slice(0, 10)).toLocaleString("en-ZA", { month: "long", year: "numeric" });
+          await exec(
+            `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+             VALUES (?, 'ad_update', ?, ?, ?)`,
+            [
+              cycle.club_id,
+              "\u2705 Ad Payment Confirmed",
+              `Payment for "${cycle.headline}" (${monthLabel}) received. Your ad continues to run \u2014 thank you!`,
+              JSON.stringify({ billing_cycle_id: cycleId })
+            ]
+          );
+        }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
   if (externalRef.startsWith("ad-")) {
     const reqId = parseInt(externalRef.slice(3), 10);
     if (!isNaN(reqId)) {
@@ -62581,6 +62614,21 @@ router10.get("/admin/ad-requests/:id", async (req, res) => {
   }
   res.json(request);
 });
+router10.get("/admin/ad-requests/:id/billing-cycles", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const reqId = parseInt(req.params.id, 10);
+  const cycles = await query(
+    `SELECT id, billing_month, amount, status, stitch_payment_url,
+            invoice_sent_at, paid_at, created_at
+     FROM ad_billing_cycles WHERE ad_request_id = ? ORDER BY billing_month ASC`,
+    [reqId]
+  );
+  res.json(cycles);
+});
 router10.put("/admin/ad-requests/:id", async (req, res) => {
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) {
@@ -62623,7 +62671,8 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     res.status(400).json({ message: "Only pending_review requests can be approved" });
     return;
   }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link: manualLink, billing_frequency } = req.body ?? {};
+  const billingFreq = billing_frequency === "monthly" ? "monthly" : "once";
   let finalLink = manualLink ?? null;
   if (!finalLink && confirmed_price && Number(confirmed_price) >= 1) {
     try {
@@ -62640,13 +62689,14 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     }
   }
   await exec(
-    `UPDATE ad_requests SET status = 'payment_pending',
+    `UPDATE ad_requests SET status = 'payment_pending', billing_frequency = ?,
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
       confirmed_end = COALESCE(?, confirmed_end), slot_duration = COALESCE(?, slot_duration),
       sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes),
       payment_link = COALESCE(?, payment_link), updated_at = NOW()
      WHERE id = ?`,
     [
+      billingFreq,
       confirmed_price ?? null,
       confirmed_start ?? null,
       confirmed_end ?? null,
@@ -62657,16 +62707,17 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       reqId
     ]
   );
-  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} is due.` : "";
-  const linkStr = finalLink ? ` Use this link to complete payment: ${finalLink}` : " TapIn staff will share a payment link with you via email or phone.";
+  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} per month is due.` : "";
+  const billingNote = billingFreq === "monthly" ? " Monthly invoices will be sent on the 1st of each month for the duration of your campaign." : " Once payment is received, your ad will publish automatically.";
+  const linkStr = finalLink ? ` Use this link to complete your first payment: ${finalLink}` : " TapIn staff will share a payment link with you via email or phone.";
   const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [
       existing.club_id,
       "\u{1F4B3} Payment Required \u2014 Complete Your Ad Booking",
-      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, your ad will publish automatically.`,
-      JSON.stringify({ ad_request_id: reqId, payment_link: finalLink })
+      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr}${billingNote}`,
+      JSON.stringify({ ad_request_id: reqId, payment_link: finalLink, billing_frequency: billingFreq })
     ]
   );
   res.json({ success: true });
@@ -70943,6 +70994,21 @@ async function applyLateAlters() {
   await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
+  await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
+  await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
+    id            SERIAL PRIMARY KEY,
+    ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,
+    billing_month DATE NOT NULL,
+    amount        DECIMAL(10,2) NOT NULL,
+    status        VARCHAR(50)   NOT NULL DEFAULT 'pending',
+    stitch_payment_id  VARCHAR(200),
+    stitch_payment_url VARCHAR(500),
+    invoice_sent_at    TIMESTAMP,
+    paid_at            TIMESTAMP,
+    created_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (ad_request_id, billing_month)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ad_billing_cycles_request ON ad_billing_cycles (ad_request_id)");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");
@@ -71314,6 +71380,119 @@ function startMonthlyCounterInvoiceWorker() {
   }, POLL_INTERVAL_MS4);
 }
 
+// src/worker/monthlyAdBilling.ts
+init_pg();
+init_stitch();
+init_logger();
+var POLL_INTERVAL_MS5 = 60 * 60 * 1e3;
+var lastBilledMonth = "";
+function nowSAST2() {
+  return new Date(Date.now() + 2 * 60 * 60 * 1e3);
+}
+function fmtRand2(n) {
+  return `R ${Number(n).toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+async function runMonthlyAdBillingCycle() {
+  const now = nowSAST2();
+  const day = now.getUTCDate();
+  const year = now.getUTCFullYear();
+  const month = now.getUTCMonth() + 1;
+  const monthKey = `${year}-${String(month).padStart(2, "0")}`;
+  if (day !== 1) return;
+  if (lastBilledMonth === monthKey) return;
+  const billingMonthDate = new Date(Date.UTC(year, month - 1, 1));
+  const billingMonthStr = billingMonthDate.toISOString().slice(0, 10);
+  const monthLabel = billingMonthDate.toLocaleString("en-ZA", { month: "long", year: "numeric" });
+  logger.info({ monthKey, billingMonthStr }, "Monthly ad billing worker: running");
+  const liveAds = await query(
+    `SELECT ar.id, ar.club_id, ar.headline, ar.confirmed_price, ar.confirmed_start, ar.confirmed_end,
+            c.name AS club_name, c.email AS club_email
+     FROM ad_requests ar
+     JOIN clubs c ON c.id = ar.club_id
+     WHERE ar.status = 'live'
+       AND ar.billing_frequency = 'monthly'
+       AND ar.confirmed_price IS NOT NULL
+       AND ar.confirmed_end >= ?
+       AND DATE_TRUNC('month', ar.confirmed_start::DATE) < ?::DATE`,
+    [billingMonthStr, billingMonthStr]
+  );
+  if (liveAds.length === 0) {
+    logger.info("Monthly ad billing worker: no ads to bill this month");
+    lastBilledMonth = monthKey;
+    return;
+  }
+  logger.info({ count: liveAds.length }, "Monthly ad billing worker: ads to bill");
+  const host = process.env["REPLIT_DEV_DOMAIN"] ? `https://${process.env["REPLIT_DEV_DOMAIN"]}` : "https://tapingolf.co.za";
+  const redirectUrl = `${host}/api/portal/invoice-success`;
+  for (const ad of liveAds) {
+    try {
+      const amount = Number(ad.confirmed_price);
+      const cycleRows = await query(
+        `INSERT INTO ad_billing_cycles
+           (ad_request_id, billing_month, amount, status, invoice_sent_at)
+         VALUES (?, ?, ?, 'pending', NOW())
+         ON CONFLICT (ad_request_id, billing_month) DO NOTHING
+         RETURNING id`,
+        [ad.id, billingMonthStr, amount]
+      );
+      if (!cycleRows || cycleRows.length === 0) {
+        logger.info({ ad_request_id: ad.id, billingMonthStr }, "Monthly ad billing: already billed, skipping");
+        continue;
+      }
+      const cycleId = cycleRows[0].id;
+      let paymentUrl = null;
+      try {
+        const payment = await createStitchPayment({
+          amount,
+          payerName: ad.club_name,
+          merchantReference: `ad-billing-${cycleId}`,
+          redirectUrl,
+          payerEmail: ad.club_email ?? void 0
+        });
+        await exec(
+          "UPDATE ad_billing_cycles SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
+          [payment.id, payment.url, cycleId]
+        );
+        paymentUrl = payment.url;
+      } catch (payErr) {
+        logger.warn({ err: payErr, cycleId }, "Monthly ad billing: Stitch link failed");
+      }
+      const endDate = ad.confirmed_end ? new Date(ad.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" }) : null;
+      const linkLine = paymentUrl ? ` Pay now: ${paymentUrl}` : " TapIn staff will be in touch with a payment link.";
+      const endLine = endDate ? ` Your campaign runs until ${endDate}.` : "";
+      await exec(
+        `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+         VALUES (?, 'ad_update', ?, ?, ?)`,
+        [
+          ad.club_id,
+          `\u{1F4C5} Monthly Ad Invoice \u2014 ${monthLabel}`,
+          `Your monthly ad fee of ${fmtRand2(amount)} for "${ad.headline}" is due for ${monthLabel}.${linkLine}${endLine}`,
+          JSON.stringify({ ad_request_id: ad.id, billing_cycle_id: cycleId, payment_url: paymentUrl })
+        ]
+      );
+      logger.info(
+        { ad_request_id: ad.id, club_id: ad.club_id, cycleId, amount, billingMonthStr },
+        "Monthly ad billing worker: invoice sent"
+      );
+    } catch (err) {
+      logger.error({ err, ad_request_id: ad.id }, "Monthly ad billing worker: failed for ad");
+    }
+  }
+  lastBilledMonth = monthKey;
+  logger.info({ monthKey }, "Monthly ad billing worker: cycle complete");
+}
+function startMonthlyAdBillingWorker() {
+  logger.info("Monthly ad billing worker started");
+  runMonthlyAdBillingCycle().catch(
+    (err) => logger.error({ err }, "Monthly ad billing worker: startup cycle failed")
+  );
+  setInterval(() => {
+    runMonthlyAdBillingCycle().catch(
+      (err) => logger.error({ err }, "Monthly ad billing worker: cycle failed")
+    );
+  }, POLL_INTERVAL_MS5);
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"];
 if (!rawPort) {
@@ -71338,12 +71517,14 @@ migrate().then(() => {
   startAutoTeeGenWorker();
   startEntryPaymentReminderWorker();
   startMonthlyCounterInvoiceWorker();
+  startMonthlyAdBillingWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
   startAutoTeeGenWorker();
   startEntryPaymentReminderWorker();
   startMonthlyCounterInvoiceWorker();
+  startMonthlyAdBillingWorker();
 });
 /*! Bundled license information:
 

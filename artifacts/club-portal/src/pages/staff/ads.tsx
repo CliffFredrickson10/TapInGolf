@@ -36,9 +36,20 @@ interface AdRequest {
   sharing_tier: string | null;
   staff_notes: string | null;
   payment_link: string | null;
+  billing_frequency: string;
   published_ad_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+interface BillingCycle {
+  id: number;
+  billing_month: string;
+  amount: number;
+  status: string;
+  stitch_payment_url: string | null;
+  invoice_sent_at: string | null;
+  paid_at: string | null;
 }
 
 interface Stats {
@@ -355,6 +366,8 @@ export default function StaffAds() {
   const [cfSharing, setCfSharing] = useState("");
   const [cfNotes, setCfNotes] = useState("");
   const [cfPaymentLink, setCfPaymentLink] = useState("");
+  const [cfBillingFreq, setCfBillingFreq] = useState<"once"|"monthly">("once");
+  const [billingCycles, setBillingCycles] = useState<BillingCycle[]>([]);
   const [saving, setSaving] = useState(false);
   const [actioning, setActioning] = useState(false);
 
@@ -411,6 +424,15 @@ export default function StaffAds() {
     setCfSharing(req.sharing_tier ?? "");
     setCfNotes(req.staff_notes ?? "");
     setCfPaymentLink(req.payment_link ?? "");
+    setCfBillingFreq((req.billing_frequency === "monthly" ? "monthly" : "once") as "once"|"monthly");
+    // Load billing cycles for monthly ads that are live or payment_pending
+    if (req.billing_frequency === "monthly" && (req.status === "live" || req.status === "payment_pending")) {
+      api<BillingCycle[]>(`/api/admin/ad-requests/${req.id}/billing-cycles`)
+        .then(setBillingCycles)
+        .catch(() => setBillingCycles([]));
+    } else {
+      setBillingCycles([]);
+    }
   };
 
   const saveConfig = async () => {
@@ -574,8 +596,11 @@ export default function StaffAds() {
                   confirmed_start: cfStart || null, confirmed_end: cfEnd || null,
                   slot_duration: cfSlot || null, sharing_tier: cfSharing || null,
                   staff_notes: cfNotes || null, payment_link: cfPaymentLink || null,
+                  billing_frequency: cfBillingFreq,
                 })}
                 cfPaymentLink={cfPaymentLink} setCfPaymentLink={setCfPaymentLink}
+                cfBillingFreq={cfBillingFreq} setCfBillingFreq={setCfBillingFreq}
+                billingCycles={billingCycles}
                 onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
                 onUnpublish={() => action("unpublish", "Ad unpublished")}
               />
@@ -973,12 +998,14 @@ function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onReject, onUnpublish }: {
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, cfBillingFreq, setCfBillingFreq, billingCycles, saving, actioning, onSave, onApprove, onReject, onUnpublish }: {
   req: AdRequest; cfPrice: string; setCfPrice: (v: string) => void;
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
   cfNotes: string; setCfNotes: (v: string) => void;
   cfPaymentLink: string; setCfPaymentLink: (v: string) => void;
+  cfBillingFreq: "once"|"monthly"; setCfBillingFreq: (v: "once"|"monthly") => void;
+  billingCycles: BillingCycle[];
   saving: boolean; actioning: boolean;
   onSave: () => void; onApprove: () => void;
   onReject: () => void; onUnpublish: () => void;
@@ -1052,15 +1079,40 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   {req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} → {req.confirmed_end ? format(new Date(req.confirmed_end), "d MMM yyyy") : "—"}
                 </div>
               </div>
-              <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}` : "—"} />
+              <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}${req.billing_frequency === "monthly" ? "/mo" : ""}` : "—"} />
+              <InfoRow label="Billing" value={req.billing_frequency === "monthly" ? "📅 Monthly" : "One-time"} />
               {req.ad_type !== "club_detail" && <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />}
               {req.ad_type !== "club_detail" && <InfoRow label="Sharing Tier" value={req.sharing_tier ?? "—"} />}
+              {req.billing_frequency === "monthly" && billingCycles.length > 0 && (
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2">Billing Cycles</p>
+                  <div className="space-y-1.5">
+                    {billingCycles.map(c => {
+                      const month = format(new Date(String(c.billing_month).slice(0, 10) + "T12:00:00"), "MMM yyyy");
+                      const isPaid = c.status === "paid";
+                      return (
+                        <div key={c.id} className={`flex items-center justify-between rounded-lg px-3 py-2 text-xs ${isPaid ? "bg-green-50 border border-green-200" : "bg-amber-50 border border-amber-200"}`}>
+                          <span className={`font-semibold ${isPaid ? "text-green-800" : "text-amber-800"}`}>{month}</span>
+                          <span className="text-muted-foreground">R {Number(c.amount).toLocaleString()}</span>
+                          <span className={`font-bold uppercase tracking-wide ${isPaid ? "text-green-700" : "text-amber-700"}`}>{isPaid ? "✓ Paid" : "Pending"}</span>
+                          {!isPaid && c.stitch_payment_url && (
+                            <a href={c.stitch_payment_url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">Link</a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
           ) : req.status === "payment_pending" ? (
             <div className="space-y-3">
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                <div className="font-semibold text-sm text-amber-800">Awaiting Payment</div>
-                <div className="text-sm text-amber-700 mt-0.5">Quoted: <strong>R {req.confirmed_price ? Number(req.confirmed_price).toLocaleString() : "—"}</strong></div>
+                <div className="font-semibold text-sm text-amber-800">Awaiting First Payment</div>
+                <div className="text-sm text-amber-700 mt-0.5">
+                  Quoted: <strong>R {req.confirmed_price ? Number(req.confirmed_price).toLocaleString() : "—"}</strong>
+                  {req.billing_frequency === "monthly" && <span className="ml-1 text-amber-600">/month · Monthly billing</span>}
+                </div>
               </div>
               <InfoRow label="Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
               <InfoRow label="End"   value={req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"} />
@@ -1099,9 +1151,23 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                 </div>
               )}
               <div>
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Billing Frequency</Label>
+                <div className="flex gap-2">
+                  {([["once", "One-time payment"], ["monthly", "📅 Monthly billing"]] as const).map(([val, label]) => (
+                    <button key={val} onClick={() => setCfBillingFreq(val)}
+                      className={`flex-1 text-xs font-semibold border rounded-lg py-2 transition-colors ${cfBillingFreq === val ? "bg-[#e8f5ee] border-[#1a5c38] text-[#1a5c38]" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+                {cfBillingFreq === "monthly" && (
+                  <p className="text-xs text-muted-foreground mt-1">Club will be invoiced monthly on the 1st. First payment activates the ad; each subsequent month is billed automatically.</p>
+                )}
+              </div>
+              <div>
                 <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Payment Link (optional)</Label>
                 <Input value={cfPaymentLink} onChange={e => setCfPaymentLink(e.target.value)} placeholder="https://pay.stitch.money/..." />
-                <p className="text-xs text-muted-foreground mt-1">Sent to the club in their payment notification when you approve.</p>
+                <p className="text-xs text-muted-foreground mt-1">Sent to the club in their payment notification when you approve. Auto-generated by Stitch if left blank.</p>
               </div>
               <div>
                 <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notes / Quote Message to Club</Label>

@@ -1342,6 +1342,40 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     return;
   }
 
+  // Monthly ad billing cycle payment: externalReference is "ad-billing-<cycleId>"
+  if (externalRef.startsWith("ad-billing-")) {
+    const cycleId = parseInt(externalRef.slice(11), 10);
+    if (!isNaN(cycleId)) {
+      const claimed = await run(
+        "UPDATE ad_billing_cycles SET status = 'paid', paid_at = NOW() WHERE id = ? AND status = 'pending'",
+        [cycleId]
+      );
+      if (claimed === 1) {
+        const cycle = await row<any>(
+          `SELECT abc.billing_month, ar.club_id, ar.headline
+           FROM ad_billing_cycles abc
+           JOIN ad_requests ar ON ar.id = abc.ad_request_id
+           WHERE abc.id = ?`,
+          [cycleId]
+        );
+        if (cycle) {
+          const monthLabel = new Date(String(cycle.billing_month).slice(0, 10))
+            .toLocaleString("en-ZA", { month: "long", year: "numeric" });
+          await exec(
+            `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta)
+             VALUES (?, 'ad_update', ?, ?, ?)`,
+            [cycle.club_id,
+             "✅ Ad Payment Confirmed",
+             `Payment for "${cycle.headline}" (${monthLabel}) received. Your ad continues to run — thank you!`,
+             JSON.stringify({ billing_cycle_id: cycleId })]
+          );
+        }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
   // Ad request payment: externalReference is "ad-<requestId>"
   if (externalRef.startsWith("ad-")) {
     const reqId = parseInt(externalRef.slice(3), 10);

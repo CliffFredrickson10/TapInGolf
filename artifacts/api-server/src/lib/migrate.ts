@@ -1469,6 +1469,21 @@ async function applyLateAlters() {
   await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
+  await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
+  await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
+    id            SERIAL PRIMARY KEY,
+    ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,
+    billing_month DATE NOT NULL,
+    amount        DECIMAL(10,2) NOT NULL,
+    status        VARCHAR(50)   NOT NULL DEFAULT 'pending',
+    stitch_payment_id  VARCHAR(200),
+    stitch_payment_url VARCHAR(500),
+    invoice_sent_at    TIMESTAMP,
+    paid_at            TIMESTAMP,
+    created_at         TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (ad_request_id, billing_month)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ad_billing_cycles_request ON ad_billing_cycles (ad_request_id)");
 }
 
 async function seedAdOfferings(): Promise<void> {

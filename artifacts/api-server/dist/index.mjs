@@ -62636,12 +62636,14 @@ router10.put("/admin/ad-requests/:id", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
   await exec(
     `UPDATE ad_requests SET confirmed_price = COALESCE(?, confirmed_price),
       confirmed_start = COALESCE(?, confirmed_start), confirmed_end = COALESCE(?, confirmed_end),
       slot_duration = COALESCE(?, slot_duration), sharing_tier = COALESCE(?, sharing_tier),
-      staff_notes = COALESCE(?, staff_notes), updated_at = NOW()
+      staff_notes = COALESCE(?, staff_notes),
+      payment_link = CASE WHEN ? IS NOT NULL THEN ? ELSE payment_link END,
+      updated_at = NOW()
      WHERE id = ?`,
     [
       confirmed_price ?? null,
@@ -62650,6 +62652,8 @@ router10.put("/admin/ad-requests/:id", async (req, res) => {
       slot_duration ?? null,
       sharing_tier ?? null,
       staff_notes ?? null,
+      payment_link ?? null,
+      payment_link ?? null,
       reqId
     ]
   );

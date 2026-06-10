@@ -1116,13 +1116,39 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
               <InfoRow label="Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
               <InfoRow label="End"   value={req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"} />
               {req.ad_type !== "club_detail" && <InfoRow label="Slot" value={req.slot_duration ?? "—"} />}
-              {req.payment_link && (
-                <div>
-                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Payment Link Sent</p>
+              <div>
+                <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5">Payment Link</p>
+                {req.payment_link ? (
                   <a href={req.payment_link} target="_blank" rel="noopener noreferrer"
-                    className="text-xs text-blue-600 hover:underline break-all">{req.payment_link}</a>
+                    className="text-xs text-blue-600 hover:underline break-all block mb-1">{req.payment_link}</a>
+                ) : (
+                  <p className="text-xs text-amber-700 mb-1.5">⚠️ No payment link generated (Stitch not configured). Enter one manually:</p>
+                )}
+                <div className="flex gap-2">
+                  <Input
+                    value={cfPaymentLink}
+                    onChange={e => setCfPaymentLink(e.target.value)}
+                    placeholder="https://pay.stitch.money/..."
+                    className="text-xs h-8"
+                  />
+                  <Button size="sm" variant="outline" className="h-8 text-xs whitespace-nowrap" disabled={saving || !cfPaymentLink}
+                    onClick={async () => {
+                      setSaving(true);
+                      try {
+                        const updated = await api<AdRequest>(`/api/admin/ad-requests/${req.id}`, {
+                          method: "PUT",
+                          body: JSON.stringify({ payment_link: cfPaymentLink }),
+                        });
+                        setSelected(updated);
+                        setAllRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
+                        toast({ title: "Payment link saved" });
+                      } catch (e: any) {
+                        toast({ title: "Error", description: e.message, variant: "destructive" });
+                      } finally { setSaving(false); }
+                    }}
+                  >{saving ? "…" : "Save Link"}</Button>
                 </div>
-              )}
+              </div>
             </div>
           ) : req.status === "rejected" || req.status === "expired" ? (
             <div className="text-sm text-muted-foreground">No configuration needed for this status.</div>

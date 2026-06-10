@@ -821,6 +821,67 @@ function resendEmailText(booking: any, clubName: string): string {
   ].join("\n");
 }
 
+const STAFF_EMAIL = () => process.env["STAFF_EMAIL"] ?? "staff@tapingolf.co.za";
+
+export async function sendAdRequestNotificationEmail(req: {
+  clubName: string;
+  adType: string;
+  packageName: string | null;
+  headline: string;
+  requestId: number;
+}): Promise<{ dev?: boolean }> {
+  const typeLabels: Record<string, string> = {
+    club_detail: "Club Detail Page Ad",
+    featured_home: "Home Screen Featured Club",
+    explore: "Explore Screen Spotlight",
+    push: "Push Notification Campaign",
+    tournament: "Tournament Sponsor Banner",
+    newsletter: "Newsletter Feature",
+    nearby_alert: "Nearby Club Alert",
+    tee_time_deal: "Tee Time Deal Promotion",
+  };
+  const typeLabel = typeLabels[req.adType] ?? req.adType;
+
+  if (EMAIL_DEV_MODE()) {
+    logger.info({ ...req }, "[DEV] Ad request notification email — no SMTP credentials");
+    return { dev: true };
+  }
+
+  const transporter = nodemailer.createTransport({
+    host:   SMTP_HOST(),
+    port:   SMTP_PORT(),
+    secure: SMTP_PORT() === 465,
+    auth: { user: SMTP_USER(), pass: SMTP_PASS() },
+  });
+
+  await transporter.sendMail({
+    from:    SMTP_FROM(),
+    to:      STAFF_EMAIL(),
+    subject: `New Ad Request #${req.requestId} — ${req.clubName}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:560px">
+        <h2 style="color:#1a5c38">New Advertisement Request</h2>
+        <p>A club has submitted a new ad request that requires your review.</p>
+        <table style="width:100%;border-collapse:collapse;margin:16px 0">
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Request ID</td><td style="font-weight:600">#${req.requestId}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Club</td><td style="font-weight:600">${req.clubName}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Ad Type</td><td style="font-weight:600">${typeLabel}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Package</td><td style="font-weight:600">${req.packageName ?? "—"}</td></tr>
+          <tr><td style="padding:6px 0;color:#6b7280;font-size:14px">Headline</td><td style="font-weight:600">${req.headline}</td></tr>
+        </table>
+        <p style="margin-top:20px">
+          <a href="https://tapingolf.co.za/staff/ads" style="background:#1a5c38;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">
+            Review in Staff Portal →
+          </a>
+        </p>
+      </div>
+    `,
+    text: `New Ad Request #${req.requestId} from ${req.clubName}\nType: ${typeLabel}\nPackage: ${req.packageName ?? "—"}\nHeadline: ${req.headline}\n\nReview at https://tapingolf.co.za/staff/ads`,
+  });
+
+  return {};
+}
+
 export async function sendInvoiceEmail(
   booking: any,
   clubName: string,

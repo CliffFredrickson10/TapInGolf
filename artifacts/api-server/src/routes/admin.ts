@@ -461,6 +461,162 @@ router.delete("/admin/ads/:id", async (req, res): Promise<void> => {
 });
 
 // ─────────────────────────────────────────────────────────────────────
+// Ad Requests management — platform admin only
+// ─────────────────────────────────────────────────────────────────────
+
+router.get("/admin/ad-requests", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const status = req.query.status as string | undefined;
+  const where = status ? "WHERE ar.status = ?" : "";
+  const params = status ? [status] : [];
+  const requests = await query<any>(
+    `SELECT ar.*, c.name AS club_name, c.province AS club_province, c.email AS club_email
+     FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id
+     ${where} ORDER BY ar.created_at DESC`,
+    params
+  );
+  res.json(requests);
+});
+
+router.get("/admin/ad-requests/stats", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const [pending, live, paymentPending, revenue] = await Promise.all([
+    row<any>("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'pending_review'"),
+    row<any>("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'live'"),
+    row<any>("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'payment_pending'"),
+    row<any>("SELECT COALESCE(SUM(confirmed_price),0) AS total FROM ad_requests WHERE status IN ('live','expired') AND MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())"),
+  ]);
+  res.json({
+    pending_review: Number(pending?.cnt ?? 0),
+    live: Number(live?.cnt ?? 0),
+    payment_pending: Number(paymentPending?.cnt ?? 0),
+    revenue_this_month: Number(revenue?.total ?? 0),
+  });
+});
+
+router.get("/admin/ad-requests/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const request = await row<any>(
+    `SELECT ar.*, c.name AS club_name, c.province AS club_province, c.email AS club_email
+     FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id WHERE ar.id = ?`,
+    [reqId]
+  );
+  if (!request) { res.status(404).json({ message: "Not found" }); return; }
+  res.json(request);
+});
+
+router.put("/admin/ad-requests/:id", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes } = req.body ?? {};
+  await exec(
+    `UPDATE ad_requests SET confirmed_price = COALESCE(?, confirmed_price),
+      confirmed_start = COALESCE(?, confirmed_start), confirmed_end = COALESCE(?, confirmed_end),
+      slot_duration = COALESCE(?, slot_duration), sharing_tier = COALESCE(?, sharing_tier),
+      staff_notes = COALESCE(?, staff_notes), updated_at = NOW()
+     WHERE id = ?`,
+    [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
+     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, reqId]
+  );
+  res.json(await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]));
+});
+
+router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
+  if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes } = req.body ?? {};
+  await exec(
+    `UPDATE ad_requests SET status = 'approved',
+      confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
+      confirmed_end = COALESCE(?, confirmed_end), slot_duration = COALESCE(?, slot_duration),
+      sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes), updated_at = NOW()
+     WHERE id = ?`,
+    [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
+     slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, reqId]
+  );
+  res.json({ success: true });
+});
+
+router.post("/admin/ad-requests/:id/reject", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const { staff_notes } = req.body ?? {};
+  await exec(
+    "UPDATE ad_requests SET status = 'rejected', staff_notes = COALESCE(?, staff_notes), updated_at = NOW() WHERE id = ?",
+    [staff_notes ?? null, reqId]
+  );
+  res.json({ success: true });
+});
+
+router.post("/admin/ad-requests/:id/payment-requested", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
+  if (existing.status !== "approved") { res.status(400).json({ message: "Only approved requests can move to payment_pending" }); return; }
+  await exec("UPDATE ad_requests SET status = 'payment_pending', updated_at = NOW() WHERE id = ?", [reqId]);
+  res.json({ success: true });
+});
+
+router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const adReq = await row<any>(
+    `SELECT ar.*, c.name AS club_name FROM ad_requests ar JOIN clubs c ON c.id = ar.club_id WHERE ar.id = ?`,
+    [reqId]
+  );
+  if (!adReq) { res.status(404).json({ message: "Not found" }); return; }
+  if (!["approved","payment_pending"].includes(adReq.status)) {
+    res.status(400).json({ message: "Request must be approved or payment_pending to publish" }); return;
+  }
+  const placementMap: Record<string, string> = {
+    club_detail: "club", featured_home: "home", explore: "explore",
+    push: "home", tournament: "home", newsletter: "home", nearby_alert: "home", tee_time_deal: "home",
+  };
+  const placement = placementMap[adReq.ad_type] ?? "home";
+  const result = await exec(
+    `INSERT INTO ads (club_id, title, subtitle, image_url, cta_text, link_url, placement, priority, active,
+      ad_request_id, campaign_start, campaign_end, slot_duration, sharing_tier)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?, ?, ?, ?)`,
+    [adReq.club_id, adReq.headline, adReq.subtitle ?? null, adReq.image_url ?? null,
+     adReq.cta_text ?? "Book Now", adReq.link_url ?? null, placement, 0, reqId,
+     adReq.confirmed_start ?? null, adReq.confirmed_end ?? null,
+     adReq.slot_duration ?? null, adReq.sharing_tier ?? null]
+  );
+  const adId = (result as any).insertId;
+  await exec(
+    "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
+    [adId, reqId]
+  );
+  res.json({ success: true, ad_id: adId });
+});
+
+router.post("/admin/ad-requests/:id/unpublish", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const reqId = parseInt(req.params.id, 10);
+  const adReq = await row<any>("SELECT id, status, published_ad_id FROM ad_requests WHERE id = ?", [reqId]);
+  if (!adReq) { res.status(404).json({ message: "Not found" }); return; }
+  if (adReq.published_ad_id) {
+    await exec("DELETE FROM ads WHERE id = ?", [adReq.published_ad_id]);
+  }
+  await exec("UPDATE ad_requests SET status = 'expired', published_ad_id = NULL, updated_at = NOW() WHERE id = ?", [reqId]);
+  res.json({ success: true });
+});
+
+// ─────────────────────────────────────────────────────────────────────
 // Vouchers management — platform admin only
 // ─────────────────────────────────────────────────────────────────────
 router.get("/admin/vouchers", async (req, res): Promise<void> => {

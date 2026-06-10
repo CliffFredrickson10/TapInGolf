@@ -4,282 +4,575 @@ import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Megaphone, Plus, Pencil, Trash2 } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
+import { RefreshCw, Bell } from "lucide-react";
 
-interface AdRow {
+interface AdRequest {
   id: number;
-  title: string;
+  club_id: number;
+  club_name: string;
+  club_province: string;
+  club_email: string | null;
+  ad_type: string;
+  package_name: string | null;
+  headline: string;
   subtitle: string | null;
   image_url: string | null;
   cta_text: string | null;
   link_url: string | null;
-  placement: string;
-  priority: number;
-  active: number;
-  club_id: number | null;
-  club_name: string | null;
+  requested_start: string | null;
+  requested_end: string | null;
+  club_notes: string | null;
+  status: string;
+  confirmed_price: number | null;
+  confirmed_start: string | null;
+  confirmed_end: string | null;
+  slot_duration: string | null;
+  sharing_tier: string | null;
+  staff_notes: string | null;
+  published_ad_id: number | null;
   created_at: string;
+  updated_at: string;
 }
 
-type AdForm = Omit<AdRow, "id" | "club_name" | "created_at">;
+interface Stats {
+  pending_review: number;
+  live: number;
+  payment_pending: number;
+  revenue_this_month: number;
+}
 
-const PLACEMENTS = ["home", "club", "explore"];
-
-const emptyForm = (): AdForm => ({
-  title: "", subtitle: "", image_url: "", cta_text: "", link_url: "",
-  placement: "home", priority: 0, active: 1, club_id: null,
-});
-
-const placementBadge = (p: string) => {
-  const map: Record<string, string> = {
-    home: "bg-blue-100 text-blue-700",
-    club: "bg-green-100 text-green-700",
-    explore: "bg-purple-100 text-purple-700",
-  };
-  return map[p] ?? "bg-gray-100 text-gray-600";
+const STATUS: Record<string, { bg: string; text: string; label: string }> = {
+  pending_review:  { bg: "bg-yellow-100", text: "text-yellow-800", label: "Pending Review" },
+  approved:        { bg: "bg-blue-100",   text: "text-blue-800",   label: "Approved" },
+  payment_pending: { bg: "bg-orange-100", text: "text-orange-800", label: "Payment Pending" },
+  live:            { bg: "bg-green-100",  text: "text-green-800",  label: "Live" },
+  expired:         { bg: "bg-gray-100",   text: "text-gray-500",   label: "Expired" },
+  rejected:        { bg: "bg-red-100",    text: "text-red-700",    label: "Rejected" },
 };
+
+const AD_TYPE: Record<string, { label: string; color: string; icon: string }> = {
+  club_detail:    { label: "Club Detail Page",      color: "#1a5c38", icon: "🏌️" },
+  featured_home:  { label: "Home Screen Featured",  color: "#c8a84b", icon: "⭐" },
+  explore:        { label: "Explore Spotlight",      color: "#0891b2", icon: "🔍" },
+  push:           { label: "Push Notification",      color: "#7c3aed", icon: "📲" },
+  tournament:     { label: "Tournament Sponsor",     color: "#c2410c", icon: "🏆" },
+  newsletter:     { label: "Newsletter Feature",     color: "#0f766e", icon: "📧" },
+  nearby_alert:   { label: "Nearby Club Alert",      color: "#b45309", icon: "🗺️" },
+  tee_time_deal:  { label: "Tee Time Deal",          color: "#c2410c", icon: "🎯" },
+};
+
+const STATUS_FILTERS = ["all", "pending_review", "approved", "payment_pending", "live", "expired", "rejected"];
 
 export default function StaffAds() {
   const { toast } = useToast();
-  const [ads, setAds] = useState<AdRow[]>([]);
+  const [allRequests, setAllRequests] = useState<AdRequest[]>([]);
+  const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [editId, setEditId] = useState<number | null>(null);
-  const [form, setForm] = useState<AdForm>(emptyForm());
+  const [selected, setSelected] = useState<AdRequest | null>(null);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [activeTab, setActiveTab] = useState("queue");
+
+  // Staff config form state
+  const [cfPrice, setCfPrice] = useState("");
+  const [cfStart, setCfStart] = useState("");
+  const [cfEnd, setCfEnd] = useState("");
+  const [cfSlot, setCfSlot] = useState("");
+  const [cfSharing, setCfSharing] = useState("");
+  const [cfNotes, setCfNotes] = useState("");
   const [saving, setSaving] = useState(false);
-  const [deleting, setDeleting] = useState<number | null>(null);
+  const [actioning, setActioning] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await api<{ ads: AdRow[] }>("/api/admin/ads");
-      setAds(data.ads);
+      const [reqs, statsData] = await Promise.all([
+        api<AdRequest[]>("/api/admin/ad-requests"),
+        api<Stats>("/api/admin/ad-requests/stats"),
+      ]);
+      setAllRequests(reqs);
+      setStats(statsData);
+      if (selected) {
+        const refreshed = reqs.find(r => r.id === selected.id);
+        if (refreshed) setSelected(refreshed);
+      }
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
-  }, [toast]);
+  }, [toast, selected?.id]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { load(); }, []);
 
-  const openCreate = () => {
-    setEditId(null);
-    setForm(emptyForm());
-    setDialogOpen(true);
+  const selectReq = (req: AdRequest) => {
+    setSelected(req);
+    setCfPrice(req.confirmed_price ? String(req.confirmed_price) : "");
+    setCfStart(req.confirmed_start ? req.confirmed_start.slice(0, 10) : "");
+    setCfEnd(req.confirmed_end ? req.confirmed_end.slice(0, 10) : "");
+    setCfSlot(req.slot_duration ?? "");
+    setCfSharing(req.sharing_tier ?? "");
+    setCfNotes(req.staff_notes ?? "");
   };
 
-  const openEdit = (ad: AdRow) => {
-    setEditId(ad.id);
-    setForm({
-      title: ad.title, subtitle: ad.subtitle ?? "", image_url: ad.image_url ?? "",
-      cta_text: ad.cta_text ?? "", link_url: ad.link_url ?? "",
-      placement: ad.placement, priority: ad.priority, active: ad.active,
-      club_id: ad.club_id,
-    });
-    setDialogOpen(true);
-  };
-
-  const save = async () => {
-    if (!form.title || !form.placement) {
-      toast({ title: "Title and placement are required", variant: "destructive" });
-      return;
-    }
+  const saveConfig = async () => {
+    if (!selected) return;
     setSaving(true);
     try {
-      const body = {
-        ...form,
-        subtitle: form.subtitle || null,
-        image_url: form.image_url || null,
-        cta_text: form.cta_text || null,
-        link_url: form.link_url || null,
-        active: form.active ? 1 : 0,
-      };
-      if (editId) {
-        await api(`/api/admin/ads/${editId}`, { method: "PUT", body: JSON.stringify(body) });
-        toast({ title: "Ad updated" });
-      } else {
-        await api("/api/admin/ads", { method: "POST", body: JSON.stringify(body) });
-        toast({ title: "Ad created" });
-      }
-      setDialogOpen(false);
-      load();
+      const updated = await api<AdRequest>(`/api/admin/ad-requests/${selected.id}`, {
+        method: "PUT",
+        body: JSON.stringify({
+          confirmed_price: cfPrice ? Number(cfPrice) : null,
+          confirmed_start: cfStart || null,
+          confirmed_end: cfEnd || null,
+          slot_duration: cfSlot || null,
+          sharing_tier: cfSharing || null,
+          staff_notes: cfNotes || null,
+        }),
+      });
+      setSelected(updated);
+      setAllRequests(prev => prev.map(r => r.id === updated.id ? updated : r));
+      toast({ title: "Configuration saved" });
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setSaving(false); }
   };
 
-  const deleteAd = async (id: number) => {
-    if (!confirm("Delete this ad?")) return;
-    setDeleting(id);
+  const action = async (endpoint: string, label: string, body?: object) => {
+    if (!selected) return;
+    setActioning(true);
     try {
-      await api(`/api/admin/ads/${id}`, { method: "DELETE" });
-      toast({ title: "Ad deleted" });
-      load();
+      await api(`/api/admin/ad-requests/${selected.id}/${endpoint}`, {
+        method: "POST",
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      toast({ title: label });
+      await load();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
-    } finally { setDeleting(null); }
+    } finally { setActioning(false); }
   };
 
-  const f = (k: keyof AdForm, v: any) => setForm(prev => ({ ...prev, [k]: v }));
+  const queueItems = allRequests.filter(r => r.status === "pending_review");
+  const liveItems  = allRequests.filter(r => r.status === "live");
+  const filteredItems = statusFilter === "all" ? allRequests : allRequests.filter(r => r.status === statusFilter);
+
+  const listForTab = activeTab === "queue" ? queueItems : activeTab === "live" ? liveItems : filteredItems;
 
   return (
-    <div className="p-8 space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="h-10 w-10 rounded-lg bg-[#c8a84b]/15 flex items-center justify-center">
-            <Megaphone className="h-5 w-5 text-[#c8a84b]" />
-          </div>
+    <div className="flex flex-col h-full">
+      {/* Header */}
+      <div className="px-8 pt-8 pb-0 space-y-5 flex-shrink-0">
+        <div className="flex items-start justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Ads &amp; Promotions</h1>
-            <p className="text-sm text-muted-foreground">Manage sponsored placements across the app</p>
+            <h1 className="text-2xl font-bold tracking-tight">Ad Management</h1>
+            <p className="text-sm text-muted-foreground mt-1">Review club ad requests, set pricing, and publish approved campaigns.</p>
           </div>
+          <Button variant="outline" size="sm" onClick={() => load()} className="gap-1.5"><RefreshCw className="h-3.5 w-3.5" /> Refresh</Button>
         </div>
-        <Button className="bg-[#1a5c38] hover:bg-[#154a2e]" onClick={openCreate}>
-          <Plus className="h-4 w-4 mr-2" /> New Ad
-        </Button>
+
+        {/* Stats */}
+        {stats && (
+          <div className="grid grid-cols-4 gap-3">
+            <StatCard label="Pending Review"  value={stats.pending_review}  color="text-yellow-700" bg="bg-yellow-50" border="border-yellow-200" icon="🔔" />
+            <StatCard label="Live Now"        value={stats.live}            color="text-green-700"  bg="bg-green-50"  border="border-green-200"  icon="🟢" />
+            <StatCard label="Payment Pending" value={stats.payment_pending} color="text-orange-700" bg="bg-orange-50" border="border-orange-200" icon="💳" />
+            <StatCard label="Revenue This Mo" value={`R ${Number(stats.revenue_this_month).toLocaleString()}`} color="text-[#1a5c38]" bg="bg-[#e8f5ee]" border="border-[#bbddc9]" icon="💰" />
+          </div>
+        )}
+
+        <Tabs value={activeTab} onValueChange={v => { setActiveTab(v); setSelected(null); }}>
+          <TabsList>
+            <TabsTrigger value="queue" className="gap-1.5">
+              <Bell className="h-3.5 w-3.5" />
+              Review Queue
+              {(stats?.pending_review ?? 0) > 0 && (
+                <span className="ml-1 bg-yellow-400 text-yellow-900 text-[10px] font-bold px-1.5 py-0.5 rounded-full">{stats!.pending_review}</span>
+              )}
+            </TabsTrigger>
+            <TabsTrigger value="all">All Requests</TabsTrigger>
+            <TabsTrigger value="live">Live Campaigns</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="analytics" className="pt-4">
+            <AnalyticsPanel requests={allRequests} />
+          </TabsContent>
+
+          {/* Shared split-pane content for queue / all / live */}
+          {["queue","all","live"].map(tabId => (
+            <TabsContent key={tabId} value={tabId} className="pt-0 mt-0">
+              {tabId === "all" && (
+                <div className="flex gap-2 flex-wrap py-3">
+                  {STATUS_FILTERS.map(s => (
+                    <button key={s} onClick={() => setStatusFilter(s)}
+                      className={`text-xs font-semibold px-3 py-1 rounded-full border transition-colors ${statusFilter === s ? "bg-[#1a5c38] text-white border-[#1a5c38]" : "bg-white text-gray-600 border-gray-200 hover:border-gray-400"}`}>
+                      {s === "all" ? "All" : STATUS[s]?.label ?? s}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          ))}
+        </Tabs>
       </div>
 
-      <div className="border rounded-lg overflow-hidden bg-background">
+      {/* Split pane */}
+      {activeTab !== "analytics" && (
+        <div className="flex flex-1 min-h-0 border-t mt-0 mx-8 mb-8 rounded-b-xl overflow-hidden border border-t-0 bg-white">
+          {/* List */}
+          <div className="w-80 border-r flex-shrink-0 overflow-y-auto">
+            {loading ? (
+              <div className="p-4 space-y-3">{Array.from({length:4}).map((_,i) => <Skeleton key={i} className="h-20 w-full" />)}</div>
+            ) : listForTab.length === 0 ? (
+              <div className="p-8 text-center text-muted-foreground text-sm">
+                {activeTab === "queue" ? "No pending requests 🎉" : "No requests in this view"}
+              </div>
+            ) : (
+              listForTab.map(req => {
+                const st = STATUS[req.status] ?? STATUS.pending_review;
+                const tp = AD_TYPE[req.ad_type];
+                const isSelected = selected?.id === req.id;
+                return (
+                  <div key={req.id} onClick={() => selectReq(req)}
+                    className={`px-4 py-3.5 border-b cursor-pointer transition-colors ${isSelected ? "bg-[#e8f5ee] border-l-2 border-l-[#1a5c38]" : "hover:bg-gray-50 border-l-2 border-l-transparent"}`}>
+                    <div className="flex justify-between items-start mb-1">
+                      <div className="font-semibold text-sm truncate flex-1 mr-2">{req.club_name}</div>
+                      <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full flex-shrink-0 ${st.bg} ${st.text}`}>{st.label}</span>
+                    </div>
+                    <div className="text-xs text-muted-foreground truncate mb-1.5">{req.headline}</div>
+                    <div className="flex items-center gap-2">
+                      {tp && <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full" style={{ background: tp.color + "18", color: tp.color }}>{tp.icon} {tp.label}</span>}
+                      <span className="text-[10px] text-muted-foreground">{format(new Date(req.created_at), "d MMM")}</span>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Detail */}
+          <div className="flex-1 overflow-y-auto">
+            {!selected ? (
+              <div className="flex items-center justify-center h-full text-muted-foreground text-sm">Select a request to review</div>
+            ) : (
+              <DetailPanel
+                req={selected}
+                cfPrice={cfPrice} setCfPrice={setCfPrice}
+                cfStart={cfStart} setCfStart={setCfStart}
+                cfEnd={cfEnd} setCfEnd={setCfEnd}
+                cfSlot={cfSlot} setCfSlot={setCfSlot}
+                cfSharing={cfSharing} setCfSharing={setCfSharing}
+                cfNotes={cfNotes} setCfNotes={setCfNotes}
+                saving={saving} actioning={actioning}
+                onSave={saveConfig}
+                onApprove={() => action("approve", "Request approved", {
+                  confirmed_price: cfPrice ? Number(cfPrice) : null,
+                  confirmed_start: cfStart || null, confirmed_end: cfEnd || null,
+                  slot_duration: cfSlot || null, sharing_tier: cfSharing || null, staff_notes: cfNotes || null,
+                })}
+                onPaymentRequested={() => action("payment-requested", "Marked as payment pending")}
+                onPublish={() => action("publish", "Ad published! It is now live in the app.")}
+                onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
+                onUnpublish={() => action("unpublish", "Ad unpublished")}
+              />
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, saving, actioning, onSave, onApprove, onPaymentRequested, onPublish, onReject, onUnpublish }: {
+  req: AdRequest;
+  cfPrice: string; setCfPrice: (v: string) => void;
+  cfStart: string; setCfStart: (v: string) => void;
+  cfEnd: string; setCfEnd: (v: string) => void;
+  cfSlot: string; setCfSlot: (v: string) => void;
+  cfSharing: string; setCfSharing: (v: string) => void;
+  cfNotes: string; setCfNotes: (v: string) => void;
+  saving: boolean; actioning: boolean;
+  onSave: () => void; onApprove: () => void; onPaymentRequested: () => void;
+  onPublish: () => void; onReject: () => void; onUnpublish: () => void;
+}) {
+  const st = STATUS[req.status] ?? STATUS.pending_review;
+  const tp = AD_TYPE[req.ad_type];
+  const statuses = ["pending_review","approved","payment_pending","live"];
+  const curIdx = statuses.indexOf(req.status);
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${st.bg} ${st.text}`}>{st.label}</span>
+            {tp && <span className="text-xs font-semibold px-2.5 py-1 rounded-full" style={{ background: tp.color + "18", color: tp.color }}>{tp.icon} {tp.label}</span>}
+          </div>
+          <h2 className="text-xl font-bold">{req.club_name}</h2>
+          <p className="text-sm text-muted-foreground">{req.club_province} · #{req.id} · Submitted {format(new Date(req.created_at), "d MMM yyyy")}</p>
+        </div>
+        <div className="flex gap-2">
+          {req.status !== "rejected" && req.status !== "expired" && (
+            <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={onReject} disabled={actioning}>Reject</Button>
+          )}
+          {req.status === "pending_review" && (
+            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onApprove} disabled={actioning}>
+              {actioning ? "…" : "Approve & Notify →"}
+            </Button>
+          )}
+          {req.status === "approved" && (
+            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPaymentRequested} disabled={actioning}>
+              {actioning ? "…" : "Mark Payment Requested →"}
+            </Button>
+          )}
+          {req.status === "payment_pending" && (
+            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPublish} disabled={actioning}>
+              {actioning ? "Publishing…" : "Confirm Payment & Publish →"}
+            </Button>
+          )}
+          {req.status === "live" && (
+            <Button size="sm" variant="destructive" onClick={onUnpublish} disabled={actioning}>
+              {actioning ? "…" : "Unpublish"}
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {/* Progress bar */}
+      <div className="flex gap-1.5">
+        {statuses.map((_, i) => (
+          <div key={i} className={`flex-1 h-1.5 rounded-full ${i <= curIdx ? "bg-[#1a5c38]" : "bg-gray-200"}`} />
+        ))}
+      </div>
+
+      <div className="grid grid-cols-2 gap-6">
+        {/* Club submission */}
+        <div>
+          <SectionLabel>Club Submission</SectionLabel>
+          <InfoRow label="Package" value={req.package_name ?? "—"} />
+          <InfoRow label="Headline" value={req.headline} />
+          {req.subtitle && <InfoRow label="Subtitle" value={req.subtitle} />}
+          <InfoRow label="Requested Start" value={req.requested_start ? format(new Date(req.requested_start), "d MMM yyyy") : "—"} />
+          <InfoRow label="Requested End"   value={req.requested_end   ? format(new Date(req.requested_end),   "d MMM yyyy") : "—"} />
+          <InfoRow label="Slot" value={req.slot_duration ?? "—"} />
+          {req.club_email && <InfoRow label="Club Email" value={req.club_email} />}
+          {req.club_notes && (
+            <div className="mt-2 bg-gray-50 border rounded-lg p-3">
+              <div className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Club Notes</div>
+              <div className="text-sm text-foreground">{req.club_notes}</div>
+            </div>
+          )}
+
+          {/* Ad preview */}
+          <SectionLabel className="mt-5">Ad Preview</SectionLabel>
+          <div className="border rounded-xl overflow-hidden">
+            <div className={`bg-gray-100 flex items-center justify-center text-muted-foreground text-sm ${req.image_url ? "" : "h-20"}`}>
+              {req.image_url ? <img src={req.image_url} alt="" className="w-full max-h-32 object-cover" /> : "📷 No image provided"}
+            </div>
+            <div className="p-3">
+              <div className="font-bold text-sm">{req.headline}</div>
+              {req.subtitle && <div className="text-xs text-muted-foreground">{req.subtitle}</div>}
+              <div className="mt-2 inline-block bg-[#1a5c38] text-white text-xs font-semibold rounded px-2.5 py-1">{req.cta_text ?? "Book Now"}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Staff configuration */}
+        <div>
+          <SectionLabel>Staff Configuration</SectionLabel>
+
+          {req.status === "live" ? (
+            <div className="space-y-3">
+              <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                <div className="font-semibold text-sm text-green-800">🟢 Live in App</div>
+                <div className="text-sm text-green-700 mt-0.5">
+                  {req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} →{" "}
+                  {req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"}
+                </div>
+              </div>
+              <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}` : "—"} />
+              <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />
+              <InfoRow label="Sharing Tier" value={req.sharing_tier ?? "—"} />
+            </div>
+          ) : req.status === "payment_pending" ? (
+            <div className="space-y-3">
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                <div className="font-semibold text-sm text-amber-800">Awaiting Payment</div>
+                <div className="text-sm text-amber-700 mt-0.5">
+                  Quoted: <strong>R {req.confirmed_price ? Number(req.confirmed_price).toLocaleString() : "—"}</strong>
+                </div>
+              </div>
+              <InfoRow label="Confirmed Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
+              <InfoRow label="Confirmed End"   value={req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"} />
+              <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />
+              {req.sharing_tier && <InfoRow label="Sharing Tier" value={req.sharing_tier} />}
+            </div>
+          ) : req.status === "rejected" || req.status === "expired" ? (
+            <div className="text-sm text-muted-foreground">No configuration needed for this status.</div>
+          ) : (
+            <div className="space-y-3">
+              <ConfigField label="Confirmed Price (ZAR)" type="number" placeholder="e.g. 1199" value={cfPrice} onChange={setCfPrice} />
+              <div className="grid grid-cols-2 gap-3">
+                <ConfigField label="Start Date" type="date" placeholder="" value={cfStart} onChange={setCfStart} />
+                <ConfigField label="End Date"   type="date" placeholder="" value={cfEnd}   onChange={setCfEnd} />
+              </div>
+              <ConfigField label="Slot Duration / Rotation" placeholder="e.g. 15 sec" value={cfSlot} onChange={setCfSlot} />
+              {req.ad_type === "featured_home" && (
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Sharing Tier</Label>
+                  <div className="flex gap-2">
+                    {["Exclusive (1 club)", "2-club share", "3-club share"].map(t => (
+                      <button key={t} onClick={() => setCfSharing(t)}
+                        className={`flex-1 text-xs font-semibold border rounded-lg py-2 transition-colors ${cfSharing === t ? "bg-[#e8f5ee] border-[#1a5c38] text-[#1a5c38]" : "border-gray-200 text-gray-600 hover:border-gray-400"}`}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notes / Quote Message to Club</Label>
+                <Textarea value={cfNotes} onChange={e => setCfNotes(e.target.value)} placeholder="Hi! We've reviewed your request. Confirmed price is R X for X weeks starting…" rows={3} />
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" className="flex-1" onClick={onSave} disabled={saving}>{saving ? "Saving…" : "Save Config"}</Button>
+                <Button size="sm" className="flex-1 bg-[#1a5c38] hover:bg-[#164d30]" onClick={onApprove} disabled={actioning}>
+                  {actioning ? "…" : "✅ Approve & Notify →"}
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Activity log */}
+          <SectionLabel className="mt-5">Activity Log</SectionLabel>
+          <div className="space-y-0">
+            <LogEntry time={format(new Date(req.created_at), "d MMM yyyy, HH:mm")} actor="Club" text="Ad request submitted" />
+            {req.status !== "pending_review" && (
+              <LogEntry time={format(new Date(req.updated_at), "d MMM yyyy, HH:mm")} actor="Staff" text={`Request approved${req.confirmed_price ? ` — R ${Number(req.confirmed_price).toLocaleString()}` : ""}`} />
+            )}
+            {["payment_pending","live","expired"].includes(req.status) && (
+              <LogEntry time={format(new Date(req.updated_at), "d MMM yyyy, HH:mm")} actor="Staff" text="Payment link sent to club" />
+            )}
+            {req.status === "live" && (
+              <LogEntry time={format(new Date(req.updated_at), "d MMM yyyy, HH:mm")} actor="Staff" text="Payment confirmed — ad published to app" />
+            )}
+            {req.status === "rejected" && (
+              <LogEntry time={format(new Date(req.updated_at), "d MMM yyyy, HH:mm")} actor="Staff" text="Request rejected" />
+            )}
+            {req.status === "expired" && (
+              <LogEntry time={format(new Date(req.updated_at), "d MMM yyyy, HH:mm")} actor="Staff" text="Campaign ended / unpublished" />
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
+  const live    = requests.filter(r => r.status === "live");
+  const expired = requests.filter(r => r.status === "expired");
+  const revenue = [...live, ...expired].reduce((s, r) => s + Number(r.confirmed_price ?? 0), 0);
+  const total   = requests.length;
+
+  return (
+    <div className="px-0 pt-4 space-y-5">
+      <div className="grid grid-cols-4 gap-3">
+        {[
+          { label: "Total Requests",     value: total,              color: "#374151" },
+          { label: "Total Live",         value: live.length,        color: "#1a5c38" },
+          { label: "Total Revenue",      value: `R ${revenue.toLocaleString()}`, color: "#1a5c38" },
+          { label: "Avg Campaign Value", value: revenue > 0 && [...live,...expired].length > 0 ? `R ${Math.round(revenue / [...live,...expired].length).toLocaleString()}` : "—", color: "#1a5c38" },
+        ].map((s, i) => (
+          <div key={i} className="border rounded-xl p-4 bg-white">
+            <div className="text-xl font-black" style={{ color: s.color }}>{s.value}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">{s.label}</div>
+          </div>
+        ))}
+      </div>
+      <div className="border rounded-xl overflow-hidden bg-white">
         <table className="w-full text-sm">
-          <thead className="bg-muted/50 border-b">
+          <thead className="bg-muted/40 border-b">
             <tr>
-              <th className="text-left px-4 py-3 font-semibold">Title</th>
-              <th className="text-left px-4 py-3 font-semibold">Placement</th>
-              <th className="text-center px-4 py-3 font-semibold">Priority</th>
-              <th className="text-left px-4 py-3 font-semibold">Club</th>
-              <th className="text-center px-4 py-3 font-semibold">Status</th>
-              <th className="text-left px-4 py-3 font-semibold">Created</th>
-              <th className="px-4 py-3" />
+              {["Club","Province","Ad Type","Package","Status","Confirmed Price","Submitted"].map(h => (
+                <th key={h} className="text-left px-4 py-2.5 text-xs font-bold text-muted-foreground uppercase tracking-wide">{h}</th>
+              ))}
             </tr>
           </thead>
           <tbody>
-            {loading ? (
-              Array.from({ length: 5 }).map((_, i) => (
-                <tr key={i} className="border-b last:border-0">
-                  {[0,1,2,3,4,5,6].map(j => (
-                    <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
-                  ))}
+            {requests.length === 0 ? (
+              <tr><td colSpan={7} className="px-4 py-8 text-center text-muted-foreground text-sm">No requests yet</td></tr>
+            ) : requests.map(r => {
+              const st = STATUS[r.status] ?? STATUS.pending_review;
+              const tp = AD_TYPE[r.ad_type];
+              return (
+                <tr key={r.id} className="border-b last:border-0">
+                  <td className="px-4 py-3 font-semibold">{r.club_name}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs">{r.club_province}</td>
+                  <td className="px-4 py-3">
+                    {tp && <span className="text-xs font-semibold px-2 py-0.5 rounded-full" style={{ background: tp.color + "18", color: tp.color }}>{tp.icon} {tp.label}</span>}
+                  </td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{r.package_name ?? "—"}</td>
+                  <td className="px-4 py-3">
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${st.bg} ${st.text}`}>{st.label}</span>
+                  </td>
+                  <td className="px-4 py-3 font-semibold text-[#1a5c38]">{r.confirmed_price ? `R ${Number(r.confirmed_price).toLocaleString()}` : "—"}</td>
+                  <td className="px-4 py-3 text-xs text-muted-foreground">{format(new Date(r.created_at), "d MMM yyyy")}</td>
                 </tr>
-              ))
-            ) : ads.length === 0 ? (
-              <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground">
-                  No ads yet — click "New Ad" to create one
-                </td>
-              </tr>
-            ) : (
-              ads.map(ad => (
-                <tr key={ad.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
-                  <td className="px-4 py-3">
-                    <div className="font-medium">{ad.title}</div>
-                    {ad.subtitle && <div className="text-xs text-muted-foreground">{ad.subtitle}</div>}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${placementBadge(ad.placement)}`}>
-                      {ad.placement}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-center text-muted-foreground">{ad.priority}</td>
-                  <td className="px-4 py-3 text-muted-foreground">{ad.club_name ?? "All clubs"}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                      ad.active ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-500"
-                    }`}>
-                      {ad.active ? "Active" : "Paused"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs">
-                    {format(new Date(ad.created_at), "d MMM yyyy")}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex items-center gap-1 justify-end">
-                      <Button variant="ghost" size="sm" onClick={() => openEdit(ad)}>
-                        <Pencil className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        variant="ghost" size="sm"
-                        className="text-destructive hover:text-destructive"
-                        onClick={() => deleteAd(ad.id)}
-                        disabled={deleting === ad.id}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))
-            )}
+              );
+            })}
           </tbody>
         </table>
       </div>
+    </div>
+  );
+}
 
-      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>{editId ? "Edit Ad" : "New Ad"}</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="col-span-2 space-y-1.5">
-                <Label>Title *</Label>
-                <Input value={form.title} onChange={e => f("title", e.target.value)} placeholder="Ad headline" />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Subtitle</Label>
-                <Input value={form.subtitle ?? ""} onChange={e => f("subtitle", e.target.value)} placeholder="Short description" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Placement *</Label>
-                <select
-                  className="w-full border rounded-md px-3 py-2 text-sm bg-background"
-                  value={form.placement}
-                  onChange={e => f("placement", e.target.value)}
-                >
-                  {PLACEMENTS.map(p => <option key={p} value={p}>{p}</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Priority (higher = first)</Label>
-                <Input
-                  type="number" min={0} max={100}
-                  value={form.priority}
-                  onChange={e => f("priority", parseInt(e.target.value) || 0)}
-                />
-              </div>
-              <div className="col-span-2 space-y-1.5">
-                <Label>Image URL</Label>
-                <Input value={form.image_url ?? ""} onChange={e => f("image_url", e.target.value)} placeholder="https://…" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>CTA Button Text</Label>
-                <Input value={form.cta_text ?? ""} onChange={e => f("cta_text", e.target.value)} placeholder="Book Now" />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Link URL</Label>
-                <Input value={form.link_url ?? ""} onChange={e => f("link_url", e.target.value)} placeholder="https://…" />
-              </div>
-              <div className="col-span-2 flex items-center gap-3">
-                <input
-                  type="checkbox"
-                  id="ad-active"
-                  checked={!!form.active}
-                  onChange={e => f("active", e.target.checked ? 1 : 0)}
-                  className="h-4 w-4"
-                />
-                <Label htmlFor="ad-active">Active (visible in app)</Label>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="ghost" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-[#1a5c38] hover:bg-[#154a2e]" onClick={save} disabled={saving}>
-              {saving ? "Saving…" : editId ? "Save Changes" : "Create Ad"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+function StatCard({ label, value, color, bg, border, icon }: { label: string; value: string | number; color: string; bg: string; border: string; icon: string }) {
+  return (
+    <div className={`border rounded-xl p-3.5 flex items-center gap-3 ${bg} ${border}`}>
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-xl ${bg}`}>{icon}</div>
+      <div>
+        <div className={`text-xl font-black ${color}`}>{value}</div>
+        <div className="text-xs text-muted-foreground">{label}</div>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return <div className={`text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2 ${className}`}>{children}</div>;
+}
+
+function InfoRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between py-1.5 border-b border-gray-100 last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs font-semibold text-foreground">{value}</span>
+    </div>
+  );
+}
+
+function ConfigField({ label, type = "text", placeholder, value, onChange }: { label: string; type?: string; placeholder: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide">{label}</Label>
+      <Input type={type} placeholder={placeholder} value={value} onChange={e => onChange(e.target.value)} className="h-8 text-sm" />
+    </div>
+  );
+}
+
+function LogEntry({ time, actor, text }: { time: string; actor: string; text: string }) {
+  return (
+    <div className={`flex gap-3 pb-3 border-l-2 pl-3 ml-1 ${actor === "Staff" ? "border-[#1a5c38]" : "border-gray-300"}`}>
+      <div className="flex-1 min-w-0">
+        <span className={`text-xs font-bold ${actor === "Staff" ? "text-[#1a5c38]" : "text-gray-500"}`}>{actor}</span>
+        <span className="text-xs text-foreground ml-2">{text}</span>
+        <div className="text-[10px] text-muted-foreground mt-0.5">{time}</div>
+      </div>
     </div>
   );
 }

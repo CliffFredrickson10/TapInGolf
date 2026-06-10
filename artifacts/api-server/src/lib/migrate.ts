@@ -155,6 +155,33 @@ async function createSchema(): Promise<void> {
   `);
 
   await ddl(`
+    CREATE TABLE IF NOT EXISTS ad_requests (
+      id              SERIAL PRIMARY KEY,
+      club_id         INT NOT NULL REFERENCES clubs(id),
+      ad_type         VARCHAR(30)  NOT NULL DEFAULT 'club_detail',
+      package_name    VARCHAR(100),
+      headline        VARCHAR(255) NOT NULL,
+      subtitle        VARCHAR(500),
+      image_url       VARCHAR(500),
+      cta_text        VARCHAR(100) DEFAULT 'Book Now',
+      link_url        VARCHAR(500),
+      requested_start DATE,
+      requested_end   DATE,
+      club_notes      TEXT,
+      status          VARCHAR(30)  NOT NULL DEFAULT 'pending_review',
+      confirmed_price DECIMAL(10,2),
+      confirmed_start DATE,
+      confirmed_end   DATE,
+      slot_duration   VARCHAR(100),
+      sharing_tier    VARCHAR(50),
+      staff_notes     TEXT,
+      published_ad_id INT,
+      created_at      TIMESTAMP DEFAULT NOW(),
+      updated_at      TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
     CREATE TABLE IF NOT EXISTS conversations (
       id            SERIAL PRIMARY KEY,
       name          VARCHAR(255),
@@ -1399,6 +1426,11 @@ async function applyLateAlters() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_vouchers_user_id ON vouchers (user_id)");
   await ddl("ALTER TABLE vouchers ADD COLUMN IF NOT EXISTS value_remaining DECIMAL(10,2)");
   await ddl("UPDATE vouchers SET value_remaining = discount_value WHERE value_remaining IS NULL AND discount_type = 'fixed'");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS ad_request_id INT");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS campaign_start DATE");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS campaign_end DATE");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS slot_duration VARCHAR(100)");
+  await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
 }
 
 export async function migrate(): Promise<void> {

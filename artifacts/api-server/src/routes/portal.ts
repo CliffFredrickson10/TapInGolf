@@ -828,6 +828,77 @@ router.delete("/portal/ads/:id", requireClubAuth, async (req: Request, res: Resp
   res.json({ message: "Deleted" });
 });
 
+// ─── AD REQUESTS (new workflow) ───────────────────────────────────────────────
+
+router.get("/portal/ad-requests", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const requests = await query<any>(
+    `SELECT id, ad_type, package_name, headline, subtitle, image_url, cta_text, link_url,
+            requested_start, requested_end, club_notes, status,
+            confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier,
+            staff_notes, published_ad_id, created_at, updated_at
+     FROM ad_requests WHERE club_id = ? ORDER BY created_at DESC`,
+    [club.id]
+  );
+  res.json(requests);
+});
+
+router.post("/portal/ad-requests", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { ad_type, package_name, headline, subtitle, image_url, cta_text, link_url,
+          requested_start, requested_end, club_notes } = req.body ?? {};
+  if (!headline) { res.status(400).json({ message: "headline required" }); return; }
+  const validTypes = ["club_detail","featured_home","explore","push","tournament","newsletter","nearby_alert","tee_time_deal"];
+  const adType = validTypes.includes(ad_type) ? ad_type : "club_detail";
+  const result = await exec(
+    `INSERT INTO ad_requests (club_id, ad_type, package_name, headline, subtitle, image_url, cta_text, link_url,
+      requested_start, requested_end, club_notes, status)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending_review')`,
+    [club.id, adType, package_name ?? null, headline,
+     subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
+     requested_start ?? null, requested_end ?? null, club_notes ?? null]
+  );
+  const requestId = (result as any).insertId;
+  const inserted = await row<any>("SELECT * FROM ad_requests WHERE id = ?", [requestId]);
+  // Notify staff (fire-and-forget — don't fail the request if email fails)
+  try {
+    const { sendAdRequestNotificationEmail } = await import("../lib/otp");
+    await sendAdRequestNotificationEmail({ clubName: club.name, adType, packageName: package_name ?? null, headline, requestId });
+  } catch (err) { logger.warn({ err }, "Ad request notification email failed"); }
+  res.status(201).json(inserted);
+});
+
+router.put("/portal/ad-requests/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const reqId = Number(req.params.id);
+  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ? AND club_id = ?", [reqId, club.id]);
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
+  if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending requests can be edited" }); return; }
+  const { headline, subtitle, image_url, cta_text, link_url, requested_start, requested_end, club_notes, package_name } = req.body ?? {};
+  await exec(
+    `UPDATE ad_requests SET headline = COALESCE(?, headline), subtitle = ?, image_url = ?, cta_text = ?,
+      link_url = ?, requested_start = ?, requested_end = ?, club_notes = ?,
+      package_name = COALESCE(?, package_name), updated_at = NOW()
+     WHERE id = ? AND club_id = ?`,
+    [headline ?? null, subtitle ?? null, image_url ?? null, cta_text ?? null, link_url ?? null,
+     requested_start ?? null, requested_end ?? null, club_notes ?? null,
+     package_name ?? null, reqId, club.id]
+  );
+  res.json(await row<any>("SELECT * FROM ad_requests WHERE id = ?", [reqId]));
+});
+
+router.delete("/portal/ad-requests/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const reqId = Number(req.params.id);
+  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ? AND club_id = ?", [reqId, club.id]);
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
+  if (!["pending_review", "rejected"].includes(existing.status)) {
+    res.status(400).json({ message: "Only pending or rejected requests can be deleted" }); return;
+  }
+  await exec("DELETE FROM ad_requests WHERE id = ? AND club_id = ?", [reqId, club.id]);
+  res.json({ message: "Deleted" });
+});
+
 // ─── EVENTS ──────────────────────────────────────────────────────────────────
 
 // Portal proxies to admin/events routes — all event management uses the same

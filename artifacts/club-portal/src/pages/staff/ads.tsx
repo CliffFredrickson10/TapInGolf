@@ -569,15 +569,13 @@ export default function StaffAds() {
                 cfNotes={cfNotes} setCfNotes={setCfNotes}
                 saving={saving} actioning={actioning}
                 onSave={saveConfig}
-                onApprove={() => action("approve", "Request approved", {
+                onApprove={() => action("approve", "Approved — club notified with payment link", {
                   confirmed_price: cfPrice ? Number(cfPrice) : null,
                   confirmed_start: cfStart || null, confirmed_end: cfEnd || null,
-                  slot_duration: cfSlot || null, sharing_tier: cfSharing || null, staff_notes: cfNotes || null,
+                  slot_duration: cfSlot || null, sharing_tier: cfSharing || null,
+                  staff_notes: cfNotes || null, payment_link: cfPaymentLink || null,
                 })}
                 cfPaymentLink={cfPaymentLink} setCfPaymentLink={setCfPaymentLink}
-                onPaymentRequested={() => action("payment-requested", "Payment link sent — club notified", {
-                  payment_link: cfPaymentLink || null,
-                })}
                 onPublish={() => action("publish", "Ad published! It is now live in the app.")}
                 onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
                 onUnpublish={() => action("unpublish", "Ad unpublished")}
@@ -976,19 +974,20 @@ function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onPaymentRequested, onPublish, onReject, onUnpublish }: {
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onPublish, onReject, onUnpublish }: {
   req: AdRequest; cfPrice: string; setCfPrice: (v: string) => void;
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
   cfNotes: string; setCfNotes: (v: string) => void;
   cfPaymentLink: string; setCfPaymentLink: (v: string) => void;
   saving: boolean; actioning: boolean;
-  onSave: () => void; onApprove: () => void; onPaymentRequested: () => void;
+  onSave: () => void; onApprove: () => void;
   onPublish: () => void; onReject: () => void; onUnpublish: () => void;
 }) {
   const st = STATUS[req.status] ?? STATUS.pending_review;
   const tp = AD_TYPE_META[req.ad_type];
-  const statuses = ["pending_review","approved","payment_pending","live"];
+  // Simplified 3-step flow: pending_review → payment_pending → live
+  const statuses = ["pending_review","payment_pending","live"];
   const curIdx = statuses.indexOf(req.status);
 
   return (
@@ -1006,9 +1005,8 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
           {req.status !== "rejected" && req.status !== "expired" && (
             <Button variant="outline" size="sm" className="text-red-600 border-red-200 hover:bg-red-50" onClick={onReject} disabled={actioning}>Reject</Button>
           )}
-          {req.status === "pending_review" && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onApprove} disabled={actioning}>{actioning ? "…" : "Approve & Notify →"}</Button>}
-          {req.status === "approved" && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPaymentRequested} disabled={actioning}>{actioning ? "…" : "Mark Payment Requested →"}</Button>}
-          {req.status === "payment_pending" && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPublish} disabled={actioning}>{actioning ? "Publishing…" : "Confirm Payment & Publish →"}</Button>}
+          {req.status === "pending_review" && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onApprove} disabled={actioning}>{actioning ? "…" : "Approve & Send Payment Link →"}</Button>}
+          {(req.status === "payment_pending" || req.status === "approved") && <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={onPublish} disabled={actioning}>{actioning ? "Publishing…" : "Confirm Payment & Publish →"}</Button>}
           {req.status === "live" && <Button size="sm" variant="destructive" onClick={onUnpublish} disabled={actioning}>{actioning ? "…" : "Unpublish"}</Button>}
         </div>
       </div>
@@ -1102,13 +1100,11 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                   </div>
                 </div>
               )}
-              {req.status === "approved" && (
-                <div>
-                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Payment Link (optional)</Label>
-                  <Input value={cfPaymentLink} onChange={e => setCfPaymentLink(e.target.value)} placeholder="https://pay.stitch.money/..." />
-                  <p className="text-xs text-muted-foreground mt-1">If provided, this URL will be included in the club's payment notification.</p>
-                </div>
-              )}
+              <div>
+                <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Payment Link (optional)</Label>
+                <Input value={cfPaymentLink} onChange={e => setCfPaymentLink(e.target.value)} placeholder="https://pay.stitch.money/..." />
+                <p className="text-xs text-muted-foreground mt-1">Sent to the club in their payment notification when you approve.</p>
+              </div>
               <div>
                 <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Notes / Quote Message to Club</Label>
                 <Textarea value={cfNotes} onChange={e => setCfNotes(e.target.value)} placeholder="Hi! We've reviewed your request. Confirmed price is R X for X weeks starting…" rows={3} />

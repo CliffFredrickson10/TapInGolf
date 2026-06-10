@@ -62560,12 +62560,13 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     res.status(400).json({ message: "Only pending_review requests can be approved" });
     return;
   }
-  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes } = req.body ?? {};
+  const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes, payment_link } = req.body ?? {};
   await exec(
-    `UPDATE ad_requests SET status = 'approved',
+    `UPDATE ad_requests SET status = 'payment_pending',
       confirmed_price = COALESCE(?, confirmed_price), confirmed_start = COALESCE(?, confirmed_start),
       confirmed_end = COALESCE(?, confirmed_end), slot_duration = COALESCE(?, slot_duration),
-      sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes), updated_at = NOW()
+      sharing_tier = COALESCE(?, sharing_tier), staff_notes = COALESCE(?, staff_notes),
+      payment_link = COALESCE(?, payment_link), updated_at = NOW()
      WHERE id = ?`,
     [
       confirmed_price ?? null,
@@ -62574,18 +62575,20 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       slot_duration ?? null,
       sharing_tier ?? null,
       staff_notes ?? null,
+      payment_link ?? null,
       reqId
     ]
   );
-  const priceNote = confirmed_price ? ` Confirmed price: R ${Number(confirmed_price).toLocaleString()}.` : "";
-  const notesNote = staff_notes ? ` Message from staff: ${staff_notes}` : "";
+  const priceStr = confirmed_price ? ` R ${Number(confirmed_price).toLocaleString()} is due.` : "";
+  const linkStr = payment_link ? ` Use this link to complete payment: ${payment_link}` : " TapIn staff will share a payment link with you via email or phone.";
+  const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
   await exec(
     `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
     [
       existing.club_id,
-      "\u2705 Ad Approved \u2014 Payment Link Coming",
-      `Great news! Your ad campaign "${existing.headline}" has been reviewed and approved by TapIn staff.${priceNote} You will receive a payment link shortly to confirm your booking.${notesNote}`,
-      JSON.stringify({ ad_request_id: reqId })
+      "\u{1F4B3} Payment Required \u2014 Complete Your Ad Booking",
+      `Great news! Your ad campaign "${existing.headline}" has been approved by TapIn staff.${priceStr}${linkStr}${notesStr} Once payment is received, TapIn staff will publish your ad to the app.`,
+      JSON.stringify({ ad_request_id: reqId, payment_link: payment_link ?? null })
     ]
   );
   res.json({ success: true });

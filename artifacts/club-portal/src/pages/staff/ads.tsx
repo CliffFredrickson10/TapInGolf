@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { RefreshCw, Bell, ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X } from "lucide-react";
+import { RefreshCw, Bell, ChevronDown, ChevronRight, Plus, Trash2, Pencil, Check, X, Search } from "lucide-react";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -100,6 +100,240 @@ const AD_TYPE_META: Record<string, { label: string; color: string; icon: string 
 };
 
 const STATUS_FILTERS = ["all", "pending_review", "approved", "payment_pending", "live", "expired", "rejected"];
+
+// ─── Featured Carousel Tab ────────────────────────────────────────────────────
+
+interface FeaturedCarouselClub {
+  id: number;
+  name: string;
+  location: string;
+  province: string;
+  has_paid_ad: boolean;
+  ad_slot_duration: string | null;
+  slot_seconds: number;
+  campaign_end: string | null;
+  package_name: string | null;
+}
+
+const SLOT_OPTIONS = [
+  { label: "5 sec  (Bronze tier)", value: 5 },
+  { label: "8 sec  (Default)",      value: 8 },
+  { label: "10 sec (Silver tier)",  value: 10 },
+  { label: "15 sec (Gold tier)",    value: 15 },
+];
+
+function FeaturedCarouselTab() {
+  const { toast } = useToast();
+  const [clubs, setClubs] = useState<FeaturedCarouselClub[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [removing, setRemoving] = useState<number | null>(null);
+  const [adding, setAdding] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<{ id: number; name: string; province: string }[]>([]);
+  const [selectedClub, setSelectedClub] = useState<{ id: number; name: string; province: string } | null>(null);
+  const [slotSeconds, setSlotSeconds] = useState(8);
+  const [searching, setSearching] = useState(false);
+  const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api<{ clubs: FeaturedCarouselClub[] }>("/api/admin/featured-carousel");
+      setClubs(data.clubs);
+    } catch (e: any) {
+      toast({ title: "Error loading carousel", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const remove = async (club: FeaturedCarouselClub) => {
+    setRemoving(club.id);
+    try {
+      await api(`/api/admin/clubs/${club.id}/feature`, { method: "DELETE" });
+      setClubs(prev => prev.filter(c => c.id !== club.id));
+      toast({ title: "Removed from carousel", description: club.name });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setRemoving(null); }
+  };
+
+  const addToCarousel = async () => {
+    if (!selectedClub) return;
+    setAdding(true);
+    try {
+      await api(`/api/admin/clubs/${selectedClub.id}/feature`, {
+        method: "PUT",
+        body: JSON.stringify({ slot_seconds: slotSeconds }),
+      });
+      toast({ title: "Added to carousel", description: selectedClub.name });
+      setSelectedClub(null);
+      setSearchQ("");
+      setSearchResults([]);
+      await load();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setAdding(false); }
+  };
+
+  const onSearchChange = (q: string) => {
+    setSearchQ(q);
+    setSelectedClub(null);
+    if (searchTimer.current) clearTimeout(searchTimer.current);
+    if (!q.trim()) { setSearchResults([]); return; }
+    searchTimer.current = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const data = await api<{ clubs: any[] }>(`/api/admin/clubs-list?q=${encodeURIComponent(q)}&active=1&limit=10`);
+        setSearchResults(data.clubs.map((c: any) => ({ id: c.id, name: c.name, province: c.province })));
+      } catch {} finally { setSearching(false); }
+    }, 300);
+  };
+
+  return (
+    <div className="p-6 space-y-5">
+      {/* Header */}
+      <div className="flex items-start justify-between">
+        <div>
+          <h2 className="font-semibold text-lg">Home Screen Carousel</h2>
+          <p className="text-sm text-muted-foreground">
+            {loading ? "Loading…" : clubs.length === 0
+              ? "Carousel is empty — add clubs below so users always see content"
+              : `${clubs.length} club${clubs.length !== 1 ? "s" : ""} in rotation`}
+          </p>
+        </div>
+        <Button variant="outline" size="sm" onClick={load} className="gap-1.5">
+          <RefreshCw className="h-3.5 w-3.5" /> Refresh
+        </Button>
+      </div>
+
+      {/* Live carousel slots */}
+      <div className="space-y-2">
+        {loading ? (
+          Array.from({ length: 3 }).map((_, i) => <Skeleton key={i} className="h-16 w-full rounded-lg" />)
+        ) : clubs.length === 0 ? (
+          <div className="border-2 border-dashed border-amber-200 bg-amber-50 rounded-xl p-8 text-center">
+            <div className="text-3xl mb-2">⭐</div>
+            <p className="font-semibold text-amber-800">No clubs in the featured carousel</p>
+            <p className="text-sm text-amber-600 mt-1">Use the form below to add clubs — they'll appear on every golfer's home screen.</p>
+          </div>
+        ) : clubs.map((club, i) => (
+          <div key={club.id} className="flex items-center gap-3 bg-white border rounded-lg px-4 py-3 shadow-sm hover:border-[#1a5c38]/30 transition-colors">
+            <div className="w-7 h-7 rounded-full bg-[#1a5c38]/10 flex items-center justify-center text-xs font-bold text-[#1a5c38] flex-shrink-0">
+              {i + 1}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold text-sm">{club.name}</span>
+                {club.has_paid_ad ? (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                    ⭐ {club.package_name ?? "Paid Ad"}
+                  </span>
+                ) : (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                    🏠 TapIn House Pick
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
+                <span>{club.province}</span>
+                <span>·</span>
+                <span className="font-medium text-[#1a5c38]">⏱ {club.slot_seconds}s per rotation</span>
+                {club.campaign_end && (
+                  <>
+                    <span>·</span>
+                    <span>Paid ad ends {club.campaign_end.slice(0, 10)}</span>
+                  </>
+                )}
+              </div>
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-red-400 hover:text-red-600 hover:bg-red-50 flex-shrink-0"
+              disabled={removing === club.id}
+              onClick={() => remove(club)}
+              title="Remove from carousel"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {/* Add a club */}
+      <div className="border rounded-xl p-5 bg-muted/30 space-y-4">
+        <h3 className="font-semibold text-sm flex items-center gap-2">
+          <Plus className="h-4 w-4 text-[#1a5c38]" />
+          Add a Club to the Carousel
+        </h3>
+        <div className="flex gap-3 items-end flex-wrap">
+          <div className="relative flex-1 min-w-56">
+            <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Search clubs</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="Type club name…"
+                value={selectedClub ? selectedClub.name : searchQ}
+                onChange={e => { if (!selectedClub) onSearchChange(e.target.value); }}
+                onFocus={() => { if (selectedClub) { setSelectedClub(null); setSearchQ(""); } }}
+              />
+            </div>
+            {!selectedClub && searchQ.trim() && (
+              <div className="absolute z-20 top-full mt-1 left-0 right-0 bg-white border rounded-lg shadow-lg max-h-52 overflow-y-auto">
+                {searching ? (
+                  <div className="px-4 py-3 text-sm text-muted-foreground">Searching…</div>
+                ) : searchResults.length === 0 ? (
+                  <div className="px-4 py-3 text-sm text-muted-foreground">No clubs found</div>
+                ) : searchResults.map(c => (
+                  <button key={c.id} className="w-full text-left px-4 py-2.5 hover:bg-muted/60 text-sm border-b last:border-0 transition-colors"
+                    onClick={() => { setSelectedClub(c); setSearchResults([]); }}>
+                    <span className="font-medium">{c.name}</span>
+                    <span className="text-muted-foreground ml-2 text-xs">{c.province}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div className="w-52">
+            <label className="text-xs font-medium mb-1.5 block text-muted-foreground">Slot duration</label>
+            <select
+              className="w-full border rounded-md px-3 py-2 text-sm bg-background h-10"
+              value={slotSeconds}
+              onChange={e => setSlotSeconds(Number(e.target.value))}
+            >
+              {SLOT_OPTIONS.map(o => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <Button
+            onClick={addToCarousel}
+            disabled={!selectedClub || adding}
+            className="bg-[#1a5c38] hover:bg-[#154d2f] text-white gap-1.5 h-10"
+          >
+            <Plus className="h-4 w-4" />
+            {adding ? "Adding…" : "Add to Carousel"}
+          </Button>
+        </div>
+
+        {selectedClub && (
+          <p className="text-xs text-muted-foreground">
+            <span className="font-semibold text-foreground">{selectedClub.name}</span> ({selectedClub.province}) will appear in the home screen carousel with a <span className="font-semibold text-[#1a5c38]">{slotSeconds}-second</span> rotation slot.
+          </p>
+        )}
+      </div>
+
+      <p className="text-xs text-muted-foreground border-t pt-4">
+        Clubs with an active paid <strong>Home Screen Featured</strong> ad campaign use their purchased slot duration and are labelled <span className="bg-amber-100 text-amber-700 px-1 rounded text-[10px] font-bold">⭐ Paid Ad</span>.
+        House picks are managed here and labelled <span className="bg-blue-100 text-blue-700 px-1 rounded text-[10px] font-bold">🏠 TapIn House Pick</span>.
+      </p>
+    </div>
+  );
+}
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -230,6 +464,7 @@ export default function StaffAds() {
             <TabsTrigger value="live">Live Campaigns</TabsTrigger>
             <TabsTrigger value="analytics">Analytics</TabsTrigger>
             <TabsTrigger value="pricing">Manage Pricing</TabsTrigger>
+            <TabsTrigger value="carousel" className="gap-1.5">⭐ Featured Carousel</TabsTrigger>
           </TabsList>
 
           <TabsContent value="analytics" className="pt-4">
@@ -238,6 +473,10 @@ export default function StaffAds() {
 
           <TabsContent value="pricing" className="pt-4 pb-8">
             <PricingManager />
+          </TabsContent>
+
+          <TabsContent value="carousel" className="pt-4 pb-8">
+            <FeaturedCarouselTab />
           </TabsContent>
 
           {["queue","all","live"].map(tabId => (

@@ -125,7 +125,7 @@ router.get("/clubs", async (req, res): Promise<void> => {
 
   const slotSubquery = `
     (SELECT a.slot_duration FROM ads a
-     WHERE a.club_id = c.id AND a.ad_type = 'home' AND a.active = 1
+     WHERE a.club_id = c.id AND a.placement = 'home' AND a.active = 1
        AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
      ORDER BY a.id DESC LIMIT 1) AS ad_slot_duration
   `;
@@ -158,8 +158,11 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.voucher_enabled     = c.voucher_enabled !== undefined ? !!c.voucher_enabled : true;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
       const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
-      c.slot_seconds = slotMatch ? parseInt(slotMatch[1]) : null;
+      c.slot_seconds = slotMatch
+        ? parseInt(slotMatch[1])
+        : (c.featured_slot_seconds ? parseInt(c.featured_slot_seconds) : null);
       delete c.ad_slot_duration;
+      delete c.featured_slot_seconds;
     });
     return clubs;
   }

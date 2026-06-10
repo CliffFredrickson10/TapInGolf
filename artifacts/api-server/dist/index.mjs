@@ -58272,7 +58272,7 @@ router3.get("/clubs", async (req, res) => {
   const orderBy = hasLocation ? "ORDER BY (c.latitude IS NULL) ASC, distance ASC" : "ORDER BY c.featured DESC, c.name ASC";
   const slotSubquery = `
     (SELECT a.slot_duration FROM ads a
-     WHERE a.club_id = c.id AND a.ad_type = 'home' AND a.active = 1
+     WHERE a.club_id = c.id AND a.placement = 'home' AND a.active = 1
        AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
      ORDER BY a.id DESC LIMIT 1) AS ad_slot_duration
   `;
@@ -58303,8 +58303,9 @@ router3.get("/clubs", async (req, res) => {
       c.voucher_enabled = c.voucher_enabled !== void 0 ? !!c.voucher_enabled : true;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
       const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
-      c.slot_seconds = slotMatch ? parseInt(slotMatch[1]) : null;
+      c.slot_seconds = slotMatch ? parseInt(slotMatch[1]) : c.featured_slot_seconds ? parseInt(c.featured_slot_seconds) : null;
       delete c.ad_slot_duration;
+      delete c.featured_slot_seconds;
     });
     return clubs2;
   }
@@ -62327,6 +62328,65 @@ router10.put("/admin/clubs/:id/toggle-featured", async (req, res) => {
   await exec("UPDATE clubs SET featured = CASE WHEN featured = 1 THEN 0 ELSE 1 END WHERE id = ?", [id]);
   const club = await row("SELECT id, featured FROM clubs WHERE id = ?", [id]);
   res.json({ club });
+});
+router10.get("/admin/featured-carousel", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubs = await query(`
+    SELECT c.id, c.name, c.location, c.province, c.featured_slot_seconds,
+      a.id AS ad_id, a.slot_duration AS ad_slot_duration,
+      a.campaign_start, a.campaign_end,
+      ar.package_name, ar.status AS request_status
+    FROM clubs c
+    LEFT JOIN ads a ON a.club_id = c.id
+      AND a.placement = 'home' AND a.active = 1
+      AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+    LEFT JOIN ad_requests ar ON ar.id = a.ad_request_id
+    WHERE c.featured = 1 AND c.active = 1
+    ORDER BY a.id DESC NULLS LAST, c.name ASC
+  `);
+  const result = clubs.map((c) => {
+    const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
+    return {
+      id: c.id,
+      name: c.name,
+      location: c.location,
+      province: c.province,
+      has_paid_ad: !!c.ad_id,
+      ad_slot_duration: c.ad_slot_duration,
+      slot_seconds: slotMatch ? parseInt(slotMatch[1]) : c.featured_slot_seconds ?? 8,
+      campaign_end: c.campaign_end,
+      package_name: c.package_name
+    };
+  });
+  res.json({ clubs: result });
+});
+router10.put("/admin/clubs/:id/feature", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { slot_seconds } = req.body ?? {};
+  await exec(
+    "UPDATE clubs SET featured = 1, featured_slot_seconds = ? WHERE id = ?",
+    [slot_seconds ?? null, id]
+  );
+  res.json({ success: true });
+});
+router10.delete("/admin/clubs/:id/feature", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET featured = 0, featured_slot_seconds = NULL WHERE id = ?", [id]);
+  res.json({ success: true });
 });
 router10.get("/admin/ads", async (req, res) => {
   const caller = await getUser(req);
@@ -70685,6 +70745,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS slot_duration VARCHAR(100)");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
   await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

@@ -1467,6 +1467,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS slot_duration VARCHAR(100)");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
   await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
 }
 
 async function seedAdOfferings(): Promise<void> {

@@ -411,6 +411,67 @@ router.put("/admin/clubs/:id/toggle-featured", async (req, res): Promise<void> =
   res.json({ club });
 });
 
+// GET /admin/featured-carousel — live state of the home screen carousel
+router.get("/admin/featured-carousel", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  const clubs = await query<any>(`
+    SELECT c.id, c.name, c.location, c.province, c.featured_slot_seconds,
+      a.id AS ad_id, a.slot_duration AS ad_slot_duration,
+      a.campaign_start, a.campaign_end,
+      ar.package_name, ar.status AS request_status
+    FROM clubs c
+    LEFT JOIN ads a ON a.club_id = c.id
+      AND a.placement = 'home' AND a.active = 1
+      AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+    LEFT JOIN ad_requests ar ON ar.id = a.ad_request_id
+    WHERE c.featured = 1 AND c.active = 1
+    ORDER BY a.id DESC NULLS LAST, c.name ASC
+  `);
+
+  const result = clubs.map((c: any) => {
+    const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
+    return {
+      id: c.id,
+      name: c.name,
+      location: c.location,
+      province: c.province,
+      has_paid_ad: !!c.ad_id,
+      ad_slot_duration: c.ad_slot_duration,
+      slot_seconds: slotMatch
+        ? parseInt(slotMatch[1])
+        : (c.featured_slot_seconds ?? 8),
+      campaign_end: c.campaign_end,
+      package_name: c.package_name,
+    };
+  });
+
+  res.json({ clubs: result });
+});
+
+// PUT /admin/clubs/:id/feature — add to carousel as house pick with optional slot_seconds
+router.put("/admin/clubs/:id/feature", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { slot_seconds } = (req.body ?? {}) as { slot_seconds?: number | null };
+  await exec(
+    "UPDATE clubs SET featured = 1, featured_slot_seconds = ? WHERE id = ?",
+    [slot_seconds ?? null, id]
+  );
+  res.json({ success: true });
+});
+
+// DELETE /admin/clubs/:id/feature — remove from carousel
+router.delete("/admin/clubs/:id/feature", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  await exec("UPDATE clubs SET featured = 0, featured_slot_seconds = NULL WHERE id = ?", [id]);
+  res.json({ success: true });
+});
+
 // ─────────────────────────────────────────────────────────────────────
 // Ads management — platform admin only
 // ─────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback } from "react";
-import { api } from "@/lib/api";
+import { useEffect, useState, useCallback, useRef } from "react";
+import { api, getToken } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { format } from "date-fns";
-import { Plus, Trash2, ChevronRight, ChevronLeft, Check } from "lucide-react";
+import { Plus, Trash2, ChevronRight, ChevronLeft, Check, Upload, X, ImageIcon } from "lucide-react";
 
 interface Package {
   id: number;
@@ -92,6 +92,8 @@ export default function Ads() {
   const [selectedPackage, setSelectedPackage] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm());
   const [submitting, setSubmitting] = useState(false);
+  const [imageUploading, setImageUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const mainOfferings = offerings.filter(o => !o.is_extra);
   const extraOfferings = offerings.filter(o => !!o.is_extra);
@@ -117,7 +119,41 @@ export default function Ads() {
     setSelectedType(typeId ?? null);
     setSelectedPackage(packageName ?? null);
     setForm(emptyForm());
+    setImageUploading(false);
     setActiveTab("new-ad");
+  };
+
+  const handleImageUpload = async (file: File) => {
+    const allowed = ["image/jpeg", "image/png", "image/webp"];
+    if (!allowed.includes(file.type)) {
+      toast({ title: "Unsupported format", description: "Please upload a JPG, PNG, or WebP image.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Image must be under 8 MB.", variant: "destructive" });
+      return;
+    }
+    setImageUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("image", file);
+      const token = getToken();
+      const res = await fetch("/api/portal/ad-image/upload", {
+        method: "POST",
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        body: fd,
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: "Upload failed" }));
+        throw new Error(err.message ?? "Upload failed");
+      }
+      const data = await res.json();
+      setF("image_url", data.url);
+    } catch (e: any) {
+      toast({ title: "Upload failed", description: e.message, variant: "destructive" });
+    } finally {
+      setImageUploading(false);
+    }
   };
 
   const handleSubmit = async () => {
@@ -322,9 +358,63 @@ export default function Ads() {
                     <Label>Tagline / Subtitle</Label>
                     <Input value={form.subtitle} onChange={e => setF("subtitle", e.target.value)} placeholder="R 299 green fee after 15:00" />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label>Ad Image URL</Label>
-                    <Input value={form.image_url} onChange={e => setF("image_url", e.target.value)} placeholder="https://yourclub.co.za/banner.jpg" />
+                  <div className="col-span-2 space-y-1.5">
+                    <Label>Ad Image</Label>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; if (f) handleImageUpload(f); e.target.value = ""; }}
+                    />
+                    {form.image_url ? (
+                      <div className="relative rounded-xl overflow-hidden border border-gray-200 bg-gray-50" style={{ aspectRatio: "16/9", maxHeight: 220 }}>
+                        <img src={form.image_url} alt="Ad preview" className="w-full h-full object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => setF("image_url", "")}
+                          className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1 transition-colors"
+                          title="Remove image"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                        <div className="absolute bottom-2 left-2 bg-green-600 text-white text-xs font-medium px-2 py-0.5 rounded-full flex items-center gap-1">
+                          <Check className="h-3 w-3" /> Image uploaded
+                        </div>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        disabled={imageUploading}
+                        className="w-full border-2 border-dashed border-gray-300 hover:border-[#1a5c38] hover:bg-green-50 rounded-xl transition-colors p-6 flex flex-col items-center gap-2 text-gray-500 hover:text-[#1a5c38] disabled:opacity-60 disabled:cursor-not-allowed"
+                      >
+                        {imageUploading ? (
+                          <>
+                            <div className="h-8 w-8 rounded-full border-2 border-[#1a5c38] border-t-transparent animate-spin" />
+                            <span className="text-sm font-medium">Uploading…</span>
+                          </>
+                        ) : (
+                          <>
+                            <Upload className="h-8 w-8" />
+                            <span className="text-sm font-semibold">Click to upload ad image</span>
+                            <span className="text-xs text-gray-400">JPG · PNG · WebP &nbsp;·&nbsp; Max 8 MB</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 space-y-1">
+                      <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-800">
+                        <ImageIcon className="h-3.5 w-3.5" /> Image guidelines for best results
+                      </div>
+                      <ul className="text-xs text-blue-700 space-y-0.5 list-disc list-inside">
+                        <li><strong>Dimensions:</strong> 1920 × 1080 px (16:9 landscape) — mandatory for Featured Home carousel cards</li>
+                        <li><strong>Safe zone:</strong> Keep text and logo in the centre 70% — edges may be cropped on smaller screens</li>
+                        <li><strong>Format:</strong> JPG or WebP preferred for best compression; PNG for graphics with transparency</li>
+                        <li><strong>File size:</strong> Under 3 MB recommended (max 8 MB accepted)</li>
+                        <li><strong>Content:</strong> No phone numbers, URLs, or QR codes — use the CTA button and link fields instead</li>
+                      </ul>
+                    </div>
                   </div>
                   <div className="space-y-1.5">
                     <Label>CTA Button Text</Label>

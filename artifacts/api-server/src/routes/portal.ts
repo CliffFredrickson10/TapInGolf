@@ -2679,6 +2679,42 @@ router.post(
   }
 );
 
+// ─── Ad image upload ──────────────────────────────────────────────────────────
+router.post(
+  "/portal/ad-image/upload",
+  requireClubAuth,
+  upload.single("image"),
+  async (req: Request, res: Response): Promise<void> => {
+    const file = req.file;
+    if (!file) { res.status(400).json({ message: "No image file provided" }); return; }
+    if (file.size > 8 * 1024 * 1024) { res.status(400).json({ message: "Image must be under 8 MB" }); return; }
+
+    const club = getClub(req);
+    const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
+    if (!privateDir) { res.status(500).json({ message: "Object storage not configured" }); return; }
+
+    const fileUuid = randomUUID();
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "") || "jpg";
+
+    const cleanDir = privateDir.replace(/^\/+/, "").replace(/\/+$/, "");
+    const slashIdx = cleanDir.indexOf("/");
+    const parsedBucket = slashIdx >= 0 ? cleanDir.slice(0, slashIdx) : cleanDir;
+    const basePath = slashIdx >= 0 ? cleanDir.slice(slashIdx + 1) : "";
+
+    const objectKey = basePath
+      ? `${basePath}/ad-images/${club.id}/${fileUuid}.${ext}`
+      : `ad-images/${club.id}/${fileUuid}.${ext}`;
+
+    const bucket = objectStorageClient.bucket(parsedBucket);
+    await bucket.file(objectKey).save(file.buffer, { contentType: file.mimetype });
+    await bucket.file(objectKey).setMetadata({ cacheControl: "public, max-age=86400" });
+
+    const host = req.get("host") ?? "localhost";
+    const url = `https://${host}/api/storage/objects/ad-images/${club.id}/${fileUuid}.${ext}`;
+    res.json({ url });
+  }
+);
+
 // ─── Logo upload ─────────────────────────────────────────────────────────────
 router.post(
   "/portal/logo/upload",

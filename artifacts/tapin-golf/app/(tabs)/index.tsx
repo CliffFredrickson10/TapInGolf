@@ -257,7 +257,7 @@ export default function HomeScreen() {
       <View style={styles.section}>
         <View style={styles.sectionHeader}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Featured Clubs</Text>
-          <TouchableOpacity onPress={() => router.push("/(tabs)/explore")}>
+          <TouchableOpacity onPress={() => router.push({ pathname: "/(tabs)/explore", params: { featured: "1" } })}>
             <Text style={[styles.seeAll, { color: colors.primary }]}>See all</Text>
           </TouchableOpacity>
         </View>

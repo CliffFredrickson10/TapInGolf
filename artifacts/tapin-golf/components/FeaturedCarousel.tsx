@@ -1,6 +1,6 @@
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Animated,
   Dimensions,
@@ -17,6 +17,7 @@ const CARD_WIDTH   = SCREEN_WIDTH * 0.72;
 const CARD_MARGIN  = 14;
 const SNAP         = CARD_WIDTH + CARD_MARGIN;
 const DEFAULT_SECS = 8;
+const LOOP_COUNT   = 200; // 100 reps each side — practically infinite
 
 export type FeaturedClub = Club & { slot_seconds?: number | null };
 
@@ -25,74 +26,98 @@ interface Props {
 }
 
 export default function FeaturedCarousel({ clubs }: Props) {
+  const n = clubs.length;
+  const CENTER = useMemo(() => Math.floor(LOOP_COUNT / 2) * n, [n]);
+
+  // Build a flat looped array so the user can scroll forever to the right
+  const loopedClubs = useMemo<FeaturedClub[]>(() => {
+    const arr: FeaturedClub[] = [];
+    for (let i = 0; i < LOOP_COUNT; i++) arr.push(...clubs);
+    return arr;
+  }, [clubs]);
+
   const colors = useColors();
-  const listRef   = useRef<FlatList>(null);
-  const indexRef  = useRef(0);
-  const pausedRef = useRef(false);
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const progressAnim = useRef(new Animated.Value(0)).current;
+  const listRef      = useRef<FlatList>(null);
+  const loopIndexRef = useRef(CENTER);  // index into loopedClubs
+  const pausedRef    = useRef(false);
+  const initializedRef = useRef(false);
+
+  const [loopIndex, setLoopIndex] = useState(CENTER);
+  const progressAnim    = useRef(new Animated.Value(0)).current;
   const progressAnimRef = useRef<Animated.CompositeAnimation | null>(null);
 
+  const dotIndex = loopIndex % n; // which real club is "current"
+
   const slotMs = useCallback(
-    (i: number) => (clubs[i]?.slot_seconds ?? DEFAULT_SECS) * 1000,
-    [clubs]
+    (li: number) => (clubs[li % n]?.slot_seconds ?? DEFAULT_SECS) * 1000,
+    [clubs, n]
   );
 
-  const scrollTo = (i: number) => {
-    try {
-      listRef.current?.scrollToIndex({ index: i, animated: true, viewPosition: 0 });
-    } catch {}
-  };
+  // Scroll to a position in the looped array (no animation flip, always right)
+  const scrollTo = useCallback((li: number, animated = true) => {
+    listRef.current?.scrollToOffset({ offset: li * SNAP, animated });
+  }, []);
 
   const startProgress = useCallback(
-    (i: number) => {
+    (li: number) => {
       progressAnimRef.current?.stop();
       progressAnim.setValue(0);
-      if (clubs.length < 2) return;
+      if (n < 2) return;
       const anim = Animated.timing(progressAnim, {
         toValue: 1,
-        duration: slotMs(i),
+        duration: slotMs(li),
         useNativeDriver: false,
       });
       progressAnimRef.current = anim;
       anim.start(({ finished }) => {
         if (!finished || pausedRef.current) return;
-        const next = (indexRef.current + 1) % clubs.length;
-        indexRef.current = next;
-        setCurrentIndex(next);
+        const next = loopIndexRef.current + 1; // always go RIGHT — infinite
+        loopIndexRef.current = next;
+        setLoopIndex(next);
         scrollTo(next);
       });
     },
-    [clubs, progressAnim, slotMs]
+    [n, progressAnim, slotMs, scrollTo]
   );
 
   useEffect(() => {
-    if (!pausedRef.current) startProgress(currentIndex);
-  }, [currentIndex]);
+    if (!pausedRef.current) startProgress(loopIndex);
+  }, [loopIndex]);
 
   useEffect(() => () => { progressAnimRef.current?.stop(); }, []);
 
-  if (clubs.length === 0) return null;
+  if (n === 0) return null;
 
-  const goTo = (i: number) => {
+  // Tap a dot → jump forward to nearest occurrence of that real index
+  const goTo = (realI: number) => {
+    const curMod = loopIndexRef.current % n;
+    const diff = (realI - curMod + n) % n;
+    const target = loopIndexRef.current + (diff === 0 ? 0 : diff);
     pausedRef.current = false;
-    indexRef.current = i;
-    setCurrentIndex(i);
-    scrollTo(i);
+    loopIndexRef.current = target;
+    setLoopIndex(target);
+    scrollTo(target);
   };
 
   return (
     <View>
       <FlatList
         ref={listRef}
-        data={clubs}
+        data={loopedClubs}
         horizontal
         showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item.id.toString()}
+        keyExtractor={(_, i) => i.toString()}
         contentContainerStyle={{ paddingLeft: 20, paddingRight: 6 }}
         snapToInterval={SNAP}
         decelerationRate="fast"
-        getItemLayout={(_, index) => ({ length: SNAP, offset: SNAP * index, index })}
+        getItemLayout={(_, i) => ({ length: SNAP, offset: SNAP * i, index: i })}
+        // Scroll silently to CENTER on first layout
+        onLayout={() => {
+          if (!initializedRef.current) {
+            initializedRef.current = true;
+            scrollTo(CENTER, false);
+          }
+        }}
         onScrollBeginDrag={() => {
           pausedRef.current = true;
           progressAnimRef.current?.stop();
@@ -100,9 +125,9 @@ export default function FeaturedCarousel({ clubs }: Props) {
         }}
         onMomentumScrollEnd={(e) => {
           const i = Math.round(e.nativeEvent.contentOffset.x / SNAP);
-          const clamped = Math.max(0, Math.min(i, clubs.length - 1));
-          indexRef.current = clamped;
-          setCurrentIndex(clamped);
+          const clamped = Math.max(0, Math.min(i, loopedClubs.length - 1));
+          loopIndexRef.current = clamped;
+          setLoopIndex(clamped);
           pausedRef.current = false;
         }}
         renderItem={({ item }) => (
@@ -116,7 +141,7 @@ export default function FeaturedCarousel({ clubs }: Props) {
         )}
       />
 
-      {clubs.length > 1 && (
+      {n > 1 && (
         <View style={styles.dotsRow}>
           {clubs.map((_, i) => (
             <TouchableOpacity key={i} onPress={() => goTo(i)} activeOpacity={0.7}>
@@ -125,12 +150,12 @@ export default function FeaturedCarousel({ clubs }: Props) {
                   styles.dot,
                   {
                     backgroundColor:
-                      i === currentIndex ? colors.primary + "40" : colors.border,
-                    width: i === currentIndex ? 32 : 6,
+                      i === dotIndex ? colors.primary + "40" : colors.border,
+                    width: i === dotIndex ? 32 : 6,
                   },
                 ]}
               >
-                {i === currentIndex && (
+                {i === dotIndex && (
                   <Animated.View
                     style={[
                       styles.dotFill,

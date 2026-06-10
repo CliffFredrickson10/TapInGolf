@@ -41,11 +41,13 @@ export default function ExploreScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user } = useAuth();
-  const params = useLocalSearchParams<{ q?: string; province?: string; focus?: string }>();
+  const params = useLocalSearchParams<{ q?: string; province?: string; focus?: string; featured?: string }>();
   const searchInputRef = useRef<TextInput>(null);
 
   const [search, setSearch] = useState(params.q ?? "");
   const [province, setProvince] = useState(params.province || "All");
+  const [featuredOnly, setFeaturedOnly] = useState(params.featured === "1");
+  const featuredRef = useRef(params.featured === "1");
   const [clubs, setClubs] = useState<Club[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
@@ -118,6 +120,7 @@ export default function ExploreScreen() {
       const qs = new URLSearchParams();
       if (q) qs.set("q", q);
       if (prov && prov !== "All") qs.set("province", prov);
+      if (featuredRef.current) qs.set("featured", "1");
       if (lat != null && lng != null) {
         qs.set("lat", lat.toString());
         qs.set("lng", lng.toString());
@@ -190,6 +193,15 @@ export default function ExploreScreen() {
     const next = params.province || "All";
     setProvince((prev) => (prev === next ? prev : next));
   }, [params.province]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Activate featured-only filter when arriving from home screen "See all"
+  useEffect(() => {
+    if (params.featured !== "1") return;
+    featuredRef.current = true;
+    setFeaturedOnly(true);
+    doSearch(search, province);
+    router.setParams({ featured: "" });
+  }, [params.featured]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ─── Location button ──────────────────────────────────────────────────────
 
@@ -298,6 +310,22 @@ export default function ExploreScreen() {
       </View>
 
       {/* Banners */}
+      {featuredOnly && (
+        <View style={[styles.banner, { backgroundColor: "#c8a84b18" }]}>
+          <Ionicons name="star" size={14} color="#c8a84b" />
+          <Text style={[styles.bannerText, { color: "#9a7a2a" }]}>
+            Showing featured clubs only
+          </Text>
+          <TouchableOpacity onPress={() => {
+            Haptics.selectionAsync();
+            featuredRef.current = false;
+            setFeaturedOnly(false);
+            doSearch(search, province);
+          }}>
+            <Ionicons name="close-circle" size={16} color="#c8a84b" />
+          </TouchableOpacity>
+        </View>
+      )}
       {locationError ? (
         <View style={[styles.banner, { backgroundColor: "#fff3cd" }]}>
           <Ionicons name="warning-outline" size={14} color="#856404" />

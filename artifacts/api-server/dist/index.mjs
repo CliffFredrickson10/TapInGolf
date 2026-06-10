@@ -62417,7 +62417,7 @@ router10.get("/admin/ad-requests/stats", async (req, res) => {
     row("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'pending_review'"),
     row("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'live'"),
     row("SELECT COUNT(*) AS cnt FROM ad_requests WHERE status = 'payment_pending'"),
-    row("SELECT COALESCE(SUM(confirmed_price),0) AS total FROM ad_requests WHERE status IN ('live','expired') AND MONTH(created_at) = MONTH(NOW()) AND YEAR(created_at) = YEAR(NOW())")
+    row("SELECT COALESCE(SUM(confirmed_price),0) AS total FROM ad_requests WHERE status IN ('live','expired') AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', NOW())")
   ]);
   res.json({
     pending_review: Number(pending?.cnt ?? 0),

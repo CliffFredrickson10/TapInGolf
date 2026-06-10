@@ -63,7 +63,7 @@ function getDestination(type: string, meta: Record<string, any>): string | null 
     case "ban_appeal":
       return meta.ban_id ? `/bans?ban=${meta.ban_id}` : "/bans";
     case "ad_update":
-      return "/ads";
+      return meta.invoice_id ? "/invoices" : "/ads";
     case "invoice":
       return "/invoices";
     default:

@@ -424,7 +424,7 @@ router.get("/admin/featured-carousel", async (req, res): Promise<void> => {
       ar.package_name, ar.status AS request_status
     FROM clubs c
     LEFT JOIN ads a ON a.club_id = c.id
-      AND a.placement = 'home' AND a.active = 1
+      AND a.placement = 'featured_home' AND a.active = 1
       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
     LEFT JOIN ad_requests ar ON ar.id = a.ad_request_id
     WHERE c.featured = 1 AND c.active = 1
@@ -848,7 +848,7 @@ router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> =>
     res.status(400).json({ message: "Request must be approved or payment_pending to publish" }); return;
   }
   const placementMap: Record<string, string> = {
-    club_detail: "club", featured_home: "home", explore: "explore",
+    club_detail: "club", featured_home: "featured_home", explore: "explore",
     push: "home", tournament: "home", newsletter: "home", nearby_alert: "home", tee_time_deal: "home",
   };
   const placement = placementMap[adReq.ad_type] ?? "home";
@@ -903,7 +903,7 @@ router.post("/admin/ad-requests/:id/unpublish", async (req, res): Promise<void> 
   if (adReq.ad_type === "featured_home" && adReq.club_id) {
     const remaining = await row<{ cnt: number }>(
       `SELECT COUNT(*) AS cnt FROM ads
-       WHERE club_id = ? AND placement = 'home' AND active = 1 AND id != ?`,
+       WHERE club_id = ? AND placement = 'featured_home' AND active = 1 AND id != ?`,
       [adReq.club_id, adReq.published_ad_id ?? 0]
     );
     const housePickClub = await row<{ featured_slot_seconds: number | null }>(

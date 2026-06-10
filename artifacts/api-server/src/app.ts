@@ -46,6 +46,12 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
+// Sales presentation — served at /presentation
+app.get("/presentation", (_req, res) => {
+  const file = path.resolve(__dirname, "../presentation.html");
+  res.sendFile(file);
+});
+
 app.use("/api", router);
 
 // In production, serve the built club-portal SPA from the same origin so

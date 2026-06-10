@@ -67249,54 +67249,7 @@ router16.get("/payments/methods", async (req, res) => {
     return;
   }
   const balance = await ensureWallet(user.id);
-  const methods = await query(
-    "SELECT id, type, label, card_last4, card_brand, card_expiry, is_default, created_at FROM payment_methods WHERE user_id = ? ORDER BY is_default DESC, created_at DESC",
-    [user.id]
-  );
-  res.json({ wallet: { balance }, methods });
-});
-router16.post("/payments/methods", async (req, res) => {
-  const user = await getUser(req);
-  if (!user) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  const { label, card_last4, card_brand, card_expiry, set_default } = req.body ?? {};
-  if (!label || !card_last4 || !card_expiry) {
-    res.status(400).json({ message: "label, card_last4, and card_expiry are required" });
-    return;
-  }
-  if (String(card_last4).replace(/\D/g, "").length < 4) {
-    res.status(400).json({ message: "card_last4 must be 4 digits" });
-    return;
-  }
-  if (set_default) {
-    await exec("UPDATE payment_methods SET is_default = 0 WHERE user_id = ?", [user.id]);
-  }
-  const id = await exec(
-    "INSERT INTO payment_methods (user_id, type, label, card_last4, card_brand, card_expiry, is_default) VALUES (?, 'card', ?, ?, ?, ?, ?)",
-    [user.id, label, String(card_last4).replace(/\D/g, "").slice(-4), card_brand || null, card_expiry, set_default ? 1 : 0]
-  );
-  res.status(201).json({ id, success: true });
-});
-router16.delete("/payments/methods/:id", async (req, res) => {
-  const user = await getUser(req);
-  if (!user) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  await exec("DELETE FROM payment_methods WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
-  res.json({ success: true });
-});
-router16.put("/payments/methods/:id/default", async (req, res) => {
-  const user = await getUser(req);
-  if (!user) {
-    res.status(401).json({ message: "Unauthorized" });
-    return;
-  }
-  await exec("UPDATE payment_methods SET is_default = 0 WHERE user_id = ?", [user.id]);
-  await exec("UPDATE payment_methods SET is_default = 1 WHERE id = ? AND user_id = ?", [req.params["id"], user.id]);
-  res.json({ success: true });
+  res.json({ wallet: { balance }, methods: [] });
 });
 router16.post("/payments/wallet/topup-url", async (req, res) => {
   const user = await getUser(req);
@@ -68647,6 +68600,10 @@ var logosDir = path2.resolve(__dirname2, "../logos");
 app.use("/api/logos", import_express23.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
+});
+app.get("/presentation", (_req, res) => {
+  const file = path2.resolve(__dirname2, "../presentation.html");
+  res.sendFile(file);
 });
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {

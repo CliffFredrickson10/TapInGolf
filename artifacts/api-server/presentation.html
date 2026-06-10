@@ -1,0 +1,1614 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>TapIn Golf — Club Sales Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700;900&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --green:    #1a5c38;
+    --green-dk: #0d2e1c;
+    --green-lt: #246b44;
+    --gold:     #c8a84b;
+    --gold-lt:  #e2c878;
+    --cream:    #f5f2eb;
+    --white:    #fdfcfa;
+    --text:     #1a1a18;
+    --muted:    #6b6b5e;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: #111;
+    font-family: 'Source Sans 3', sans-serif;
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+  }
+
+  /* ── Slide container ── */
+  .deck {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+  }
+
+  .slide {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.4s ease;
+    overflow: hidden;
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+  }
+
+  /* ── Nav UI ── */
+  .nav {
+    position: fixed;
+    bottom: 2.5vh;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 1.2vw;
+    z-index: 100;
+    background: rgba(0,0,0,0.45);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(200,168,75,0.3);
+    border-radius: 999px;
+    padding: 0.7vh 1.8vw;
+  }
+  .nav button {
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: #c8a84b;
+    font-size: 1.4vw;
+    line-height: 1;
+    padding: 0.3vh 0.5vw;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+  }
+  .nav button:hover { opacity: 1; }
+  .nav-counter {
+    color: rgba(255,255,255,0.7);
+    font-size: 0.9vw;
+    font-family: 'Source Sans 3', sans-serif;
+    min-width: 3.5vw;
+    text-align: center;
+    letter-spacing: 0.05em;
+  }
+  .dots {
+    display: flex;
+    gap: 0.5vw;
+    align-items: center;
+  }
+  .dot {
+    width: 0.5vw;
+    height: 0.5vw;
+    border-radius: 50%;
+    background: rgba(200,168,75,0.35);
+    transition: background 0.25s;
+    cursor: pointer;
+  }
+  .dot.on { background: #c8a84b; }
+
+  /* ── Print: show all slides stacked ── */
+  @media print {
+    body { background: white; overflow: visible; height: auto; }
+    .deck { height: auto; position: static; }
+    .nav { display: none; }
+    .slide {
+      position: relative;
+      opacity: 1;
+      pointer-events: all;
+      width: 297mm;
+      height: 167.06mm;
+      page-break-after: always;
+      break-after: page;
+    }
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 1 — Title
+  ═══════════════════════════════════════════ */
+  #s1 {
+    background: var(--green-dk);
+    display: flex;
+    align-items: stretch;
+  }
+  .s1-left {
+    flex: 0 0 58%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 7vh 5vw 7vh 7vw;
+    position: relative;
+    z-index: 2;
+  }
+  .s1-right {
+    flex: 1;
+    background: var(--green);
+    clip-path: polygon(8% 0, 100% 0, 100% 100%, 0 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .s1-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,168,75,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,168,75,0.06) 1px, transparent 1px);
+    background-size: 4vw 4vw;
+  }
+  .s1-hole {
+    width: 18vw;
+    height: 18vw;
+    border-radius: 50%;
+    border: 0.25vw solid rgba(200,168,75,0.25);
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .s1-hole::before {
+    content: '';
+    position: absolute;
+    inset: 8%;
+    border-radius: 50%;
+    border: 0.18vw solid rgba(200,168,75,0.18);
+  }
+  .s1-hole-center {
+    width: 3vw;
+    height: 3vw;
+    border-radius: 50%;
+    background: var(--gold);
+    opacity: 0.7;
+  }
+  .s1-flag {
+    position: absolute;
+    bottom: 46%;
+    right: 46%;
+    width: 0.22vw;
+    height: 5vw;
+    background: var(--gold);
+    opacity: 0.5;
+  }
+  .s1-flag::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0.22vw;
+    width: 2.2vw;
+    height: 1.2vw;
+    background: var(--gold);
+    opacity: 0.6;
+    clip-path: polygon(0 0, 100% 50%, 0 100%);
+  }
+  .s1-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.1vw;
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 3vh;
+  }
+  .s1-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 5.8vw;
+    font-weight: 900;
+    line-height: 1.05;
+    color: var(--white);
+    margin-bottom: 3vh;
+    text-wrap: balance;
+  }
+  .s1-headline span { color: var(--gold); }
+  .s1-rule {
+    width: 5vw;
+    height: 0.22vh;
+    background: var(--gold);
+    margin-bottom: 3vh;
+  }
+  .s1-sub {
+    font-size: 1.6vw;
+    font-weight: 300;
+    color: rgba(255,255,255,0.72);
+    line-height: 1.5;
+    max-width: 90%;
+    margin-bottom: 5vh;
+  }
+  .s1-url {
+    font-size: 1vw;
+    font-weight: 600;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--gold);
+    opacity: 0.85;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 2 — The Problem
+  ═══════════════════════════════════════════ */
+  #s2 {
+    background: var(--cream);
+    display: flex;
+    align-items: stretch;
+  }
+  .s2-accent {
+    flex: 0 0 0.6vw;
+    background: var(--green);
+  }
+  .s2-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6vh 7vw;
+  }
+  .s2-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s2-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.8vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    line-height: 1.15;
+    margin-bottom: 5vh;
+    text-wrap: balance;
+  }
+  .prob-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2vw;
+  }
+  .prob-card {
+    background: var(--white);
+    border-radius: 0.6vw;
+    padding: 3.5vh 2.5vw;
+    border-top: 0.35vh solid var(--green);
+    position: relative;
+  }
+  .prob-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5vw;
+    font-weight: 900;
+    color: var(--green);
+    opacity: 0.12;
+    position: absolute;
+    top: 1.5vh;
+    right: 1.5vw;
+    line-height: 1;
+  }
+  .prob-icon {
+    font-size: 2.2vw;
+    margin-bottom: 1.5vh;
+  }
+  .prob-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.35vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    margin-bottom: 1.2vh;
+    line-height: 1.25;
+  }
+  .prob-text {
+    font-size: 1.15vw;
+    color: var(--muted);
+    line-height: 1.55;
+    font-weight: 400;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 3 — The Solution
+  ═══════════════════════════════════════════ */
+  #s3 {
+    background: var(--green);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 7vw;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .s3-bg-circles {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .s3-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(200,168,75,0.12);
+  }
+  .s3-c1 { width: 70vw; height: 70vw; top: -20vw; right: -20vw; }
+  .s3-c2 { width: 50vw; height: 50vw; bottom: -15vw; left: -10vw; }
+  .s3-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+    position: relative;
+  }
+  .s3-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.8vw;
+    font-weight: 900;
+    color: var(--white);
+    line-height: 1.1;
+    margin-bottom: 1.5vh;
+    position: relative;
+  }
+  .s3-sub {
+    font-size: 1.4vw;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 5vh;
+    position: relative;
+  }
+  .s3-pillars {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2.5vw;
+    width: 100%;
+    position: relative;
+  }
+  .s3-pillar {
+    border: 1px solid rgba(200,168,75,0.35);
+    border-radius: 0.8vw;
+    padding: 4vh 2.5vw;
+    background: rgba(255,255,255,0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.5vh;
+  }
+  .s3-pillar-icon {
+    width: 5vw;
+    height: 5vw;
+    border-radius: 50%;
+    background: rgba(200,168,75,0.15);
+    border: 1px solid rgba(200,168,75,0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2vw;
+  }
+  .s3-pillar-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.6vw;
+    font-weight: 700;
+    color: var(--gold);
+  }
+  .s3-pillar-text {
+    font-size: 1.15vw;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.55;
+    text-align: center;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 4 — Golfer App Features
+  ═══════════════════════════════════════════ */
+  #s4 {
+    background: var(--white);
+    display: flex;
+    align-items: stretch;
+  }
+  .s4-left {
+    flex: 0 0 42%;
+    background: var(--green-dk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 4vw;
+    position: relative;
+    overflow: hidden;
+    clip-path: polygon(0 0, 92% 0, 100% 100%, 0 100%);
+  }
+  .s4-grid {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,168,75,0.05) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,168,75,0.05) 1px, transparent 1px);
+    background-size: 3vw 3vw;
+  }
+  .s4-phone {
+    position: relative;
+    z-index: 2;
+    width: 18vw;
+    height: 32vw;
+    background: #0d2e1c;
+    border-radius: 2.5vw;
+    border: 0.35vw solid rgba(200,168,75,0.4);
+    overflow: hidden;
+    box-shadow: 0 2vw 5vw rgba(0,0,0,0.5);
+    display: flex;
+    flex-direction: column;
+  }
+  .s4-phone-notch {
+    width: 5vw;
+    height: 0.8vw;
+    background: rgba(200,168,75,0.3);
+    border-radius: 999px;
+    margin: 1vw auto 0;
+  }
+  .s4-phone-screen {
+    flex: 1;
+    margin: 0.8vw 0.6vw;
+    background: var(--green);
+    border-radius: 1.8vw;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    padding: 1.5vw;
+    gap: 0.8vw;
+  }
+  .s4-ps-header {
+    width: 100%;
+    height: 1.8vw;
+    background: rgba(200,168,75,0.2);
+    border-radius: 0.3vw;
+  }
+  .s4-ps-card {
+    background: rgba(255,255,255,0.08);
+    border-radius: 0.5vw;
+    padding: 0.8vw;
+    display: flex;
+    gap: 0.6vw;
+    align-items: center;
+  }
+  .s4-ps-dot {
+    width: 1.8vw;
+    height: 1.8vw;
+    border-radius: 0.3vw;
+    background: rgba(200,168,75,0.4);
+    flex-shrink: 0;
+  }
+  .s4-ps-lines {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.3vw;
+  }
+  .s4-ps-line {
+    height: 0.4vw;
+    background: rgba(255,255,255,0.18);
+    border-radius: 999px;
+  }
+  .s4-ps-line.short { width: 60%; }
+  .s4-right {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6vh 5vw 6vh 6vw;
+  }
+  .s4-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s4-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.2vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    line-height: 1.15;
+    margin-bottom: 4vh;
+  }
+  .feat-list {
+    display: flex;
+    flex-direction: column;
+    gap: 2.5vh;
+  }
+  .feat-item {
+    display: flex;
+    gap: 1.5vw;
+    align-items: flex-start;
+  }
+  .feat-icon-wrap {
+    flex-shrink: 0;
+    width: 3.5vw;
+    height: 3.5vw;
+    border-radius: 0.6vw;
+    background: rgba(26,92,56,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.6vw;
+    margin-top: 0.2vh;
+  }
+  .feat-title {
+    font-size: 1.25vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    margin-bottom: 0.4vh;
+  }
+  .feat-desc {
+    font-size: 1.1vw;
+    color: var(--muted);
+    line-height: 1.5;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 5 — Split Billing
+  ═══════════════════════════════════════════ */
+  #s5 {
+    background: var(--green-dk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 7vw;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .s5-stripe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0.4vh;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .s5-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s5-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.8vw;
+    font-weight: 900;
+    color: var(--white);
+    line-height: 1.1;
+    margin-bottom: 1.5vh;
+  }
+  .s5-sub {
+    font-size: 1.4vw;
+    color: rgba(255,255,255,0.6);
+    margin-bottom: 5vh;
+    max-width: 55vw;
+  }
+  .s5-flow {
+    display: flex;
+    align-items: center;
+    gap: 2vw;
+    margin-bottom: 5vh;
+  }
+  .s5-step {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1.2vh;
+    flex: 1;
+  }
+  .s5-step-icon {
+    width: 5.5vw;
+    height: 5.5vw;
+    border-radius: 50%;
+    background: rgba(200,168,75,0.12);
+    border: 1px solid rgba(200,168,75,0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.2vw;
+  }
+  .s5-step-label {
+    font-size: 1.15vw;
+    color: rgba(255,255,255,0.75);
+    line-height: 1.45;
+    text-align: center;
+    max-width: 10vw;
+  }
+  .s5-arrow {
+    font-size: 1.8vw;
+    color: var(--gold);
+    opacity: 0.5;
+    flex: 0;
+    margin-top: -2vh;
+  }
+  .s5-result {
+    background: rgba(200,168,75,0.1);
+    border: 1px solid rgba(200,168,75,0.3);
+    border-radius: 0.8vw;
+    padding: 2.5vh 4vw;
+    font-size: 1.4vw;
+    color: var(--gold-lt);
+    font-weight: 600;
+    max-width: 55vw;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 6 — Club Portal Overview
+  ═══════════════════════════════════════════ */
+  #s6 {
+    background: var(--cream);
+    display: flex;
+    align-items: stretch;
+  }
+  .s6-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6vh 5vw 6vh 7vw;
+  }
+  .s6-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s6-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    line-height: 1.15;
+    margin-bottom: 2.5vh;
+  }
+  .s6-headline span { color: var(--green); }
+  .s6-desc {
+    font-size: 1.25vw;
+    color: var(--muted);
+    line-height: 1.6;
+    margin-bottom: 4vh;
+    max-width: 90%;
+  }
+  .s6-stat-row {
+    display: flex;
+    gap: 3vw;
+  }
+  .s6-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.3vh;
+  }
+  .s6-stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.2vw;
+    font-weight: 900;
+    color: var(--green);
+    line-height: 1;
+  }
+  .s6-stat-label {
+    font-size: 1vw;
+    color: var(--muted);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+  .s6-right {
+    flex: 0 0 50%;
+    background: var(--green);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4vh 4vw;
+    clip-path: polygon(6% 0, 100% 0, 100% 100%, 0 100%);
+  }
+  .s6-portal-mock {
+    background: var(--green-dk);
+    border-radius: 0.8vw;
+    overflow: hidden;
+    border: 1px solid rgba(200,168,75,0.2);
+    box-shadow: 0 1.5vw 4vw rgba(0,0,0,0.4);
+  }
+  .s6-mock-bar {
+    background: rgba(200,168,75,0.12);
+    padding: 1vh 1.5vw;
+    display: flex;
+    align-items: center;
+    gap: 0.6vw;
+    border-bottom: 1px solid rgba(200,168,75,0.1);
+  }
+  .s6-mock-dot {
+    width: 0.7vw;
+    height: 0.7vw;
+    border-radius: 50%;
+  }
+  .s6-mock-tabs {
+    display: flex;
+    gap: 2vw;
+    padding: 1.2vh 1.5vw;
+    border-bottom: 1px solid rgba(255,255,255,0.06);
+  }
+  .s6-mock-tab {
+    font-size: 0.85vw;
+    color: rgba(255,255,255,0.45);
+    padding-bottom: 0.8vh;
+    font-weight: 600;
+  }
+  .s6-mock-tab.active {
+    color: var(--gold);
+    border-bottom: 0.25vh solid var(--gold);
+  }
+  .s6-mock-content {
+    padding: 1.5vh 1.5vw;
+    display: flex;
+    flex-direction: column;
+    gap: 0.8vh;
+  }
+  .s6-mock-row {
+    display: flex;
+    gap: 1vw;
+    align-items: center;
+  }
+  .s6-mock-time {
+    font-size: 0.75vw;
+    color: var(--gold);
+    opacity: 0.7;
+    width: 3.5vw;
+    flex-shrink: 0;
+    font-weight: 600;
+  }
+  .s6-mock-slot {
+    flex: 1;
+    height: 1.8vh;
+    border-radius: 0.3vw;
+  }
+  .s6-mock-slot.booked { background: rgba(26,92,56,0.6); }
+  .s6-mock-slot.open   { background: rgba(200,168,75,0.15); border: 1px dashed rgba(200,168,75,0.25); }
+  .s6-mock-badge {
+    font-size: 0.65vw;
+    padding: 0.2vh 0.6vw;
+    border-radius: 999px;
+    font-weight: 700;
+    flex-shrink: 0;
+  }
+  .s6-mock-badge.b { background: rgba(26,92,56,0.5); color: #7fd9a0; }
+  .s6-mock-badge.o { background: rgba(200,168,75,0.15); color: var(--gold); }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 7 — Portal Feature Grid
+  ═══════════════════════════════════════════ */
+  #s7 {
+    background: var(--green-dk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 7vw;
+    position: relative;
+    overflow: hidden;
+  }
+  .s7-bg {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(200,168,75,0.04) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(200,168,75,0.04) 1px, transparent 1px);
+    background-size: 5vw 5vw;
+    pointer-events: none;
+  }
+  .s7-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+    position: relative;
+  }
+  .s7-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.2vw;
+    font-weight: 700;
+    color: var(--white);
+    text-align: center;
+    margin-bottom: 4vh;
+    position: relative;
+  }
+  .s7-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 2vw;
+    width: 100%;
+    position: relative;
+  }
+  .s7-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(200,168,75,0.18);
+    border-radius: 0.7vw;
+    padding: 3vh 2.5vw;
+    display: flex;
+    gap: 1.5vw;
+    align-items: flex-start;
+  }
+  .s7-card-icon {
+    flex-shrink: 0;
+    width: 3.2vw;
+    height: 3.2vw;
+    border-radius: 0.5vw;
+    background: rgba(200,168,75,0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5vw;
+    margin-top: 0.2vh;
+  }
+  .s7-card-title {
+    font-size: 1.2vw;
+    font-weight: 700;
+    color: var(--gold-lt);
+    margin-bottom: 0.8vh;
+  }
+  .s7-card-text {
+    font-size: 1.05vw;
+    color: rgba(255,255,255,0.6);
+    line-height: 1.55;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 8 — Payments
+  ═══════════════════════════════════════════ */
+  #s8 {
+    background: var(--white);
+    display: flex;
+    align-items: stretch;
+  }
+  .s8-left {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 6vh 5vw 6vh 7vw;
+  }
+  .s8-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s8-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    line-height: 1.15;
+    margin-bottom: 1.5vh;
+  }
+  .s8-sub {
+    font-size: 1.25vw;
+    color: var(--muted);
+    margin-bottom: 4vh;
+    max-width: 90%;
+    line-height: 1.55;
+  }
+  .s8-methods {
+    display: flex;
+    flex-direction: column;
+    gap: 1.8vh;
+  }
+  .s8-method {
+    display: flex;
+    align-items: center;
+    gap: 1.5vw;
+    padding: 1.8vh 2vw;
+    border-radius: 0.6vw;
+    background: rgba(26,92,56,0.05);
+    border-left: 0.3vw solid var(--green);
+  }
+  .s8-method-icon { font-size: 1.8vw; }
+  .s8-method-title {
+    font-size: 1.2vw;
+    font-weight: 700;
+    color: var(--green-dk);
+  }
+  .s8-method-desc {
+    font-size: 1.05vw;
+    color: var(--muted);
+  }
+  .s8-right {
+    flex: 0 0 42%;
+    background: var(--green);
+    clip-path: polygon(8% 0, 100% 0, 100% 100%, 0 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 5vh 5vw 5vh 8vw;
+    gap: 3vh;
+  }
+  .s8-stitch-badge {
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(200,168,75,0.3);
+    border-radius: 1vw;
+    padding: 3vh 3vw;
+    width: 100%;
+    text-align: center;
+  }
+  .s8-stitch-title {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.8vw;
+    font-weight: 700;
+    color: var(--gold);
+    margin-bottom: 1vh;
+  }
+  .s8-stitch-desc {
+    font-size: 1.1vw;
+    color: rgba(255,255,255,0.65);
+    line-height: 1.5;
+  }
+  .s8-banks {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.8vw;
+    justify-content: center;
+  }
+  .s8-bank {
+    background: rgba(255,255,255,0.09);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 0.4vw;
+    padding: 0.6vh 1.2vw;
+    font-size: 0.85vw;
+    color: rgba(255,255,255,0.7);
+    font-weight: 600;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 9 — Why TapIn / Stats
+  ═══════════════════════════════════════════ */
+  #s9 {
+    background: var(--cream);
+    display: flex;
+    align-items: stretch;
+  }
+  .s9-accent { flex: 0 0 0.6vw; background: var(--green); }
+  .s9-body {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 5vh 7vw;
+  }
+  .s9-label {
+    font-size: 0.9vw;
+    font-weight: 700;
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 1.5vh;
+  }
+  .s9-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 3.5vw;
+    font-weight: 700;
+    color: var(--green-dk);
+    margin-bottom: 5vh;
+    text-wrap: balance;
+  }
+  .s9-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 3vw;
+    margin-bottom: 4.5vh;
+  }
+  .s9-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6vh;
+    padding: 3vh 2.5vw;
+    background: var(--white);
+    border-radius: 0.7vw;
+    border-top: 0.35vh solid var(--gold);
+  }
+  .s9-stat-num {
+    font-family: 'Playfair Display', serif;
+    font-size: 4.5vw;
+    font-weight: 900;
+    color: var(--green);
+    line-height: 1;
+  }
+  .s9-stat-label {
+    font-size: 1.1vw;
+    color: var(--muted);
+    font-weight: 600;
+    line-height: 1.4;
+  }
+  .s9-quote {
+    font-family: 'Playfair Display', serif;
+    font-size: 1.5vw;
+    font-style: italic;
+    color: var(--green-dk);
+    opacity: 0.7;
+    text-align: center;
+    border-top: 1px solid rgba(26,92,56,0.15);
+    padding-top: 3vh;
+  }
+
+  /* ═══════════════════════════════════════════
+     SLIDE 10 — CTA
+  ═══════════════════════════════════════════ */
+  #s10 {
+    background: var(--green-dk);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 6vh 10vw;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  .s10-glow {
+    position: absolute;
+    width: 60vw;
+    height: 60vw;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(200,168,75,0.08) 0%, transparent 70%);
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .s10-circle {
+    position: absolute;
+    border-radius: 50%;
+    border: 1px solid rgba(200,168,75,0.1);
+  }
+  .s10-c1 { width: 90vw; height: 90vw; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+  .s10-c2 { width: 70vw; height: 70vw; top: 50%; left: 50%; transform: translate(-50%,-50%); }
+  .s10-stripe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 0.4vh;
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+  .s10-logo {
+    font-family: 'Playfair Display', serif;
+    font-size: 1vw;
+    font-weight: 700;
+    letter-spacing: 0.35em;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 2.5vh;
+    position: relative;
+  }
+  .s10-headline {
+    font-family: 'Playfair Display', serif;
+    font-size: 5.5vw;
+    font-weight: 900;
+    color: var(--white);
+    line-height: 1.05;
+    margin-bottom: 2vh;
+    position: relative;
+  }
+  .s10-headline span { color: var(--gold); }
+  .s10-rule {
+    width: 5vw;
+    height: 0.22vh;
+    background: var(--gold);
+    margin: 0 auto 3vh;
+    position: relative;
+  }
+  .s10-sub {
+    font-size: 1.5vw;
+    color: rgba(255,255,255,0.65);
+    margin-bottom: 5vh;
+    max-width: 45vw;
+    line-height: 1.55;
+    position: relative;
+  }
+  .s10-contacts {
+    display: flex;
+    gap: 4vw;
+    justify-content: center;
+    position: relative;
+  }
+  .s10-contact {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.6vh;
+  }
+  .s10-contact-label {
+    font-size: 0.85vw;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--gold);
+    opacity: 0.7;
+  }
+  .s10-contact-value {
+    font-size: 1.4vw;
+    font-weight: 600;
+    color: var(--white);
+  }
+</style>
+</head>
+<body>
+
+<div class="deck" id="deck">
+
+  <!-- ══ Slide 1 — Title ══ -->
+  <div class="slide active" id="s1">
+    <div class="s1-left">
+      <div class="s1-logo">TapIn Golf</div>
+      <h1 class="s1-headline">Fill Every<br><span>Tee Time.</span></h1>
+      <div class="s1-rule"></div>
+      <p class="s1-sub">The complete digital booking platform built exclusively for South African golf clubs.</p>
+      <div class="s1-url">tapingolf.co.za</div>
+    </div>
+    <div class="s1-right">
+      <div class="s1-grid"></div>
+      <div class="s1-hole">
+        <div class="s1-flag"></div>
+        <div class="s1-hole-center"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 2 — The Problem ══ -->
+  <div class="slide" id="s2">
+    <div class="s2-accent"></div>
+    <div class="s2-body">
+      <div class="s2-label">The Challenge</div>
+      <h2 class="s2-headline">Clubs Are Losing Revenue<br>Every Day</h2>
+      <div class="prob-grid">
+        <div class="prob-card">
+          <div class="prob-num">01</div>
+          <div class="prob-icon">📞</div>
+          <div class="prob-title">Phone Bookings &amp; No-Shows</div>
+          <div class="prob-text">Manual tee-time management means missed calls, booking errors, and revenue lost to empty slots that could have been filled.</div>
+        </div>
+        <div class="prob-card">
+          <div class="prob-num">02</div>
+          <div class="prob-icon">📊</div>
+          <div class="prob-title">Zero Visibility Into Demand</div>
+          <div class="prob-text">Without digital data, clubs cannot see peak hours, identify loyal players, or make informed decisions about pricing and events.</div>
+        </div>
+        <div class="prob-card">
+          <div class="prob-num">03</div>
+          <div class="prob-icon">💵</div>
+          <div class="prob-title">Cash &amp; Split-Bill Disputes</div>
+          <div class="prob-text">Handling cash at the pro shop, chasing players for their share, and reconciling payments manually wastes staff time every single day.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 3 — The Solution ══ -->
+  <div class="slide" id="s3">
+    <div class="s3-bg-circles">
+      <div class="s3-circle s3-c1"></div>
+      <div class="s3-circle s3-c2"></div>
+    </div>
+    <div class="s3-label">The TapIn Platform</div>
+    <h2 class="s3-headline">One Platform.<br>Total Control.</h2>
+    <p class="s3-sub">A seamless ecosystem connecting your club, your staff, and your golfers.</p>
+    <div class="s3-pillars">
+      <div class="s3-pillar">
+        <div class="s3-pillar-icon">📱</div>
+        <div class="s3-pillar-title">Golfer App</div>
+        <div class="s3-pillar-text">iOS &amp; Android app for discovering clubs, booking tee times, inviting friends, and paying instantly.</div>
+      </div>
+      <div class="s3-pillar">
+        <div class="s3-pillar-icon">🖥️</div>
+        <div class="s3-pillar-title">Club Portal</div>
+        <div class="s3-pillar-text">Web-based management dashboard for tee sheets, bookings, events, vouchers, members, and communications.</div>
+      </div>
+      <div class="s3-pillar">
+        <div class="s3-pillar-icon">💳</div>
+        <div class="s3-pillar-title">Stitch Payments</div>
+        <div class="s3-pillar-text">Instant EFT and card payments via Stitch. ZAR-native, webhook-confirmed, and fully integrated at checkout.</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 4 — Golfer App Features ══ -->
+  <div class="slide" id="s4">
+    <div class="s4-left">
+      <div class="s4-grid"></div>
+      <div class="s4-phone">
+        <div class="s4-phone-notch"></div>
+        <div class="s4-phone-screen">
+          <div class="s4-ps-header"></div>
+          <div class="s4-ps-card">
+            <div class="s4-ps-dot"></div>
+            <div class="s4-ps-lines">
+              <div class="s4-ps-line"></div>
+              <div class="s4-ps-line short"></div>
+            </div>
+          </div>
+          <div class="s4-ps-card">
+            <div class="s4-ps-dot"></div>
+            <div class="s4-ps-lines">
+              <div class="s4-ps-line"></div>
+              <div class="s4-ps-line short"></div>
+            </div>
+          </div>
+          <div class="s4-ps-card">
+            <div class="s4-ps-dot"></div>
+            <div class="s4-ps-lines">
+              <div class="s4-ps-line"></div>
+              <div class="s4-ps-line short"></div>
+            </div>
+          </div>
+          <div class="s4-ps-card">
+            <div class="s4-ps-dot"></div>
+            <div class="s4-ps-lines">
+              <div class="s4-ps-line"></div>
+              <div class="s4-ps-line short"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s4-right">
+      <div class="s4-label">The Golfer App</div>
+      <h2 class="s4-headline">Your Club in Every<br>Golfer's Pocket</h2>
+      <div class="feat-list">
+        <div class="feat-item">
+          <div class="feat-icon-wrap">⛳</div>
+          <div>
+            <div class="feat-title">Discover 506 SA Clubs</div>
+            <div class="feat-desc">Golfers browse your club, view facilities, green fees, and available tee times in real time.</div>
+          </div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-icon-wrap">📅</div>
+          <div>
+            <div class="feat-title">Instant Tee Time Booking</div>
+            <div class="feat-desc">Book 9 or 18 holes for 1–4 players in under a minute — confirmed immediately.</div>
+          </div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-icon-wrap">👥</div>
+          <div>
+            <div class="feat-title">Friends &amp; Group Play</div>
+            <div class="feat-desc">Invite friends, see their handicaps, and organise group rounds with shared notifications.</div>
+          </div>
+        </div>
+        <div class="feat-item">
+          <div class="feat-icon-wrap">🎫</div>
+          <div>
+            <div class="feat-title">Vouchers &amp; Wallet</div>
+            <div class="feat-desc">Club-issued discount vouchers apply automatically at checkout. Top up a TapIn Wallet for fast repeat payments.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 5 — Split Billing ══ -->
+  <div class="slide" id="s5">
+    <div class="s5-stripe"></div>
+    <div class="s5-label">Split Billing</div>
+    <h2 class="s5-headline">No More Bill Disputes</h2>
+    <p class="s5-sub">The organiser books the round — each player pays their own share independently. You always receive the full amount.</p>
+    <div class="s5-flow">
+      <div class="s5-step">
+        <div class="s5-step-icon">📋</div>
+        <div class="s5-step-label">Organiser books tee time for 4 players</div>
+      </div>
+      <div class="s5-arrow">→</div>
+      <div class="s5-step">
+        <div class="s5-step-icon">📲</div>
+        <div class="s5-step-label">Friends get notified &amp; pay their share</div>
+      </div>
+      <div class="s5-arrow">→</div>
+      <div class="s5-step">
+        <div class="s5-step-icon">💳</div>
+        <div class="s5-step-label">Each pays via Stitch EFT or card</div>
+      </div>
+      <div class="s5-arrow">→</div>
+      <div class="s5-step">
+        <div class="s5-step-icon">✅</div>
+        <div class="s5-step-label">Club receives full amount — confirmed instantly</div>
+      </div>
+    </div>
+    <div class="s5-result">Your club never chases a payment again.</div>
+  </div>
+
+  <!-- ══ Slide 6 — Club Portal ══ -->
+  <div class="slide" id="s6">
+    <div class="s6-left">
+      <div class="s6-label">Club Management Portal</div>
+      <h2 class="s6-headline">Your Club,<br><span>Fully in Control</span></h2>
+      <p class="s6-desc">A powerful web dashboard that gives your pro shop and management team real-time visibility and control over every aspect of your club's booking operation.</p>
+      <div class="s6-stat-row">
+        <div class="s6-stat">
+          <div class="s6-stat-num">Real-time</div>
+          <div class="s6-stat-label">Tee Sheet Visibility</div>
+        </div>
+        <div class="s6-stat">
+          <div class="s6-stat-num">Full</div>
+          <div class="s6-stat-label">Booking History</div>
+        </div>
+      </div>
+    </div>
+    <div class="s6-right">
+      <div class="s6-portal-mock">
+        <div class="s6-mock-bar">
+          <div class="s6-mock-dot" style="background:#e74c3c"></div>
+          <div class="s6-mock-dot" style="background:#f39c12"></div>
+          <div class="s6-mock-dot" style="background:#2ecc71"></div>
+        </div>
+        <div class="s6-mock-tabs">
+          <div class="s6-mock-tab active">Tee Sheet</div>
+          <div class="s6-mock-tab">Bookings</div>
+          <div class="s6-mock-tab">Events</div>
+          <div class="s6-mock-tab">Members</div>
+        </div>
+        <div class="s6-mock-content">
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">07:00</div>
+            <div class="s6-mock-slot booked"></div>
+            <div class="s6-mock-badge b">Booked</div>
+          </div>
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">07:15</div>
+            <div class="s6-mock-slot booked"></div>
+            <div class="s6-mock-badge b">Booked</div>
+          </div>
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">07:30</div>
+            <div class="s6-mock-slot open"></div>
+            <div class="s6-mock-badge o">Open</div>
+          </div>
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">07:45</div>
+            <div class="s6-mock-slot booked"></div>
+            <div class="s6-mock-badge b">Booked</div>
+          </div>
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">08:00</div>
+            <div class="s6-mock-slot open"></div>
+            <div class="s6-mock-badge o">Open</div>
+          </div>
+          <div class="s6-mock-row">
+            <div class="s6-mock-time">08:15</div>
+            <div class="s6-mock-slot booked"></div>
+            <div class="s6-mock-badge b">Booked</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 7 — Portal Feature Grid ══ -->
+  <div class="slide" id="s7">
+    <div class="s7-bg"></div>
+    <div class="s7-label">Portal Capabilities</div>
+    <h2 class="s7-headline">Everything Your Club Needs — In One Place</h2>
+    <div class="s7-grid">
+      <div class="s7-card">
+        <div class="s7-card-icon">📅</div>
+        <div>
+          <div class="s7-card-title">Tee Sheet Management</div>
+          <div class="s7-card-text">Create and publish tee times by date. Set pricing per round, restrict slots, and see live availability.</div>
+        </div>
+      </div>
+      <div class="s7-card">
+        <div class="s7-card-icon">🎟️</div>
+        <div>
+          <div class="s7-card-title">Events &amp; Competitions</div>
+          <div class="s7-card-text">Run club events with entry fees, draw formats, scorecards, and payment tracking — all in the portal.</div>
+        </div>
+      </div>
+      <div class="s7-card">
+        <div class="s7-card-icon">🏷️</div>
+        <div>
+          <div class="s7-card-title">Vouchers &amp; Discounts</div>
+          <div class="s7-card-text">Issue discount vouchers to specific members. Value depletes with each use — no misuse, full control.</div>
+        </div>
+      </div>
+      <div class="s7-card">
+        <div class="s7-card-icon">👤</div>
+        <div>
+          <div class="s7-card-title">Member Management</div>
+          <div class="s7-card-text">View member profiles, set prepaid round access, manage student and pensioner rates, and communicate directly.</div>
+        </div>
+      </div>
+      <div class="s7-card">
+        <div class="s7-card-icon">📈</div>
+        <div>
+          <div class="s7-card-title">Booking Analytics</div>
+          <div class="s7-card-text">Track revenue, booking volumes, peak times, and player trends. Export data for club reporting.</div>
+        </div>
+      </div>
+      <div class="s7-card">
+        <div class="s7-card-icon">📬</div>
+        <div>
+          <div class="s7-card-title">Inbox &amp; Notifications</div>
+          <div class="s7-card-text">Send announcements and booking confirmations directly to golfers. Receive and respond to player messages.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 8 — Payments ══ -->
+  <div class="slide" id="s8">
+    <div class="s8-left">
+      <div class="s8-label">Integrated Payments</div>
+      <h2 class="s8-headline">Get Paid —<br>Instantly</h2>
+      <p class="s8-sub">Powered by Stitch — South Africa's leading payment gateway. All transactions are confirmed via webhook before a booking is finalised.</p>
+      <div class="s8-methods">
+        <div class="s8-method">
+          <div class="s8-method-icon">🏦</div>
+          <div>
+            <div class="s8-method-title">Instant EFT</div>
+            <div class="s8-method-desc">Direct bank-to-bank transfer from all major SA banks — FNB, Standard Bank, Absa, Nedbank, Capitec</div>
+          </div>
+        </div>
+        <div class="s8-method">
+          <div class="s8-method-icon">💳</div>
+          <div>
+            <div class="s8-method-title">Card Payments</div>
+            <div class="s8-method-desc">Visa and Mastercard debit and credit cards accepted at checkout</div>
+          </div>
+        </div>
+        <div class="s8-method">
+          <div class="s8-method-icon">👛</div>
+          <div>
+            <div class="s8-method-title">TapIn Wallet</div>
+            <div class="s8-method-desc">Golfers top up a wallet balance for instant one-tap payment at any TapIn club</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="s8-right">
+      <div class="s8-stitch-badge">
+        <div class="s8-stitch-title">Powered by Stitch</div>
+        <div class="s8-stitch-desc">PCI-compliant, webhook-verified, ZAR-native payment processing designed for South African businesses.</div>
+      </div>
+      <div class="s8-banks">
+        <div class="s8-bank">FNB</div>
+        <div class="s8-bank">Standard Bank</div>
+        <div class="s8-bank">Absa</div>
+        <div class="s8-bank">Nedbank</div>
+        <div class="s8-bank">Capitec</div>
+        <div class="s8-bank">Investec</div>
+        <div class="s8-bank">TymeBank</div>
+        <div class="s8-bank">Discovery</div>
+      </div>
+      <div style="font-size:1.1vw; color:rgba(255,255,255,0.5); text-align:center; line-height:1.5;">
+        Bookings are only confirmed once payment is received — no more no-show risk.
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 9 — Why TapIn ══ -->
+  <div class="slide" id="s9">
+    <div class="s9-accent"></div>
+    <div class="s9-body">
+      <div class="s9-label">The TapIn Advantage</div>
+      <h2 class="s9-headline">Built for South African Golf.<br>At Scale.</h2>
+      <div class="s9-stats">
+        <div class="s9-stat">
+          <div class="s9-stat-num">506</div>
+          <div class="s9-stat-label">South African clubs already in the platform database</div>
+        </div>
+        <div class="s9-stat">
+          <div class="s9-stat-num">R0</div>
+          <div class="s9-stat-label">Cash handling required — every payment is digital and confirmed</div>
+        </div>
+        <div class="s9-stat">
+          <div class="s9-stat-num">4-ball</div>
+          <div class="s9-stat-label">Full group booking with independent split billing per player</div>
+        </div>
+      </div>
+      <div class="s9-quote">"The platform is live, tested, and ready for your club — no waiting, no lengthy setup."</div>
+    </div>
+  </div>
+
+  <!-- ══ Slide 10 — CTA ══ -->
+  <div class="slide" id="s10">
+    <div class="s10-glow"></div>
+    <div class="s10-circle s10-c1"></div>
+    <div class="s10-circle s10-c2"></div>
+    <div class="s10-stripe"></div>
+    <div class="s10-logo">TapIn Golf</div>
+    <h2 class="s10-headline">Ready to Go<br><span>Digital?</span></h2>
+    <div class="s10-rule"></div>
+    <p class="s10-sub">Join the TapIn Golf network. Your club, your tee times, your revenue — fully digital in days.</p>
+    <div class="s10-contacts">
+      <div class="s10-contact">
+        <div class="s10-contact-label">Website</div>
+        <div class="s10-contact-value">tapingolf.co.za</div>
+      </div>
+      <div class="s10-contact">
+        <div class="s10-contact-label">Platform</div>
+        <div class="s10-contact-value">iOS · Android · Web</div>
+      </div>
+      <div class="s10-contact">
+        <div class="s10-contact-label">Payments</div>
+        <div class="s10-contact-value">Stitch · ZAR · Instant EFT</div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /deck -->
+
+<!-- Navigation UI -->
+<div class="nav" id="nav">
+  <button id="prevBtn" title="Previous (←)">&#8592;</button>
+  <div class="dots" id="dots"></div>
+  <div class="nav-counter" id="counter">1 / 10</div>
+  <button id="nextBtn" title="Next (→ or Space)">&#8594;</button>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const total = slides.length;
+  let cur = 0;
+
+  const dotsEl = document.getElementById('dots');
+  const counter = document.getElementById('counter');
+
+  // Build dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' on' : '');
+    d.addEventListener('click', () => go(i));
+    dotsEl.appendChild(d);
+  });
+
+  function go(n) {
+    slides[cur].classList.remove('active');
+    dotsEl.children[cur].classList.remove('on');
+    cur = Math.max(0, Math.min(total - 1, n));
+    slides[cur].classList.add('active');
+    dotsEl.children[cur].classList.add('on');
+    counter.textContent = (cur + 1) + ' / ' + total;
+  }
+
+  document.getElementById('prevBtn').addEventListener('click', () => go(cur - 1));
+  document.getElementById('nextBtn').addEventListener('click', () => go(cur + 1));
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === ' ' || e.key === 'ArrowDown') { e.preventDefault(); go(cur + 1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')                    { e.preventDefault(); go(cur - 1); }
+  });
+
+  // Touch/swipe support
+  let tx = 0;
+  document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; }, { passive: true });
+  document.addEventListener('touchend',   e => {
+    const dx = tx - e.changedTouches[0].clientX;
+    if (Math.abs(dx) > 50) dx > 0 ? go(cur + 1) : go(cur - 1);
+  }, { passive: true });
+</script>
+
+</body>
+</html>

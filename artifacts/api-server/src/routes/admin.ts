@@ -591,7 +591,7 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const reqId = parseInt(req.params.id, 10);
-  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  const existing = await row<any>("SELECT id, club_id, headline, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   if (existing.status !== "pending_review") { res.status(400).json({ message: "Only pending_review requests can be approved" }); return; }
   const { confirmed_price, confirmed_start, confirmed_end, slot_duration, sharing_tier, staff_notes } = req.body ?? {};
@@ -604,6 +604,15 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     [confirmed_price ?? null, confirmed_start ?? null, confirmed_end ?? null,
      slot_duration ?? null, sharing_tier ?? null, staff_notes ?? null, reqId]
   );
+  const priceNote = confirmed_price ? ` Confirmed price: R ${Number(confirmed_price).toLocaleString()}.` : "";
+  const notesNote = staff_notes ? ` Message from staff: ${staff_notes}` : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [existing.club_id,
+     "✅ Ad Approved — Payment Link Coming",
+     `Great news! Your ad campaign "${existing.headline}" has been reviewed and approved by TapIn staff.${priceNote} You will receive a payment link shortly to confirm your booking.${notesNote}`,
+     JSON.stringify({ ad_request_id: reqId })]
+  );
   res.json({ success: true });
 });
 
@@ -611,10 +620,20 @@ router.post("/admin/ad-requests/:id/reject", async (req, res): Promise<void> => 
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const reqId = parseInt(req.params.id, 10);
+  const existing = await row<any>("SELECT id, club_id, headline FROM ad_requests WHERE id = ?", [reqId]);
+  if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   const { staff_notes } = req.body ?? {};
   await exec(
     "UPDATE ad_requests SET status = 'rejected', staff_notes = COALESCE(?, staff_notes), updated_at = NOW() WHERE id = ?",
     [staff_notes ?? null, reqId]
+  );
+  const reason = staff_notes ? ` Reason: ${staff_notes}` : " Please contact TapIn staff for more information.";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [existing.club_id,
+     "Ad Request Not Approved",
+     `Unfortunately your ad campaign "${existing.headline}" was not approved at this time.${reason}`,
+     JSON.stringify({ ad_request_id: reqId })]
   );
   res.json({ success: true });
 });
@@ -623,10 +642,26 @@ router.post("/admin/ad-requests/:id/payment-requested", async (req, res): Promis
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const reqId = parseInt(req.params.id, 10);
-  const existing = await row<any>("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  const existing = await row<any>("SELECT id, club_id, headline, confirmed_price, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) { res.status(404).json({ message: "Not found" }); return; }
   if (existing.status !== "approved") { res.status(400).json({ message: "Only approved requests can move to payment_pending" }); return; }
-  await exec("UPDATE ad_requests SET status = 'payment_pending', updated_at = NOW() WHERE id = ?", [reqId]);
+  const { payment_link, staff_notes } = req.body ?? {};
+  await exec(
+    "UPDATE ad_requests SET status = 'payment_pending', payment_link = COALESCE(?, payment_link), staff_notes = COALESCE(?, staff_notes), updated_at = NOW() WHERE id = ?",
+    [payment_link ?? null, staff_notes ?? null, reqId]
+  );
+  const priceStr = existing.confirmed_price ? ` R ${Number(existing.confirmed_price).toLocaleString()} is due.` : "";
+  const linkStr = payment_link
+    ? ` Use this link to complete payment: ${payment_link}`
+    : " TapIn staff will share a payment link with you via email or phone.";
+  const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [existing.club_id,
+     "💳 Payment Required — Complete Your Ad Booking",
+     `Your ad campaign "${existing.headline}" is confirmed and ready to go live.${priceStr}${linkStr}${notesStr} Once payment is received, TapIn staff will publish your ad to the app.`,
+     JSON.stringify({ ad_request_id: reqId, payment_link: payment_link ?? null })]
+  );
   res.json({ success: true });
 });
 
@@ -665,6 +700,16 @@ router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> =>
   if (adReq.ad_type === "featured_home") {
     await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
   }
+  const endNote = adReq.confirmed_end
+    ? ` Your campaign runs until ${new Date(adReq.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.`
+    : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [adReq.club_id,
+     "🚀 Your Ad is Now Live!",
+     `"${adReq.headline}" is now live in the TapIn Golf app and visible to golfers across South Africa.${endNote}`,
+     JSON.stringify({ ad_request_id: reqId, ad_id: adId })]
+  );
   res.json({ success: true, ad_id: adId });
 });
 
@@ -693,6 +738,15 @@ router.post("/admin/ad-requests/:id/unpublish", async (req, res): Promise<void> 
     if ((remaining?.cnt ?? 0) === 0 && housePickClub?.featured_slot_seconds == null) {
       await exec("UPDATE clubs SET featured = 0 WHERE id = ?", [adReq.club_id]);
     }
+  }
+  if (adReq.club_id) {
+    await exec(
+      `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+      [adReq.club_id,
+       "Ad Campaign Ended",
+       "Your ad campaign has been removed from the TapIn Golf app. Contact TapIn staff if you'd like to run another campaign.",
+       JSON.stringify({ ad_request_id: reqId })]
+    );
   }
   res.json({ success: true });
 });

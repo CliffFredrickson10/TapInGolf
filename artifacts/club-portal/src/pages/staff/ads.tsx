@@ -35,6 +35,7 @@ interface AdRequest {
   slot_duration: string | null;
   sharing_tier: string | null;
   staff_notes: string | null;
+  payment_link: string | null;
   published_ad_id: number | null;
   created_at: string;
   updated_at: string;
@@ -352,6 +353,7 @@ export default function StaffAds() {
   const [cfSlot, setCfSlot] = useState("");
   const [cfSharing, setCfSharing] = useState("");
   const [cfNotes, setCfNotes] = useState("");
+  const [cfPaymentLink, setCfPaymentLink] = useState("");
   const [saving, setSaving] = useState(false);
   const [actioning, setActioning] = useState(false);
 
@@ -383,6 +385,7 @@ export default function StaffAds() {
     setCfSlot(req.slot_duration ?? "");
     setCfSharing(req.sharing_tier ?? "");
     setCfNotes(req.staff_notes ?? "");
+    setCfPaymentLink(req.payment_link ?? "");
   };
 
   const saveConfig = async () => {
@@ -545,7 +548,10 @@ export default function StaffAds() {
                   confirmed_start: cfStart || null, confirmed_end: cfEnd || null,
                   slot_duration: cfSlot || null, sharing_tier: cfSharing || null, staff_notes: cfNotes || null,
                 })}
-                onPaymentRequested={() => action("payment-requested", "Marked as payment pending")}
+                cfPaymentLink={cfPaymentLink} setCfPaymentLink={setCfPaymentLink}
+                onPaymentRequested={() => action("payment-requested", "Payment link sent — club notified", {
+                  payment_link: cfPaymentLink || null,
+                })}
                 onPublish={() => action("publish", "Ad published! It is now live in the app.")}
                 onReject={() => action("reject", "Request rejected", { staff_notes: cfNotes || null })}
                 onUnpublish={() => action("unpublish", "Ad unpublished")}
@@ -944,11 +950,12 @@ function AnalyticsPanel({ requests }: { requests: AdRequest[] }) {
 
 // ─── Detail Panel ─────────────────────────────────────────────────────────────
 
-function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, saving, actioning, onSave, onApprove, onPaymentRequested, onPublish, onReject, onUnpublish }: {
+function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, setCfEnd, cfSlot, setCfSlot, cfSharing, setCfSharing, cfNotes, setCfNotes, cfPaymentLink, setCfPaymentLink, saving, actioning, onSave, onApprove, onPaymentRequested, onPublish, onReject, onUnpublish }: {
   req: AdRequest; cfPrice: string; setCfPrice: (v: string) => void;
   cfStart: string; setCfStart: (v: string) => void; cfEnd: string; setCfEnd: (v: string) => void;
   cfSlot: string; setCfSlot: (v: string) => void; cfSharing: string; setCfSharing: (v: string) => void;
   cfNotes: string; setCfNotes: (v: string) => void;
+  cfPaymentLink: string; setCfPaymentLink: (v: string) => void;
   saving: boolean; actioning: boolean;
   onSave: () => void; onApprove: () => void; onPaymentRequested: () => void;
   onPublish: () => void; onReject: () => void; onUnpublish: () => void;
@@ -1035,6 +1042,13 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
               <InfoRow label="Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
               <InfoRow label="End"   value={req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"} />
               <InfoRow label="Slot"  value={req.slot_duration ?? "—"} />
+              {req.payment_link && (
+                <div>
+                  <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Payment Link Sent</p>
+                  <a href={req.payment_link} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-blue-600 hover:underline break-all">{req.payment_link}</a>
+                </div>
+              )}
             </div>
           ) : req.status === "rejected" || req.status === "expired" ? (
             <div className="text-sm text-muted-foreground">No configuration needed for this status.</div>
@@ -1057,6 +1071,13 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                       </button>
                     ))}
                   </div>
+                </div>
+              )}
+              {req.status === "approved" && (
+                <div>
+                  <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1.5 block">Payment Link (optional)</Label>
+                  <Input value={cfPaymentLink} onChange={e => setCfPaymentLink(e.target.value)} placeholder="https://pay.stitch.money/..." />
+                  <p className="text-xs text-muted-foreground mt-1">If provided, this URL will be included in the club's payment notification.</p>
                 </div>
               )}
               <div>

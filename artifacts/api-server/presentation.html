@@ -125,68 +125,74 @@
     color: var(--gold);
     line-height: 1.2;
   }
-  .rotate-sub { font-size: 4.5vw; color: rgba(255,255,255,0.6); line-height: 1.5; }
-  @media (orientation: portrait) and (max-width: 900px) {
-    .rotate-prompt { display: flex; }
-    .nav { display: none; }
-  }
+  .rotate-sub { font-size: 5vw; color: rgba(255,255,255,0.6); line-height: 1.6; }
 
-  /* ── Mobile landscape: enforce minimum readable font sizes ── */
-  @media (max-height: 520px), (max-width: 900px) and (orientation: landscape) {
+  /* ── z-index: ensure text renders above decorative backgrounds ── */
+  /* Slide 5 */
+  .s5-stripe { position: absolute; z-index: 0; }
+  .s5-label, .s5-headline, .s5-sub, .s5-flow, .s5-result { position: relative; z-index: 1; }
+  /* Slide 7 */
+  .s7-bg { z-index: 0; }
+  .s7-label { z-index: 1; }
+  .s7-headline { z-index: 1; }
+  .s7-grid { z-index: 1; }
+  /* Slide 10 */
+  .s10-glow, .s10-c1, .s10-c2, .s10-stripe { z-index: 0; }
+  .s10-logo, .s10-rule, .s10-sub, .s10-contacts { position: relative; z-index: 1; }
+  .s10-headline { z-index: 1; }
+
+  /* ── Mobile: readable font sizes (plain px, no CSS math functions) ── */
+  @media screen and (max-width: 900px) {
     /* Labels / eyebrows */
     .s1-logo, .s2-label, .s3-label, .s4-label, .s5-label,
-    .s6-label, .s7-label, .s8-label, .s9-label, .s10-logo,
-    .s10-contact-label { font-size: max(0.9vw, 10px) !important; }
+    .s6-label, .s7-label, .s8-label, .s9-label,
+    .s10-logo, .s10-contact-label, .s1-url { font-size: 12px !important; }
 
-    .s1-url { font-size: max(1vw, 10px) !important; }
-
-    /* Body / description text */
+    /* Body text */
     .prob-text, .s3-pillar-text, .feat-desc, .s5-step-label,
-    .s7-card-text, .s8-method-desc, .s8-stitch-desc, .s9-stat-label,
-    .s6-desc, .s9-quote { font-size: max(1.1vw, 11px) !important; }
+    .s7-card-text, .s8-method-desc, .s8-stitch-desc,
+    .s9-stat-label, .s6-desc, .s9-quote { font-size: 12px !important; }
 
-    .s1-sub, .s3-sub, .s5-sub, .s5-result, .s8-sub, .s10-sub,
-    .s6-stat-label { font-size: max(1.4vw, 12px) !important; }
+    /* Sub / result */
+    .s1-sub, .s3-sub, .s5-sub, .s5-result, .s8-sub,
+    .s10-sub, .s6-stat-label { font-size: 13px !important; }
 
     /* Card / item titles */
-    .prob-title, .feat-title, .s7-card-title, .s8-method-title { font-size: max(1.3vw, 12px) !important; }
-    .s3-pillar-title { font-size: max(1.6vw, 13px) !important; }
-    .s8-stitch-title { font-size: max(1.8vw, 14px) !important; }
-    .s8-bank { font-size: max(0.85vw, 10px) !important; }
-    .s10-contact-value { font-size: max(1.4vw, 13px) !important; }
+    .prob-title, .feat-title, .s7-card-title,
+    .s8-method-title, .s3-pillar-title { font-size: 13px !important; }
+    .s8-stitch-title { font-size: 15px !important; }
+    .s8-bank { font-size: 11px !important; }
+    .s10-contact-value { font-size: 14px !important; }
 
     /* Section headlines */
     .s2-headline, .s3-headline, .s5-headline,
-    .s7-headline, .s8-headline, .s9-headline { font-size: max(3.5vw, 20px) !important; }
-    .s4-headline, .s6-headline { font-size: max(3.2vw, 18px) !important; }
-    .s1-headline { font-size: max(5.8vw, 30px) !important; }
-    .s10-headline { font-size: max(5.5vw, 28px) !important; }
-    .s9-stat-num { font-size: max(4.5vw, 26px) !important; }
-    .s6-stat-num { font-size: max(3.2vw, 18px) !important; }
+    .s7-headline, .s8-headline, .s9-headline { font-size: 22px !important; }
+    .s4-headline, .s6-headline { font-size: 20px !important; }
+    .s1-headline  { font-size: 32px !important; }
+    .s10-headline { font-size: 30px !important; }
+    .s9-stat-num  { font-size: 28px !important; }
+    .s6-stat-num  { font-size: 20px !important; }
 
-    /* Icon / element sizes */
-    .prob-icon, .s5-arrow { font-size: max(2.2vw, 18px) !important; }
-    .s3-pillar-icon { width: max(5vw, 42px) !important; height: max(5vw, 42px) !important; font-size: max(2.2vw, 18px) !important; }
-    .s5-step-icon { width: max(5.5vw, 42px) !important; height: max(5.5vw, 42px) !important; font-size: max(2.2vw, 18px) !important; }
-    .s7-card-icon { width: max(3.2vw, 28px) !important; height: max(3.2vw, 28px) !important; font-size: max(1.5vw, 14px) !important; }
-    .feat-icon-wrap { width: max(3.5vw, 30px) !important; height: max(3.5vw, 30px) !important; font-size: max(1.6vw, 14px) !important; }
-    .s8-method-icon { font-size: max(1.8vw, 16px) !important; }
+    /* Icons */
+    .prob-icon, .s5-arrow   { font-size: 18px !important; }
+    .s8-method-icon         { font-size: 18px !important; }
+    .s3-pillar-icon { width: 44px !important; height: 44px !important; font-size: 20px !important; }
+    .s5-step-icon   { width: 44px !important; height: 44px !important; font-size: 20px !important; }
+    .s7-card-icon   { width: 30px !important; height: 30px !important; font-size: 15px !important; }
+    .feat-icon-wrap { width: 32px !important; height: 32px !important; font-size: 15px !important; }
 
-    /* Phone mockup on slide 4 */
-    .s4-phone { width: max(18vw, 100px) !important; height: max(32vw, 175px) !important; }
+    /* Phone mockup */
+    .s4-phone { width: 110px !important; height: 190px !important; }
 
-    /* Remove decorative clip-paths that can clip content on small screens */
-    .s1-right { clip-path: none !important; }
-    .s4-left  { clip-path: none !important; }
-    .s6-right { clip-path: none !important; }
-    .s8-right { clip-path: none !important; }
+    /* Remove decorative clip-paths */
+    .s1-right, .s4-left, .s6-right, .s8-right { clip-path: none !important; }
 
-    /* Fix nav bar */
-    .nav { gap: 10px !important; padding: 5px 14px !important; }
-    .nav button { font-size: 16px !important; padding: 4px 6px !important; }
+    /* Nav */
+    .nav { gap: 10px !important; padding: 6px 16px !important; }
+    .nav button { font-size: 16px !important; padding: 4px 8px !important; }
     .nav-counter { font-size: 12px !important; min-width: 36px !important; }
     .dots { gap: 5px !important; }
-    .dot { width: 6px !important; height: 6px !important; }
+    .dot  { width: 6px !important; height: 6px !important; }
   }
 
   /* ── Print: show all slides stacked ── */
@@ -1701,6 +1707,17 @@
     const dx = tx - e.changedTouches[0].clientX;
     if (Math.abs(dx) > 50) dx > 0 ? go(cur + 1) : go(cur - 1);
   }, { passive: true });
+
+  // JS-based portrait detection (more reliable than CSS orientation media query)
+  const rotateEl = document.getElementById('rotate-prompt');
+  const navEl    = document.getElementById('nav');
+  function checkOrientation() {
+    const portrait = window.innerHeight > window.innerWidth;
+    rotateEl.style.display = portrait ? 'flex' : 'none';
+    navEl.style.display    = portrait ? 'none' : 'flex';
+  }
+  window.addEventListener('resize', checkOrientation);
+  checkOrientation();
 </script>
 
 </body>

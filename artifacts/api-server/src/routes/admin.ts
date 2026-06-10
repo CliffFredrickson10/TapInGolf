@@ -661,6 +661,10 @@ router.post("/admin/ad-requests/:id/publish", async (req, res): Promise<void> =>
     "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
     [adId, reqId]
   );
+  // Auto-feature the club on the home carousel when a featured_home ad goes live
+  if (adReq.ad_type === "featured_home") {
+    await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
+  }
   res.json({ success: true, ad_id: adId });
 });
 
@@ -668,12 +672,28 @@ router.post("/admin/ad-requests/:id/unpublish", async (req, res): Promise<void> 
   const caller = await getUser(req);
   if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
   const reqId = parseInt(req.params.id, 10);
-  const adReq = await row<any>("SELECT id, status, published_ad_id FROM ad_requests WHERE id = ?", [reqId]);
+  const adReq = await row<any>("SELECT id, status, published_ad_id, ad_type, club_id FROM ad_requests WHERE id = ?", [reqId]);
   if (!adReq) { res.status(404).json({ message: "Not found" }); return; }
   if (adReq.published_ad_id) {
     await exec("DELETE FROM ads WHERE id = ?", [adReq.published_ad_id]);
   }
   await exec("UPDATE ad_requests SET status = 'expired', published_ad_id = NULL, updated_at = NOW() WHERE id = ?", [reqId]);
+  // Auto-unfeature the club if this was a featured_home ad and no other active
+  // featured_home ads remain AND the club is not a house pick (featured_slot_seconds IS NULL)
+  if (adReq.ad_type === "featured_home" && adReq.club_id) {
+    const remaining = await row<{ cnt: number }>(
+      `SELECT COUNT(*) AS cnt FROM ads
+       WHERE club_id = ? AND placement = 'home' AND active = 1 AND id != ?`,
+      [adReq.club_id, adReq.published_ad_id ?? 0]
+    );
+    const housePickClub = await row<{ featured_slot_seconds: number | null }>(
+      "SELECT featured_slot_seconds FROM clubs WHERE id = ?",
+      [adReq.club_id]
+    );
+    if ((remaining?.cnt ?? 0) === 0 && housePickClub?.featured_slot_seconds == null) {
+      await exec("UPDATE clubs SET featured = 0 WHERE id = ?", [adReq.club_id]);
+    }
+  }
   res.json({ success: true });
 });
 

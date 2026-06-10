@@ -90,6 +90,7 @@ router.get("/clubs/counts", async (_req, res): Promise<void> => {
 router.get("/clubs", async (req, res): Promise<void> => {
   const q        = String(req.query.q ?? "").trim();
   const province = String(req.query.province ?? "").trim();
+  const featured = req.query.featured === "1";
   const limit    = Math.min(parseInt(String(req.query.limit ?? "20")), 100);
   const offset   = Math.max(parseInt(String(req.query.offset ?? "0")), 0);
   const userLat  = parseFloat(String(req.query.lat ?? ""));
@@ -113,17 +114,28 @@ router.get("/clubs", async (req, res): Promise<void> => {
     filterWhere.push("c.province = ?");
     filterParams.push(province);
   }
+  if (featured) {
+    filterWhere.push("c.featured = 1");
+  }
 
   const whereClause = filterWhere.join(" AND ");
   const orderBy     = hasLocation
     ? "ORDER BY (c.latitude IS NULL) ASC, distance ASC"
     : "ORDER BY c.featured DESC, c.name ASC";
 
+  const slotSubquery = `
+    (SELECT a.slot_duration FROM ads a
+     WHERE a.club_id = c.id AND a.ad_type = 'home' AND a.active = 1
+       AND (a.campaign_end IS NULL OR a.campaign_end >= CURRENT_DATE)
+     ORDER BY a.id DESC LIMIT 1) AS ad_slot_duration
+  `;
+
   const baseSelect = `
     SELECT c.*,
       ROUND(AVG(r.rating)::numeric, 1) as rating,
       COUNT(DISTINCT r.id) as review_count,
-      ${distanceExpr} as distance
+      ${distanceExpr} as distance,
+      ${slotSubquery}
     FROM clubs c
     LEFT JOIN reviews r ON r.club_id = c.id AND r.hidden = 0
   `;
@@ -141,10 +153,13 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.cart_price          = c.cart_price ? parseFloat(c.cart_price) : null;
       c.pay_at_club_enabled = !!c.pay_at_club_enabled;
       c.stitch_enabled      = c.stitch_enabled  !== undefined ? !!c.stitch_enabled  : true;
-      c.wallet_enabled      = true; // TapIn Wallet is always available
+      c.wallet_enabled      = true;
       c.prepaid_enabled     = c.prepaid_enabled !== undefined ? !!c.prepaid_enabled : true;
       c.voucher_enabled     = c.voucher_enabled !== undefined ? !!c.voucher_enabled : true;
       if (c.logo_url) c.logo_url = logoApiUrl(c.id, c.logo_url);
+      const slotMatch = String(c.ad_slot_duration ?? "").match(/^(\d+)/);
+      c.slot_seconds = slotMatch ? parseInt(slotMatch[1]) : null;
+      delete c.ad_slot_duration;
     });
     return clubs;
   }

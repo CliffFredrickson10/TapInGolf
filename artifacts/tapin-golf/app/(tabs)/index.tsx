@@ -15,6 +15,7 @@ import {
 } from "react-native";
 import AdBanner, { Ad } from "@/components/AdBanner";
 import ClubCard, { Club } from "@/components/ClubCard";
+import FeaturedCarousel, { FeaturedClub } from "@/components/FeaturedCarousel";
 import { AppHeader } from "@/components/AppHeader";
 import { ClubCardSkeleton } from "@/components/SkeletonLoader";
 import { useAuth } from "@/context/AuthContext";
@@ -48,7 +49,7 @@ const PROVINCES = [
 export default function HomeScreen() {
   const colors = useColors();
   const { user } = useAuth();
-  const [featuredClubs, setFeaturedClubs] = useState<Club[]>([]);
+  const [featuredClubs, setFeaturedClubs] = useState<FeaturedClub[]>([]);
   const [nearbyClubs, setNearbyClubs] = useState<Club[]>([]);
   const [ads, setAds] = useState<Ad[]>([]);
   const [loading, setLoading] = useState(true);
@@ -265,23 +266,7 @@ export default function HomeScreen() {
             {[1, 2, 3].map((i) => <ClubCardSkeleton key={i} />)}
           </ScrollView>
         ) : featuredClubs.length > 0 ? (
-          <FlatList
-            data={featuredClubs}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            keyExtractor={(item) => item.id.toString()}
-            contentContainerStyle={{ paddingLeft: 20 }}
-            renderItem={({ item }) => (
-              <ClubCard
-                club={item}
-                onPress={() => {
-                  Haptics.selectionAsync();
-                  router.push({ pathname: "/club/[id]", params: { id: item.id } });
-                }}
-              />
-            )}
-            scrollEnabled
-          />
+          <FeaturedCarousel clubs={featuredClubs} />
         ) : (
           <View style={styles.empty}>
             <Ionicons name="golf-outline" size={36} color={colors.mutedForeground} />

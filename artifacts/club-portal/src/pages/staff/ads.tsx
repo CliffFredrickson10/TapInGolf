@@ -561,11 +561,13 @@ function OfferingCard({ offering, onRefresh, toast, compact = false }: {
                       <Label className="text-xs font-semibold">Period</Label>
                       <Input value={pForm.price_period} onChange={e => setPF(f => ({ ...f, price_period: e.target.value }))} className="h-8 text-sm" placeholder="/month" />
                     </div>
-                    <div className="space-y-1">
-                      <Label className="text-xs font-semibold">Slot Duration</Label>
-                      <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec display" />
-                    </div>
-                    <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
+                    {offering.ad_type !== "club_detail" && (
+                      <div className="space-y-1">
+                        <Label className="text-xs font-semibold">Slot Duration</Label>
+                        <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec / rotation" />
+                      </div>
+                    )}
+                    <div className={`space-y-1 ${offering.ad_type === "club_detail" ? "col-span-2" : ""}`}><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
                     <div className="flex items-end gap-2 pb-1"><input type="checkbox" checked={pForm.is_popular} onChange={e => setPF(f => ({ ...f, is_popular: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" /><Label className="text-xs font-semibold">Mark as Popular</Label></div>
                   </div>
                   <div className="flex gap-2">
@@ -577,13 +579,15 @@ function OfferingCard({ offering, onRefresh, toast, compact = false }: {
                 /* Display row */
                 <div className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 transition-colors">
                   {pkg.is_popular === 1 && <span className="text-[10px] font-bold px-2 py-0.5 rounded-full text-white flex-shrink-0" style={{ background: offering.color }}>Popular</span>}
-                  <div className="flex-1 min-w-0 grid grid-cols-4 gap-4 items-center">
+                  <div className={`flex-1 min-w-0 grid gap-4 items-center ${offering.ad_type === "club_detail" ? "grid-cols-3" : "grid-cols-4"}`}>
                     <div className="font-semibold text-sm">{pkg.name}</div>
                     <div>
                       <span className="text-base font-black" style={{ color: offering.color }}>{pkg.price_display}</span>
                       <span className="text-xs text-muted-foreground ml-1">{pkg.price_period}</span>
                     </div>
-                    <div className="text-xs text-muted-foreground">{pkg.slot_duration && `⏱ ${pkg.slot_duration}`}</div>
+                    {offering.ad_type !== "club_detail" && (
+                      <div className="text-xs text-muted-foreground">{pkg.slot_duration && `⏱ ${pkg.slot_duration}`}</div>
+                    )}
                     <div className="text-xs text-muted-foreground">{pkg.reach_info && `👥 ${pkg.reach_info}`}</div>
                   </div>
                   <div className="flex gap-1.5 flex-shrink-0">
@@ -613,11 +617,13 @@ function OfferingCard({ offering, onRefresh, toast, compact = false }: {
                   <Label className="text-xs font-semibold">Period</Label>
                   <Input value={pForm.price_period} onChange={e => setPF(f => ({ ...f, price_period: e.target.value }))} className="h-8 text-sm" placeholder="/month" />
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs font-semibold">Slot Duration</Label>
-                  <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec display" />
-                </div>
-                <div className="col-span-2 space-y-1"><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
+                {offering.ad_type !== "club_detail" && (
+                  <div className="space-y-1">
+                    <Label className="text-xs font-semibold">Slot Duration</Label>
+                    <Input value={pForm.slot_duration} onChange={e => setPF(f => ({ ...f, slot_duration: e.target.value }))} className="h-8 text-sm" placeholder="10 sec / rotation" />
+                  </div>
+                )}
+                <div className={`space-y-1 ${offering.ad_type === "club_detail" ? "col-span-2" : ""}`}><Label className="text-xs">Reach Info</Label><Input value={pForm.reach_info} onChange={e => setPF(f => ({ ...f, reach_info: e.target.value }))} className="h-8 text-sm" placeholder="~500 club views/month" /></div>
                 <div className="flex items-end gap-2 pb-1"><input type="checkbox" checked={pForm.is_popular} onChange={e => setPF(f => ({ ...f, is_popular: e.target.checked }))} className="h-4 w-4 accent-[#1a5c38]" /><Label className="text-xs">Mark as Popular</Label></div>
               </div>
               <div className="flex gap-2">

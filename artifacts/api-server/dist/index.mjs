@@ -70670,6 +70670,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS campaign_end DATE");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS slot_duration VARCHAR(100)");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
+  await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");
@@ -70694,9 +70695,9 @@ async function seedAdOfferings() {
   const [{ pcnt }] = await query("SELECT COUNT(*) AS pcnt FROM ad_packages");
   if (Number(pcnt) === 0) {
     const packages = [
-      ["club_detail", "Monthly Starter", "R 499", "/month", "10 sec display", "~500 club views/month", 0, 1],
-      ["club_detail", "Quarterly Pro", "R 1 199", "/quarter", "15 sec display", "~500 club views/month", 1, 2],
-      ["club_detail", "Annual Club", "R 3 999", "/year", "20 sec display", "~500 club views/month", 0, 3],
+      ["club_detail", "Monthly Starter", "R 499", "/month", null, "~500 club views/month", 0, 1],
+      ["club_detail", "Quarterly Pro", "R 1 199", "/quarter", null, "~500 club views/month", 1, 2],
+      ["club_detail", "Annual Club", "R 3 999", "/year", null, "~500 club views/month", 0, 3],
       ["featured_home", "Bronze Spot", "R 299", "/month", "5 sec / rotation", "All users \xB7 3 clubs share", 0, 1],
       ["featured_home", "Silver Spot", "R 699", "/month", "10 sec / rotation", "All users \xB7 2 clubs share", 1, 2],
       ["featured_home", "Gold Spot", "R 1 499", "/month", "15 sec / rotation", "All users \xB7 Exclusive slot", 0, 3]

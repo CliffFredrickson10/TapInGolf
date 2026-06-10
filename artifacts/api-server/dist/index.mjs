@@ -62551,7 +62551,7 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
-  const existing = await row("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  const existing = await row("SELECT id, club_id, headline, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) {
     res.status(404).json({ message: "Not found" });
     return;
@@ -62577,6 +62577,17 @@ router10.post("/admin/ad-requests/:id/approve", async (req, res) => {
       reqId
     ]
   );
+  const priceNote = confirmed_price ? ` Confirmed price: R ${Number(confirmed_price).toLocaleString()}.` : "";
+  const notesNote = staff_notes ? ` Message from staff: ${staff_notes}` : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [
+      existing.club_id,
+      "\u2705 Ad Approved \u2014 Payment Link Coming",
+      `Great news! Your ad campaign "${existing.headline}" has been reviewed and approved by TapIn staff.${priceNote} You will receive a payment link shortly to confirm your booking.${notesNote}`,
+      JSON.stringify({ ad_request_id: reqId })
+    ]
+  );
   res.json({ success: true });
 });
 router10.post("/admin/ad-requests/:id/reject", async (req, res) => {
@@ -62586,10 +62597,25 @@ router10.post("/admin/ad-requests/:id/reject", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
+  const existing = await row("SELECT id, club_id, headline FROM ad_requests WHERE id = ?", [reqId]);
+  if (!existing) {
+    res.status(404).json({ message: "Not found" });
+    return;
+  }
   const { staff_notes } = req.body ?? {};
   await exec(
     "UPDATE ad_requests SET status = 'rejected', staff_notes = COALESCE(?, staff_notes), updated_at = NOW() WHERE id = ?",
     [staff_notes ?? null, reqId]
+  );
+  const reason = staff_notes ? ` Reason: ${staff_notes}` : " Please contact TapIn staff for more information.";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [
+      existing.club_id,
+      "Ad Request Not Approved",
+      `Unfortunately your ad campaign "${existing.headline}" was not approved at this time.${reason}`,
+      JSON.stringify({ ad_request_id: reqId })
+    ]
   );
   res.json({ success: true });
 });
@@ -62600,7 +62626,7 @@ router10.post("/admin/ad-requests/:id/payment-requested", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
-  const existing = await row("SELECT id, status FROM ad_requests WHERE id = ?", [reqId]);
+  const existing = await row("SELECT id, club_id, headline, confirmed_price, status FROM ad_requests WHERE id = ?", [reqId]);
   if (!existing) {
     res.status(404).json({ message: "Not found" });
     return;
@@ -62609,7 +62635,23 @@ router10.post("/admin/ad-requests/:id/payment-requested", async (req, res) => {
     res.status(400).json({ message: "Only approved requests can move to payment_pending" });
     return;
   }
-  await exec("UPDATE ad_requests SET status = 'payment_pending', updated_at = NOW() WHERE id = ?", [reqId]);
+  const { payment_link, staff_notes } = req.body ?? {};
+  await exec(
+    "UPDATE ad_requests SET status = 'payment_pending', payment_link = COALESCE(?, payment_link), staff_notes = COALESCE(?, staff_notes), updated_at = NOW() WHERE id = ?",
+    [payment_link ?? null, staff_notes ?? null, reqId]
+  );
+  const priceStr = existing.confirmed_price ? ` R ${Number(existing.confirmed_price).toLocaleString()} is due.` : "";
+  const linkStr = payment_link ? ` Use this link to complete payment: ${payment_link}` : " TapIn staff will share a payment link with you via email or phone.";
+  const notesStr = staff_notes ? ` Note: ${staff_notes}` : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [
+      existing.club_id,
+      "\u{1F4B3} Payment Required \u2014 Complete Your Ad Booking",
+      `Your ad campaign "${existing.headline}" is confirmed and ready to go live.${priceStr}${linkStr}${notesStr} Once payment is received, TapIn staff will publish your ad to the app.`,
+      JSON.stringify({ ad_request_id: reqId, payment_link: payment_link ?? null })
+    ]
+  );
   res.json({ success: true });
 });
 router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
@@ -62667,6 +62709,19 @@ router10.post("/admin/ad-requests/:id/publish", async (req, res) => {
     "UPDATE ad_requests SET status = 'live', published_ad_id = ?, updated_at = NOW() WHERE id = ?",
     [adId, reqId]
   );
+  if (adReq.ad_type === "featured_home") {
+    await exec("UPDATE clubs SET featured = 1 WHERE id = ?", [adReq.club_id]);
+  }
+  const endNote = adReq.confirmed_end ? ` Your campaign runs until ${new Date(adReq.confirmed_end).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}.` : "";
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+    [
+      adReq.club_id,
+      "\u{1F680} Your Ad is Now Live!",
+      `"${adReq.headline}" is now live in the TapIn Golf app and visible to golfers across South Africa.${endNote}`,
+      JSON.stringify({ ad_request_id: reqId, ad_id: adId })
+    ]
+  );
   res.json({ success: true, ad_id: adId });
 });
 router10.post("/admin/ad-requests/:id/unpublish", async (req, res) => {
@@ -62676,7 +62731,7 @@ router10.post("/admin/ad-requests/:id/unpublish", async (req, res) => {
     return;
   }
   const reqId = parseInt(req.params.id, 10);
-  const adReq = await row("SELECT id, status, published_ad_id FROM ad_requests WHERE id = ?", [reqId]);
+  const adReq = await row("SELECT id, status, published_ad_id, ad_type, club_id FROM ad_requests WHERE id = ?", [reqId]);
   if (!adReq) {
     res.status(404).json({ message: "Not found" });
     return;
@@ -62685,6 +62740,31 @@ router10.post("/admin/ad-requests/:id/unpublish", async (req, res) => {
     await exec("DELETE FROM ads WHERE id = ?", [adReq.published_ad_id]);
   }
   await exec("UPDATE ad_requests SET status = 'expired', published_ad_id = NULL, updated_at = NOW() WHERE id = ?", [reqId]);
+  if (adReq.ad_type === "featured_home" && adReq.club_id) {
+    const remaining = await row(
+      `SELECT COUNT(*) AS cnt FROM ads
+       WHERE club_id = ? AND placement = 'home' AND active = 1 AND id != ?`,
+      [adReq.club_id, adReq.published_ad_id ?? 0]
+    );
+    const housePickClub = await row(
+      "SELECT featured_slot_seconds FROM clubs WHERE id = ?",
+      [adReq.club_id]
+    );
+    if ((remaining?.cnt ?? 0) === 0 && housePickClub?.featured_slot_seconds == null) {
+      await exec("UPDATE clubs SET featured = 0 WHERE id = ?", [adReq.club_id]);
+    }
+  }
+  if (adReq.club_id) {
+    await exec(
+      `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'ad_update', ?, ?, ?)`,
+      [
+        adReq.club_id,
+        "Ad Campaign Ended",
+        "Your ad campaign has been removed from the TapIn Golf app. Contact TapIn staff if you'd like to run another campaign.",
+        JSON.stringify({ ad_request_id: reqId })
+      ]
+    );
+  }
   res.json({ success: true });
 });
 router10.get("/admin/vouchers", async (req, res) => {
@@ -67162,6 +67242,41 @@ router14.post(
   }
 );
 router14.post(
+  "/portal/ad-image/upload",
+  requireClubAuth2,
+  upload.single("image"),
+  async (req, res) => {
+    const file = req.file;
+    if (!file) {
+      res.status(400).json({ message: "No image file provided" });
+      return;
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      res.status(400).json({ message: "Image must be under 8 MB" });
+      return;
+    }
+    const club = getClub2(req);
+    const privateDir = process.env["PRIVATE_OBJECT_DIR"] ?? "";
+    if (!privateDir) {
+      res.status(500).json({ message: "Object storage not configured" });
+      return;
+    }
+    const fileUuid = randomUUID2();
+    const ext = path.extname(file.originalname).toLowerCase().replace(/[^.a-z0-9]/g, "") || "jpg";
+    const cleanDir = privateDir.replace(/^\/+/, "").replace(/\/+$/, "");
+    const slashIdx = cleanDir.indexOf("/");
+    const parsedBucket = slashIdx >= 0 ? cleanDir.slice(0, slashIdx) : cleanDir;
+    const basePath = slashIdx >= 0 ? cleanDir.slice(slashIdx + 1) : "";
+    const objectKey = basePath ? `${basePath}/ad-images/${club.id}/${fileUuid}.${ext}` : `ad-images/${club.id}/${fileUuid}.${ext}`;
+    const bucket = objectStorageClient.bucket(parsedBucket);
+    await bucket.file(objectKey).save(file.buffer, { contentType: file.mimetype });
+    await bucket.file(objectKey).setMetadata({ cacheControl: "public, max-age=86400" });
+    const host = req.get("host") ?? "localhost";
+    const url = `https://${host}/api/storage/objects/ad-images/${club.id}/${fileUuid}.${ext}`;
+    res.json({ url });
+  }
+);
+router14.post(
   "/portal/logo/upload",
   requireClubAuth2,
   upload.single("logo"),
@@ -70746,6 +70861,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS sharing_tier VARCHAR(50)");
   await ddl("UPDATE ad_packages SET slot_duration = NULL WHERE ad_type = 'club_detail' AND slot_duration IS NOT NULL");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
+  await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

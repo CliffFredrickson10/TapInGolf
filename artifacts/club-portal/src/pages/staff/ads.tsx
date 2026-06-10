@@ -1057,8 +1057,8 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                 </div>
               </div>
               <InfoRow label="Confirmed Price" value={req.confirmed_price ? `R ${Number(req.confirmed_price).toLocaleString()}` : "—"} />
-              <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />
-              <InfoRow label="Sharing Tier" value={req.sharing_tier ?? "—"} />
+              {req.ad_type !== "club_detail" && <InfoRow label="Slot Duration" value={req.slot_duration ?? "—"} />}
+              {req.ad_type !== "club_detail" && <InfoRow label="Sharing Tier" value={req.sharing_tier ?? "—"} />}
             </div>
           ) : req.status === "payment_pending" ? (
             <div className="space-y-3">
@@ -1068,7 +1068,7 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
               </div>
               <InfoRow label="Start" value={req.confirmed_start ? format(new Date(req.confirmed_start), "d MMM yyyy") : "—"} />
               <InfoRow label="End"   value={req.confirmed_end   ? format(new Date(req.confirmed_end),   "d MMM yyyy") : "—"} />
-              <InfoRow label="Slot"  value={req.slot_duration ?? "—"} />
+              {req.ad_type !== "club_detail" && <InfoRow label="Slot" value={req.slot_duration ?? "—"} />}
               {req.payment_link && (
                 <div>
                   <p className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-1">Payment Link Sent</p>
@@ -1086,7 +1086,9 @@ function DetailPanel({ req, cfPrice, setCfPrice, cfStart, setCfStart, cfEnd, set
                 <ConfigField label="Start Date" type="date" placeholder="" value={cfStart} onChange={setCfStart} />
                 <ConfigField label="End Date"   type="date" placeholder="" value={cfEnd}   onChange={setCfEnd} />
               </div>
-              <ConfigField label="Slot Duration / Rotation" placeholder="e.g. 15 sec" value={cfSlot} onChange={setCfSlot} />
+              {req.ad_type !== "club_detail" && (
+                <ConfigField label="Slot Duration / Rotation" placeholder="e.g. 15 sec" value={cfSlot} onChange={setCfSlot} />
+              )}
               {req.ad_type === "featured_home" && (
                 <div>
                   <Label className="text-xs font-bold text-muted-foreground uppercase tracking-wide mb-2 block">Sharing Tier</Label>

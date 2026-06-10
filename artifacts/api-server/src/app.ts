@@ -2,6 +2,7 @@ import express, { type Express } from "express";
 import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
+import fs from "fs";
 import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -46,10 +47,18 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
 
+// HTML smoke-test — tiny response to check if proxy allows non-/api HTML
+app.get("/ping-html", (_req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send("<h1>ok</h1>");
+});
+
 // Sales presentation — served at /presentation
 app.get("/presentation", (_req, res) => {
   const file = path.resolve(__dirname, "../presentation.html");
-  res.sendFile(file);
+  const html = fs.readFileSync(file, "utf-8");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(html);
 });
 
 app.use("/api", router);

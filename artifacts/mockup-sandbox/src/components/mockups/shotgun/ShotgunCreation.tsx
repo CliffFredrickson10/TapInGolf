@@ -21,7 +21,9 @@ function Label({ children, note }: { children: React.ReactNode; note?: string })
   );
 }
 
-function Toggle({ checked, onChange, label, sublabel }: { checked: boolean; onChange: () => void; label: string; sublabel?: string }) {
+function Toggle({ checked, onChange, label, sublabel }: {
+  checked: boolean; onChange: () => void; label: string; sublabel?: string;
+}) {
   return (
     <div className="flex items-center justify-between py-2.5 px-3 rounded-lg border border-gray-200 bg-gray-50">
       <div>
@@ -44,10 +46,28 @@ const DEFAULT_PAR3_HOLES: Record<9 | 18, number[]> = {
   18: [3, 7, 12, 16],
 };
 
+// ─── Session pill ─────────────────────────────────────────────────────────────
+function SessionBadge({ label, color }: { label: string; color: string }) {
+  return (
+    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold text-white" style={{ background: color }}>
+      {label}
+    </span>
+  );
+}
+
 export function ShotgunCreation() {
   const [startType, setStartType] = useState<"interval_start" | "shotgun_start">("shotgun_start");
-  const [shotgunTime, setShotgunTime] = useState("07:30");
   const [holes, setHoles] = useState<9 | 18>(18);
+
+  // Single-session time
+  const [shotgunTime, setShotgunTime] = useState("07:30");
+
+  // Two-session support
+  const [twoSessions, setTwoSessions] = useState(true);
+  const [amTime, setAmTime] = useState("07:30");
+  const [pmTime, setPmTime] = useState("13:00");
+
+  // Double-teeing
   const [doubleTee, setDoubleTee] = useState(true);
   const [doubleTeeMode, setDoubleTeeMode] = useState<"all" | "exclude_par3">("exclude_par3");
   const [par3Holes, setPar3Holes] = useState<Set<number>>(new Set(DEFAULT_PAR3_HOLES[18]));
@@ -61,16 +81,24 @@ export function ShotgunCreation() {
   };
 
   const par3Excluded = doubleTee && doubleTeeMode === "exclude_par3";
-  const par3Count = par3Excluded ? par3Holes.size : 0;
-  const doubleHoles = par3Excluded ? holes - par3Count : holes;
-  const singleHoles = par3Excluded ? par3Count : 0;
-  const maxGroups = doubleTee ? doubleHoles * 2 + singleHoles : holes;
-  const maxPlayers = maxGroups * 4;
-  const registeredPlayers = 56;
-  const registeredGroups = Math.ceil(registeredPlayers / 4);
-  const capacityOk = registeredGroups <= maxGroups;
+  const par3Count    = par3Excluded ? par3Holes.size : 0;
+  const doubleHoles  = par3Excluded ? holes - par3Count : holes;
+  const singleHoles  = par3Excluded ? par3Count : 0;
+  const maxGroupsPerSession = doubleTee ? doubleHoles * 2 + singleHoles : holes;
+  const sessions = twoSessions ? 2 : 1;
+  const maxGroupsTotal = maxGroupsPerSession * sessions;
+  const maxPlayersTotal = maxGroupsTotal * 4;
 
-  const allHoles = Array.from({ length: holes }, (_, i) => i + 1);
+  const registeredPlayers = 96;
+  const registeredGroups  = Math.ceil(registeredPlayers / 4);
+  const capacityOk = registeredGroups <= maxGroupsTotal;
+
+  const allHoles    = Array.from({ length: holes }, (_, i) => i + 1);
+  const previewHoles = Array.from({ length: Math.min(6, holes) }, (_, i) => i + 1);
+
+  const sessionTimes = twoSessions ? [amTime, pmTime] : [shotgunTime];
+  const sessionLabels = twoSessions ? ["AM", "PM"] : [""];
+  const sessionColors = ["#1a5c38", "#7c3aed"];
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start justify-center p-6">
@@ -86,7 +114,7 @@ export function ShotgunCreation() {
           <p className="text-sm text-gray-500 mt-0.5">Sat 14 Jun 2025 · 18 holes · Competition · Members Only</p>
         </div>
 
-        {/* Wizard step indicator */}
+        {/* Step indicator */}
         <div className="flex items-center gap-0">
           {["Details", "Format", "Pricing", "Schedule", "Review"].map((step, i) => (
             <div key={step} className="flex items-center">
@@ -102,7 +130,7 @@ export function ShotgunCreation() {
           ))}
         </div>
 
-        {/* Schedule section card */}
+        {/* Schedule card */}
         <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
             <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -114,204 +142,241 @@ export function ShotgunCreation() {
 
           <div className="p-5 space-y-5">
 
-            {/* Start Type selector */}
+            {/* Start Type */}
             <div>
               <Label note="NEW">Start Type</Label>
               <div className="grid grid-cols-2 gap-3">
-                <button onClick={() => setStartType("interval_start")}
-                  className={`flex flex-col items-start gap-1 p-3.5 rounded-lg border-2 text-left transition-all ${startType === "interval_start" ? "border-[#1a5c38] bg-[#f0faf4]" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-                  <div className="flex items-center gap-2 w-full">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${startType === "interval_start" ? "border-[#1a5c38]" : "border-gray-300"}`}>
-                      {startType === "interval_start" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
+                {[
+                  { key: "interval_start", title: "Interval Start", desc: "Groups tee off sequentially from the 1st (or 10th) tee, spaced by a set interval." },
+                  { key: "shotgun_start",  title: "Shotgun Start",  desc: "All groups start simultaneously, each from a different hole. Ideal for corporate & open days." },
+                ].map(opt => (
+                  <button key={opt.key} onClick={() => setStartType(opt.key as any)}
+                    className={`flex flex-col items-start gap-1 p-3.5 rounded-lg border-2 text-left transition-all ${startType === opt.key ? "border-[#1a5c38] bg-[#f0faf4]" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                    <div className="flex items-center gap-2 w-full">
+                      <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${startType === opt.key ? "border-[#1a5c38]" : "border-gray-300"}`}>
+                        {startType === opt.key && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
+                      </div>
+                      <span className={`text-sm font-semibold ${startType === opt.key ? "text-[#1a5c38]" : "text-gray-700"}`}>{opt.title}</span>
                     </div>
-                    <span className={`text-sm font-semibold ${startType === "interval_start" ? "text-[#1a5c38]" : "text-gray-700"}`}>Interval Start</span>
-                  </div>
-                  <p className="text-xs text-gray-500 ml-6">Groups tee off sequentially from the 1st (or 10th) tee, spaced by a set interval.</p>
-                </button>
-                <button onClick={() => setStartType("shotgun_start")}
-                  className={`flex flex-col items-start gap-1 p-3.5 rounded-lg border-2 text-left transition-all ${startType === "shotgun_start" ? "border-[#1a5c38] bg-[#f0faf4]" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-                  <div className="flex items-center gap-2 w-full">
-                    <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${startType === "shotgun_start" ? "border-[#1a5c38]" : "border-gray-300"}`}>
-                      {startType === "shotgun_start" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
-                    </div>
-                    <span className={`text-sm font-semibold ${startType === "shotgun_start" ? "text-[#1a5c38]" : "text-gray-700"}`}>Shotgun Start</span>
-                  </div>
-                  <p className="text-xs text-gray-500 ml-6">All groups start simultaneously, each from a different hole. Ideal for corporate &amp; open days.</p>
-                </button>
+                    <p className="text-xs text-gray-500 ml-6">{opt.desc}</p>
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* Interval Start fields */}
+            {/* Interval fields */}
             {startType === "interval_start" && (
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <Label>First Tee Time</Label>
-                  <input type="time" defaultValue="07:30" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white" />
+                  <input type="time" defaultValue="07:30" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white" />
                 </div>
                 <div>
                   <Label>Tee Interval</Label>
-                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
+                  <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white">
                     <option>8 minutes</option><option>10 minutes</option><option>12 minutes</option>
                   </select>
                 </div>
               </div>
             )}
 
-            {/* Shotgun Start config */}
+            {/* ── Shotgun config ──────────────────────────────────────────── */}
             {startType === "shotgun_start" && (
               <div className="space-y-4 rounded-lg border border-[#b7dfc8] bg-[#f8fdf9] p-4">
+
+                {/* Header */}
                 <div className="flex items-center gap-2">
-                  <svg className="h-4 w-4 text-[#1a5c38]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
                   <span className="text-sm font-semibold" style={{ color: GREEN }}>Shotgun Start Configuration</span>
                 </div>
 
-                {/* Time + Course */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Shotgun Start Time</Label>
-                    <input type="time" value={shotgunTime} onChange={e => setShotgunTime(e.target.value)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white" />
-                    <p className="text-xs text-gray-400 mt-1">All groups start at this time simultaneously.</p>
-                  </div>
-                  <div>
-                    <Label>Course Layout</Label>
-                    <div className="flex gap-2">
-                      {([9, 18] as (9 | 18)[]).map(h => (
-                        <button key={h} onClick={() => { setHoles(h); setPar3Holes(new Set(DEFAULT_PAR3_HOLES[h])); }}
-                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${holes === h ? "text-white border-transparent" : "border-gray-200 text-gray-600 bg-white"}`}
-                          style={holes === h ? { background: GREEN } : {}}>
-                          {h} Holes
-                        </button>
-                      ))}
-                    </div>
+                {/* Course Layout */}
+                <div>
+                  <Label>Course Layout</Label>
+                  <div className="flex gap-2 w-40">
+                    {([9, 18] as (9 | 18)[]).map(h => (
+                      <button key={h} onClick={() => { setHoles(h); setPar3Holes(new Set(DEFAULT_PAR3_HOLES[h])); }}
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${holes === h ? "text-white border-transparent" : "border-gray-200 text-gray-600 bg-white"}`}
+                        style={holes === h ? { background: GREEN } : {}}>
+                        {h} Holes
+                      </button>
+                    ))}
                   </div>
                 </div>
 
-                {/* Double Teeing toggle */}
+                {/* ── Two Sessions toggle ───────────────────────────────── */}
+                <Toggle
+                  checked={twoSessions}
+                  onChange={() => setTwoSessions(v => !v)}
+                  label="Two Sessions (AM + PM)"
+                  sublabel="Run a morning and afternoon shotgun on the same day — field split across both"
+                />
+
+                {/* Session time pickers */}
+                {twoSessions ? (
+                  <div className="grid grid-cols-2 gap-3">
+                    {/* AM */}
+                    <div className="rounded-lg border-2 p-3 space-y-1.5" style={{ borderColor: "#1a5c38", background: "#f0faf4" }}>
+                      <div className="flex items-center gap-1.5">
+                        <SessionBadge label="AM" color="#1a5c38" />
+                        <span className="text-xs font-medium" style={{ color: GREEN }}>Morning Session</span>
+                      </div>
+                      <input type="time" value={amTime} onChange={e => setAmTime(e.target.value)}
+                        className="w-full border border-[#b7dfc8] rounded-md px-2.5 py-1.5 text-sm bg-white font-mono" />
+                      <p className="text-[10px] text-gray-500">
+                        Up to {maxGroupsPerSession} groups · {maxGroupsPerSession * 4} players
+                      </p>
+                    </div>
+                    {/* PM */}
+                    <div className="rounded-lg border-2 p-3 space-y-1.5" style={{ borderColor: "#7c3aed", background: "#faf5ff" }}>
+                      <div className="flex items-center gap-1.5">
+                        <SessionBadge label="PM" color="#7c3aed" />
+                        <span className="text-xs font-medium text-purple-700">Afternoon Session</span>
+                      </div>
+                      <input type="time" value={pmTime} onChange={e => setPmTime(e.target.value)}
+                        className="w-full border border-purple-200 rounded-md px-2.5 py-1.5 text-sm bg-white font-mono" />
+                      <p className="text-[10px] text-gray-500">
+                        Up to {maxGroupsPerSession} groups · {maxGroupsPerSession * 4} players
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  /* Single time picker */
+                  <div>
+                    <Label>Shotgun Start Time</Label>
+                    <input type="time" value={shotgunTime} onChange={e => setShotgunTime(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white" />
+                    <p className="text-xs text-gray-400 mt-1">All groups start at this time simultaneously.</p>
+                  </div>
+                )}
+
+                {/* ── Double Teeing toggle ──────────────────────────────── */}
                 <Toggle
                   checked={doubleTee}
                   onChange={() => setDoubleTee(v => !v)}
                   label="Allow Double Teeing"
-                  sublabel="Assign up to 2 groups per hole to increase capacity"
+                  sublabel="Assign up to 2 groups per hole per session"
                 />
 
-                {/* Double Teeing sub-options */}
                 {doubleTee && (
                   <div className="ml-3 pl-3 border-l-2 border-[#b7dfc8] space-y-3">
                     <p className="text-xs font-medium text-gray-600">Double tee applies to:</p>
 
-                    {/* All holes */}
-                    <button onClick={() => setDoubleTeeMode("all")}
-                      className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all ${doubleTeeMode === "all" ? "border-[#1a5c38] bg-white" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${doubleTeeMode === "all" ? "border-[#1a5c38]" : "border-gray-300"}`}>
-                        {doubleTeeMode === "all" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
-                      </div>
-                      <div>
-                        <p className={`text-sm font-medium ${doubleTeeMode === "all" ? "text-[#1a5c38]" : "text-gray-700"}`}>All holes</p>
-                        <p className="text-xs text-gray-500 mt-0.5">Max {holes * 2} groups ({holes * 2 * 4} players) · 2 groups on every hole including par 3s</p>
-                      </div>
-                    </button>
-
-                    {/* Exclude par 3s */}
-                    <button onClick={() => setDoubleTeeMode("exclude_par3")}
-                      className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all ${doubleTeeMode === "exclude_par3" ? "border-[#1a5c38] bg-white" : "border-gray-200 bg-white hover:border-gray-300"}`}>
-                      <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${doubleTeeMode === "exclude_par3" ? "border-[#1a5c38]" : "border-gray-300"}`}>
-                        {doubleTeeMode === "exclude_par3" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <p className={`text-sm font-medium ${doubleTeeMode === "exclude_par3" ? "text-[#1a5c38]" : "text-gray-700"}`}>
-                            All holes except par 3s
-                          </p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: "#fef3c7", color: "#92400e" }}>
-                            Recommended
-                          </span>
+                    {[
+                      { key: "all", title: "All holes", desc: `Max ${holes * 2} groups (${holes * 2 * 4} players) per session · 2 groups on every hole` },
+                      { key: "exclude_par3", title: "All holes except par 3s", desc: "Par 3s stay single-group to prevent pace-of-play delays.", recommended: true },
+                    ].map(opt => (
+                      <button key={opt.key} onClick={() => setDoubleTeeMode(opt.key as any)}
+                        className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all ${doubleTeeMode === opt.key ? "border-[#1a5c38] bg-white" : "border-gray-200 bg-white hover:border-gray-300"}`}>
+                        <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${doubleTeeMode === opt.key ? "border-[#1a5c38]" : "border-gray-300"}`}>
+                          {doubleTeeMode === opt.key && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
                         </div>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Par 3s stay single-group to prevent pace-of-play delays.
-                        </p>
-
-                        {/* Par 3 hole picker — only when this mode is active */}
-                        {doubleTeeMode === "exclude_par3" && (
-                          <div className="mt-3 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-medium text-gray-600">
-                                Select which holes are par 3
-                                <span className="ml-1.5 font-normal text-gray-400">
-                                  ({par3Holes.size} selected)
-                                </span>
-                              </p>
-                              <div className="flex gap-2">
-                                <button
-                                  onClick={() => setPar3Holes(new Set())}
-                                  className="text-[10px] text-gray-400 hover:text-gray-600 underline"
-                                >Clear</button>
-                                <button
-                                  onClick={() => setPar3Holes(new Set(DEFAULT_PAR3_HOLES[holes]))}
-                                  className="text-[10px] hover:underline"
-                                  style={{ color: GREEN }}
-                                >Reset defaults</button>
-                              </div>
-                            </div>
-
-                            {/* Hole grid */}
-                            <div className="grid grid-cols-9 gap-1">
-                              {allHoles.map(hole => {
-                                const isPar3 = par3Holes.has(hole);
-                                return (
-                                  <button
-                                    key={hole}
-                                    onClick={() => togglePar3(hole)}
-                                    title={isPar3 ? `Hole ${hole} — Par 3 (click to remove)` : `Hole ${hole} (click to mark as par 3)`}
-                                    className="flex flex-col items-center justify-center rounded-md border text-[10px] font-bold py-1.5 transition-all"
-                                    style={isPar3
-                                      ? { background: "#1d4ed8", borderColor: "#1d4ed8", color: "#fff" }
-                                      : { background: "#fff", borderColor: "#e5e7eb", color: "#6b7280" }
-                                    }
-                                  >
-                                    <span>{hole}</span>
-                                    {isPar3 && (
-                                      <span className="text-[8px] font-normal leading-none opacity-80 mt-0.5">P3</span>
-                                    )}
-                                  </button>
-                                );
-                              })}
-                            </div>
-
-                            <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
-                              <span className="inline-block w-3 h-3 rounded bg-blue-700 flex-shrink-0" />
-                              Blue = par 3 (single group only) · White = double tee (Group A + B)
-                            </p>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <p className={`text-sm font-medium ${doubleTeeMode === opt.key ? "text-[#1a5c38]" : "text-gray-700"}`}>{opt.title}</p>
+                            {opt.recommended && <span className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: "#fef3c7", color: "#92400e" }}>Recommended</span>}
                           </div>
-                        )}
-                      </div>
-                    </button>
+                          <p className="text-xs text-gray-500 mt-0.5">{opt.desc}</p>
+
+                          {/* Par 3 hole picker */}
+                          {opt.key === "exclude_par3" && doubleTeeMode === "exclude_par3" && (
+                            <div className="mt-3 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                              <div className="flex items-center justify-between mb-2">
+                                <p className="text-xs font-medium text-gray-600">
+                                  Select which holes are par 3
+                                  <span className="ml-1 font-normal text-gray-400">({par3Holes.size} selected)</span>
+                                </p>
+                                <div className="flex gap-2">
+                                  <button onClick={() => setPar3Holes(new Set())} className="text-[10px] text-gray-400 hover:text-gray-600 underline">Clear</button>
+                                  <button onClick={() => setPar3Holes(new Set(DEFAULT_PAR3_HOLES[holes]))} className="text-[10px] hover:underline" style={{ color: GREEN }}>Reset defaults</button>
+                                </div>
+                              </div>
+                              <div className="grid grid-cols-9 gap-1">
+                                {allHoles.map(hole => {
+                                  const isPar3 = par3Holes.has(hole);
+                                  return (
+                                    <button key={hole} onClick={() => togglePar3(hole)}
+                                      title={`Hole ${hole}${isPar3 ? " — Par 3" : ""}`}
+                                      className="flex flex-col items-center justify-center rounded-md border text-[10px] font-bold py-1.5 transition-all"
+                                      style={isPar3
+                                        ? { background: "#1d4ed8", borderColor: "#1d4ed8", color: "#fff" }
+                                        : { background: "#fff", borderColor: "#e5e7eb", color: "#6b7280" }}>
+                                      <span>{hole}</span>
+                                      {isPar3 && <span className="text-[8px] font-normal opacity-80 mt-0.5">P3</span>}
+                                    </button>
+                                  );
+                                })}
+                              </div>
+                              <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                                <span className="inline-block w-3 h-3 rounded bg-blue-700 flex-shrink-0" />
+                                Blue = par 3 (single group only) · White = double tee (A + B)
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      </button>
+                    ))}
                   </div>
                 )}
 
-                {/* Capacity indicator */}
-                <div className={`flex items-start gap-2.5 p-3 rounded-lg border ${capacityOk ? "border-[#b7dfc8] bg-[#f0faf4]" : "border-red-200 bg-red-50"}`}>
-                  <span className={`mt-0.5 text-lg leading-none ${capacityOk ? "text-green-600" : "text-red-500"}`}>
-                    {capacityOk ? "✓" : "⚠"}
-                  </span>
-                  <div className="flex-1">
-                    <p className={`text-sm font-medium ${capacityOk ? "text-green-800" : "text-red-700"}`}>
-                      {capacityOk
-                        ? `Capacity OK — up to ${maxPlayers} players (${maxGroups} groups × 4)`
-                        : `Capacity exceeded — ${registeredGroups} groups needed, only ${maxGroups} available`}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {holes}-hole course
-                      {doubleTee
-                        ? par3Excluded && par3Count > 0
-                          ? ` · double tee on ${doubleHoles} holes · single on ${par3Count} par 3${par3Count !== 1 ? "s" : ""} (holes ${[...par3Holes].sort((a,b)=>a-b).join(", ")})`
-                          : ` · double teeing on all holes`
-                        : " · single group per hole"}
-                      {" · "}{registeredPlayers} players registered
-                    </p>
-                  </div>
+                {/* ── Capacity indicator ────────────────────────────────── */}
+                <div className={`rounded-lg border p-3 ${capacityOk ? "border-[#b7dfc8] bg-[#f0faf4]" : "border-red-200 bg-red-50"}`}>
+                  {twoSessions ? (
+                    <>
+                      {/* Two-session breakdown */}
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-lg leading-none ${capacityOk ? "text-green-600" : "text-red-500"}`}>{capacityOk ? "✓" : "⚠"}</span>
+                        <p className={`text-sm font-medium ${capacityOk ? "text-green-800" : "text-red-700"}`}>
+                          {capacityOk
+                            ? `Total capacity OK — up to ${maxPlayersTotal} players across both sessions`
+                            : `Capacity exceeded — ${registeredGroups} groups needed, only ${maxGroupsTotal} available`}
+                        </p>
+                      </div>
+                      <div className="grid grid-cols-2 gap-2 mt-2">
+                        {[
+                          { label: "AM", time: amTime, color: "#1a5c38", bg: "#f0faf4", border: "#b7dfc8" },
+                          { label: "PM", time: pmTime, color: "#7c3aed", bg: "#faf5ff", border: "#c4b5fd" },
+                        ].map(s => (
+                          <div key={s.label} className="rounded-md border px-2.5 py-2 text-xs" style={{ borderColor: s.border, background: s.bg }}>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <SessionBadge label={s.label} color={s.color} />
+                              <span className="font-mono text-gray-600">{s.time}</span>
+                            </div>
+                            <p className="text-gray-500">
+                              Up to {maxGroupsPerSession} groups · {maxGroupsPerSession * 4} players
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-gray-500 mt-2">
+                        {holes}-hole course
+                        {par3Excluded && par3Count > 0
+                          ? ` · double tee on ${doubleHoles} holes · single on ${par3Count} par 3s (holes ${[...par3Holes].sort((a,b)=>a-b).join(", ")})`
+                          : doubleTee ? ` · double teeing all holes` : ` · single group per hole`}
+                        {" · "}{registeredPlayers} players registered
+                      </p>
+                    </>
+                  ) : (
+                    <div className="flex items-start gap-2.5">
+                      <span className={`mt-0.5 text-lg leading-none ${capacityOk ? "text-green-600" : "text-red-500"}`}>{capacityOk ? "✓" : "⚠"}</span>
+                      <div>
+                        <p className={`text-sm font-medium ${capacityOk ? "text-green-800" : "text-red-700"}`}>
+                          {capacityOk
+                            ? `Capacity OK — up to ${maxPlayersTotal} players (${maxGroupsTotal} groups × 4)`
+                            : `Capacity exceeded — ${registeredGroups} groups needed, only ${maxGroupsTotal} available`}
+                        </p>
+                        <p className="text-xs text-gray-500 mt-0.5">
+                          {holes}-hole course
+                          {par3Excluded && par3Count > 0
+                            ? ` · double tee on ${doubleHoles} holes · single on ${par3Count} par 3s`
+                            : doubleTee ? ` · double teeing all holes` : ` · single group per hole`}
+                          {" · "}{registeredPlayers} players registered
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Info note */}
@@ -319,14 +384,14 @@ export function ShotgunCreation() {
                   <svg className="h-3.5 w-3.5 text-gray-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  {par3Excluded && par3Count > 0
-                    ? `Hole assignments auto-generated on draw publish. Par 3s (holes ${[...par3Holes].sort((a,b)=>a-b).join(", ")}) get one group only; all others get Group A + B.`
+                  {twoSessions
+                    ? `Two separate draws will be generated — one per session. Players are assigned to a session at draw time.`
                     : `Hole assignments are auto-generated when you publish the draw.`}
                 </p>
               </div>
             )}
 
-            {/* Interval tee slots */}
+            {/* Tee slots for interval */}
             {startType === "interval_start" && (
               <div>
                 <Label>Tee Time Slots</Label>
@@ -336,58 +401,64 @@ export function ShotgunCreation() {
                       <span className="font-mono text-gray-600 w-12">{t}</span>
                       <span className="text-gray-400">·</span>
                       <span className="text-gray-500">4 players</span>
-                      <span className="ml-auto text-xs" style={{ color: i < 3 ? GREEN : GOLD }}>
-                        {i < 3 ? "Booked" : "Available"}
-                      </span>
+                      <span className="ml-auto text-xs" style={{ color: i < 3 ? GREEN : GOLD }}>{i < 3 ? "Booked" : "Available"}</span>
                     </div>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Hole assignment preview for shotgun */}
+            {/* Hole assignment preview */}
             {startType === "shotgun_start" && (
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <Label note="preview">Hole Assignment Preview</Label>
-                  {par3Excluded && par3Count > 0 && (
-                    <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                  <div className="flex items-center gap-3 text-[10px] text-gray-400">
+                    {twoSessions && (
+                      <>
+                        <span className="flex items-center gap-1"><SessionBadge label="AM" color="#1a5c38" /> {amTime}</span>
+                        <span className="flex items-center gap-1"><SessionBadge label="PM" color="#7c3aed" /> {pmTime}</span>
+                      </>
+                    )}
+                    {par3Excluded && par3Count > 0 && (
                       <span className="flex items-center gap-1">
-                        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "#fef3c7", border: "1px solid #f59e0b" }} />
-                        A+B
+                        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-700" />Par 3 (A only)
                       </span>
-                      <span className="flex items-center gap-1">
-                        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-700" />
-                        Par 3 (A only)
-                      </span>
-                    </div>
-                  )}
+                    )}
+                  </div>
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {Array.from({ length: Math.min(9, holes) }, (_, i) => i + 1).map(hole => {
+                  {previewHoles.map(hole => {
                     const isPar3 = par3Excluded && par3Holes.has(hole);
                     return (
                       <div key={hole}
-                        className="flex items-center gap-1.5 px-2.5 py-2 rounded border text-xs"
-                        style={isPar3 ? { background: "#eff6ff", borderColor: "#93c5fd" } : { background: "#fff", borderColor: "#e5e7eb" }}>
-                        <span className={`font-bold w-14 shrink-0`} style={{ color: isPar3 ? "#1d4ed8" : GREEN }}>
-                          Hole {hole}
-                        </span>
-                        <span className="text-gray-400 font-mono text-[10px]">{shotgunTime}</span>
-                        {doubleTee && (
-                          isPar3
-                            ? <span className="ml-auto text-[10px] px-1 rounded font-medium bg-blue-100 text-blue-700">A only</span>
-                            : <span className="ml-auto text-[10px] px-1 rounded font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>A+B</span>
-                        )}
+                        className="rounded border text-xs overflow-hidden"
+                        style={{ borderColor: isPar3 ? "#93c5fd" : "#e5e7eb" }}>
+                        {/* Hole label row */}
+                        <div className="flex items-center gap-1.5 px-2.5 py-1.5"
+                          style={{ background: isPar3 ? "#eff6ff" : "#fff" }}>
+                          <span className="font-bold" style={{ color: isPar3 ? "#1d4ed8" : GREEN }}>Hole {hole}</span>
+                          {doubleTee && (
+                            isPar3
+                              ? <span className="ml-auto text-[10px] px-1 rounded font-medium bg-blue-100 text-blue-700">A only</span>
+                              : <span className="ml-auto text-[10px] px-1 rounded font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>A+B</span>
+                          )}
+                        </div>
+                        {/* Session time rows */}
+                        {sessionTimes.map((t, si) => (
+                          <div key={si} className="flex items-center gap-1.5 px-2.5 py-1 border-t border-gray-100"
+                            style={{ background: si === 0 ? "#f8fdf9" : "#faf5ff" }}>
+                            {twoSessions && <SessionBadge label={sessionLabels[si]} color={sessionColors[si]} />}
+                            <span className="font-mono text-[10px] text-gray-500">{t}</span>
+                          </div>
+                        ))}
                       </div>
                     );
                   })}
-                  {holes === 18 && (
-                    <div className="col-span-3 text-xs text-gray-400 text-center py-1">
-                      …and holes 10–18
-                      {par3Excluded && par3Count > 0 && ` (incl. ${[...par3Holes].filter(h => h > 9).length} par 3${[...par3Holes].filter(h => h > 9).length !== 1 ? "s" : ""})`}
-                    </div>
-                  )}
+                  <div className="col-span-3 text-xs text-gray-400 text-center py-1">
+                    …and holes {Math.min(6, holes) + 1}–{holes}
+                    {par3Excluded && par3Count > 0 && ` (incl. ${[...par3Holes].filter(h => h > 6).length} more par 3s)`}
+                  </div>
                 </div>
               </div>
             )}
@@ -396,12 +467,8 @@ export function ShotgunCreation() {
 
         {/* Navigation */}
         <div className="flex items-center justify-between pb-6">
-          <button className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50">
-            ← Back
-          </button>
-          <button className="px-5 py-2 rounded-lg text-sm font-medium text-white" style={{ background: GREEN }}>
-            Next: Review →
-          </button>
+          <button className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50">← Back</button>
+          <button className="px-5 py-2 rounded-lg text-sm font-medium text-white" style={{ background: GREEN }}>Next: Review →</button>
         </div>
       </div>
     </div>

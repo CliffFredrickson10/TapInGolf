@@ -1488,6 +1488,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS ad_billing_cycle_id INT REFERENCES ad_billing_cycles(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");
 }
 
 async function seedAdOfferings(): Promise<void> {

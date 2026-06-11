@@ -12,6 +12,7 @@ interface ClubInfo {
   name: string;
   location: string;
   province: string;
+  fiscal_year_start_month?: number;
 }
 
 export interface ClubUserInfo {
@@ -116,7 +117,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         .finally(() => setLoading(false));
     } else {
       api("/api/portal/auth/me")
-        .then((data) => setClub({ id: data.id, name: data.name, location: data.location, province: data.province }))
+        .then((data) => setClub({ id: data.id, name: data.name, location: data.location, province: data.province, fiscal_year_start_month: data.fiscal_year_start_month ?? 1 }))
         .catch(() => clearToken())
         .finally(() => setLoading(false));
     }

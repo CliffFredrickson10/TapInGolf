@@ -40,7 +40,13 @@ function fmt(d: Date) {
   return d.toISOString().split("T")[0];
 }
 
-function getDateRange(period: PeriodKey, customFrom: string, customTo: string): { from: string; to: string } {
+function getFiscalYearStart(now: Date, fiscalStartMonth: number): Date {
+  const fsm = fiscalStartMonth - 1; // 0-indexed
+  const fyStartYear = now.getMonth() >= fsm ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(fyStartYear, fsm, 1);
+}
+
+function getDateRange(period: PeriodKey, customFrom: string, customTo: string, fiscalStartMonth = 1): { from: string; to: string } {
   const now = new Date();
   const todayStr = fmt(now);
 
@@ -60,12 +66,16 @@ function getDateRange(period: PeriodKey, customFrom: string, customTo: string): 
       return { from: fmt(new Date(now.getFullYear(), now.getMonth(), 1)), to: todayStr };
 
     case "quarter": {
-      const q = Math.floor(now.getMonth() / 3);
-      return { from: fmt(new Date(now.getFullYear(), q * 3, 1)), to: todayStr };
+      const fyStart = getFiscalYearStart(now, fiscalStartMonth);
+      const monthsFromFy = (now.getMonth() - fyStart.getMonth() + 12) % 12;
+      const qOffset = Math.floor(monthsFromFy / 3) * 3;
+      const qStart = new Date(fyStart);
+      qStart.setMonth(fyStart.getMonth() + qOffset);
+      return { from: fmt(qStart), to: todayStr };
     }
 
     case "year":
-      return { from: fmt(new Date(now.getFullYear(), 0, 1)), to: todayStr };
+      return { from: fmt(getFiscalYearStart(now, fiscalStartMonth)), to: todayStr };
 
     case "custom":
       return { from: customFrom || todayStr, to: customTo || todayStr };
@@ -92,7 +102,7 @@ export default function Dashboard() {
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo]     = useState("");
 
-  const { from, to } = getDateRange(period, customFrom, customTo);
+  const { from, to } = getDateRange(period, customFrom, customTo, club?.fiscal_year_start_month ?? 1);
 
   const load = useCallback(async (f: string, t: string) => {
     setLoading(true);

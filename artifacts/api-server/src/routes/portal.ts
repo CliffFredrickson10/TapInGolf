@@ -91,7 +91,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try direct club login token first
   const clubId = verifyClubToken(token);
   if (clubId) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month FROM clubs WHERE id = ? AND active = 1", [clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     (req as any).club = club;
     (req as any).clubUser = null; // direct admin login — no portal user record
@@ -102,7 +102,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try club portal user token
   const userPayload = verifyClubUserToken(token);
   if (userPayload) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     const clubUser = await row<any>("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ? AND club_id = ? AND active = 1", [userPayload.userId, userPayload.clubId]);
     if (!clubUser) { res.status(401).json({ message: "User not found or inactive" }); return; }
@@ -124,12 +124,12 @@ function isPortalAdmin(req: Request): boolean { return getClubUser(req) === null
 router.post("/portal/auth/login", async (req: Request, res: Response): Promise<void> => {
   const { username, password } = req.body ?? {};
   if (!username || !password) { res.status(400).json({ message: "Username and password required" }); return; }
-  const club = await row<any>("SELECT id, name, location, province, password_hash, active FROM clubs WHERE username = ? LIMIT 1", [String(username).trim().toLowerCase()]);
+  const club = await row<any>("SELECT id, name, location, province, password_hash, active, fiscal_year_start_month FROM clubs WHERE username = ? LIMIT 1", [String(username).trim().toLowerCase()]);
   if (!club || !club.active) { res.status(401).json({ message: "Invalid credentials" }); return; }
   const valid = await bcrypt.compare(String(password), club.password_hash);
   if (!valid) { res.status(401).json({ message: "Invalid credentials" }); return; }
   const token = generateClubToken(club.id);
-  res.json({ token, club: { id: club.id, name: club.name, location: club.location, province: club.province } });
+  res.json({ token, club: { id: club.id, name: club.name, location: club.location, province: club.province, fiscal_year_start_month: club.fiscal_year_start_month ?? 1 } });
 });
 
 // ── POST /portal/auth/forgot-password ────────────────────────────────────────
@@ -223,6 +223,7 @@ router.get("/portal/auth/me", requireClubAuth, async (req: Request, res: Respons
   const club = getClub(req);
   res.json({
     id: club.id, name: club.name, location: club.location, province: club.province,
+    fiscal_year_start_month: club.fiscal_year_start_month ?? 1,
     image_url: club.image_url, logo_url: club.logo_url, holes: club.holes,
     price_from: club.price_from ? Number(club.price_from) : null,
     facilities: typeof club.facilities === "string" ? JSON.parse(club.facilities || "[]") : (club.facilities ?? []),
@@ -243,6 +244,7 @@ router.get("/portal/me", requireClubAuth, async (req: Request, res: Response): P
   const club = getClub(req);
   res.json({
     id: club.id, name: club.name, location: club.location, province: club.province,
+    fiscal_year_start_month: club.fiscal_year_start_month ?? 1,
     image_url: club.image_url, logo_url: club.logo_url, holes: club.holes,
     price_from: club.price_from ? Number(club.price_from) : null,
     facilities: typeof club.facilities === "string" ? JSON.parse(club.facilities || "[]") : (club.facilities ?? []),
@@ -266,7 +268,11 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
   const { name, location, province, image_url, logo_url, holes, price_from, facilities, website, description,
           phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude,
           geofence_enabled, geofence_radius_m, pay_at_club_enabled,
-          stitch_enabled, prepaid_enabled, voucher_enabled } = req.body ?? {};
+          stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month } = req.body ?? {};
+
+  const fiscalMonth = fiscal_year_start_month != null
+    ? Math.min(12, Math.max(1, Math.round(Number(fiscal_year_start_month))))
+    : null;
 
   await exec(
     `UPDATE clubs SET
@@ -279,7 +285,8 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
       pay_at_club_enabled = COALESCE(?, pay_at_club_enabled),
       stitch_enabled  = COALESCE(?, stitch_enabled),
       prepaid_enabled = COALESCE(?, prepaid_enabled),
-      voucher_enabled = COALESCE(?, voucher_enabled)
+      voucher_enabled = COALESCE(?, voucher_enabled),
+      fiscal_year_start_month = COALESCE(?, fiscal_year_start_month)
     WHERE id = ?`,
     [name ?? null, location ?? null, province ?? null,
      image_url ?? null, logo_url ?? null, holes ?? null, price_from ?? null,
@@ -292,10 +299,11 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
      stitch_enabled  != null ? (stitch_enabled  ? 1 : 0) : null,
      prepaid_enabled != null ? (prepaid_enabled ? 1 : 0) : null,
      voucher_enabled != null ? (voucher_enabled ? 1 : 0) : null,
+     fiscalMonth,
      club.id]
   );
-  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled FROM clubs WHERE id = ?", [club.id]);
-  res.json({ ...updated, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
+  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month FROM clubs WHERE id = ?", [club.id]);
+  res.json({ ...updated, fiscal_year_start_month: updated?.fiscal_year_start_month ?? 1, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 
 // ─── CANCELLATION POLICY ─────────────────────────────────────────────────────

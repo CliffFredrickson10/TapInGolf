@@ -26,6 +26,7 @@ interface ClubProfile {
   prepaid_enabled: boolean;
   voucher_enabled: boolean;
   pay_at_club_enabled: boolean;
+  fiscal_year_start_month: number;
 }
 
 type ClubImage = {
@@ -347,6 +348,34 @@ export default function Profile() {
           <div className="space-y-2 col-span-2">
             <Label>Website</Label>
             <Input value={profile.website ?? ""} onChange={e => update("website", e.target.value)} placeholder="https://yourclub.co.za" />
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Reporting ─────────────────────────────────────────────────────── */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Reporting</CardTitle>
+          <CardDescription>Controls how dashboard periods like "This Quarter" and "This Year" are calculated.</CardDescription>
+        </CardHeader>
+        <CardContent className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <Label>Fiscal Year Start Month</Label>
+            <p className="text-xs text-muted-foreground -mt-1">The month your financial year begins. Affects quarter and year date ranges on the dashboard.</p>
+            <Select
+              value={String(profile.fiscal_year_start_month ?? 1)}
+              onValueChange={v => update("fiscal_year_start_month", Number(v))}
+            >
+              <SelectTrigger><SelectValue placeholder="Select month" /></SelectTrigger>
+              <SelectContent>
+                {[
+                  "January","February","March","April","May","June",
+                  "July","August","September","October","November","December",
+                ].map((m, i) => (
+                  <SelectItem key={i + 1} value={String(i + 1)}>{m}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>

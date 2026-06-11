@@ -4,7 +4,7 @@ import { useAuth } from "@/context/AuthContext";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
-import { Clock, CalendarCheck, Star, Users, Calendar, TrendingUp, Banknote, Building2, PersonStanding, Smartphone } from "lucide-react";
+import { Clock, CalendarCheck, Users, Calendar, TrendingUp, Banknote, Building2, PersonStanding, Smartphone } from "lucide-react";
 import { format } from "date-fns";
 
 interface DashboardData {
@@ -216,7 +216,6 @@ export default function Dashboard() {
   const stats = data ? [
     { label: "Tee Times",        value: `${data.active_tee_times_today} / ${data.tee_times_today}`, sub: "active / total slots",            icon: Clock,          color: "text-blue-600" },
     { label: "Bookings",         value: data.bookings_today,             sub: `${data.confirmed_bookings_today} confirmed`,                     icon: CalendarCheck,  color: "text-green-600" },
-    { label: "Avg Rating",       value: data.avg_rating ? `${data.avg_rating} ★` : "—", sub: `${data.total_reviews} reviews (all time)`,  icon: Star,           color: "text-yellow-600" },
     { label: "Active Members",   value: data.active_members,             sub: "registered golfers",                                            icon: Users,          color: "text-purple-600" },
     { label: "Active Events",    value: data.active_events,              sub: "upcoming events",                                               icon: Calendar,       color: "text-orange-600" },
     { label: "Pending Bookings", value: data.pending_bookings_today,     sub: "awaiting confirmation",                                         icon: TrendingUp,     color: "text-red-600" },

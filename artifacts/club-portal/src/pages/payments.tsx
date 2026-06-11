@@ -48,6 +48,8 @@ interface Payment {
   tee_date: string;
   tee_time: string;
   players_list: Player[];
+  driving_range_fee: number;
+  club_hire_fee: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -447,7 +449,6 @@ export default function Payments() {
 
   const stats = useMemo(() => {
     const paid = payments.filter(p => p.status === "confirmed" || p.status === "completed");
-    // Prepaid rounds are settled directly with the club — exclude from digital revenue
     const digital = paid.filter(p => p.payment_method !== "prepaid");
     return {
       total:          payments.length,
@@ -456,6 +457,12 @@ export default function Payments() {
       platform_fees:  digital.reduce((s, p) => s + (p.platform_fee ?? 0), 0),
       confirmed:      paid.length,
       pending:        payments.filter(p => p.status === "pending").length,
+      // Earnings breakdown
+      visitor_earnings: paid.filter(p => p.price_tier === "visitor").reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      member_earnings:  paid.filter(p => p.price_tier === "member").reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      range_earnings:   paid.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
+      cart_earnings:    paid.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
+      hire_earnings:    paid.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),
     };
   }, [payments]);
 
@@ -569,6 +576,58 @@ export default function Payments() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Earnings Breakdown */}
+      <div>
+        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Earnings Breakdown</p>
+        <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-green-50 rounded-lg"><Users className="h-5 w-5 text-green-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Visitor Bookings</p>
+                <p className="text-xl font-bold text-[#1a5c38]">{fmtRand(stats.visitor_earnings)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-blue-50 rounded-lg"><Users className="h-5 w-5 text-blue-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Member Bookings</p>
+                <p className="text-xl font-bold text-blue-700">{fmtRand(stats.member_earnings)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-teal-50 rounded-lg"><TrendingUp className="h-5 w-5 text-teal-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Driving Range Balls</p>
+                <p className="text-xl font-bold text-teal-700">{fmtRand(stats.range_earnings)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-orange-50 rounded-lg"><Banknote className="h-5 w-5 text-orange-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Golf Cart Hire</p>
+                <p className="text-xl font-bold text-orange-700">{fmtRand(stats.cart_earnings)}</p>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className="p-2 bg-purple-50 rounded-lg"><Banknote className="h-5 w-5 text-purple-600" /></div>
+              <div>
+                <p className="text-xs text-muted-foreground font-medium">Club Hire</p>
+                <p className="text-xl font-bold text-purple-700">{fmtRand(stats.hire_earnings)}</p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
 
       {/* Period Picker */}

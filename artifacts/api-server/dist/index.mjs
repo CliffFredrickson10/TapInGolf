@@ -68088,6 +68088,7 @@ router14.get("/portal/payments", requireClubAuth2, async (req, res) => {
     SELECT b.id, b.booking_ref, b.players, b.total_amount, b.my_amount, b.club_amount,
            b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
            b.discount_amount, b.voucher_code, b.created_at, b.holes,
+           b.price_tier, b.driving_range_fee, b.club_hire_fee,
            u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
            pts.date AS tee_date, pts.tee_time AS tee_time,
            COALESCE(
@@ -68136,7 +68137,9 @@ router14.get("/portal/payments", requireClubAuth2, async (req, res) => {
     platform_fee: Number(r.platform_fee ?? 0),
     discount_amount: Number(r.discount_amount ?? 0),
     holes: r.holes ? Number(r.holes) : 18,
-    price_tier: null,
+    price_tier: r.price_tier ?? null,
+    driving_range_fee: Number(r.driving_range_fee ?? 0),
+    club_hire_fee: Number(r.club_hire_fee ?? 0),
     split_bill: !!r.split_bill,
     players_list: typeof r.players_list === "string" ? JSON.parse(r.players_list) : r.players_list ?? []
   })));
@@ -71327,6 +71330,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(20)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

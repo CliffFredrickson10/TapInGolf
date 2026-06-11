@@ -1489,6 +1489,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(20)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
 }
 
 async function seedAdOfferings(): Promise<void> {

@@ -66194,8 +66194,9 @@ router14.delete("/portal/events/:id", requireClubAuth2, async (req, res) => {
      )`,
     [evId, club.id]
   );
-  const dateFrom = String(ev.event_date).slice(0, 10);
-  const dateTo = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
+  const toIso = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+  const dateFrom = toIso(ev.event_date);
+  const dateTo = ev.end_date ? toIso(ev.end_date) : dateFrom;
   await exec("UPDATE golf_events SET status = 'cancelled' WHERE id = ? AND club_id = ?", [evId, club.id]);
   await exec("DELETE FROM event_draws WHERE event_id = ?", [evId]);
   if (slotsMode === "open") {
@@ -66321,8 +66322,9 @@ router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) 
     res.status(404).json({ message: "Event not found" });
     return;
   }
-  const dateFrom = String(ev.event_date).slice(0, 10);
-  const dateTo = ev.end_date ? String(ev.end_date).slice(0, 10) : dateFrom;
+  const toIso = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
+  const dateFrom = toIso(ev.event_date);
+  const dateTo = ev.end_date ? toIso(ev.end_date) : dateFrom;
   const conflicting_bookings = await query(
     `SELECT b.id, b.booking_ref, u.name AS user_name, u.id AS user_id,
             pts.date AS tee_date, pts.tee_time, b.status, b.players

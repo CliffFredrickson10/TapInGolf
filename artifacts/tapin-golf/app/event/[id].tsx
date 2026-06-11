@@ -130,9 +130,10 @@ export default function EventDetailScreen() {
   );
 
   // Registration / payment state
-  const [registering, setRegistering] = useState(false);
-  const [paying, setPaying]           = useState(false);
-  const [payError, setPayError]       = useState<string | null>(null);
+  const [registering, setRegistering]     = useState(false);
+  const [registerError, setRegisterError] = useState<string | null>(null);
+  const [paying, setPaying]               = useState(false);
+  const [payError, setPayError]           = useState<string | null>(null);
   const [voucherCode, setVoucherCode] = useState("");
 
   // Score submission — one card per round: { gross, net, points }
@@ -221,6 +222,7 @@ export default function EventDetailScreen() {
   const handleRegister = async () => {
     if (!user) { router.push("/(auth)/login"); return; }
     setRegistering(true);
+    setRegisterError(null);
     try {
       const body: Record<string, any> = {};
       if (selectedPartner) body.partner_id = selectedPartner.id;
@@ -231,7 +233,7 @@ export default function EventDetailScreen() {
         : `You're registered!${res.division ? ` Auto-assigned to ${res.division} Division (HCP ${res.frozen_handicap ?? "N/A"}).` : ""}`;
       Alert.alert("Entry Submitted", msg);
     } catch (e: any) {
-      Alert.alert("Error", e.message);
+      setRegisterError(e.message ?? "Registration failed. Please try again.");
     } finally { setRegistering(false); }
   };
 
@@ -576,6 +578,12 @@ export default function EventDetailScreen() {
                     </View>
                   )}
 
+                  {registerError && (
+                    <View style={[styles.inlineError, { backgroundColor: "#fef2f2", borderColor: "#fca5a5" }]}>
+                      <Ionicons name="alert-circle-outline" size={15} color="#dc2626" />
+                      <Text style={[styles.inlineErrorText, { color: "#dc2626" }]}>{registerError}</Text>
+                    </View>
+                  )}
                   <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={handleRegister} disabled={registering}>
                     {registering ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Enter This Event</Text>}
                   </TouchableOpacity>
@@ -1004,10 +1012,12 @@ const styles = StyleSheet.create({
   yourDivText:   { fontSize: 11, fontWeight: "700" },
   ctaCard:       { borderRadius: 12, borderWidth: 1, padding: 16, marginTop: 8, gap: 10 },
   ctaTitle:      { fontSize: 14, fontWeight: "700" },
-  ctaNote:       { fontSize: 13, lineHeight: 18 },
-  statusRow:     { flexDirection: "row", alignItems: "center", gap: 10 },
-  primaryBtn:    { borderRadius: 10, paddingVertical: 13, alignItems: "center", marginTop: 4 },
-  primaryBtnText:{ fontSize: 15, fontWeight: "700", color: "#fff" },
+  ctaNote:        { fontSize: 13, lineHeight: 18 },
+  statusRow:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  primaryBtn:     { borderRadius: 10, paddingVertical: 13, alignItems: "center", marginTop: 4 },
+  primaryBtnText: { fontSize: 15, fontWeight: "700", color: "#fff" },
+  inlineError:    { flexDirection: "row", alignItems: "flex-start", gap: 7, borderRadius: 8, borderWidth: 1, padding: 10, marginTop: 8 },
+  inlineErrorText:{ flex: 1, fontSize: 13, lineHeight: 18, fontFamily: "Inter_400Regular" },
   outlineBtn:    { borderRadius: 10, borderWidth: 1.5, paddingVertical: 11, alignItems: "center", flexDirection: "row", justifyContent: "center", gap: 6, marginTop: 4 },
   outlineBtnText:{ fontSize: 14, fontWeight: "600" },
   voucherInput:  { borderWidth: 1, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 9, fontSize: 14, marginTop: 4 },

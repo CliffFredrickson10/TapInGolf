@@ -65239,8 +65239,8 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
     row("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
     row("SELECT COUNT(*) AS total FROM club_members WHERE club_id = ? AND status = 'active'", [club.id]),
     row("SELECT COUNT(*) AS total FROM golf_events WHERE club_id = ? AND status = 'active'", [club.id]),
-    row(`SELECT COALESCE(SUM(b.total_amount),0) AS total_revenue,
-                     COALESCE(SUM(b.club_amount),0)  AS club_earnings,
+    row(`SELECT COALESCE(SUM(b.total_amount + b.event_entry_fee + b.event_additional_fees),0) AS total_revenue,
+                     COALESCE(SUM(b.club_amount  + b.event_entry_fee + b.event_additional_fees),0) AS club_earnings,
                      COALESCE(SUM(b.platform_fee),0) AS platform_fees
               FROM bookings b
               JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id

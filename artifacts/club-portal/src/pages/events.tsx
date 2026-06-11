@@ -1174,7 +1174,7 @@ export default function Events() {
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {fmtFormat(ev)}{ev.format2 ? ` + ${fmtFormat({ format: ev.format2, format_custom: ev.format2_custom })}` : ""} · {RESTRICT_LABELS[ev.restriction] ?? ev.restriction}
-                        {ev.entry_fee ? ` · R${ev.entry_fee.toFixed(2)} entry` : ""}
+                        {ev.entry_fee ? ` · R${Number(ev.entry_fee).toFixed(2)} entry` : ""}
                         {ev.max_participants ? ` · Max ${ev.max_participants}` : ""}
                         {ev.rounds > 1 ? ` · ${ev.rounds} rounds` : ""}
                       </p>

@@ -480,21 +480,24 @@ export default function Payments() {
   }, [payments, methodFilter, search]);
 
   const stats = useMemo(() => {
-    const paid = payments.filter(p => p.status === "confirmed" || p.status === "completed");
+    // "paid" = confirmed/completed, any payment method.
+    // "digital" = paid minus prepaid (prepaid rounds have no per-booking cash flow for the club).
+    const paid    = payments.filter(p => p.status === "confirmed" || p.status === "completed");
     const digital = paid.filter(p => p.payment_method !== "prepaid");
     return {
       total:          payments.length,
-      revenue:        digital.reduce((s, p) => s + p.my_amount, 0),
+      // Total Revenue = gross booking value (all players, full amount); Club Earnings = club's net after TapIn fee.
+      revenue:        digital.reduce((s, p) => s + (p.total_amount ?? 0), 0),
       club_earnings:  digital.reduce((s, p) => s + (p.club_amount ?? 0), 0),
       platform_fees:  digital.reduce((s, p) => s + (p.platform_fee ?? 0), 0),
       confirmed:      paid.length,
       pending:        payments.filter(p => p.status === "pending").length,
-      // Earnings breakdown
-      visitor_earnings: paid.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
-      member_earnings:  paid.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
-      range_earnings:   paid.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
-      cart_earnings:    paid.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
-      hire_earnings:    paid.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),
+      // Earnings breakdowns — all use the same "digital" base as club_earnings for consistency.
+      visitor_earnings: digital.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      member_earnings:  digital.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      range_earnings:   digital.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
+      cart_earnings:    digital.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
+      hire_earnings:    digital.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),
     };
   }, [payments]);
 

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import { LinearGradient } from "expo-linear-gradient";
 import { router } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import {
@@ -185,15 +186,38 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Book Now */}
+      {/* Book Now Hero */}
       <TouchableOpacity
-        style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
-        onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/explore"); }}
-        activeOpacity={0.88}
+        style={styles.heroWrap}
+        onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(tabs)/explore"); }}
+        activeOpacity={0.93}
       >
-        <Ionicons name="golf" size={20} color="#fff" />
-        <Text style={styles.bookNowText}>Book Now</Text>
-        <Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.8)" />
+        <LinearGradient
+          colors={["#0f3d24", "#1a5c38", "#227048"]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.heroGradient}
+        >
+          {/* Decorative circles */}
+          <View style={styles.heroCircle1} />
+          <View style={styles.heroCircle2} />
+          <View style={styles.heroCircle3} />
+
+          {/* Content */}
+          <View style={styles.heroContent}>
+            <View style={styles.heroIconWrap}>
+              <Ionicons name="golf" size={28} color="#1a5c38" />
+            </View>
+            <Text style={styles.heroEyebrow}>506 clubs across South Africa</Text>
+            <Text style={styles.heroHeadline}>Ready to{"\n"}Tee Off?</Text>
+            <Text style={styles.heroSub}>Find and book tee times instantly</Text>
+
+            <View style={styles.heroBtn}>
+              <Text style={styles.heroBtnText}>Book Now</Text>
+              <Ionicons name="arrow-forward" size={16} color="#1a5c38" />
+            </View>
+          </View>
+        </LinearGradient>
       </TouchableOpacity>
 
       {/* Join a Game */}
@@ -280,18 +304,18 @@ const styles = StyleSheet.create({
   upcomingLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: 0.5 },
   upcomingClub: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff", marginVertical: 1 },
   upcomingMeta: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
-  bookNowBtn: {
-    marginHorizontal: 20,
-    marginBottom: 20,
-    borderRadius: 16,
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
-  bookNowText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff", flex: 1, textAlign: "center" },
+  heroWrap: { marginHorizontal: 20, marginBottom: 24, borderRadius: 24, overflow: "hidden", elevation: 6, shadowColor: "#0f3d24", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12 },
+  heroGradient: { borderRadius: 24, padding: 28, minHeight: 200, overflow: "hidden" },
+  heroCircle1: { position: "absolute", width: 220, height: 220, borderRadius: 110, backgroundColor: "rgba(255,255,255,0.05)", top: -60, right: -50 },
+  heroCircle2: { position: "absolute", width: 140, height: 140, borderRadius: 70, backgroundColor: "rgba(255,255,255,0.04)", bottom: -30, right: 60 },
+  heroCircle3: { position: "absolute", width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(200,168,75,0.15)", top: 20, right: 20 },
+  heroContent: { gap: 6 },
+  heroIconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#c8a84b", alignItems: "center", justifyContent: "center", marginBottom: 4 },
+  heroEyebrow: { fontSize: 12, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.6)", letterSpacing: 0.3 },
+  heroHeadline: { fontSize: 38, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -1, lineHeight: 42, marginTop: 2 },
+  heroSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)", marginBottom: 6 },
+  heroBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#c8a84b", alignSelf: "flex-start", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 50, marginTop: 8 },
+  heroBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#1a5c38" },
   section: { marginBottom: 28 },
   sectionHeader: {
     flexDirection: "row",

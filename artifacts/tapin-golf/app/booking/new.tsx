@@ -708,6 +708,9 @@ export default function NewBookingScreen() {
             </>
           )}
 
+          {/* Add-ons section header */}
+          <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>Add-ons</Text>
+
           {/* Golf Cart */}
           {!cartAvailable && (
             <View style={[styles.cartCard, { backgroundColor: colors.muted + "55", borderColor: colors.border }]}>
@@ -847,7 +850,10 @@ export default function NewBookingScreen() {
             </View>
           )}
 
-          {/* Split bill */}
+          {/* Payment method */}
+          <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>Payment Method</Text>
+
+          {/* Split bill — first item under Payment Method */}
           {numPlayers > 1 && (
             <View style={[styles.splitRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
               <View>
@@ -868,9 +874,6 @@ export default function NewBookingScreen() {
               />
             </View>
           )}
-
-          {/* Payment method */}
-          <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Payment Method</Text>
           {stitchEnabled && (
             <TouchableOpacity
               style={[

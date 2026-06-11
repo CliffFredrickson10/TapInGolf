@@ -33,18 +33,6 @@ type UpcomingBooking = {
   status: string;
 };
 
-const PROVINCES = [
-  "All Clubs",
-  "Gauteng",
-  "Western Cape",
-  "KwaZulu-Natal",
-  "Eastern Cape",
-  "Free State",
-  "Mpumalanga",
-  "North West",
-  "Northern Cape",
-  "Limpopo",
-];
 
 export default function HomeScreen() {
   const colors = useColors();
@@ -56,7 +44,6 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [upcomingBooking, setUpcomingBooking] = useState<UpcomingBooking | null>(null);
   const [openGamesCount, setOpenGamesCount] = useState<number | null>(null);
-  const [counts, setCounts] = useState<Record<string, number>>({});
   const [adIndex, setAdIndex] = useState(0);
   const adTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -71,11 +58,6 @@ export default function HomeScreen() {
           locationQs = `&lat=${pos.coords.latitude}&lng=${pos.coords.longitude}`;
         }
       } catch {}
-
-      // Fetch province counts (non-blocking, best-effort)
-      apiFetch("/clubs/counts", user?.token)
-        .then((data: Record<string, number>) => setCounts(data))
-        .catch(() => {});
 
       const requests: Promise<any>[] = [
         apiFetch(`/clubs?featured=1&limit=20${locationQs}`, user?.token),
@@ -203,52 +185,16 @@ export default function HomeScreen() {
         </TouchableOpacity>
       )}
 
-      {/* Search + Map row */}
-      <View style={styles.searchWrap}>
-        <TouchableOpacity
-          style={[styles.searchBar, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => router.push({ pathname: "/(tabs)/explore", params: { focus: "1" } })}
-          activeOpacity={0.9}
-        >
-          <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
-          <Text style={[styles.searchPlaceholder, { color: colors.mutedForeground }]}>
-            Search golf clubs…
-          </Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.mapBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
-          onPress={() => { Haptics.selectionAsync(); router.push("/club-map"); }}
-          activeOpacity={0.85}
-        >
-          <Ionicons name="map-outline" size={20} color={colors.primary} />
-          <Text style={[styles.mapBtnText, { color: colors.primary }]}>Map</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Province chips */}
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.chips} contentContainerStyle={{ paddingHorizontal: 20, gap: 10, alignItems: "center" }}>
-        {PROVINCES.map((tag) => {
-          const isAll = tag === "All Clubs";
-          // counts uses "All" key for total; province chips use the province name
-          const count = counts[isAll ? "All" : tag];
-          return (
-            <TouchableOpacity
-              key={tag}
-              style={[styles.chip, { backgroundColor: isAll ? colors.primary : colors.card, borderColor: isAll ? colors.primary : colors.border }]}
-              onPress={() => { Haptics.selectionAsync(); router.push({ pathname: "/(tabs)/explore", params: { province: isAll ? "" : tag } }); }}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.chipText, { color: isAll ? "#fff" : colors.foreground }]}>{tag}</Text>
-              {count != null && (
-                <View style={[styles.countBadge, { backgroundColor: isAll ? "rgba(255,255,255,0.25)" : colors.primary + "18" }]}>
-                  <Text style={[styles.countText, { color: isAll ? "#fff" : colors.primary }]}>{count}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
+      {/* Book Now */}
+      <TouchableOpacity
+        style={[styles.bookNowBtn, { backgroundColor: colors.primary }]}
+        onPress={() => { Haptics.selectionAsync(); router.push("/(tabs)/explore"); }}
+        activeOpacity={0.88}
+      >
+        <Ionicons name="golf" size={20} color="#fff" />
+        <Text style={styles.bookNowText}>Book Now</Text>
+        <Ionicons name="arrow-forward" size={18} color="rgba(255,255,255,0.8)" />
+      </TouchableOpacity>
 
       {/* Join a Game */}
       <TouchableOpacity
@@ -334,33 +280,18 @@ const styles = StyleSheet.create({
   upcomingLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: 0.5 },
   upcomingClub: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff", marginVertical: 1 },
   upcomingMeta: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
-  searchWrap: { paddingHorizontal: 20, marginBottom: 14, flexDirection: "row", gap: 10 },
-  searchBar: {
-    flex: 1,
+  bookNowBtn: {
+    marginHorizontal: 20,
+    marginBottom: 20,
+    borderRadius: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     flexDirection: "row",
     alignItems: "center",
-    gap: 10,
-    borderWidth: 1.5,
-    borderRadius: 14,
-    paddingHorizontal: 16,
-    height: 50,
-  },
-  searchPlaceholder: { fontSize: 15, fontFamily: "Inter_400Regular" },
-  mapBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    alignItems: "center",
     justifyContent: "center",
-    gap: 2,
+    gap: 10,
   },
-  mapBtnText: { fontSize: 10, fontFamily: "Inter_600SemiBold" },
-  chips: { marginBottom: 20 },
-  chip: { borderRadius: 20, paddingHorizontal: 16, paddingVertical: 8, borderWidth: 1, flexDirection: "row", alignItems: "center", gap: 6 },
-  chipText: { fontSize: 13, fontFamily: "Inter_500Medium" },
-  countBadge: { borderRadius: 10, paddingHorizontal: 6, paddingVertical: 2, minWidth: 20, alignItems: "center" },
-  countText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  bookNowText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff", flex: 1, textAlign: "center" },
   section: { marginBottom: 28 },
   sectionHeader: {
     flexDirection: "row",

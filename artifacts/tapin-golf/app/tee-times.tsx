@@ -275,7 +275,7 @@ const styles = StyleSheet.create({
   sectionHeader:{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 },
   sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   sectionSub:   { fontSize: 13, fontFamily: "Inter_400Regular" },
-  slotsGrid:    { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  slotsGrid:    { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 10 },
   emptyCard:    { alignItems: "center", gap: 10, borderRadius: 16, borderWidth: 1.5, padding: 32, marginTop: 8 },
   emptyTitle:   { fontSize: 16, fontFamily: "Inter_700Bold" },
   emptySub:     { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },

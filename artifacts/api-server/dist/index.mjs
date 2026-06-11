@@ -65167,9 +65167,16 @@ router14.put("/portal/cancellation-policy", requireClubAuth2, async (req, res) =
 router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const today = (/* @__PURE__ */ new Date()).toISOString().split("T")[0];
+  const from = typeof req.query.from === "string" && req.query.from ? req.query.from : today;
+  const to = typeof req.query.to === "string" && req.query.to ? req.query.to : today;
   const [teeTimes, bookings, reviews, members, events, revenue, bookingSources] = await Promise.all([
-    row("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date = ?", [club.id, today]),
-    row("SELECT COUNT(*) AS total, SUM(CASE WHEN status='confirmed' THEN 1 ELSE 0 END) AS confirmed, SUM(CASE WHEN status='pending' THEN 1 ELSE 0 END) AS pending FROM bookings b JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id WHERE pts.club_id = ? AND DATE(b.created_at) = ?", [club.id, today]),
+    row("SELECT COUNT(*) AS total, SUM(is_active) AS active_count FROM portal_tee_slots WHERE club_id = ? AND date BETWEEN ? AND ?", [club.id, from, to]),
+    row(`SELECT COUNT(*) AS total,
+               SUM(CASE WHEN b.status='confirmed' THEN 1 ELSE 0 END) AS confirmed,
+               SUM(CASE WHEN b.status='pending'   THEN 1 ELSE 0 END) AS pending
+              FROM bookings b
+              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
+              WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ?`, [club.id, from, to]),
     row("SELECT COUNT(*) AS total, AVG(rating) AS avg_rating FROM reviews WHERE club_id = ? AND hidden = 0", [club.id]),
     row("SELECT COUNT(*) AS total FROM club_members WHERE club_id = ? AND status = 'active'", [club.id]),
     row("SELECT COUNT(*) AS total FROM golf_events WHERE club_id = ? AND status = 'active'", [club.id]),
@@ -65179,13 +65186,15 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
               FROM bookings b
               JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
               WHERE pts.club_id = ? AND b.status IN ('confirmed','completed')
-                AND b.payment_method != 'prepaid'`, [club.id]),
+                AND b.payment_method != 'prepaid'
+                AND pts.date BETWEEN ? AND ?`, [club.id, from, to]),
     row(`SELECT
                SUM(CASE WHEN b.booking_source = 'club_counter' THEN 1 ELSE 0 END) AS walkin_total,
                SUM(CASE WHEN b.booking_source != 'club_counter' OR b.booking_source IS NULL THEN 1 ELSE 0 END) AS app_total
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
-             WHERE pts.club_id = ? AND b.status NOT IN ('cancelled')`, [club.id])
+             WHERE pts.club_id = ? AND b.status NOT IN ('cancelled')
+               AND pts.date BETWEEN ? AND ?`, [club.id, from, to])
   ]);
   const recentBookings = await query(
     `SELECT b.id, b.booking_ref, b.players, b.total_amount, b.status, b.created_at,
@@ -65193,9 +65202,9 @@ router14.get("/portal/dashboard", requireClubAuth2, async (req, res) => {
      FROM bookings b
      JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
      JOIN users u ON b.user_id = u.id
-     WHERE pts.club_id = ?
+     WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ?
      ORDER BY b.created_at DESC LIMIT 5`,
-    [club.id]
+    [club.id, from, to]
   );
   res.json({
     tee_times_today: Number(teeTimes?.total ?? 0),

@@ -59921,8 +59921,8 @@ router4.post("/bookings", async (req, res) => {
         return;
       }
     } else if (ev.restriction === "whs_players_only") {
-      const verified = await isHnaVerified(user.id);
-      if (!verified) {
+      const verified2 = await isHnaVerified(user.id);
+      if (!verified2) {
         res.status(403).json({
           message: `"${ev.name}" requires a verified WHS handicap index. Please contact the club.`,
           error_code: "event_whs_only",
@@ -60015,17 +60015,19 @@ router4.post("/bookings", async (req, res) => {
   const numHoles = holes === 9 && slot.price_9 != null ? 9 : 18;
   const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);
   const priceCol = numHoles === 9 ? "price_9h" : "price_18h";
-  let basePrice = slot.promotional_price ? parseFloat(slot.promotional_price) : rawPrice;
-  if (!slot.promotional_price) {
-    const memberTierRow = await row(
+  const [memberTierRow, verified] = await Promise.all([
+    row(
       "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
       [slot.club_id, user.id]
-    );
-    const verified = await isHnaVerified(user.id);
-    const tierType = memberTierRow ? memberTierRow.membership_type : verified ? "affiliated_visitor" : "non_affiliated_visitor";
+    ),
+    isHnaVerified(user.id)
+  ]);
+  const bookingTierType = memberTierRow ? memberTierRow.membership_type : verified ? "affiliated_visitor" : "non_affiliated_visitor";
+  let basePrice = slot.promotional_price ? parseFloat(slot.promotional_price) : rawPrice;
+  if (!slot.promotional_price) {
     const tierPrice = await row(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
-      [slot.club_id, tierType]
+      [slot.club_id, bookingTierType]
     );
     if (tierPrice && tierPrice[priceCol] != null) {
       basePrice = parseFloat(tierPrice[priceCol]);
@@ -60150,8 +60152,8 @@ router4.post("/bookings", async (req, res) => {
       client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         user.id,
         parseInt(tee_time_id),
@@ -60168,7 +60170,8 @@ router4.post("/bookings", async (req, res) => {
         clubAmount,
         numHoles,
         rangeBallsFee,
-        clubHireFee
+        clubHireFee,
+        bookingTierType
       ]
     );
     bookingId = insertResult.rows[0].id;
@@ -71370,9 +71373,24 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");
-  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(20)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(40)");
+  await ddl("ALTER TABLE bookings ALTER COLUMN price_tier TYPE VARCHAR(40)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await query(`
+    UPDATE bookings b
+    SET price_tier = COALESCE(
+      (SELECT cm.membership_type
+         FROM club_members cm
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+        WHERE cm.club_id = pts.club_id
+          AND cm.user_id = b.user_id
+          AND cm.status  = 'active'
+        LIMIT 1),
+      'non_affiliated_visitor'
+    )
+    WHERE b.price_tier IS NULL
+  `);
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_price DECIMAL(10,2)");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");

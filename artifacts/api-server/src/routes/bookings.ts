@@ -629,23 +629,26 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);
   const priceCol = numHoles === 9 ? "price_9h" : "price_18h";
 
-  // Resolve organizer's tier price: member tier > HNA affiliated > non-affiliated visitor
-  let basePrice = slot.promotional_price ? parseFloat(slot.promotional_price) : rawPrice;
-  if (!slot.promotional_price) {
-    const memberTierRow = await row<any>(
+  // Always resolve the organizer's tier for pricing AND for recording on the booking row.
+  // HNA affiliation is universal but must be club-verified — only a golfer with an
+  // active, non-expired membership somewhere qualifies for the affiliated-visitor rate.
+  const [memberTierRow, verified] = await Promise.all([
+    row<any>(
       "SELECT membership_type FROM club_members WHERE club_id = ? AND user_id = ? AND status = 'active'",
       [slot.club_id, user.id]
-    );
-    // HNA affiliation is universal but must be CLUB-VERIFIED: only a golfer with an
-    // active, non-expired membership somewhere qualifies for the affiliated-visitor
-    // rate. A self-typed number (the legacy hna_number param) no longer grants it.
-    const verified = await isHnaVerified(user.id);
-    const tierType = memberTierRow
-      ? memberTierRow.membership_type
-      : (verified ? "affiliated_visitor" : "non_affiliated_visitor");
+    ),
+    isHnaVerified(user.id),
+  ]);
+  const bookingTierType: string = memberTierRow
+    ? memberTierRow.membership_type
+    : (verified ? "affiliated_visitor" : "non_affiliated_visitor");
+
+  // Resolve organizer's greens fee: promotional override > tier price > slot base price
+  let basePrice = slot.promotional_price ? parseFloat(slot.promotional_price) : rawPrice;
+  if (!slot.promotional_price) {
     const tierPrice = await row<any>(
       `SELECT ${priceCol} FROM club_pricing_tiers WHERE club_id = ? AND tier_type = ?`,
-      [slot.club_id, tierType]
+      [slot.club_id, bookingTierType]
     );
     if (tierPrice && tierPrice[priceCol] != null) {
       basePrice = parseFloat(tierPrice[priceCol]);
@@ -823,12 +826,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const insertResult = await clientQuery(client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
        numPlayers, split_bill ? 1 : 0, totalAmount, chargeAmount,
        ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles,
-       rangeBallsFee, clubHireFee]
+       rangeBallsFee, clubHireFee, bookingTierType]
     );
     bookingId = insertResult.rows[0].id;
 

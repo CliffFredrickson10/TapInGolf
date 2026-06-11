@@ -1489,9 +1489,26 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");
-  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(20)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(40)");
+  await ddl("ALTER TABLE bookings ALTER COLUMN price_tier TYPE VARCHAR(40)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  // Backfill price_tier for existing bookings that pre-date the column:
+  // look up the user's membership_type at the booked club; fall back to non_affiliated_visitor.
+  await query(`
+    UPDATE bookings b
+    SET price_tier = COALESCE(
+      (SELECT cm.membership_type
+         FROM club_members cm
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+        WHERE cm.club_id = pts.club_id
+          AND cm.user_id = b.user_id
+          AND cm.status  = 'active'
+        LIMIT 1),
+      'non_affiliated_visitor'
+    )
+    WHERE b.price_tier IS NULL
+  `);
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_price DECIMAL(10,2)");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");

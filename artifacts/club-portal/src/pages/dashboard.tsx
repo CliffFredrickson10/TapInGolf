@@ -274,20 +274,27 @@ export default function Dashboard() {
 
         {/* Month picker */}
         {period === "month" && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex gap-1 flex-wrap">
-              {MONTH_SHORT.map((m, i) => (
-                <button key={i} onClick={() => setSelectedMonth(i)} className={pill(selectedMonth === i)}>
-                  {m}
-                </button>
-              ))}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Month</p>
+              <div className="flex gap-1 flex-wrap">
+                {MONTH_SHORT.map((m, i) => (
+                  <button key={i} onClick={() => setSelectedMonth(i)} className={pill(selectedMonth === i)}>
+                    {m}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1">
-              {yearOptions.map(y => (
-                <button key={y} onClick={() => setSelectedMonthYear(y)} className={pill(selectedMonthYear === y)}>
-                  {y}
-                </button>
-              ))}
+            <div className="w-px h-10 bg-border self-end" />
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</p>
+              <div className="flex gap-1">
+                {yearOptions.map(y => (
+                  <button key={y} onClick={() => setSelectedMonthYear(y)} className={pill(selectedMonthYear === y)}>
+                    {y}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         )}

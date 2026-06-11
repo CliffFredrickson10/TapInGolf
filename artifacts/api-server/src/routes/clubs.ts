@@ -251,6 +251,9 @@ router.get("/clubs/:id", async (req, res): Promise<void> => {
   club.cart_price          = club.cart_price ? parseFloat(club.cart_price) : null;
   club.range_balls_enabled = !!club.range_balls_enabled;
   club.range_balls_price   = club.range_balls_price ? parseFloat(club.range_balls_price) : null;
+  club.range_balls_options = club.range_balls_options
+    ? (typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options)
+    : [];
   club.club_hire_enabled   = !!club.club_hire_enabled;
   club.club_hire_price     = club.club_hire_price ? parseFloat(club.club_hire_price) : null;
   if (club.logo_url) club.logo_url = logoApiUrl(club.id, club.logo_url);

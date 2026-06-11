@@ -67,10 +67,42 @@ const METHOD_LABELS: Record<string, string> = {
 };
 
 const TIER_LABELS: Record<string, string> = {
+  // Member tiers
+  full_member:          "Full Member",
+  six_day_member:       "Six-Day Member",
+  week_day_member:      "Weekday Member",
+  pensioner_full:       "Pensioner Member (Full)",
+  pensioner_six_day:    "Pensioner Member (6-Day)",
+  pensioner_week_day:   "Pensioner Member (Weekday)",
+  student_member:       "Student Member",
+  junior_member:        "Junior Member",
+  honorary:             "Honorary Member",
+  // Visitor tiers
+  affiliated_visitor:       "Affiliated Visitor",
+  affiliated_pensioner:     "Affiliated Pensioner",
+  non_affiliated_visitor:   "Non-Affiliated Visitor",
+  non_affiliated_pensioner: "Non-Affiliated Pensioner",
+  student_visitor:          "Student Visitor",
+  junior_visitor:           "Junior Visitor",
+  // Legacy / catch-all
   visitor: "Visitor",
   hna:     "HNA Affiliated",
   member:  "Member",
 };
+
+const MEMBER_TIERS = new Set([
+  "full_member","six_day_member","week_day_member",
+  "pensioner_full","pensioner_six_day","pensioner_week_day",
+  "student_member","junior_member","honorary",
+  "member",
+]);
+
+const VISITOR_TIERS = new Set([
+  "affiliated_visitor","affiliated_pensioner",
+  "non_affiliated_visitor","non_affiliated_pensioner",
+  "student_visitor","junior_visitor",
+  "visitor","hna",
+]);
 
 function fmtRand(n: number) {
   return `R ${n.toLocaleString("en-ZA", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -458,8 +490,8 @@ export default function Payments() {
       confirmed:      paid.length,
       pending:        payments.filter(p => p.status === "pending").length,
       // Earnings breakdown
-      visitor_earnings: paid.filter(p => p.price_tier === "visitor").reduce((s, p) => s + (p.club_amount ?? 0), 0),
-      member_earnings:  paid.filter(p => p.price_tier === "member").reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      visitor_earnings: paid.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      member_earnings:  paid.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
       range_earnings:   paid.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
       cart_earnings:    paid.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
       hire_earnings:    paid.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),

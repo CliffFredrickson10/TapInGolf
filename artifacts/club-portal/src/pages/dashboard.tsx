@@ -89,11 +89,13 @@ function getDateRange(
       return { from: fmt(mon), to: fmt(sun) };
     }
 
-    case "month":
+    case "month": {
+      const isCurrentMonth = selectedMonthYear === now.getFullYear() && selectedMonth === now.getMonth();
       return {
         from: fmt(new Date(selectedMonthYear, selectedMonth, 1)),
-        to:   fmt(new Date(selectedMonthYear, selectedMonth + 1, 0)),
+        to:   isCurrentMonth ? todayStr : fmt(new Date(selectedMonthYear, selectedMonth + 1, 0)),
       };
+    }
 
     case "quarter": {
       const fsm = fiscalStartMonth - 1;
@@ -170,7 +172,7 @@ export default function Dashboard() {
   const [data, setData]                     = useState<DashboardData | null>(null);
   const [error, setError]                   = useState("");
   const [loading, setLoading]               = useState(true);
-  const [period, setPeriod]                 = useState<PeriodKey>("today");
+  const [period, setPeriod]                 = useState<PeriodKey>("month");
   const [weekPickDate, setWeekPickDate]     = useState(() => fmt(now));
   const [selectedMonth, setSelectedMonth]   = useState(now.getMonth());
   const [selectedMonthYear, setSelectedMonthYear] = useState(currentYear);
@@ -292,22 +294,29 @@ export default function Dashboard() {
 
         {/* Quarter picker */}
         {period === "quarter" && (
-          <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex gap-1">
-              {[0, 1, 2, 3].map(q => (
-                <button key={q} onClick={() => setSelectedFQ(q)} className={pill(selectedFQ === q)}>
-                  Q{q + 1}
-                </button>
-              ))}
+          <div className="flex items-center gap-4 flex-wrap">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quarter</p>
+              <div className="flex gap-1">
+                {[0, 1, 2, 3].map(q => (
+                  <button key={q} onClick={() => setSelectedFQ(q)} className={pill(selectedFQ === q)}>
+                    Q{q + 1}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="flex gap-1">
-              {yearOptions.map(y => (
-                <button key={y} onClick={() => setSelectedFQYear(y)} className={pill(selectedFQYear === y)}>
-                  {y}
-                </button>
-              ))}
+            <div className="w-px h-10 bg-border self-end" />
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</p>
+              <div className="flex gap-1">
+                {yearOptions.map(y => (
+                  <button key={y} onClick={() => setSelectedFQYear(y)} className={pill(selectedFQYear === y)}>
+                    {y}
+                  </button>
+                ))}
+              </div>
             </div>
-            <span className="text-xs text-muted-foreground">{from} — {to}</span>
+            <span className="text-xs text-muted-foreground self-end pb-0.5">{from} — {to}</span>
           </div>
         )}
 

@@ -94,7 +94,6 @@ export default function NewBookingScreen() {
     cart_price?: string;
     range_balls_enabled?: string;
     range_balls_price?: string;
-    range_balls_options?: string;
     club_hire_enabled?: string;
     club_hire_price?: string;
     stitch_enabled?: string;
@@ -172,10 +171,7 @@ export default function NewBookingScreen() {
 
   const rangeBallsAvailable = params.range_balls_enabled === "1";
   const rangeBallsUnitPrice = params.range_balls_price ? parseFloat(params.range_balls_price) : 0;
-  const rangeBallsOptions: Array<{ label: string; price: number }> = React.useMemo(() => {
-    if (!params.range_balls_options) return [];
-    try { return JSON.parse(params.range_balls_options); } catch { return []; }
-  }, [params.range_balls_options]);
+  const [rangeBallsOptions, setRangeBallsOptions] = useState<Array<{ label: string; price: number }>>([]);
   const clubHireAvailable   = params.club_hire_enabled === "1";
   const clubHireUnitPrice   = params.club_hire_price ? parseFloat(params.club_hire_price) : 0;
 
@@ -388,6 +384,17 @@ export default function NewBookingScreen() {
       .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
       .catch(() => setWalletBalance(0));
   }, [user]);
+
+  // ── Fetch range ball options from API (URL params can't carry JSON safely) ───
+  useEffect(() => {
+    if (!rangeBallsAvailable || !params.club_id) return;
+    apiFetch(`/clubs/${params.club_id}`)
+      .then((d) => {
+        const opts = d?.club?.range_balls_options;
+        if (Array.isArray(opts) && opts.length > 0) setRangeBallsOptions(opts);
+      })
+      .catch(() => {});
+  }, [params.club_id, rangeBallsAvailable]);
 
   // ── User search (debounced) ─────────────────────────────────────────────────
   useEffect(() => {

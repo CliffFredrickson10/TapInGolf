@@ -39,7 +39,10 @@ function Toggle({ checked, onChange, label, sublabel }: { checked: boolean; onCh
   );
 }
 
-const DEFAULT_PAR3: Record<9 | 18, number> = { 9: 2, 18: 4 };
+const DEFAULT_PAR3_HOLES: Record<9 | 18, number[]> = {
+  9:  [3, 7],
+  18: [3, 7, 12, 16],
+};
 
 export function ShotgunCreation() {
   const [startType, setStartType] = useState<"interval_start" | "shotgun_start">("shotgun_start");
@@ -47,9 +50,18 @@ export function ShotgunCreation() {
   const [holes, setHoles] = useState<9 | 18>(18);
   const [doubleTee, setDoubleTee] = useState(true);
   const [doubleTeeMode, setDoubleTeeMode] = useState<"all" | "exclude_par3">("exclude_par3");
-  const [par3Count, setPar3Count] = useState(4);
+  const [par3Holes, setPar3Holes] = useState<Set<number>>(new Set(DEFAULT_PAR3_HOLES[18]));
+
+  const togglePar3 = (hole: number) => {
+    setPar3Holes(prev => {
+      const next = new Set(prev);
+      next.has(hole) ? next.delete(hole) : next.add(hole);
+      return next;
+    });
+  };
 
   const par3Excluded = doubleTee && doubleTeeMode === "exclude_par3";
+  const par3Count = par3Excluded ? par3Holes.size : 0;
   const doubleHoles = par3Excluded ? holes - par3Count : holes;
   const singleHoles = par3Excluded ? par3Count : 0;
   const maxGroups = doubleTee ? doubleHoles * 2 + singleHoles : holes;
@@ -58,8 +70,7 @@ export function ShotgunCreation() {
   const registeredGroups = Math.ceil(registeredPlayers / 4);
   const capacityOk = registeredGroups <= maxGroups;
 
-  const previewHoles = Array.from({ length: Math.min(9, holes) }, (_, i) => i + 1);
-  const par3Holes = [3, 7, 12, 16].slice(0, par3Count);
+  const allHoles = Array.from({ length: holes }, (_, i) => i + 1);
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-start justify-center p-6">
@@ -68,8 +79,7 @@ export function ShotgunCreation() {
         {/* Page header */}
         <div>
           <div className="flex items-center gap-2 text-xs text-gray-400 mb-1">
-            <span>Events</span>
-            <span>›</span>
+            <span>Events</span><span>›</span>
             <span style={{ color: GREEN }} className="font-medium">Create Tournament</span>
           </div>
           <h1 className="text-xl font-bold text-gray-900">Club Championship 2025</h1>
@@ -118,7 +128,6 @@ export function ShotgunCreation() {
                   </div>
                   <p className="text-xs text-gray-500 ml-6">Groups tee off sequentially from the 1st (or 10th) tee, spaced by a set interval.</p>
                 </button>
-
                 <button onClick={() => setStartType("shotgun_start")}
                   className={`flex flex-col items-start gap-1 p-3.5 rounded-lg border-2 text-left transition-all ${startType === "shotgun_start" ? "border-[#1a5c38] bg-[#f0faf4]" : "border-gray-200 bg-white hover:border-gray-300"}`}>
                   <div className="flex items-center gap-2 w-full">
@@ -142,9 +151,7 @@ export function ShotgunCreation() {
                 <div>
                   <Label>Tee Interval</Label>
                   <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm bg-white focus:outline-none">
-                    <option>8 minutes</option>
-                    <option>10 minutes</option>
-                    <option>12 minutes</option>
+                    <option>8 minutes</option><option>10 minutes</option><option>12 minutes</option>
                   </select>
                 </div>
               </div>
@@ -172,7 +179,7 @@ export function ShotgunCreation() {
                     <Label>Course Layout</Label>
                     <div className="flex gap-2">
                       {([9, 18] as (9 | 18)[]).map(h => (
-                        <button key={h} onClick={() => { setHoles(h); setPar3Count(DEFAULT_PAR3[h]); }}
+                        <button key={h} onClick={() => { setHoles(h); setPar3Holes(new Set(DEFAULT_PAR3_HOLES[h])); }}
                           className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${holes === h ? "text-white border-transparent" : "border-gray-200 text-gray-600 bg-white"}`}
                           style={holes === h ? { background: GREEN } : {}}>
                           {h} Holes
@@ -190,60 +197,93 @@ export function ShotgunCreation() {
                   sublabel="Assign up to 2 groups per hole to increase capacity"
                 />
 
-                {/* Double Teeing sub-options — only shown when toggle is on */}
+                {/* Double Teeing sub-options */}
                 {doubleTee && (
                   <div className="ml-3 pl-3 border-l-2 border-[#b7dfc8] space-y-3">
-                    <p className="text-xs font-medium text-gray-600 mb-2">Double tee applies to:</p>
+                    <p className="text-xs font-medium text-gray-600">Double tee applies to:</p>
 
-                    {/* All holes option */}
-                    <button
-                      onClick={() => setDoubleTeeMode("all")}
+                    {/* All holes */}
+                    <button onClick={() => setDoubleTeeMode("all")}
                       className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all ${doubleTeeMode === "all" ? "border-[#1a5c38] bg-white" : "border-gray-200 bg-white hover:border-gray-300"}`}>
                       <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${doubleTeeMode === "all" ? "border-[#1a5c38]" : "border-gray-300"}`}>
                         {doubleTeeMode === "all" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
                       </div>
                       <div>
-                        <p className={`text-sm font-medium ${doubleTeeMode === "all" ? "text-[#1a5c38]" : "text-gray-700"}`}>
-                          All holes
-                        </p>
-                        <p className="text-xs text-gray-500 mt-0.5">
-                          Max {holes * 2} groups ({holes * 2 * 4} players) · 2 groups on every hole including par 3s
-                        </p>
+                        <p className={`text-sm font-medium ${doubleTeeMode === "all" ? "text-[#1a5c38]" : "text-gray-700"}`}>All holes</p>
+                        <p className="text-xs text-gray-500 mt-0.5">Max {holes * 2} groups ({holes * 2 * 4} players) · 2 groups on every hole including par 3s</p>
                       </div>
                     </button>
 
-                    {/* Exclude par 3s option */}
-                    <button
-                      onClick={() => setDoubleTeeMode("exclude_par3")}
+                    {/* Exclude par 3s */}
+                    <button onClick={() => setDoubleTeeMode("exclude_par3")}
                       className={`w-full flex items-start gap-3 p-3 rounded-lg border-2 text-left transition-all ${doubleTeeMode === "exclude_par3" ? "border-[#1a5c38] bg-white" : "border-gray-200 bg-white hover:border-gray-300"}`}>
                       <div className={`mt-0.5 w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0 ${doubleTeeMode === "exclude_par3" ? "border-[#1a5c38]" : "border-gray-300"}`}>
                         {doubleTeeMode === "exclude_par3" && <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />}
                       </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
                           <p className={`text-sm font-medium ${doubleTeeMode === "exclude_par3" ? "text-[#1a5c38]" : "text-gray-700"}`}>
                             All holes except par 3s
                           </p>
-                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>
+                          <span className="text-[10px] px-1.5 py-0.5 rounded font-medium flex-shrink-0" style={{ background: "#fef3c7", color: "#92400e" }}>
                             Recommended
                           </span>
                         </div>
                         <p className="text-xs text-gray-500 mt-0.5">
-                          Par 3s stay single-group to prevent pace-of-play delays on the course.
+                          Par 3s stay single-group to prevent pace-of-play delays.
                         </p>
-                        {/* Par 3 count input — only shown when this mode is active */}
+
+                        {/* Par 3 hole picker — only when this mode is active */}
                         {doubleTeeMode === "exclude_par3" && (
-                          <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100">
-                            <label className="text-xs text-gray-600 whitespace-nowrap">Number of par 3 holes on this course</label>
-                            <div className="flex items-center gap-1.5 ml-auto">
-                              <button
-                                onClick={e => { e.stopPropagation(); setPar3Count(c => Math.max(1, c - 1)); }}
-                                className="w-6 h-6 rounded border border-gray-200 bg-white text-gray-600 flex items-center justify-center text-sm font-bold hover:bg-gray-50">−</button>
-                              <span className="w-6 text-center text-sm font-bold" style={{ color: GREEN }}>{par3Count}</span>
-                              <button
-                                onClick={e => { e.stopPropagation(); setPar3Count(c => Math.min(holes - 1, c + 1)); }}
-                                className="w-6 h-6 rounded border border-gray-200 bg-white text-gray-600 flex items-center justify-center text-sm font-bold hover:bg-gray-50">+</button>
+                          <div className="mt-3 pt-3 border-t border-gray-100" onClick={e => e.stopPropagation()}>
+                            <div className="flex items-center justify-between mb-2">
+                              <p className="text-xs font-medium text-gray-600">
+                                Select which holes are par 3
+                                <span className="ml-1.5 font-normal text-gray-400">
+                                  ({par3Holes.size} selected)
+                                </span>
+                              </p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setPar3Holes(new Set())}
+                                  className="text-[10px] text-gray-400 hover:text-gray-600 underline"
+                                >Clear</button>
+                                <button
+                                  onClick={() => setPar3Holes(new Set(DEFAULT_PAR3_HOLES[holes]))}
+                                  className="text-[10px] hover:underline"
+                                  style={{ color: GREEN }}
+                                >Reset defaults</button>
+                              </div>
                             </div>
+
+                            {/* Hole grid */}
+                            <div className="grid grid-cols-9 gap-1">
+                              {allHoles.map(hole => {
+                                const isPar3 = par3Holes.has(hole);
+                                return (
+                                  <button
+                                    key={hole}
+                                    onClick={() => togglePar3(hole)}
+                                    title={isPar3 ? `Hole ${hole} — Par 3 (click to remove)` : `Hole ${hole} (click to mark as par 3)`}
+                                    className="flex flex-col items-center justify-center rounded-md border text-[10px] font-bold py-1.5 transition-all"
+                                    style={isPar3
+                                      ? { background: "#1d4ed8", borderColor: "#1d4ed8", color: "#fff" }
+                                      : { background: "#fff", borderColor: "#e5e7eb", color: "#6b7280" }
+                                    }
+                                  >
+                                    <span>{hole}</span>
+                                    {isPar3 && (
+                                      <span className="text-[8px] font-normal leading-none opacity-80 mt-0.5">P3</span>
+                                    )}
+                                  </button>
+                                );
+                              })}
+                            </div>
+
+                            <p className="text-[10px] text-gray-400 mt-2 flex items-center gap-1">
+                              <span className="inline-block w-3 h-3 rounded bg-blue-700 flex-shrink-0" />
+                              Blue = par 3 (single group only) · White = double tee (Group A + B)
+                            </p>
                           </div>
                         )}
                       </div>
@@ -252,12 +292,12 @@ export function ShotgunCreation() {
                 )}
 
                 {/* Capacity indicator */}
-                <div className={`flex items-start gap-2.5 p-3 rounded-lg border text-sm ${capacityOk ? "border-[#b7dfc8] bg-[#f0faf4]" : "border-red-200 bg-red-50"}`}>
+                <div className={`flex items-start gap-2.5 p-3 rounded-lg border ${capacityOk ? "border-[#b7dfc8] bg-[#f0faf4]" : "border-red-200 bg-red-50"}`}>
                   <span className={`mt-0.5 text-lg leading-none ${capacityOk ? "text-green-600" : "text-red-500"}`}>
                     {capacityOk ? "✓" : "⚠"}
                   </span>
                   <div className="flex-1">
-                    <p className={`font-medium ${capacityOk ? "text-green-800" : "text-red-700"}`}>
+                    <p className={`text-sm font-medium ${capacityOk ? "text-green-800" : "text-red-700"}`}>
                       {capacityOk
                         ? `Capacity OK — up to ${maxPlayers} players (${maxGroups} groups × 4)`
                         : `Capacity exceeded — ${registeredGroups} groups needed, only ${maxGroups} available`}
@@ -265,8 +305,8 @@ export function ShotgunCreation() {
                     <p className="text-xs text-gray-500 mt-0.5">
                       {holes}-hole course
                       {doubleTee
-                        ? par3Excluded
-                          ? ` · double tee on ${doubleHoles} holes · single on ${par3Count} par 3s`
+                        ? par3Excluded && par3Count > 0
+                          ? ` · double tee on ${doubleHoles} holes · single on ${par3Count} par 3${par3Count !== 1 ? "s" : ""} (holes ${[...par3Holes].sort((a,b)=>a-b).join(", ")})`
                           : ` · double teeing on all holes`
                         : " · single group per hole"}
                       {" · "}{registeredPlayers} players registered
@@ -279,17 +319,14 @@ export function ShotgunCreation() {
                   <svg className="h-3.5 w-3.5 text-gray-400 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                   </svg>
-                  Hole assignments are auto-generated when you publish the draw.
-                  {par3Excluded
-                    ? ` Par 3 holes (${par3Count} holes) will be assigned a single group only; all other holes get Group A + B.`
-                    : doubleTee
-                      ? ` All ${holes} holes will get Group A + B.`
-                      : ` Each hole gets one group.`}
+                  {par3Excluded && par3Count > 0
+                    ? `Hole assignments auto-generated on draw publish. Par 3s (holes ${[...par3Holes].sort((a,b)=>a-b).join(", ")}) get one group only; all others get Group A + B.`
+                    : `Hole assignments are auto-generated when you publish the draw.`}
                 </p>
               </div>
             )}
 
-            {/* Tee times list for interval */}
+            {/* Interval tee slots */}
             {startType === "interval_start" && (
               <div>
                 <Label>Tee Time Slots</Label>
@@ -313,35 +350,33 @@ export function ShotgunCreation() {
               <div>
                 <div className="flex items-center justify-between mb-1.5">
                   <Label note="preview">Hole Assignment Preview</Label>
-                  {par3Excluded && (
+                  {par3Excluded && par3Count > 0 && (
                     <div className="flex items-center gap-3 text-[10px] text-gray-400">
                       <span className="flex items-center gap-1">
                         <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "#fef3c7", border: "1px solid #f59e0b" }} />
-                        Double tee (A+B)
+                        A+B
                       </span>
                       <span className="flex items-center gap-1">
-                        <span className="inline-block w-2.5 h-2.5 rounded-sm" style={{ background: "#eff6ff", border: "1px solid #93c5fd" }} />
-                        Par 3 — single only
+                        <span className="inline-block w-2.5 h-2.5 rounded-sm bg-blue-700" />
+                        Par 3 (A only)
                       </span>
                     </div>
                   )}
                 </div>
                 <div className="grid grid-cols-3 gap-1.5">
-                  {previewHoles.map(hole => {
-                    const isPar3 = par3Excluded && par3Holes.includes(hole);
+                  {Array.from({ length: Math.min(9, holes) }, (_, i) => i + 1).map(hole => {
+                    const isPar3 = par3Excluded && par3Holes.has(hole);
                     return (
                       <div key={hole}
                         className="flex items-center gap-1.5 px-2.5 py-2 rounded border text-xs"
-                        style={isPar3
-                          ? { background: "#eff6ff", borderColor: "#93c5fd" }
-                          : { background: "#fff", borderColor: "#e5e7eb" }}>
-                        <span className={`font-bold w-14 shrink-0 ${isPar3 ? "text-blue-600" : ""}`} style={!isPar3 ? { color: GREEN } : {}}>
+                        style={isPar3 ? { background: "#eff6ff", borderColor: "#93c5fd" } : { background: "#fff", borderColor: "#e5e7eb" }}>
+                        <span className={`font-bold w-14 shrink-0`} style={{ color: isPar3 ? "#1d4ed8" : GREEN }}>
                           Hole {hole}
                         </span>
                         <span className="text-gray-400 font-mono text-[10px]">{shotgunTime}</span>
                         {doubleTee && (
                           isPar3
-                            ? <span className="ml-auto text-[10px] px-1 rounded font-medium" style={{ background: "#eff6ff", color: "#1d4ed8" }}>A only</span>
+                            ? <span className="ml-auto text-[10px] px-1 rounded font-medium bg-blue-100 text-blue-700">A only</span>
                             : <span className="ml-auto text-[10px] px-1 rounded font-medium" style={{ background: "#fef3c7", color: "#92400e" }}>A+B</span>
                         )}
                       </div>
@@ -350,7 +385,7 @@ export function ShotgunCreation() {
                   {holes === 18 && (
                     <div className="col-span-3 text-xs text-gray-400 text-center py-1">
                       …and holes 10–18
-                      {par3Excluded && ` (including ${par3Holes.filter(h => h > 9).length} more par 3${par3Holes.filter(h => h > 9).length !== 1 ? "s" : ""})`}
+                      {par3Excluded && par3Count > 0 && ` (incl. ${[...par3Holes].filter(h => h > 9).length} par 3${[...par3Holes].filter(h => h > 9).length !== 1 ? "s" : ""})`}
                     </div>
                   )}
                 </div>

@@ -377,6 +377,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     friend_ids = [],        // legacy field — kept for backward compat
     players_data,           // preferred: Array<{user_id?:number, guest_name?:string}>
     payment_method = "stitch", voucher_code, include_cart = false,
+    include_range_balls = false, include_club_hire = false,
     holes = 18,             // 9 or 18
     hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
     event_id: bodyEventId,  // optional: event being booked into (used for pay_at_club rounds calc)
@@ -395,6 +396,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const rawSlot = await row<any>(
     `SELECT pts.*, c.name AS club_name,
        c.cart_available, c.cart_compulsory, c.cart_price,
+       c.range_balls_enabled, c.range_balls_price, c.club_hire_enabled, c.club_hire_price,
        GREATEST(0, pts.max_players - pts.player_count) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
@@ -751,12 +753,21 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const cartFee        = wantCart ? Math.round(numCarts * cartUnitPrice * 100) / 100 : 0;
   const cartShare      = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
 
+  // Add-on fees — personal (not split with other players)
+  const rangeBallsEnabled = !!slot.range_balls_enabled;
+  const rangeBallsPrice   = slot.range_balls_price ? parseFloat(slot.range_balls_price) : 0;
+  const rangeBallsFee     = rangeBallsEnabled && include_range_balls ? Math.round(rangeBallsPrice * 100) / 100 : 0;
+
+  const clubHireAvail  = !!slot.club_hire_enabled;
+  const clubHireUnitPrice = slot.club_hire_price ? parseFloat(slot.club_hire_price) : 0;
+  const clubHireFee    = clubHireAvail && include_club_hire ? Math.round(clubHireUnitPrice * 100) / 100 : 0;
+
   const greensAfterDiscount = Math.max(0, totalGreens - discountAmount);
-  const totalAmount         = greensAfterDiscount + cartFee;
+  const totalAmount         = greensAfterDiscount + cartFee + rangeBallsFee + clubHireFee;
 
   // Organizer's payment: their greens (R0 if prepaid) + full cart (solo) or cart share (split)
   const splitAmount = split_bill && numPlayers > 1
-    ? organizerGreens + cartShare
+    ? organizerGreens + cartShare + rangeBallsFee + clubHireFee
     : totalAmount;
 
   // If a voucher covers the full amount no gateway is needed — override to "voucher"
@@ -811,11 +822,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
   await withTransaction(async (client) => {
     const insertResult = await clientQuery(client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
-        booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?) RETURNING id`,
+        booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
+        driving_range_fee, club_hire_fee)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
        numPlayers, split_bill ? 1 : 0, totalAmount, chargeAmount,
-       ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles]
+       ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles,
+       rangeBallsFee, clubHireFee]
     );
     bookingId = insertResult.rows[0].id;
 

@@ -168,10 +168,14 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.price_from      = c.price_from ? parseFloat(c.price_from) : null;
       c.featured        = !!c.featured;
       c.distance_km     = c.distance != null ? parseFloat(c.distance) : null;
-      c.cart_available      = !!c.cart_available;
-      c.cart_compulsory     = !!c.cart_compulsory;
-      c.cart_price          = c.cart_price ? parseFloat(c.cart_price) : null;
-      c.pay_at_club_enabled = !!c.pay_at_club_enabled;
+      c.cart_available        = !!c.cart_available;
+      c.cart_compulsory       = !!c.cart_compulsory;
+      c.cart_price            = c.cart_price ? parseFloat(c.cart_price) : null;
+      c.range_balls_enabled   = !!c.range_balls_enabled;
+      c.range_balls_price     = c.range_balls_price ? parseFloat(c.range_balls_price) : null;
+      c.club_hire_enabled     = !!c.club_hire_enabled;
+      c.club_hire_price       = c.club_hire_price ? parseFloat(c.club_hire_price) : null;
+      c.pay_at_club_enabled   = !!c.pay_at_club_enabled;
       c.stitch_enabled      = c.stitch_enabled  !== undefined ? !!c.stitch_enabled  : true;
       c.wallet_enabled      = true;
       c.prepaid_enabled     = c.prepaid_enabled !== undefined ? !!c.prepaid_enabled : true;
@@ -239,9 +243,13 @@ router.get("/clubs/:id", async (req, res): Promise<void> => {
   club.rating          = club.rating ? parseFloat(club.rating) : null;
   club.review_count    = parseInt(club.review_count ?? "0");
   club.price_from      = club.price_from ? parseFloat(club.price_from) : null;
-  club.cart_available  = !!club.cart_available;
-  club.cart_compulsory = !!club.cart_compulsory;
-  club.cart_price      = club.cart_price ? parseFloat(club.cart_price) : null;
+  club.cart_available      = !!club.cart_available;
+  club.cart_compulsory     = !!club.cart_compulsory;
+  club.cart_price          = club.cart_price ? parseFloat(club.cart_price) : null;
+  club.range_balls_enabled = !!club.range_balls_enabled;
+  club.range_balls_price   = club.range_balls_price ? parseFloat(club.range_balls_price) : null;
+  club.club_hire_enabled   = !!club.club_hire_enabled;
+  club.club_hire_price     = club.club_hire_price ? parseFloat(club.club_hire_price) : null;
   if (club.logo_url) club.logo_url = logoApiUrl(club.id, club.logo_url);
 
   res.json({ club });

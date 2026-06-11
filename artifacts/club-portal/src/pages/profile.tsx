@@ -20,6 +20,8 @@ interface ClubProfile {
   facilities: string[]; website: string | null; description: string | null;
   phone: string | null; email: string | null; address: string | null;
   cart_available: boolean; cart_compulsory: boolean; cart_price: number | null;
+  range_balls_enabled: boolean; range_balls_price: number | null;
+  club_hire_enabled: boolean; club_hire_price: number | null;
   latitude: number | null; longitude: number | null;
   geofence_enabled: boolean; geofence_radius_m: number | null;
   stitch_enabled: boolean;
@@ -658,6 +660,45 @@ export default function Profile() {
           <div className="space-y-2">
             <Label>Cart Price (ZAR per player)</Label>
             <Input type="number" value={profile.cart_price ?? ""} onChange={e => update("cart_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Add-on Services</CardTitle>
+          <p className="text-sm text-muted-foreground">Optional extras golfers can add at checkout. These are charged to the booking organiser only and are not split among players.</p>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Driving Range Balls</Label>
+                <p className="text-xs text-muted-foreground">Bucket of range balls available at checkout</p>
+              </div>
+              <Switch checked={!!profile.range_balls_enabled} onCheckedChange={v => update("range_balls_enabled", v)} />
+            </div>
+            {profile.range_balls_enabled && (
+              <div className="space-y-2">
+                <Label>Price (ZAR)</Label>
+                <Input type="number" value={profile.range_balls_price ?? ""} onChange={e => update("range_balls_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
+              </div>
+            )}
+          </div>
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <Label>Club Hire</Label>
+                <p className="text-xs text-muted-foreground">Set of rental clubs available at checkout</p>
+              </div>
+              <Switch checked={!!profile.club_hire_enabled} onCheckedChange={v => update("club_hire_enabled", v)} />
+            </div>
+            {profile.club_hire_enabled && (
+              <div className="space-y-2">
+                <Label>Price (ZAR)</Label>
+                <Input type="number" value={profile.club_hire_price ?? ""} onChange={e => update("club_hire_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
+              </div>
+            )}
           </div>
         </CardContent>
       </Card>

@@ -92,6 +92,10 @@ export default function NewBookingScreen() {
     cart_available?: string;
     cart_compulsory?: string;
     cart_price?: string;
+    range_balls_enabled?: string;
+    range_balls_price?: string;
+    club_hire_enabled?: string;
+    club_hire_price?: string;
     stitch_enabled?: string;
     prepaid_enabled?: string;
     voucher_enabled?: string;
@@ -165,10 +169,17 @@ export default function NewBookingScreen() {
   const cartCompulsory = params.cart_compulsory === "1";
   const cartUnitPrice  = params.cart_price ? parseFloat(params.cart_price) : 0;
 
+  const rangeBallsAvailable = params.range_balls_enabled === "1";
+  const rangeBallsUnitPrice = params.range_balls_price ? parseFloat(params.range_balls_price) : 0;
+  const clubHireAvailable   = params.club_hire_enabled === "1";
+  const clubHireUnitPrice   = params.club_hire_price ? parseFloat(params.club_hire_price) : 0;
+
   // ── Core booking state ──────────────────────────────────────────────────────
   const [numPlayers, setNumPlayers]   = useState(1);
   const [splitBill, setSplitBill]     = useState(false);
-  const [includeCart, setIncludeCart] = useState(cartCompulsory);
+  const [includeCart, setIncludeCart]           = useState(cartCompulsory);
+  const [includeRangeBalls, setIncludeRangeBalls] = useState(false);
+  const [includeClubHire, setIncludeClubHire]     = useState(false);
   // Default to the first enabled payment method for this club
   const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
     params.stitch_enabled  !== "0" ? "stitch"      :
@@ -320,10 +331,14 @@ export default function NewBookingScreen() {
   const discount    = appliedVoucher ? appliedVoucher.discount_amount : 0;
   const greensTotal = Math.max(0, subtotal - discount);
   const numCarts    = numPlayers <= 2 ? 1 : 2;
-  const cartFee     = (cartAvailable && includeCart) ? numCarts * cartUnitPrice : 0;
-  const totalAmount = greensTotal + cartFee;
-  const cartShare   = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
-  const myAmount    = splitBill && numPlayers > 1 ? organizerGreens + cartShare : totalAmount;
+  const cartFee       = (cartAvailable && includeCart) ? numCarts * cartUnitPrice : 0;
+  const rangeBallsFee = (rangeBallsAvailable && includeRangeBalls) ? rangeBallsUnitPrice : 0;
+  const clubHireFee   = (clubHireAvailable && includeClubHire) ? clubHireUnitPrice : 0;
+  const totalAmount   = greensTotal + cartFee + rangeBallsFee + clubHireFee;
+  const cartShare     = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
+  const myAmount      = splitBill && numPlayers > 1
+    ? organizerGreens + cartShare + rangeBallsFee + clubHireFee
+    : totalAmount;
 
   // ── Per-player breakdown rows (memoised so React Compiler tracks addedPlayerPrices) ──
   const playerBreakdownRows = React.useMemo(() =>
@@ -490,8 +505,10 @@ export default function NewBookingScreen() {
           players_data,
           payment_method: paymentMethod,
           voucher_code:   appliedVoucher?.code ?? null,
-          include_cart:   cartAvailable && includeCart,
-          holes:          holes,
+          include_cart:         cartAvailable && includeCart,
+          include_range_balls:  rangeBallsAvailable && includeRangeBalls,
+          include_club_hire:    clubHireAvailable && includeClubHire,
+          holes:                holes,
           hna_number:     hnaNumber.trim() || null,
           event_id:       params.event_id ? parseInt(params.event_id) : undefined,
         }),
@@ -727,6 +744,54 @@ export default function NewBookingScreen() {
                 </View>
               </View>
             )
+          )}
+
+          {/* Driving Range Balls */}
+          {rangeBallsAvailable && (
+            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.cartRow}>
+                <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
+                  <Ionicons name="golf" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>Driving Range Balls</Text>
+                  <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                    Bucket of range balls · R{rangeBallsUnitPrice.toFixed(2)}
+                    {includeRangeBalls ? ` · +R${rangeBallsFee.toFixed(2)}` : ""}
+                  </Text>
+                </View>
+                <Switch
+                  value={includeRangeBalls}
+                  onValueChange={(v) => { Haptics.selectionAsync(); setIncludeRangeBalls(v); }}
+                  trackColor={{ true: colors.primary, false: colors.muted }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
+          )}
+
+          {/* Club Hire */}
+          {clubHireAvailable && (
+            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={styles.cartRow}>
+                <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
+                  <Ionicons name="bag-handle" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>Club Hire</Text>
+                  <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                    Rental set of clubs · R{clubHireUnitPrice.toFixed(2)}
+                    {includeClubHire ? ` · +R${clubHireFee.toFixed(2)}` : ""}
+                  </Text>
+                </View>
+                <Switch
+                  value={includeClubHire}
+                  onValueChange={(v) => { Haptics.selectionAsync(); setIncludeClubHire(v); }}
+                  trackColor={{ true: colors.primary, false: colors.muted }}
+                  thumbColor="#fff"
+                />
+              </View>
+            </View>
           )}
 
           {/* Split bill */}
@@ -1103,6 +1168,8 @@ export default function NewBookingScreen() {
                           ? "Free (prepaid)"
                           : `R${organizerGreens.toFixed(2)} greens`,
                         cartFee > 0 ? `R${cartFee.toFixed(2)} cart` : null,
+                        rangeBallsFee > 0 ? `R${rangeBallsFee.toFixed(2)} range balls` : null,
+                        clubHireFee > 0 ? `R${clubHireFee.toFixed(2)} club hire` : null,
                         organizerTierLabel,
                       ].filter(Boolean).join(" · ")}
                     </Text>
@@ -1120,6 +1187,18 @@ export default function NewBookingScreen() {
               <View style={styles.totalLine}>
                 <Text style={[styles.totalLineLabel, { color: colors.accent }]}>Golf Cart ({numCarts} × R{cartUnitPrice.toFixed(2)})</Text>
                 <Text style={[styles.totalLineVal, { color: colors.accent }]}>+R{cartFee.toFixed(2)}</Text>
+              </View>
+            )}
+            {rangeBallsFee > 0 && (
+              <View style={styles.totalLine}>
+                <Text style={[styles.totalLineLabel, { color: colors.accent }]}>Driving Range Balls</Text>
+                <Text style={[styles.totalLineVal, { color: colors.accent }]}>+R{rangeBallsFee.toFixed(2)}</Text>
+              </View>
+            )}
+            {clubHireFee > 0 && (
+              <View style={styles.totalLine}>
+                <Text style={[styles.totalLineLabel, { color: colors.accent }]}>Club Hire</Text>
+                <Text style={[styles.totalLineVal, { color: colors.accent }]}>+R{clubHireFee.toFixed(2)}</Text>
               </View>
             )}
             {(hasPromo || appliedVoucher || (cartFee > 0 && numPlayers > 1 && !(splitBill && numPlayers > 1 && !effectiveTierPriced && !hasPromo))) && (

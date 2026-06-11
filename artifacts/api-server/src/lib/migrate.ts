@@ -1492,6 +1492,10 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS price_tier VARCHAR(20)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_price DECIMAL(10,2)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
 }
 
 async function seedAdOfferings(): Promise<void> {

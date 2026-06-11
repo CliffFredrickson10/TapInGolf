@@ -64,8 +64,8 @@ function buildSlotsForDay(configType: string, configData: any): SlotEntry[] {
     const times = generateBlockTimes(b.start, b.end, b.interval);
     if (b.tee_start_type === "two_tee") {
       times.forEach(t => {
-        slots.push({ time: t, tee_start_type: "1st Tee",  session_type: sessionType });
-        slots.push({ time: t, tee_start_type: "10th Tee", session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "first_tee",  session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "tenth_tee", session_type: sessionType });
       });
     } else {
       times.forEach(t => slots.push({ time: t, tee_start_type: normTeeStart(b.tee_start_type), session_type: sessionType }));

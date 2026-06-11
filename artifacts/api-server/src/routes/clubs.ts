@@ -418,13 +418,12 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
     const dt = new Date(`${dateStr}T${String(timeStr).slice(0, 5)}:00+02:00`);
     return !isNaN(dt.getTime()) && dt.getTime() < nowMs;
   };
-  // Normalise DB display strings to the enum values TeeTimeSlot expects
+  // DB now stores canonical snake_case; keep as a safety net for any legacy rows
   const normTeeStartType = (v: string | null | undefined): "first_tee" | "tenth_tee" | "two_tee" | null => {
     if (!v) return null;
-    const lv = v.toLowerCase();
-    if (lv.includes("1st")  || lv === "first_tee")  return "first_tee";
-    if (lv.includes("10th") || lv === "tenth_tee")  return "tenth_tee";
-    if (lv.includes("two")  || lv === "two_tee")    return "two_tee";
+    if (v === "first_tee"  || v === "1st Tee")       return "first_tee";
+    if (v === "tenth_tee"  || v === "10th Tee")       return "tenth_tee";
+    if (v === "two_tee"    || v === "Two-Tee Start")  return "two_tee";
     return null;
   };
 

@@ -53186,8 +53186,8 @@ function buildSlotsForDay(configType, configData) {
     const times = generateBlockTimes(b.start, b.end, b.interval);
     if (b.tee_start_type === "two_tee") {
       times.forEach((t) => {
-        slots.push({ time: t, tee_start_type: "1st Tee", session_type: sessionType });
-        slots.push({ time: t, tee_start_type: "10th Tee", session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "first_tee", session_type: sessionType });
+        slots.push({ time: t, tee_start_type: "tenth_tee", session_type: sessionType });
       });
     } else {
       times.forEach((t) => slots.push({ time: t, tee_start_type: normTeeStart(b.tee_start_type), session_type: sessionType }));
@@ -58528,7 +58528,14 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
     const dt = /* @__PURE__ */ new Date(`${dateStr}T${String(timeStr).slice(0, 5)}:00+02:00`);
     return !isNaN(dt.getTime()) && dt.getTime() < nowMs;
   };
-  const formatted = portalSlots.filter((s) => {
+  const normTeeStartType = (v) => {
+    if (!v) return null;
+    if (v === "first_tee" || v === "1st Tee") return "first_tee";
+    if (v === "tenth_tee" || v === "10th Tee") return "tenth_tee";
+    if (v === "two_tee" || v === "Two-Tee Start") return "two_tee";
+    return null;
+  };
+  const mappedSlots = portalSlots.filter((s) => {
     const dateStr = (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10);
     return !isPastSlot(dateStr, s.tee_time);
   }).map((s) => ({
@@ -58540,7 +58547,7 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
     price: tierPrice18 ?? 0,
     price_9: tierPrice9 ?? null,
     promotional_price: null,
-    tee_start_type: s.tee_start_type,
+    tee_start_type: normTeeStartType(s.tee_start_type),
     session_type: s.session_type,
     active: s.is_active === 1,
     slot_source: "portal",
@@ -58551,6 +58558,17 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
       players: p.players
     }))
   }));
+  const seen = /* @__PURE__ */ new Map();
+  for (const slot of mappedSlots) {
+    const key = `${slot.time}|${slot.tee_start_type ?? "any"}`;
+    const existing = seen.get(key);
+    if (!existing || !existing.event_id && slot.event_id) {
+      seen.set(key, slot);
+    }
+  }
+  const formatted = Array.from(seen.values()).sort(
+    (a, b) => a.time < b.time ? -1 : a.time > b.time ? 1 : 0
+  );
   res.json({ tee_times: formatted, is_junior: isJuniorResponse });
 });
 router3.get("/clubs/:id/tier-price", async (req, res) => {
@@ -64767,14 +64785,14 @@ import path2 from "path";
 init_otp();
 init_logger();
 init_notifications();
-var TEE_START_MAP2 = {
-  first_tee: "1st Tee",
-  tenth_tee: "10th Tee",
-  two_tee: "Two-Tee Start"
-};
 function normTeeStart2(raw) {
-  if (!raw) return "1st Tee";
-  return TEE_START_MAP2[raw] ?? raw;
+  if (!raw) return "first_tee";
+  const map = {
+    "1st Tee": "first_tee",
+    "10th Tee": "tenth_tee",
+    "Two-Tee Start": "two_tee"
+  };
+  return map[raw] ?? raw;
 }
 var upload2 = (0, import_multer2.default)({
   storage: import_multer2.default.memoryStorage(),
@@ -65333,7 +65351,7 @@ router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
     price: 0,
     price_9: null,
     promotional_price: null,
-    tee_start_type: { "1st Tee": "first_tee", "10th Tee": "tenth_tee", "Two-Tee Start": "two_tee" }[r.tee_start_type] ?? r.tee_start_type ?? "first_tee",
+    tee_start_type: r.tee_start_type ?? "first_tee",
     crossover_enabled: false,
     active: !!r.active,
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]")
@@ -66815,13 +66833,13 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     for (const slot of slots) {
       if (playerIdx >= players.length) break;
       const teeTime = String(slot.tee_time).slice(0, 5);
-      const startingTee = slot.tee_start_type === "10th Tee" || slot.tee_start_type === "tenth_tee" ? 10 : 1;
+      const startingTee = slot.tee_start_type === "tenth_tee" ? 10 : 1;
       assignGroup(teeTime, startingTee);
     }
     if (playerIdx < players.length) {
       const last = slots[slots.length - 1];
       const teeTime = String(last.tee_time).slice(0, 5);
-      const startingTee = last.tee_start_type === "10th Tee" || last.tee_start_type === "tenth_tee" ? 10 : 1;
+      const startingTee = last.tee_start_type === "tenth_tee" ? 10 : 1;
       while (playerIdx < players.length) assignGroup(teeTime, startingTee);
     }
   } else {
@@ -71431,6 +71449,13 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_options TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
+  await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'two_tee'    WHERE tee_start_type = 'Two-Tee Start'`);
+  await ddl(`ALTER TABLE portal_tee_slots ADD CONSTRAINT portal_tee_slots_tee_start_type_check
+    CHECK (tee_start_type IN ('first_tee','tenth_tee','two_tee'))`);
+  await ddl(`ALTER TABLE portal_tee_slots ALTER COLUMN tee_start_type SET DEFAULT 'first_tee'`);
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

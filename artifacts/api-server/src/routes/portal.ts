@@ -13,15 +13,14 @@ import { logger } from "../lib/logger";
 import { saveUserNotification } from "../lib/userNotifications";
 import { sendPushNotifications } from "../lib/notifications";
 
-// Normalize tee_start_type: the portal sends snake_case, the DB constraint requires display format
-const TEE_START_MAP: Record<string, string> = {
-  first_tee:  "1st Tee",
-  tenth_tee:  "10th Tee",
-  two_tee:    "Two-Tee Start",
-};
+// DB stores snake_case values: 'first_tee' | 'tenth_tee' | 'two_tee'
 function normTeeStart(raw: string | undefined | null): string {
-  if (!raw) return "1st Tee";
-  return TEE_START_MAP[raw] ?? raw; // pass through if already correct format
+  if (!raw) return "first_tee";
+  // Accept both snake_case (canonical) and legacy display strings (safety net)
+  const map: Record<string, string> = {
+    "1st Tee": "first_tee", "10th Tee": "tenth_tee", "Two-Tee Start": "two_tee",
+  };
+  return map[raw] ?? raw;
 }
 
 const upload = multer({
@@ -492,7 +491,7 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
     price: 0,
     price_9: null,
     promotional_price: null,
-    tee_start_type: ({ "1st Tee": "first_tee", "10th Tee": "tenth_tee", "Two-Tee Start": "two_tee" } as Record<string, string>)[r.tee_start_type] ?? r.tee_start_type ?? "first_tee",
+    tee_start_type: r.tee_start_type ?? "first_tee",
     crossover_enabled: false,
     active: !!r.active,
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]"),
@@ -1844,14 +1843,14 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     for (const slot of slots) {
       if (playerIdx >= players.length) break;
       const teeTime     = String(slot.tee_time).slice(0, 5);
-      const startingTee = (slot.tee_start_type === "10th Tee" || slot.tee_start_type === "tenth_tee") ? 10 : 1;
+      const startingTee = slot.tee_start_type === "tenth_tee" ? 10 : 1;
       assignGroup(teeTime, startingTee);
     }
     // Overflow: more players than slots — continue at last slot's time
     if (playerIdx < players.length) {
       const last        = slots[slots.length - 1]!;
       const teeTime     = String(last.tee_time).slice(0, 5);
-      const startingTee = (last.tee_start_type === "10th Tee" || last.tee_start_type === "tenth_tee") ? 10 : 1;
+      const startingTee = last.tee_start_type === "tenth_tee" ? 10 : 1;
       while (playerIdx < players.length) assignGroup(teeTime, startingTee);
     }
   } else {

@@ -124,8 +124,8 @@ function startingHoleFromSlots(slots: TeeSlot[], teeDate: string, teeTime: strin
     String(s.date).slice(0, 10) === dateStr &&
     String(s.time).slice(0, 5) === timeStr
   );
-  const tst = match?.tee_start_type ?? slots[0]?.tee_start_type ?? "1st Tee";
-  if (tst === "10th Tee" || tst === "tenth_tee") return 10;
+  const tst = match?.tee_start_type ?? slots[0]?.tee_start_type ?? "first_tee";
+  if (tst === "tenth_tee") return 10;
   return 1;
 }
 

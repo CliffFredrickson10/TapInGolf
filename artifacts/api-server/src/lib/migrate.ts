@@ -1516,6 +1516,17 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_options TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
+
+  // ── Standardise tee_start_type to snake_case throughout ──────────────────────────────
+  // Must drop the old CHECK constraint BEFORE updating data, then re-add it with the
+  // new snake_case values so the UPDATEs don't violate the old constraint.
+  await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);
+  await exec(`UPDATE portal_tee_slots SET tee_start_type = 'two_tee'    WHERE tee_start_type = 'Two-Tee Start'`);
+  await ddl(`ALTER TABLE portal_tee_slots ADD CONSTRAINT portal_tee_slots_tee_start_type_check
+    CHECK (tee_start_type IN ('first_tee','tenth_tee','two_tee'))`);
+  await ddl(`ALTER TABLE portal_tee_slots ALTER COLUMN tee_start_type SET DEFAULT 'first_tee'`);
 }
 
 async function seedAdOfferings(): Promise<void> {

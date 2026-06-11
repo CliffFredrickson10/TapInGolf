@@ -1,0 +1,35 @@
+**Objective:** Expand the existing tournament creation architecture to support a "Shotgun Start" format. 
+
+**Context:** The app already has a fully functioning tournament creation system (including player registration, course configuration, and standard tee-time scheduling). This feature introduces an alternative scheduling and starting method where all players start simultaneously across different holes, rather than sequentially off the 1st or 10th tees.
+
+**Data Schema Adjustments:**
+1. **Tournament Model:** Add a `start_type` ENUM or string field (`interval_start`, `shotgun_start`).
+2. **Tee Time / Group Model:** 
+   - Ensure the model supports a `starting_hole` integer field (defaulting to 1 for interval starts, but dynamically assigned for shotguns).
+   - Ensure all groups in a shotgun tournament share the exact same `start_time`.
+
+**Core Functional Logic to Implement:**
+
+1. **Capacity Validation & Allocation Rule:**
+   - A standard shotgun start accommodates up to 18 groups (one per hole) or up to 36 groups if utilizing "double teeing" (two groups assigned to the same hole, e.g., Group A and Group B).
+   - **Validation:** If total registered players / 4 exceeds the available holes multiplied by max groups per hole (1 or 2), throw a validation error: "Player count exceeds maximum shotgun capacity for this course configuration."
+
+2. **Automated Hole Assignment Algorithm:**
+   - When a user selects "Shotgun Start," the app must automatically distribute created groups across the available holes of the selected course layout (e.g., holes 1 through 18, or holes 1 through 9).
+   - **Sequence of Assignment:** 
+     - First group goes to Hole 1, second to Hole 2, and so on, until all holes have 1 group.
+     - If there are remaining groups (and "Double Teeing" is enabled), start assigning the second group (Group B) starting from Hole 1 (or Hole 10, depending on club preference) until all groups are placed.
+     - For 9-hole courses, cap the initial distribution at 9 holes before doubling up.
+
+3. **UI/UX Adjustments in Tournament Creation:**
+   - In the scheduling step, if `start_type == 'shotgun_start'`:
+     - Hide the "Tee Time Interval" setting (e.g., 8-minute gaps).
+     - Display a single "Shotgun Start Time" picker instead of a rolling tee sheet.
+     - Provide a toggle for "Allow Double Teeing (Max 2 groups per hole)".
+     - Modify the final tournament preview screen to display "Hole # [Group A/B]" instead of standard chronological tee times (e.g., "08:00 AM - Hole 4" instead of "08:32 AM - Hole 1").
+
+4. **Leaderboard & Scoring Impact:**
+   - The scoring architecture must remain unaffected by the start type. However, ensure that live leaderboard progress tracks completion based on *number of holes played*, not the physical hole number, since a player starting on Hole 5 will finish their round on Hole 4.
+
+**Output Deliverable:** 
+Generate the required database migrations, backend controller logic for group allocation, and front-end component updates to integrate this cleanly into our existing tournament creation wizard.

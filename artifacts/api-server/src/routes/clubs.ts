@@ -1334,10 +1334,10 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
 
   // ── Wallet ────────────────────────────────────────────────────────────────
   if (payment_method === "wallet") {
-    const walletRow = await row<any>("SELECT balance FROM user_wallets WHERE user_id = ?", [user.id]);
+    const walletRow = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
     const balance = parseFloat(walletRow?.balance ?? "0");
     if (balance < fee) { res.status(400).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${fee.toFixed(2)} required)` }); return; }
-    await exec("UPDATE user_wallets SET balance = balance - ? WHERE user_id = ?", [fee, user.id]);
+    await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [fee, user.id]);
     await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'wallet', paid_at = NOW() WHERE id = ?", [reg.id]);
     res.json({ paid: true });
     return;

@@ -418,31 +418,55 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
     const dt = new Date(`${dateStr}T${String(timeStr).slice(0, 5)}:00+02:00`);
     return !isNaN(dt.getTime()) && dt.getTime() < nowMs;
   };
-  const formatted = portalSlots
+  // Normalise DB display strings to the enum values TeeTimeSlot expects
+  const normTeeStartType = (v: string | null | undefined): "first_tee" | "tenth_tee" | "two_tee" | null => {
+    if (!v) return null;
+    const lv = v.toLowerCase();
+    if (lv.includes("1st")  || lv === "first_tee")  return "first_tee";
+    if (lv.includes("10th") || lv === "tenth_tee")  return "tenth_tee";
+    if (lv.includes("two")  || lv === "two_tee")    return "two_tee";
+    return null;
+  };
+
+  const mappedSlots = portalSlots
     .filter((s: any) => {
       const dateStr = (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10);
       return !isPastSlot(dateStr, s.tee_time);
     })
     .map((s: any) => ({
-    id:               s.id,
-    date:             (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10),
-    time:             s.tee_time,
-    total_slots:      s.max_players,
-    available_slots:  parseInt(s.available_slots ?? "0"),
-    price:            tierPrice18 ?? 0,
-    price_9:          tierPrice9 ?? null,
-    promotional_price: null,
-    tee_start_type:   s.tee_start_type,
-    session_type:     s.session_type,
-    active:           s.is_active === 1,
-    slot_source:      "portal" as const,
-    event_id:         s.event_id ?? null,
-    event_name:       s.event_name ?? null,
-    existing_players: (s.existing_players ?? []).map((p: any) => ({
-      name:    fmtName(p.name),
-      players: p.players,
-    })),
-  }));
+      id:               s.id,
+      date:             (s.date instanceof Date ? s.date.toISOString() : String(s.date)).slice(0, 10),
+      time:             s.tee_time,
+      total_slots:      s.max_players,
+      available_slots:  parseInt(s.available_slots ?? "0"),
+      price:            tierPrice18 ?? 0,
+      price_9:          tierPrice9 ?? null,
+      promotional_price: null,
+      tee_start_type:   normTeeStartType(s.tee_start_type),
+      session_type:     s.session_type,
+      active:           s.is_active === 1,
+      slot_source:      "portal" as const,
+      event_id:         s.event_id ?? null,
+      event_name:       s.event_name ?? null,
+      existing_players: (s.existing_players ?? []).map((p: any) => ({
+        name:    fmtName(p.name),
+        players: p.players,
+      })),
+    }));
+
+  // Deduplicate: when multiple slots share the same time + tee_start_type,
+  // keep the event-linked one (if any), otherwise keep the first.
+  const seen = new Map<string, (typeof mappedSlots)[0]>();
+  for (const slot of mappedSlots) {
+    const key = `${slot.time}|${slot.tee_start_type ?? "any"}`;
+    const existing = seen.get(key);
+    if (!existing || (!existing.event_id && slot.event_id)) {
+      seen.set(key, slot);
+    }
+  }
+  const formatted = Array.from(seen.values()).sort((a, b) =>
+    a.time < b.time ? -1 : a.time > b.time ? 1 : 0
+  );
 
   res.json({ tee_times: formatted, is_junior: isJuniorResponse });
 });

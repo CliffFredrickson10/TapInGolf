@@ -202,14 +202,11 @@ export default function HomeScreen() {
           <View style={styles.heroCircle2} />
 
           <View style={styles.heroContent}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.heroSub}>Find and book tee times instantly</Text>
-              <View style={styles.heroBtn}>
-                <Text style={styles.heroBtnText}>Book Now</Text>
-                <Ionicons name="arrow-forward" size={14} color="#1a5c38" />
-              </View>
+            <Text style={styles.heroSub}>Find and book tee times instantly</Text>
+            <View style={styles.heroBtn}>
+              <Text style={styles.heroBtnText}>Book Your Round</Text>
+              <Ionicons name="arrow-forward" size={14} color="#1a5c38" />
             </View>
-            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -302,10 +299,10 @@ const styles = StyleSheet.create({
   heroGradient: { paddingHorizontal: 16, paddingVertical: 14, overflow: "hidden" },
   heroCircle1: { position: "absolute", width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,255,255,0.05)", top: -50, right: -30 },
   heroCircle2: { position: "absolute", width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(200,168,75,0.12)", bottom: -20, right: 80 },
-  heroContent: { flexDirection: "row", alignItems: "center", gap: 14 },
+  heroContent: { alignItems: "center", gap: 6 },
   heroIconWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#c8a84b", alignItems: "center", justifyContent: "center", flexShrink: 0 },
   heroSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginBottom: 6 },
-  heroBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#c8a84b", alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 50 },
+  heroBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#c8a84b", alignSelf: "center", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 50 },
   heroBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#1a5c38" },
   section: { marginBottom: 28 },
   sectionHeader: {

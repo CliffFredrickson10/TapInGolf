@@ -19,17 +19,13 @@ function NativeTabLayout() {
         <Icon sf={{ default: "magnifyingglass", selected: "magnifyingglass" }} />
         <Label>Explore</Label>
       </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="bookings">
-        <Icon sf={{ default: "calendar", selected: "calendar.fill" }} />
-        <Label>Bookings</Label>
+      <NativeTabs.Trigger name="my-golf">
+        <Icon sf={{ default: "figure.golf", selected: "figure.golf" }} />
+        <Label>My Golf</Label>
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="friends">
         <Icon sf={{ default: "person.2", selected: "person.2.fill" }} />
         <Label>Friends</Label>
-      </NativeTabs.Trigger>
-      <NativeTabs.Trigger name="tournaments">
-        <Icon sf={{ default: "trophy", selected: "trophy.fill" }} />
-        <Label>Tournaments</Label>
       </NativeTabs.Trigger>
     </NativeTabs>
   );
@@ -92,14 +88,14 @@ function ClassicTabLayout() {
         }}
       />
       <Tabs.Screen
-        name="bookings"
+        name="my-golf"
         options={{
-          title: "Bookings",
+          title: "My Golf",
           tabBarIcon: ({ color, focused }) =>
             isIOS ? (
-              <SymbolView name={focused ? "calendar.fill" : "calendar"} tintColor={color} size={24} />
+              <SymbolView name="figure.golf" tintColor={color} size={24} />
             ) : (
-              <Ionicons name={focused ? "calendar" : "calendar-outline"} size={22} color={color} />
+              <Ionicons name={focused ? "golf" : "golf-outline"} size={22} color={color} />
             ),
         }}
       />
@@ -115,26 +111,10 @@ function ClassicTabLayout() {
             ),
         }}
       />
-      <Tabs.Screen
-        name="tournaments"
-        options={{
-          title: "Tournaments",
-          tabBarIcon: ({ color, focused }) =>
-            isIOS ? (
-              <SymbolView name={focused ? "trophy.fill" : "trophy"} tintColor={color} size={24} />
-            ) : (
-              <Ionicons name={focused ? "trophy" : "trophy-outline"} size={22} color={color} />
-            ),
-        }}
-      />
-      <Tabs.Screen
-        name="scoring"
-        options={{ href: null }}
-      />
-      <Tabs.Screen
-        name="profile"
-        options={{ href: null }}
-      />
+      <Tabs.Screen name="bookings"     options={{ href: null }} />
+      <Tabs.Screen name="tournaments"  options={{ href: null }} />
+      <Tabs.Screen name="scoring"      options={{ href: null }} />
+      <Tabs.Screen name="profile"      options={{ href: null }} />
     </Tabs>
   );
 }

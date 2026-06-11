@@ -58318,6 +58318,7 @@ router3.get("/clubs", async (req, res) => {
       c.cart_price = c.cart_price ? parseFloat(c.cart_price) : null;
       c.range_balls_enabled = !!c.range_balls_enabled;
       c.range_balls_price = c.range_balls_price ? parseFloat(c.range_balls_price) : null;
+      c.range_balls_options = c.range_balls_options ? typeof c.range_balls_options === "string" ? JSON.parse(c.range_balls_options) : c.range_balls_options : [];
       c.club_hire_enabled = !!c.club_hire_enabled;
       c.club_hire_price = c.club_hire_price ? parseFloat(c.club_hire_price) : null;
       c.pay_at_club_enabled = !!c.pay_at_club_enabled;
@@ -58385,6 +58386,7 @@ router3.get("/clubs/:id", async (req, res) => {
   club.cart_price = club.cart_price ? parseFloat(club.cart_price) : null;
   club.range_balls_enabled = !!club.range_balls_enabled;
   club.range_balls_price = club.range_balls_price ? parseFloat(club.range_balls_price) : null;
+  club.range_balls_options = club.range_balls_options ? typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options : [];
   club.club_hire_enabled = !!club.club_hire_enabled;
   club.club_hire_price = club.club_hire_price ? parseFloat(club.club_hire_price) : null;
   if (club.logo_url) club.logo_url = logoApiUrl(club.id, club.logo_url);
@@ -59765,6 +59767,7 @@ router4.post("/bookings", async (req, res) => {
     voucher_code,
     include_cart = false,
     include_range_balls = false,
+    range_balls_selected_price,
     include_club_hire = false,
     holes = 18,
     // 9 or 18
@@ -59779,7 +59782,7 @@ router4.post("/bookings", async (req, res) => {
   const rawSlot = await row(
     `SELECT pts.*, c.name AS club_name,
        c.cart_available, c.cart_compulsory, c.cart_price,
-       c.range_balls_enabled, c.range_balls_price, c.club_hire_enabled, c.club_hire_price,
+       c.range_balls_enabled, c.range_balls_price, c.range_balls_options, c.club_hire_enabled, c.club_hire_price,
        GREATEST(0, pts.max_players - pts.player_count) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
@@ -60114,7 +60117,18 @@ router4.post("/bookings", async (req, res) => {
   const cartFee = wantCart ? Math.round(numCarts * cartUnitPrice * 100) / 100 : 0;
   const cartShare = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
   const rangeBallsEnabled = !!slot.range_balls_enabled;
-  const rangeBallsPrice = slot.range_balls_price ? parseFloat(slot.range_balls_price) : 0;
+  const rangeBallsClubOptions = slot.range_balls_options ? typeof slot.range_balls_options === "string" ? JSON.parse(slot.range_balls_options) : slot.range_balls_options : [];
+  const rangeBallsDefaultPrice = slot.range_balls_price ? parseFloat(slot.range_balls_price) : 0;
+  const rangeBallsPrice = (() => {
+    if (!include_range_balls || !rangeBallsEnabled) return 0;
+    const sel = parseFloat(range_balls_selected_price);
+    if (!isNaN(sel) && sel > 0) {
+      if (rangeBallsClubOptions.length === 0) return sel;
+      const valid = rangeBallsClubOptions.some((o) => Math.round(o.price * 100) === Math.round(sel * 100));
+      return valid ? sel : rangeBallsDefaultPrice;
+    }
+    return rangeBallsDefaultPrice;
+  })();
   const rangeBallsFee = rangeBallsEnabled && include_range_balls ? Math.round(rangeBallsPrice * 100) / 100 : 0;
   const clubHireAvail = !!slot.club_hire_enabled;
   const clubHireUnitPrice = slot.club_hire_price ? parseFloat(slot.club_hire_price) : 0;
@@ -64823,7 +64837,7 @@ async function requireClubAuth2(req, res, next) {
   const token = header.slice(7);
   const clubId = verifyClubToken2(token);
   if (clubId) {
-    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [clubId]);
     if (!club) {
       res.status(401).json({ message: "Club not found" });
       return;
@@ -64835,7 +64849,7 @@ async function requireClubAuth2(req, res, next) {
   }
   const userPayload = verifyClubUserToken(token);
   if (userPayload) {
-    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    const club = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
     if (!club) {
       res.status(401).json({ message: "Club not found" });
       return;
@@ -65003,6 +65017,7 @@ router14.get("/portal/auth/me", requireClubAuth2, async (req, res) => {
     cart_price: club.cart_price ? Number(club.cart_price) : null,
     range_balls_enabled: !!club.range_balls_enabled,
     range_balls_price: club.range_balls_price ? Number(club.range_balls_price) : null,
+    range_balls_options: club.range_balls_options ? typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options : [],
     club_hire_enabled: !!club.club_hire_enabled,
     club_hire_price: club.club_hire_price ? Number(club.club_hire_price) : null,
     latitude: club.latitude ? Number(club.latitude) : null,
@@ -65036,6 +65051,7 @@ router14.get("/portal/me", requireClubAuth2, async (req, res) => {
     cart_price: club.cart_price ? Number(club.cart_price) : null,
     range_balls_enabled: !!club.range_balls_enabled,
     range_balls_price: club.range_balls_price ? Number(club.range_balls_price) : null,
+    range_balls_options: club.range_balls_options ? typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options : [],
     club_hire_enabled: !!club.club_hire_enabled,
     club_hire_price: club.club_hire_price ? Number(club.club_hire_price) : null,
     latitude: club.latitude ? Number(club.latitude) : null,
@@ -65080,6 +65096,7 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
     fiscal_year_start_month,
     range_balls_enabled,
     range_balls_price,
+    range_balls_options,
     club_hire_enabled,
     club_hire_price
   } = req.body ?? {};
@@ -65099,6 +65116,7 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       fiscal_year_start_month = COALESCE(?, fiscal_year_start_month),
       range_balls_enabled = COALESCE(?, range_balls_enabled),
       range_balls_price   = ?,
+      range_balls_options = COALESCE(?, range_balls_options),
       club_hire_enabled   = COALESCE(?, club_hire_enabled),
       club_hire_price     = ?
     WHERE id = ?`,
@@ -65130,12 +65148,13 @@ router14.put("/portal/me", requireClubAuth2, async (req, res) => {
       fiscalMonth,
       range_balls_enabled != null ? range_balls_enabled ? 1 : 0 : null,
       range_balls_price ?? null,
+      range_balls_options != null ? JSON.stringify(range_balls_options) : null,
       club_hire_enabled != null ? club_hire_enabled ? 1 : 0 : null,
       club_hire_price ?? null,
       club.id
     ]
   );
-  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, fiscal_year_start_month: updated?.fiscal_year_start_month ?? 1, facilities: typeof updated.facilities === "string" ? JSON.parse(updated.facilities || "[]") : updated.facilities });
 });
 router14.get("/portal/cancellation-policy", requireClubAuth2, async (req, res) => {
@@ -71409,6 +71428,7 @@ async function applyLateAlters() {
   `);
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_price DECIMAL(10,2)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_options TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
 }

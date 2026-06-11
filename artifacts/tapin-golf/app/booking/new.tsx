@@ -94,6 +94,7 @@ export default function NewBookingScreen() {
     cart_price?: string;
     range_balls_enabled?: string;
     range_balls_price?: string;
+    range_balls_options?: string;
     club_hire_enabled?: string;
     club_hire_price?: string;
     stitch_enabled?: string;
@@ -171,6 +172,10 @@ export default function NewBookingScreen() {
 
   const rangeBallsAvailable = params.range_balls_enabled === "1";
   const rangeBallsUnitPrice = params.range_balls_price ? parseFloat(params.range_balls_price) : 0;
+  const rangeBallsOptions: Array<{ label: string; price: number }> = React.useMemo(() => {
+    if (!params.range_balls_options) return [];
+    try { return JSON.parse(params.range_balls_options); } catch { return []; }
+  }, [params.range_balls_options]);
   const clubHireAvailable   = params.club_hire_enabled === "1";
   const clubHireUnitPrice   = params.club_hire_price ? parseFloat(params.club_hire_price) : 0;
 
@@ -179,6 +184,7 @@ export default function NewBookingScreen() {
   const [splitBill, setSplitBill]     = useState(false);
   const [includeCart, setIncludeCart]           = useState(cartCompulsory);
   const [includeRangeBalls, setIncludeRangeBalls] = useState(false);
+  const [selectedRangeBallsOption, setSelectedRangeBallsOption] = useState<{ label: string; price: number } | null>(null);
   const [includeClubHire, setIncludeClubHire]     = useState(false);
   // Default to the first enabled payment method for this club
   const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
@@ -332,7 +338,11 @@ export default function NewBookingScreen() {
   const greensTotal = Math.max(0, subtotal - discount);
   const numCarts    = numPlayers <= 2 ? 1 : 2;
   const cartFee       = (cartAvailable && includeCart) ? numCarts * cartUnitPrice : 0;
-  const rangeBallsFee = (rangeBallsAvailable && includeRangeBalls) ? rangeBallsUnitPrice : 0;
+  const activeRangeBallsPrice = rangeBallsOptions.length > 0
+    ? (selectedRangeBallsOption?.price ?? 0)
+    : (includeRangeBalls ? rangeBallsUnitPrice : 0);
+  const rangeBallsFee = rangeBallsAvailable && (rangeBallsOptions.length > 0 ? selectedRangeBallsOption !== null : includeRangeBalls)
+    ? activeRangeBallsPrice : 0;
   const clubHireFee   = (clubHireAvailable && includeClubHire) ? clubHireUnitPrice : 0;
   const totalAmount   = greensTotal + cartFee + rangeBallsFee + clubHireFee;
   const cartShare     = numPlayers > 1 ? Math.round(cartFee / numPlayers * 100) / 100 : cartFee;
@@ -506,7 +516,8 @@ export default function NewBookingScreen() {
           payment_method: paymentMethod,
           voucher_code:   appliedVoucher?.code ?? null,
           include_cart:         cartAvailable && includeCart,
-          include_range_balls:  rangeBallsAvailable && includeRangeBalls,
+          include_range_balls:  rangeBallsAvailable && (rangeBallsOptions.length > 0 ? selectedRangeBallsOption !== null : includeRangeBalls),
+          range_balls_selected_price: rangeBallsOptions.length > 0 ? (selectedRangeBallsOption?.price ?? undefined) : undefined,
           include_club_hire:    clubHireAvailable && includeClubHire,
           holes:                holes,
           hna_number:     hnaNumber.trim() || null,
@@ -756,17 +767,52 @@ export default function NewBookingScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.cartTitle, { color: colors.foreground }]}>Driving Range Balls</Text>
                   <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
-                    Bucket of range balls · R{rangeBallsUnitPrice.toFixed(2)}
-                    {includeRangeBalls ? ` · +R${rangeBallsFee.toFixed(2)}` : ""}
+                    {rangeBallsOptions.length > 0
+                      ? selectedRangeBallsOption
+                        ? `${selectedRangeBallsOption.label} · +R${rangeBallsFee.toFixed(2)}`
+                        : "Choose a package below"
+                      : `Bucket of range balls · R${rangeBallsUnitPrice.toFixed(2)}${includeRangeBalls ? ` · +R${rangeBallsFee.toFixed(2)}` : ""}`}
                   </Text>
                 </View>
-                <Switch
-                  value={includeRangeBalls}
-                  onValueChange={(v) => { Haptics.selectionAsync(); setIncludeRangeBalls(v); }}
-                  trackColor={{ true: colors.primary, false: colors.muted }}
-                  thumbColor="#fff"
-                />
+                {rangeBallsOptions.length === 0 && (
+                  <Switch
+                    value={includeRangeBalls}
+                    onValueChange={(v) => { Haptics.selectionAsync(); setIncludeRangeBalls(v); }}
+                    trackColor={{ true: colors.primary, false: colors.muted }}
+                    thumbColor="#fff"
+                  />
+                )}
               </View>
+              {rangeBallsOptions.length > 0 && (
+                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                  {rangeBallsOptions.map((opt, i) => {
+                    const selected = selectedRangeBallsOption?.price === opt.price && selectedRangeBallsOption?.label === opt.label;
+                    return (
+                      <TouchableOpacity
+                        key={i}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedRangeBallsOption(selected ? null : opt); }}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 20,
+                          borderWidth: 1.5,
+                          borderColor: selected ? colors.primary : colors.border,
+                          backgroundColor: selected ? colors.primary + "18" : colors.background,
+                        }}
+                        activeOpacity={0.75}
+                      >
+                        <Text style={{
+                          fontSize: 13,
+                          color: selected ? colors.primary : colors.foreground,
+                          fontWeight: selected ? "600" : "400",
+                        }}>
+                          {opt.label} · R{opt.price.toFixed(2)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
             </View>
           )}
 

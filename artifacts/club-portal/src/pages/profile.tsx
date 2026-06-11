@@ -21,6 +21,7 @@ interface ClubProfile {
   phone: string | null; email: string | null; address: string | null;
   cart_available: boolean; cart_compulsory: boolean; cart_price: number | null;
   range_balls_enabled: boolean; range_balls_price: number | null;
+  range_balls_options: Array<{ label: string; price: number }>;
   club_hire_enabled: boolean; club_hire_price: number | null;
   latitude: number | null; longitude: number | null;
   geofence_enabled: boolean; geofence_radius_m: number | null;
@@ -674,14 +675,72 @@ export default function Profile() {
             <div className="flex items-center justify-between">
               <div>
                 <Label>Driving Range Balls</Label>
-                <p className="text-xs text-muted-foreground">Bucket of range balls available at checkout</p>
+                <p className="text-xs text-muted-foreground">Range ball packages golfers can add at checkout</p>
               </div>
               <Switch checked={!!profile.range_balls_enabled} onCheckedChange={v => update("range_balls_enabled", v)} />
             </div>
             {profile.range_balls_enabled && (
-              <div className="space-y-2">
-                <Label>Price (ZAR)</Label>
-                <Input type="number" value={profile.range_balls_price ?? ""} onChange={e => update("range_balls_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
+              <div className="space-y-3 pl-1">
+                <div className="flex items-center justify-between">
+                  <Label className="text-sm">Packages</Label>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const opts = [...(profile.range_balls_options ?? []), { label: "", price: 0 }];
+                      update("range_balls_options", opts);
+                    }}
+                  >
+                    <Plus className="h-3 w-3 mr-1" /> Add Package
+                  </Button>
+                </div>
+                {(profile.range_balls_options ?? []).length === 0 && (
+                  <p className="text-xs text-muted-foreground italic">No packages yet — add at least one so golfers can choose.</p>
+                )}
+                {(profile.range_balls_options ?? []).map((opt, i) => (
+                  <div key={i} className="flex gap-2 items-center">
+                    <Input
+                      value={opt.label}
+                      onChange={e => {
+                        const opts = [...(profile.range_balls_options ?? [])];
+                        opts[i] = { ...opts[i], label: e.target.value };
+                        update("range_balls_options", opts);
+                      }}
+                      placeholder="e.g. 30 balls"
+                      className="flex-1"
+                    />
+                    <div className="flex items-center gap-1 shrink-0">
+                      <span className="text-sm text-muted-foreground font-medium">R</span>
+                      <Input
+                        type="number"
+                        value={opt.price || ""}
+                        onChange={e => {
+                          const opts = [...(profile.range_balls_options ?? [])];
+                          opts[i] = { ...opts[i], price: Number(e.target.value) };
+                          update("range_balls_options", opts);
+                          if (i === 0) update("range_balls_price", Number(e.target.value));
+                        }}
+                        placeholder="0"
+                        className="w-24"
+                        min={0}
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="shrink-0 text-destructive hover:text-destructive"
+                      onClick={() => {
+                        const opts = (profile.range_balls_options ?? []).filter((_, idx) => idx !== i);
+                        update("range_balls_options", opts);
+                        if (opts.length > 0) update("range_balls_price", opts[0].price);
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
           </div>

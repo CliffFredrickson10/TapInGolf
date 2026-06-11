@@ -1513,6 +1513,7 @@ async function applyLateAlters() {
   `);
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_price DECIMAL(10,2)");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_options TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
 }

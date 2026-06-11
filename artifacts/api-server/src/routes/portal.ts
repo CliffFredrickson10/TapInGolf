@@ -91,7 +91,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try direct club login token first
   const clubId = verifyClubToken(token);
   if (clubId) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     (req as any).club = club;
     (req as any).clubUser = null; // direct admin login — no portal user record
@@ -102,7 +102,7 @@ async function requireClubAuth(req: Request, res: Response, next: NextFunction):
   // Try club portal user token
   const userPayload = verifyClubUserToken(token);
   if (userPayload) {
-    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
+    const club = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, featured, active, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, username, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ? AND active = 1", [userPayload.clubId]);
     if (!club) { res.status(401).json({ message: "Club not found" }); return; }
     const clubUser = await row<any>("SELECT id, name, email, role, permissions, active FROM club_portal_users WHERE id = ? AND club_id = ? AND active = 1", [userPayload.userId, userPayload.clubId]);
     if (!clubUser) { res.status(401).json({ message: "User not found or inactive" }); return; }
@@ -233,6 +233,7 @@ router.get("/portal/auth/me", requireClubAuth, async (req: Request, res: Respons
     cart_price: club.cart_price ? Number(club.cart_price) : null,
     range_balls_enabled: !!club.range_balls_enabled,
     range_balls_price: club.range_balls_price ? Number(club.range_balls_price) : null,
+    range_balls_options: club.range_balls_options ? (typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options) : [],
     club_hire_enabled: !!club.club_hire_enabled,
     club_hire_price: club.club_hire_price ? Number(club.club_hire_price) : null,
     latitude: club.latitude ? Number(club.latitude) : null,
@@ -258,6 +259,7 @@ router.get("/portal/me", requireClubAuth, async (req: Request, res: Response): P
     cart_price: club.cart_price ? Number(club.cart_price) : null,
     range_balls_enabled: !!club.range_balls_enabled,
     range_balls_price: club.range_balls_price ? Number(club.range_balls_price) : null,
+    range_balls_options: club.range_balls_options ? (typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options) : [],
     club_hire_enabled: !!club.club_hire_enabled,
     club_hire_price: club.club_hire_price ? Number(club.club_hire_price) : null,
     latitude: club.latitude ? Number(club.latitude) : null,
@@ -277,7 +279,7 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
           phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude,
           geofence_enabled, geofence_radius_m, pay_at_club_enabled,
           stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month,
-          range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price } = req.body ?? {};
+          range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price } = req.body ?? {};
 
   const fiscalMonth = fiscal_year_start_month != null
     ? Math.min(12, Math.max(1, Math.round(Number(fiscal_year_start_month))))
@@ -298,6 +300,7 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
       fiscal_year_start_month = COALESCE(?, fiscal_year_start_month),
       range_balls_enabled = COALESCE(?, range_balls_enabled),
       range_balls_price   = ?,
+      range_balls_options = COALESCE(?, range_balls_options),
       club_hire_enabled   = COALESCE(?, club_hire_enabled),
       club_hire_price     = ?
     WHERE id = ?`,
@@ -315,11 +318,12 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
      fiscalMonth,
      range_balls_enabled != null ? (range_balls_enabled ? 1 : 0) : null,
      range_balls_price ?? null,
+     range_balls_options != null ? JSON.stringify(range_balls_options) : null,
      club_hire_enabled != null ? (club_hire_enabled ? 1 : 0) : null,
      club_hire_price ?? null,
      club.id]
   );
-  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, club_hire_enabled, club_hire_price FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, fiscal_year_start_month: updated?.fiscal_year_start_month ?? 1, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 

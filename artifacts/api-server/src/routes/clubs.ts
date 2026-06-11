@@ -173,6 +173,9 @@ router.get("/clubs", async (req, res): Promise<void> => {
       c.cart_price            = c.cart_price ? parseFloat(c.cart_price) : null;
       c.range_balls_enabled   = !!c.range_balls_enabled;
       c.range_balls_price     = c.range_balls_price ? parseFloat(c.range_balls_price) : null;
+      c.range_balls_options   = c.range_balls_options
+        ? (typeof c.range_balls_options === "string" ? JSON.parse(c.range_balls_options) : c.range_balls_options)
+        : [];
       c.club_hire_enabled     = !!c.club_hire_enabled;
       c.club_hire_price       = c.club_hire_price ? parseFloat(c.club_hire_price) : null;
       c.pay_at_club_enabled   = !!c.pay_at_club_enabled;

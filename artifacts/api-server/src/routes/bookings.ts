@@ -377,7 +377,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     friend_ids = [],        // legacy field — kept for backward compat
     players_data,           // preferred: Array<{user_id?:number, guest_name?:string}>
     payment_method = "stitch", voucher_code, include_cart = false,
-    include_range_balls = false, include_club_hire = false,
+    include_range_balls = false, range_balls_selected_price, include_club_hire = false,
     holes = 18,             // 9 or 18
     hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
     event_id: bodyEventId,  // optional: event being booked into (used for pay_at_club rounds calc)
@@ -396,7 +396,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   const rawSlot = await row<any>(
     `SELECT pts.*, c.name AS club_name,
        c.cart_available, c.cart_compulsory, c.cart_price,
-       c.range_balls_enabled, c.range_balls_price, c.club_hire_enabled, c.club_hire_price,
+       c.range_balls_enabled, c.range_balls_price, c.range_balls_options, c.club_hire_enabled, c.club_hire_price,
        GREATEST(0, pts.max_players - pts.player_count) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
@@ -773,8 +773,21 @@ router.post("/bookings", async (req, res): Promise<void> => {
 
   // Add-on fees — personal (not split with other players)
   const rangeBallsEnabled = !!slot.range_balls_enabled;
-  const rangeBallsPrice   = slot.range_balls_price ? parseFloat(slot.range_balls_price) : 0;
-  const rangeBallsFee     = rangeBallsEnabled && include_range_balls ? Math.round(rangeBallsPrice * 100) / 100 : 0;
+  const rangeBallsClubOptions: Array<{label: string; price: number}> = slot.range_balls_options
+    ? (typeof slot.range_balls_options === "string" ? JSON.parse(slot.range_balls_options) : slot.range_balls_options)
+    : [];
+  const rangeBallsDefaultPrice = slot.range_balls_price ? parseFloat(slot.range_balls_price) : 0;
+  const rangeBallsPrice = (() => {
+    if (!include_range_balls || !rangeBallsEnabled) return 0;
+    const sel = parseFloat(range_balls_selected_price);
+    if (!isNaN(sel) && sel > 0) {
+      if (rangeBallsClubOptions.length === 0) return sel;
+      const valid = rangeBallsClubOptions.some(o => Math.round(o.price * 100) === Math.round(sel * 100));
+      return valid ? sel : rangeBallsDefaultPrice;
+    }
+    return rangeBallsDefaultPrice;
+  })();
+  const rangeBallsFee = rangeBallsEnabled && include_range_balls ? Math.round(rangeBallsPrice * 100) / 100 : 0;
 
   const clubHireAvail  = !!slot.club_hire_enabled;
   const clubHireUnitPrice = slot.club_hire_price ? parseFloat(slot.club_hire_price) : 0;

@@ -506,6 +506,7 @@ export default function ClubDetailScreen() {
                   cart_price:          club.cart_price ? String(club.cart_price) : "",
                   range_balls_enabled: (club as any).range_balls_enabled ? "1" : "0",
                   range_balls_price:   (club as any).range_balls_price ? String((club as any).range_balls_price) : "",
+                  range_balls_options: (club as any).range_balls_options?.length ? JSON.stringify((club as any).range_balls_options) : "",
                   club_hire_enabled:   (club as any).club_hire_enabled ? "1" : "0",
                   club_hire_price:     (club as any).club_hire_price ? String((club as any).club_hire_price) : "",
                   stitch_enabled:      (club as any).stitch_enabled  === false ? "0" : "1",

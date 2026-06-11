@@ -190,7 +190,7 @@ export default function HomeScreen() {
       <TouchableOpacity
         style={styles.heroWrap}
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(tabs)/explore"); }}
-        activeOpacity={0.93}
+        activeOpacity={0.88}
       >
         <LinearGradient
           colors={["#0f3d24", "#1a5c38", "#227048"]}
@@ -198,24 +198,21 @@ export default function HomeScreen() {
           end={{ x: 1, y: 1 }}
           style={styles.heroGradient}
         >
-          {/* Decorative circles */}
           <View style={styles.heroCircle1} />
           <View style={styles.heroCircle2} />
-          <View style={styles.heroCircle3} />
 
-          {/* Content */}
           <View style={styles.heroContent}>
             <View style={styles.heroIconWrap}>
-              <Ionicons name="golf" size={28} color="#1a5c38" />
+              <Ionicons name="golf" size={22} color="#1a5c38" />
             </View>
-            <Text style={styles.heroEyebrow}>506 clubs across South Africa</Text>
-            <Text style={styles.heroHeadline}>Ready to{"\n"}Tee Off?</Text>
-            <Text style={styles.heroSub}>Find and book tee times instantly</Text>
-
-            <View style={styles.heroBtn}>
-              <Text style={styles.heroBtnText}>Book Now</Text>
-              <Ionicons name="arrow-forward" size={16} color="#1a5c38" />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.heroSub}>Find and book tee times instantly</Text>
+              <View style={styles.heroBtn}>
+                <Text style={styles.heroBtnText}>Book Now</Text>
+                <Ionicons name="arrow-forward" size={14} color="#1a5c38" />
+              </View>
             </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.5)" />
           </View>
         </LinearGradient>
       </TouchableOpacity>
@@ -304,18 +301,15 @@ const styles = StyleSheet.create({
   upcomingLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "rgba(255,255,255,0.75)", textTransform: "uppercase", letterSpacing: 0.5 },
   upcomingClub: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff", marginVertical: 1 },
   upcomingMeta: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.8)" },
-  heroWrap: { marginHorizontal: 20, marginBottom: 24, borderRadius: 24, overflow: "hidden", elevation: 6, shadowColor: "#0f3d24", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 12 },
-  heroGradient: { borderRadius: 24, padding: 28, minHeight: 200, overflow: "hidden" },
-  heroCircle1: { position: "absolute", width: 220, height: 220, borderRadius: 110, backgroundColor: "rgba(255,255,255,0.05)", top: -60, right: -50 },
-  heroCircle2: { position: "absolute", width: 140, height: 140, borderRadius: 70, backgroundColor: "rgba(255,255,255,0.04)", bottom: -30, right: 60 },
-  heroCircle3: { position: "absolute", width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(200,168,75,0.15)", top: 20, right: 20 },
-  heroContent: { gap: 6 },
-  heroIconWrap: { width: 52, height: 52, borderRadius: 26, backgroundColor: "#c8a84b", alignItems: "center", justifyContent: "center", marginBottom: 4 },
-  heroEyebrow: { fontSize: 12, fontFamily: "Inter_500Medium", color: "rgba(255,255,255,0.6)", letterSpacing: 0.3 },
-  heroHeadline: { fontSize: 38, fontFamily: "Inter_700Bold", color: "#fff", letterSpacing: -1, lineHeight: 42, marginTop: 2 },
-  heroSub: { fontSize: 14, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.7)", marginBottom: 6 },
-  heroBtn: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: "#c8a84b", alignSelf: "flex-start", paddingHorizontal: 20, paddingVertical: 12, borderRadius: 50, marginTop: 8 },
-  heroBtnText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#1a5c38" },
+  heroWrap: { marginHorizontal: 20, marginBottom: 16, borderRadius: 16, overflow: "hidden", elevation: 4, shadowColor: "#0f3d24", shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.3, shadowRadius: 8 },
+  heroGradient: { paddingHorizontal: 16, paddingVertical: 14, overflow: "hidden" },
+  heroCircle1: { position: "absolute", width: 160, height: 160, borderRadius: 80, backgroundColor: "rgba(255,255,255,0.05)", top: -50, right: -30 },
+  heroCircle2: { position: "absolute", width: 80, height: 80, borderRadius: 40, backgroundColor: "rgba(200,168,75,0.12)", bottom: -20, right: 80 },
+  heroContent: { flexDirection: "row", alignItems: "center", gap: 14 },
+  heroIconWrap: { width: 44, height: 44, borderRadius: 22, backgroundColor: "#c8a84b", alignItems: "center", justifyContent: "center", flexShrink: 0 },
+  heroSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginBottom: 6 },
+  heroBtn: { flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#c8a84b", alignSelf: "flex-start", paddingHorizontal: 14, paddingVertical: 7, borderRadius: 50 },
+  heroBtnText: { fontSize: 14, fontFamily: "Inter_700Bold", color: "#1a5c38" },
   section: { marginBottom: 28 },
   sectionHeader: {
     flexDirection: "row",

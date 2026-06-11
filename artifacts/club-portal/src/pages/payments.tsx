@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -96,6 +96,7 @@ const PERIODS: { key: PeriodKey; label: string }[] = [
 ];
 
 const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const MONTH_FULL  = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
 function fmtDate(d: Date): string {
   return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
@@ -153,6 +154,34 @@ function computeDateRange(
     }
     case "custom": return { from: customFrom || today, to: customTo || today };
     default: return { from: today, to: today };
+  }
+}
+
+function periodLabel(
+  period: PeriodKey,
+  selMonth: number, selMonthYear: number,
+  selFQ: number, selFQYear: number,
+  selFYear: number,
+  from: string, to: string,
+  fiscalStartMonth = 1
+): string {
+  switch (period) {
+    case "today":   return "today";
+    case "week":    return `${from} — ${to}`;
+    case "month":   return `${MONTH_FULL[selMonth]} ${selMonthYear} (${from} — ${to})`;
+    case "quarter": {
+      const fsm = fiscalStartMonth - 1;
+      const qSM = (fsm + selFQ * 3) % 12;
+      const qSY = qSM < fsm ? selFQYear + 1 : selFQYear;
+      return `Q${selFQ + 1} ${qSY} (${from} — ${to})`;
+    }
+    case "year": {
+      const fsm = fiscalStartMonth - 1;
+      const label = fsm === 0 ? String(selFYear) : `FY${selFYear}`;
+      return `${label} (${from} — ${to})`;
+    }
+    case "custom":  return `${from} — ${to}`;
+    default:        return "";
   }
 }
 
@@ -436,6 +465,23 @@ export default function Payments() {
   };
   const hasFilters = !!(search || statusFilter !== "all" || methodFilter !== "all");
 
+  // ── Lazy loading ──────────────────────────────────────────────────────────
+  const PAGE = 50;
+  const [visibleCount, setVisibleCount] = useState(PAGE);
+  const sentinelRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setVisibleCount(PAGE); }, [fromDate, toDate, search, statusFilter, methodFilter]);
+
+  useEffect(() => {
+    const el = sentinelRef.current;
+    if (!el) return;
+    const obs = new IntersectionObserver(entries => {
+      if (entries[0].isIntersecting) setVisibleCount(c => c + PAGE);
+    }, { rootMargin: "200px" });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [filtered]);
+
   const resendInvoice = async (p: Payment) => {
     setResending(true);
     try {
@@ -457,7 +503,13 @@ export default function Payments() {
           Payments
         </h1>
         <p className="text-muted-foreground mt-1">
-          All transactions for your club — download or resend invoices directly from here.
+          Showing{" "}
+          <span className="font-medium text-foreground">
+            {periodLabel(period, selectedMonth, selectedMonthYear, selectedFQ, selectedFQYear, selectedFYear, fromDate, toDate, fiscalStartMonth)}
+          </span>
+          {filtered.length > 0 && (
+            <> &mdash; {filtered.length} transaction{filtered.length !== 1 ? "s" : ""}</>
+          )}
         </p>
       </div>
 
@@ -719,7 +771,7 @@ export default function Payments() {
             <div className="px-4 py-3 text-center">Status</div>
           </div>
           {/* Rows */}
-          {filtered.map(p => (
+          {filtered.slice(0, visibleCount).map(p => (
             <div
               key={p.id}
               className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_95px_85px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
@@ -756,6 +808,12 @@ export default function Payments() {
               </div>
             </div>
           ))}
+          {/* Lazy-load sentinel */}
+          {visibleCount < filtered.length && (
+            <div ref={sentinelRef} className="py-4 text-center text-sm text-muted-foreground">
+              Loading more…
+            </div>
+          )}
         </div>
       )}
 

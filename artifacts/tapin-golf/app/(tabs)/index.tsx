@@ -202,9 +202,6 @@ export default function HomeScreen() {
           <View style={styles.heroCircle2} />
 
           <View style={styles.heroContent}>
-            <View style={styles.heroIconWrap}>
-              <Ionicons name="golf" size={22} color="#1a5c38" />
-            </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.heroSub}>Find and book tee times instantly</Text>
               <View style={styles.heroBtn}>

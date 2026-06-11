@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
@@ -80,6 +80,80 @@ function fmtMethod(m: string) {
 
 function fmtTier(t: string | null | undefined) {
   return t ? (TIER_LABELS[t] ?? t) : "Standard";
+}
+
+// ─── Period picker helpers (shared with dashboard) ────────────────────────────
+
+type PeriodKey = "today" | "week" | "month" | "quarter" | "year" | "custom";
+
+const PERIODS: { key: PeriodKey; label: string }[] = [
+  { key: "today",   label: "Today" },
+  { key: "week",    label: "Week" },
+  { key: "month",   label: "Month" },
+  { key: "quarter", label: "Quarter" },
+  { key: "year",    label: "Year" },
+  { key: "custom",  label: "Custom" },
+];
+
+const MONTH_SHORT = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+function fmtDate(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+
+function getFiscalYearStart(now: Date, fiscalStartMonth: number): Date {
+  const fsm = fiscalStartMonth - 1;
+  return new Date(now.getMonth() >= fsm ? now.getFullYear() : now.getFullYear() - 1, fsm, 1);
+}
+
+function currentFiscalQuarter(now: Date, fsm: number) {
+  const fyStart = getFiscalYearStart(now, fsm);
+  return { fq: Math.floor(((now.getMonth() - fyStart.getMonth() + 12) % 12) / 3), fyYear: fyStart.getFullYear() };
+}
+
+function computeDateRange(
+  period: PeriodKey,
+  weekPickDate: string,
+  selMonth: number, selMonthYear: number,
+  selFQ: number, selFQYear: number,
+  selFYear: number,
+  customFrom: string, customTo: string,
+  fiscalStartMonth = 1
+): { from: string; to: string } {
+  const now = new Date();
+  const today = fmtDate(now);
+  switch (period) {
+    case "today": return { from: today, to: today };
+    case "week": {
+      const pick = weekPickDate ? new Date(weekPickDate + "T00:00:00") : now;
+      if (isNaN(pick.getTime())) return { from: today, to: today };
+      const diff = pick.getDay() === 0 ? 6 : pick.getDay() - 1;
+      const mon = new Date(pick); mon.setDate(pick.getDate() - diff);
+      const sun = new Date(mon); sun.setDate(mon.getDate() + 6);
+      return { from: fmtDate(mon), to: fmtDate(sun) };
+    }
+    case "month": {
+      const isCurrent = selMonthYear === now.getFullYear() && selMonth === now.getMonth();
+      return {
+        from: fmtDate(new Date(selMonthYear, selMonth, 1)),
+        to:   isCurrent ? today : fmtDate(new Date(selMonthYear, selMonth + 1, 0)),
+      };
+    }
+    case "quarter": {
+      const fsm = fiscalStartMonth - 1;
+      const qSM = (fsm + selFQ * 3) % 12;
+      const qEM = (fsm + selFQ * 3 + 2) % 12;
+      const qSY = qSM < fsm ? selFQYear + 1 : selFQYear;
+      const qEY = qEM < qSM ? qSY + 1 : qSY;
+      return { from: fmtDate(new Date(qSY, qSM, 1)), to: fmtDate(new Date(qEY, qEM + 1, 0)) };
+    }
+    case "year": {
+      const fsm = fiscalStartMonth - 1;
+      return { from: fmtDate(new Date(selFYear, fsm, 1)), to: fmtDate(new Date(selFYear + 1, fsm, 0)) };
+    }
+    case "custom": return { from: customFrom || today, to: customTo || today };
+    default: return { from: today, to: today };
+  }
 }
 
 function generateInvoiceHTML(b: Payment, clubName: string, vatPct: number): string {
@@ -240,8 +314,29 @@ export default function Payments() {
   const [search, setSearch]         = useState("");
   const [statusFilter, setStatus]   = useState("all");
   const [methodFilter, setMethod]   = useState("all");
-  const [fromDate, setFrom]         = useState("");
-  const [toDate, setTo]             = useState("");
+
+  // ── Period picker state ───────────────────────────────────────────────────
+  const fiscalStartMonth = club?.fiscal_year_start_month ?? 1;
+  const _now = new Date();
+  const _currentYear = _now.getFullYear();
+  const _initFQ = currentFiscalQuarter(_now, fiscalStartMonth);
+  const yearOptions = [_currentYear - 2, _currentYear - 1, _currentYear];
+
+  const [period, setPeriod]                     = useState<PeriodKey>("month");
+  const [weekPickDate, setWeekPickDate]         = useState(() => fmtDate(_now));
+  const [selectedMonth, setSelectedMonth]       = useState(_now.getMonth());
+  const [selectedMonthYear, setSelectedMonthYear] = useState(_currentYear);
+  const [selectedFQ, setSelectedFQ]             = useState(_initFQ.fq);
+  const [selectedFQYear, setSelectedFQYear]     = useState(_initFQ.fyYear);
+  const [selectedFYear, setSelectedFYear]       = useState(_initFQ.fyYear);
+  const [customFrom, setCustomFrom]             = useState("");
+  const [customTo, setCustomTo]                 = useState("");
+
+  const { from: fromDate, to: toDate } = computeDateRange(
+    period, weekPickDate, selectedMonth, selectedMonthYear,
+    selectedFQ, selectedFQYear, selectedFYear,
+    customFrom, customTo, fiscalStartMonth
+  );
 
   const [exportOpen, setExportOpen] = useState(false);
   const ALL_EXPORT_FIELDS = [
@@ -282,9 +377,7 @@ export default function Payments() {
     const ws = XLSX.utils.aoa_to_sheet([header, ...rows]);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Payments");
-    const from = fromDate || "all";
-    const to   = toDate   || "all";
-    XLSX.writeFile(wb, `TapIn_Payments_${from}_to_${to}.xlsx`);
+    XLSX.writeFile(wb, `TapIn_Payments_${fromDate}_to_${toDate}.xlsx`);
     setExportOpen(false);
   };
 
@@ -337,8 +430,11 @@ export default function Payments() {
     };
   }, [payments]);
 
-  const clearFilters = () => { setSearch(""); setStatus("all"); setMethod("all"); setFrom(""); setTo(""); };
-  const hasFilters = search || statusFilter !== "all" || methodFilter !== "all" || fromDate || toDate;
+  const clearFilters = () => {
+    setSearch(""); setStatus("all"); setMethod("all");
+    setPeriod("month"); setSelectedMonth(_now.getMonth()); setSelectedMonthYear(_currentYear);
+  };
+  const hasFilters = !!(search || statusFilter !== "all" || methodFilter !== "all");
 
   const resendInvoice = async (p: Payment) => {
     setResending(true);
@@ -423,7 +519,126 @@ export default function Payments() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Period Picker */}
+      {(() => {
+        const pill = (active: boolean) =>
+          `px-3 py-1 rounded-full text-sm font-medium transition-colors cursor-pointer border ${
+            active
+              ? "bg-[#1a5c38] text-white border-[#1a5c38]"
+              : "bg-background text-foreground border-border hover:bg-muted"
+          }`;
+        return (
+          <div className="space-y-3">
+            {/* Period tabs */}
+            <div className="flex gap-1.5 flex-wrap">
+              {PERIODS.map(p => (
+                <button key={p.key} onClick={() => setPeriod(p.key)} className={pill(period === p.key)}>
+                  {p.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Today — no sub-picker */}
+
+            {/* Week picker */}
+            {period === "week" && (
+              <div className="flex items-center gap-2">
+                <span className="text-sm text-muted-foreground">Week containing</span>
+                <Input
+                  type="date"
+                  value={weekPickDate}
+                  onChange={e => setWeekPickDate(e.target.value)}
+                  className="w-40"
+                />
+              </div>
+            )}
+
+            {/* Month picker */}
+            {period === "month" && (
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Month</p>
+                  <div className="flex gap-1 flex-wrap">
+                    {MONTH_SHORT.map((m, i) => (
+                      <button key={i} onClick={() => setSelectedMonth(i)} className={pill(selectedMonth === i)}>
+                        {m}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="w-px h-10 bg-border self-end" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</p>
+                  <div className="flex gap-1">
+                    {yearOptions.map(y => (
+                      <button key={y} onClick={() => setSelectedMonthYear(y)} className={pill(selectedMonthYear === y)}>
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Quarter picker */}
+            {period === "quarter" && (
+              <div className="flex items-center gap-4 flex-wrap">
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quarter</p>
+                  <div className="flex gap-1">
+                    {["Q1","Q2","Q3","Q4"].map((q, i) => (
+                      <button key={i} onClick={() => setSelectedFQ(i)} className={pill(selectedFQ === i)}>
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="w-px h-10 bg-border self-end" />
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</p>
+                  <div className="flex gap-1">
+                    {yearOptions.map(y => (
+                      <button key={y} onClick={() => setSelectedFQYear(y)} className={pill(selectedFQYear === y)}>
+                        {y}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Year picker */}
+            {period === "year" && (
+              <div className="space-y-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Year</p>
+                <div className="flex gap-1">
+                  {yearOptions.map(y => (
+                    <button key={y} onClick={() => setSelectedFYear(y)} className={pill(selectedFYear === y)}>
+                      {y}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Custom picker */}
+            {period === "custom" && (
+              <div className="flex items-center gap-3 flex-wrap">
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
+                  <Input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} className="w-36" />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
+                  <Input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} className="w-36" />
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
+      {/* Search / Status / Method filters */}
       <div className="flex flex-wrap gap-3 items-center">
         <div className="relative flex-1 min-w-48 max-w-72">
           <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
@@ -458,14 +673,6 @@ export default function Payments() {
             <SelectItem value="card">Card</SelectItem>
           </SelectContent>
         </Select>
-        <div className="flex items-center gap-1.5">
-          <label className="text-sm text-muted-foreground whitespace-nowrap">From</label>
-          <Input type="date" value={fromDate} onChange={e => setFrom(e.target.value)} className="w-36" />
-        </div>
-        <div className="flex items-center gap-1.5">
-          <label className="text-sm text-muted-foreground whitespace-nowrap">To</label>
-          <Input type="date" value={toDate} onChange={e => setTo(e.target.value)} className="w-36" />
-        </div>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-muted-foreground">
             <X className="h-3.5 w-3.5" /> Clear

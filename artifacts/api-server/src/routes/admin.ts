@@ -124,13 +124,13 @@ router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
   const summary = await row<any>(
     `SELECT
        COUNT(b.id) as total_bookings,
-       COALESCE(SUM(b.total_amount), 0) as total_collected,
+       COALESCE(SUM(b.total_amount + b.event_entry_fee + b.event_additional_fees), 0) as total_collected,
        COALESCE(SUM(b.platform_fee), 0) as total_platform_fee,
-       COALESCE(SUM(b.club_amount), 0) as total_club_payouts
+       COALESCE(SUM(b.club_amount  + b.event_entry_fee + b.event_additional_fees), 0) as total_club_payouts
      FROM bookings b
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      JOIN clubs c ON c.id = pts.club_id
-     WHERE b.status IN ('confirmed','completed') ${scope.where}`,
+     WHERE b.status IN ('confirmed','completed') AND b.payment_method != 'prepaid' ${scope.where}`,
     scope.params
   );
 
@@ -207,9 +207,9 @@ router.get("/admin/revenue/clubs", async (req, res): Promise<void> => {
   const clubs = await query<any>(
     `SELECT c.id, c.name, c.location, c.province,
        COUNT(DISTINCT b.id) as total_bookings,
-       COALESCE(SUM(b.total_amount), 0) as gross_revenue,
+       COALESCE(SUM(b.total_amount + b.event_entry_fee + b.event_additional_fees), 0) as gross_revenue,
        COALESCE(SUM(b.platform_fee), 0) as platform_fees,
-       COALESCE(SUM(b.club_amount), 0) as club_earnings,
+       COALESCE(SUM(b.club_amount  + b.event_entry_fee + b.event_additional_fees), 0) as club_earnings,
        (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
         WHERE cpts.club_id = c.id AND cb.booking_source = 'club_counter' AND cb.status != 'cancelled') AS counter_bookings_total,
        (SELECT COALESCE(SUM(cb.players),0) FROM bookings cb JOIN portal_tee_slots cpts ON cb.portal_slot_id = cpts.id
@@ -274,12 +274,13 @@ router.get("/admin/revenue/clubs/:id/bookings", async (req, res): Promise<void> 
 
   const agg = await row<any>(
     `SELECT COUNT(b.id) AS cnt,
-            COALESCE(SUM(b.total_amount), 0) AS gross,
+            COALESCE(SUM(b.total_amount + b.event_entry_fee + b.event_additional_fees), 0) AS gross,
             COALESCE(SUM(b.platform_fee), 0) AS fees,
-            COALESCE(SUM(b.club_amount),  0) AS earnings
+            COALESCE(SUM(b.club_amount  + b.event_entry_fee + b.event_additional_fees), 0) AS earnings
      FROM bookings b
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-     WHERE pts.club_id = ? AND b.status IN ('confirmed','completed') ${dateFilter}`,
+     WHERE pts.club_id = ? AND b.status IN ('confirmed','completed')
+       AND b.payment_method != 'prepaid' ${dateFilter}`,
     [clubId, ...dateParams]
   );
 

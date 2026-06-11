@@ -189,17 +189,29 @@ export default function TeeTimesScreen() {
             </View>
           ) : (
             <>
-              {/* Tee time grid */}
-              <View style={styles.slotsGrid}>
-                {teeTimes.map(slot => (
-                  <TeeTimeSlot
-                    key={slot.id}
-                    slot={slot}
-                    selected={selectedSlot?.id === slot.id}
-                    onPress={() => { Haptics.selectionAsync(); setSelectedSlot(slot === selectedSlot ? null : slot); }}
-                  />
-                ))}
-              </View>
+              {/* Tee time grid — grouped by time, 2 per row, full width */}
+              {(() => {
+                // Group slots by time so paired tees (1st + 10th) share a row
+                const groups = new Map<string, TeeTime[]>();
+                for (const slot of teeTimes) {
+                  const row = groups.get(slot.time) ?? [];
+                  row.push(slot);
+                  groups.set(slot.time, row);
+                }
+                return Array.from(groups.entries()).map(([time, row]) => (
+                  <View key={time} style={styles.slotRow}>
+                    {row.map(slot => (
+                      <TeeTimeSlot
+                        key={slot.id}
+                        slot={slot}
+                        selected={selectedSlot?.id === slot.id}
+                        onPress={() => { Haptics.selectionAsync(); setSelectedSlot(slot === selectedSlot ? null : slot); }}
+                        style={styles.slotCell}
+                      />
+                    ))}
+                  </View>
+                ));
+              })()}
 
               {/* Who's joining panel */}
               {selectedSlot && (selectedSlot.existing_players?.length ?? 0) > 0 && (
@@ -275,7 +287,8 @@ const styles = StyleSheet.create({
   sectionHeader:{ flexDirection: "row", justifyContent: "space-between", alignItems: "baseline", marginBottom: 14 },
   sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
   sectionSub:   { fontSize: 13, fontFamily: "Inter_400Regular" },
-  slotsGrid:    { flexDirection: "row", flexWrap: "wrap", justifyContent: "center", rowGap: 10 },
+  slotRow:      { flexDirection: "row", gap: 8, marginBottom: 8 },
+  slotCell:     { flex: 1, marginRight: 0, minWidth: 0 },
   emptyCard:    { alignItems: "center", gap: 10, borderRadius: 16, borderWidth: 1.5, padding: 32, marginTop: 8 },
   emptyTitle:   { fontSize: 16, fontFamily: "Inter_700Bold" },
   emptySub:     { fontSize: 13, fontFamily: "Inter_400Regular", textAlign: "center", lineHeight: 20 },

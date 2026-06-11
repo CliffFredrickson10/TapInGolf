@@ -25,9 +25,10 @@ interface Props {
   slot: TeeTime;
   selected?: boolean;
   onPress: () => void;
+  style?: import("react-native").StyleProp<import("react-native").ViewStyle>;
 }
 
-export default function TeeTimeSlot({ slot, selected, onPress }: Props) {
+export default function TeeTimeSlot({ slot, selected, onPress, style }: Props) {
   const colors = useColors();
   const isFull = slot.available_slots === 0;
   const hasPlayers = (slot.existing_players?.length ?? 0) > 0;
@@ -52,6 +53,7 @@ export default function TeeTimeSlot({ slot, selected, onPress }: Props) {
       activeOpacity={isFull ? 1 : 0.75}
       style={[
         styles.slot,
+        style,
         {
           backgroundColor: selected
             ? colors.primary

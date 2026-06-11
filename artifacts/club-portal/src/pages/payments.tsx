@@ -492,9 +492,10 @@ export default function Payments() {
       platform_fees:  digital.reduce((s, p) => s + (p.platform_fee ?? 0), 0),
       confirmed:      paid.length,
       pending:        payments.filter(p => p.status === "pending").length,
-      // Earnings breakdowns — all use the same "digital" base as club_earnings for consistency.
-      visitor_earnings: digital.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
-      member_earnings:  digital.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      // Earnings breakdowns — green fees only (add-ons are listed separately below).
+      // club_amount = total_amount − platform_fee, so subtract add-ons to isolate greens.
+      visitor_earnings: digital.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0), 0),
+      member_earnings:  digital.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0), 0),
       range_earnings:   digital.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
       cart_earnings:    digital.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
       hire_earnings:    digital.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),

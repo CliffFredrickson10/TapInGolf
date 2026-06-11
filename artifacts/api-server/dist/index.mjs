@@ -59857,10 +59857,13 @@ router4.post("/bookings", async (req, res) => {
     }
   }
   const slotDate = slot.date instanceof Date ? slot.date.toISOString().split("T")[0] : String(slot.date).split("T")[0];
+  let bookingEventEntryFee = 0;
+  let bookingEventAdditionalFees = 0;
   if (slot.event_id) {
     const ev = await row(
       `SELECT id, name, status, restriction, entries_required,
-              entries_open, entries_close, payment_required
+              entries_open, entries_close, payment_required,
+              entry_fee, additional_fees
        FROM golf_events WHERE id = ?`,
       [slot.event_id]
     );
@@ -59945,6 +59948,11 @@ router4.post("/bookings", async (req, res) => {
         });
         return;
       }
+    }
+    if (ev.payment_required && ev.entry_fee != null) {
+      bookingEventEntryFee = Math.round(parseFloat(ev.entry_fee ?? "0") * 100) / 100;
+      const additionalFees = Array.isArray(ev.additional_fees) ? ev.additional_fees : typeof ev.additional_fees === "string" ? JSON.parse(ev.additional_fees || "[]") : [];
+      bookingEventAdditionalFees = Math.round(additionalFees.reduce((s, f) => s + (Number(f.amount) || 0), 0) * 100) / 100;
     }
   } else {
     const restrictedEvent = await row(
@@ -60152,8 +60160,8 @@ router4.post("/bookings", async (req, res) => {
       client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee, price_tier)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         user.id,
         parseInt(tee_time_id),
@@ -60171,7 +60179,9 @@ router4.post("/bookings", async (req, res) => {
         numHoles,
         rangeBallsFee,
         clubHireFee,
-        bookingTierType
+        bookingTierType,
+        bookingEventEntryFee,
+        bookingEventAdditionalFees
       ]
     );
     bookingId = insertResult.rows[0].id;
@@ -68132,6 +68142,7 @@ router14.get("/portal/payments", requireClubAuth2, async (req, res) => {
            b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
            b.discount_amount, b.voucher_code, b.created_at, b.holes,
            b.price_tier, b.driving_range_fee, b.club_hire_fee,
+           b.event_entry_fee, b.event_additional_fees,
            u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
            pts.date AS tee_date, pts.tee_time AS tee_time,
            COALESCE(
@@ -68183,6 +68194,8 @@ router14.get("/portal/payments", requireClubAuth2, async (req, res) => {
     price_tier: r.price_tier ?? null,
     driving_range_fee: Number(r.driving_range_fee ?? 0),
     club_hire_fee: Number(r.club_hire_fee ?? 0),
+    event_entry_fee: Number(r.event_entry_fee ?? 0),
+    event_additional_fees: Number(r.event_additional_fees ?? 0),
     split_bill: !!r.split_bill,
     players_list: typeof r.players_list === "string" ? JSON.parse(r.players_list) : r.players_list ?? []
   })));
@@ -71377,6 +71390,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ALTER COLUMN price_tier TYPE VARCHAR(40)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_entry_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_additional_fees DECIMAL(10,2) NOT NULL DEFAULT 0");
   await query(`
     UPDATE bookings b
     SET price_tier = COALESCE(

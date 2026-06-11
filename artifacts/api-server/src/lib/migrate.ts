@@ -1493,6 +1493,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ALTER COLUMN price_tier TYPE VARCHAR(40)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_entry_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_additional_fees DECIMAL(10,2) NOT NULL DEFAULT 0");
   // Backfill price_tier for existing bookings that pre-date the column:
   // look up the user's membership_type at the booked club; fall back to non_affiliated_visitor.
   await query(`

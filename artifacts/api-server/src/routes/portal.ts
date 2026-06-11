@@ -3122,6 +3122,7 @@ router.get("/portal/payments", requireClubAuth, async (req: Request, res: Respon
            b.payment_method, b.status, b.split_bill, b.cart_fee, b.platform_fee,
            b.discount_amount, b.voucher_code, b.created_at, b.holes,
            b.price_tier, b.driving_range_fee, b.club_hire_fee,
+           b.event_entry_fee, b.event_additional_fees,
            u.name AS user_name, u.email AS user_email, u.phone AS user_phone,
            pts.date AS tee_date, pts.tee_time AS tee_time,
            COALESCE(
@@ -3164,8 +3165,10 @@ router.get("/portal/payments", requireClubAuth, async (req: Request, res: Respon
     discount_amount:    Number(r.discount_amount ?? 0),
     holes:              r.holes ? Number(r.holes) : 18,
     price_tier:         r.price_tier ?? null,
-    driving_range_fee:  Number(r.driving_range_fee ?? 0),
-    club_hire_fee:      Number(r.club_hire_fee ?? 0),
+    driving_range_fee:      Number(r.driving_range_fee ?? 0),
+    club_hire_fee:          Number(r.club_hire_fee ?? 0),
+    event_entry_fee:        Number(r.event_entry_fee ?? 0),
+    event_additional_fees:  Number(r.event_additional_fees ?? 0),
     split_bill:      !!r.split_bill,
     players_list:    typeof r.players_list === "string" ? JSON.parse(r.players_list) : (r.players_list ?? []),
   })));

@@ -482,10 +482,17 @@ router.post("/bookings", async (req, res): Promise<void> => {
     ? slot.date.toISOString().split("T")[0]
     : String(slot.date).split("T")[0];
 
+  // Track per-booking event entry + competition fees for earnings reporting.
+  // These are stored for accounting purposes and NOT added to the charged amount
+  // (entry fees are a separate payment when the golfer registers for the event).
+  let bookingEventEntryFee       = 0;
+  let bookingEventAdditionalFees = 0;
+
   if (slot.event_id) {
     const ev = await row<any>(
       `SELECT id, name, status, restriction, entries_required,
-              entries_open, entries_close, payment_required
+              entries_open, entries_close, payment_required,
+              entry_fee, additional_fees
        FROM golf_events WHERE id = ?`,
       [slot.event_id]
     );
@@ -553,6 +560,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
           error_code: "event_entry_required", event_id: ev.id, registration_status: reg?.status ?? null,
         }); return;
       }
+    }
+    // Capture the event's entry fee and additional fees (e.g. competition fee) for earnings reporting.
+    if (ev.payment_required && ev.entry_fee != null) {
+      bookingEventEntryFee = Math.round(parseFloat(ev.entry_fee ?? "0") * 100) / 100;
+      const additionalFees: { name: string; amount: number }[] = Array.isArray(ev.additional_fees)
+        ? ev.additional_fees
+        : (typeof ev.additional_fees === "string" ? JSON.parse(ev.additional_fees || "[]") : []);
+      bookingEventAdditionalFees = Math.round(additionalFees.reduce((s, f) => s + (Number(f.amount) || 0), 0) * 100) / 100;
     }
   } else {
     // ── General slot: date-based event restriction check ─────────────
@@ -826,12 +841,12 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const insertResult = await clientQuery(client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee, price_tier)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
        numPlayers, split_bill ? 1 : 0, totalAmount, chargeAmount,
        ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles,
-       rangeBallsFee, clubHireFee, bookingTierType]
+       rangeBallsFee, clubHireFee, bookingTierType, bookingEventEntryFee, bookingEventAdditionalFees]
     );
     bookingId = insertResult.rows[0].id;
 

@@ -50,6 +50,8 @@ interface Payment {
   players_list: Player[];
   driving_range_fee: number;
   club_hire_fee: number;
+  event_entry_fee: number;
+  event_additional_fees: number;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -486,16 +488,17 @@ export default function Payments() {
     const digital = paid.filter(p => p.payment_method !== "prepaid");
     return {
       total:          payments.length,
-      // Total Revenue = gross booking value (all players, full amount); Club Earnings = club's net after TapIn fee.
-      revenue:        digital.reduce((s, p) => s + (p.total_amount ?? 0), 0),
-      club_earnings:  digital.reduce((s, p) => s + (p.club_amount ?? 0), 0),
+      // Total Revenue = gross booking value + event entry/competition fees.
+      // Club Earnings = club's net after TapIn fee + event fees (no platform fee on event fees).
+      revenue:        digital.reduce((s, p) => s + (p.total_amount ?? 0) + (p.event_entry_fee ?? 0) + (p.event_additional_fees ?? 0), 0),
+      club_earnings:  digital.reduce((s, p) => s + (p.club_amount ?? 0) + (p.event_entry_fee ?? 0) + (p.event_additional_fees ?? 0), 0),
       platform_fees:  digital.reduce((s, p) => s + (p.platform_fee ?? 0), 0),
       confirmed:      paid.length,
       pending:        payments.filter(p => p.status === "pending").length,
-      // Earnings breakdowns — green fees only (add-ons are listed separately below).
-      // club_amount = total_amount − platform_fee, so subtract add-ons to isolate greens.
-      visitor_earnings: digital.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0), 0),
-      member_earnings:  digital.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0), 0),
+      // Earnings breakdowns — green fees + event entry/competition fees; add-ons listed separately.
+      // club_amount = total_amount − platform_fee, so subtract add-ons but include event fees.
+      visitor_earnings: digital.filter(p => p.price_tier != null && VISITOR_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0) + (p.event_entry_fee ?? 0) + (p.event_additional_fees ?? 0), 0),
+      member_earnings:  digital.filter(p => p.price_tier != null && MEMBER_TIERS.has(p.price_tier)).reduce((s, p) => s + (p.club_amount ?? 0) - (p.cart_fee ?? 0) - (p.driving_range_fee ?? 0) - (p.club_hire_fee ?? 0) + (p.event_entry_fee ?? 0) + (p.event_additional_fees ?? 0), 0),
       range_earnings:   digital.reduce((s, p) => s + (p.driving_range_fee ?? 0), 0),
       cart_earnings:    digital.reduce((s, p) => s + (p.cart_fee ?? 0), 0),
       hire_earnings:    digital.reduce((s, p) => s + (p.club_hire_fee ?? 0), 0),

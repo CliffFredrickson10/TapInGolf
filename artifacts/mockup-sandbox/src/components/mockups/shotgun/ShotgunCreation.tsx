@@ -178,6 +178,208 @@ export function ShotgunCreation() {
           ))}
         </div>
 
+        {/* Details — step 0 */}
+        {step === 0 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-gray-100" style={{ background: "#f8fdf9" }}>
+                <h3 className="text-sm font-semibold text-gray-800">Event Details</h3>
+              </div>
+              <div className="p-5 space-y-4">
+                <div>
+                  <Label>Event Name</Label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 focus:outline-none focus:ring-1" defaultValue="Club Championship 2025" style={{ focusRingColor: GREEN }} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Start Date</Label>
+                    <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800" defaultValue="2025-06-14" />
+                  </div>
+                  <div>
+                    <Label note="optional">End Date</Label>
+                    <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600" />
+                  </div>
+                </div>
+                <div>
+                  <Label>Event Type</Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {["Competition", "Social", "Club Trial", "League", "Charity", "Corporate"].map(t => (
+                      <button key={t}
+                        className={`py-1.5 rounded-lg border text-xs font-medium transition-colors ${t === "Competition" ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                        style={t === "Competition" ? { background: GREEN, borderColor: GREEN } : {}}>
+                        {t}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label>Restriction</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["Open", "Members Only", "Invite Only", "WHS Index Players Only"].map(r => (
+                      <button key={r}
+                        className={`py-1.5 rounded-lg border text-xs font-medium transition-colors ${r === "Members Only" ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                        style={r === "Members Only" ? { background: GREEN, borderColor: GREEN } : {}}>
+                        {r}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label note="optional">Max Participants</Label>
+                    <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800" defaultValue="120" />
+                  </div>
+                  <div>
+                    <Label note="optional">Cover Image URL</Label>
+                    <input type="url" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600" placeholder="https://…" />
+                  </div>
+                </div>
+                <div>
+                  <Label note="optional">Description</Label>
+                  <textarea rows={3} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 resize-none" defaultValue="Annual club championship open to all members with a valid WHS handicap index." />
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Format — step 1 */}
+        {step === 1 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-gray-100" style={{ background: "#f8fdf9" }}>
+                <h3 className="text-sm font-semibold text-gray-800">Game Format</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Set Format 1 and optionally a secondary format. Team formats automatically require player pairings.</p>
+              </div>
+              <div className="p-5 space-y-5">
+                <div>
+                  <Label>Format 1 <span className="text-xs font-normal text-gray-400">(primary)</span></Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[
+                      ["stroke_play","Stroke Play"],["stableford","Stableford"],["betterball","Betterball"],
+                      ["fourball","Fourball"],["scramble","Scramble"],["alliance","Alliance"],
+                      ["match_play","Match Play"],["bogey","Bogey"],["other","Other"],
+                    ].map(([k, v]) => {
+                      const isTeam = ["betterball","fourball","scramble","alliance"].includes(k);
+                      return (
+                        <button key={k}
+                          className={`py-1.5 rounded-lg border text-xs font-medium transition-colors relative ${k === "stroke_play" ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                          style={k === "stroke_play" ? { background: GREEN, borderColor: GREEN } : {}}>
+                          {v}
+                          {isTeam && <span className="absolute -top-1 -right-1 w-2 h-2 rounded-full bg-amber-400" title="Team format" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">🟡 Dot = team format — requires player pairings</p>
+                </div>
+                <div>
+                  <Label>Format 2 <span className="text-xs font-normal text-gray-400">(optional secondary)</span></Label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {[["none","None"],["stableford","Stableford"],["betterball","Betterball"],["bogey","Bogey"],["other","Other"]].map(([k, v]) => (
+                      <button key={k}
+                        className={`py-1.5 rounded-lg border text-xs font-medium transition-colors ${k === "none" ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                        style={k === "none" ? { background: "#9ca3af", borderColor: "#9ca3af" } : {}}>
+                        {v}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-3">
+                  <div>
+                    <Label>Holes</Label>
+                    <div className="flex gap-2">
+                      {[9, 18].map(h => (
+                        <button key={h} className={`flex-1 py-2 rounded-lg border text-sm font-medium ${h === 18 ? "text-white" : "border-gray-200 text-gray-600"}`}
+                          style={h === 18 ? { background: GREEN, borderColor: GREEN } : {}}>{h}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Rounds</Label>
+                    <div className="flex gap-2">
+                      {[1, 2].map(r => (
+                        <button key={r} className={`flex-1 py-2 rounded-lg border text-sm font-medium ${r === 1 ? "text-white" : "border-gray-200 text-gray-600"}`}
+                          style={r === 1 ? { background: GREEN, borderColor: GREEN } : {}}>{r}</button>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Scoring</Label>
+                    <div className="space-y-1.5">
+                      {[["Gross","Gross"],["Net","Net (handicap)"],["Both","Gross + Net"]].map(([k,v]) => (
+                        <button key={k} className={`w-full py-1.5 rounded-lg border text-xs font-medium text-left px-3 ${k === "Net" ? "text-white" : "border-gray-200 text-gray-600"}`}
+                          style={k === "Net" ? { background: GREEN, borderColor: GREEN } : {}}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Pricing — step 2 */}
+        {step === 2 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-gray-100" style={{ background: "#f8fdf9" }}>
+                <h3 className="text-sm font-semibold text-gray-800">Entry Fees &amp; Payment</h3>
+              </div>
+              <div className="p-5 space-y-4">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Entry Fee (R)</Label>
+                    <input type="number" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800" defaultValue="450" />
+                  </div>
+                  <div>
+                    <Label>Payment Required</Label>
+                    <div className="flex gap-2 mt-0.5">
+                      {["Yes","No"].map(v => (
+                        <button key={v} className={`flex-1 py-2 rounded-lg border text-sm font-medium ${v === "Yes" ? "text-white" : "border-gray-200 text-gray-600"}`}
+                          style={v === "Yes" ? { background: GREEN, borderColor: GREEN } : {}}>{v}</button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+                <Toggle checked label="Use club member tiered pricing" sublabel="Members get their club rate; guests pay the guest rate" onChange={() => {}} />
+                <div>
+                  <Label>Additional Fees <span className="text-xs font-normal text-gray-400">(optional)</span></Label>
+                  <div className="space-y-2">
+                    {[{ name: "Cart hire", amount: "150" }, { name: "Caddie", amount: "200" }].map(f => (
+                      <div key={f.name} className="flex gap-2 items-center">
+                        <input className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700" defaultValue={f.name} placeholder="Fee name" />
+                        <input className="w-24 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700" defaultValue={f.amount} placeholder="R" />
+                        <button className="text-gray-300 hover:text-red-400"><svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" /></svg></button>
+                      </div>
+                    ))}
+                    <button className="text-xs text-gray-400 hover:text-green-700 border border-dashed border-gray-200 rounded-lg w-full py-2 hover:border-green-300 transition-colors">+ Add fee</button>
+                  </div>
+                </div>
+                <div>
+                  <Label>Accepted Payment Methods</Label>
+                  <div className="space-y-1.5">
+                    {[["Stitch (Instant EFT + card)","stitch",true],["Club wallet","wallet",true],["Voucher / prepaid round","voucher",false]].map(([label, k, on]) => (
+                      <Toggle key={k as string} checked={on as boolean} label={label as string} onChange={() => {}} />
+                    ))}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label>Entries Open</Label>
+                    <input type="datetime-local" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700" defaultValue="2025-05-01T08:00" />
+                  </div>
+                  <div>
+                    <Label>Entries Close</Label>
+                    <input type="datetime-local" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-700" defaultValue="2025-06-10T17:00" />
+                  </div>
+                </div>
+                <Toggle checked={false} label="Enable ballot (cap entries, confirm by ballot)" sublabel="Useful when demand exceeds max participants" onChange={() => {}} />
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Review screen — step 5 */}
         {step === 5 && (
           <div className="space-y-4">
@@ -268,7 +470,7 @@ export function ShotgunCreation() {
                     <span className="text-xs text-gray-400">players per team</span>
                   </div>
                   <div className="flex gap-2">
-                    {[2, 3, 4].map(n => (
+                    {[2, 4].map(n => (
                       <button key={n} onClick={() => setTeamSize(n)}
                         className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${teamSize === n ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
                         style={teamSize === n ? { background: GREEN, borderColor: GREEN } : {}}>

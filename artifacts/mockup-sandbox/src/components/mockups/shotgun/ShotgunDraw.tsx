@@ -292,7 +292,7 @@ export function ShotgunDraw() {
                   <p className="text-sm font-semibold text-gray-800">New Team Pairing</p>
                   <div className="flex items-center gap-1">
                     <span className="text-xs text-gray-500 mr-1">Size:</span>
-                    {[2, 3, 4].map(n => (
+                    {[2, 4].map(n => (
                       <button key={n} onClick={() => { setDraftSize(n); setDraftPlayers(p => p.slice(0, n)); }}
                         className={`w-7 h-7 rounded text-xs font-bold transition-colors ${draftSize === n ? "text-white" : "border border-gray-200 text-gray-600"}`}
                         style={draftSize === n ? { background: GREEN } : {}}>

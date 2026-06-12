@@ -1,0 +1,25 @@
+uploads = []
+
+[[generated]]
+id = "cvhlgE8dQTrlv5wFnI35w"
+uri = "file://attached_assets/tapin-golf-logo.png"
+type = "image"
+title = "tapin golf letterhead logo"
+
+[[generated]]
+id = "iDToz0qVtZm4KF85Oj4mp"
+uri = "file://attached_assets/tapin-golf-logo-alt.png"
+type = "image"
+title = "tapin golf logo alt"
+
+[[outputs]]
+id = "EIdvwQwGd8TL3lpZ-UEr8"
+uri = "file://attached_assets/tapin-golf-logo.png"
+type = "image"
+title = "TapIn Golf Logo — Option A (Flag Pin)"
+
+[[outputs]]
+id = "668Uxw6zQ9z8so_gJhOrS"
+uri = "file://attached_assets/tapin-golf-logo-alt.png"
+type = "image"
+title = "TapIn Golf Logo — Option B (Top-down Hole)"

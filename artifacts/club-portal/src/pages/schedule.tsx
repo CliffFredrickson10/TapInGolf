@@ -78,6 +78,7 @@ interface TeeTime {
   blocked_slots: number[];
   event_id?: number | null;
   event_name?: string | null;
+  shotgun_start?: boolean | number | null;
 }
 
 interface Booking {
@@ -2024,7 +2025,24 @@ export default function Schedule() {
                   </div>
 
                   {/* Player cells — draw players for tournament slots, bookings for regular slots */}
-                  {isTournament && hasDrawPlayers
+                  {isTournament && !!tt.shotgun_start
+                    ? (
+                      <div className="col-span-4 border-l border-amber-100 px-4 py-2.5 flex items-center gap-3 bg-amber-50/60">
+                        <span className="text-xl flex-shrink-0">🔫</span>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold text-amber-800 leading-tight">Shotgun Start — all groups start simultaneously</p>
+                          <p className="text-[11px] text-amber-600 mt-0.5">
+                            {Math.ceil(tt.total_slots / 4)} groups &middot; {tt.total_slots} spots &middot; Hole assignments are managed in the Draw
+                          </p>
+                        </div>
+                        <button
+                          onClick={() => navigate("/events")}
+                          className="flex-shrink-0 text-[11px] font-semibold text-[#1a5c38] border border-[#1a5c38]/40 rounded-lg px-3 py-1.5 hover:bg-[#1a5c38]/8 transition-colors whitespace-nowrap">
+                          View Draw &rarr;
+                        </button>
+                      </div>
+                    )
+                    : isTournament && hasDrawPlayers
                     ? Array.from({ length: 4 }, (_, i) => {
                         const p = drawPlayers[i];
                         return (

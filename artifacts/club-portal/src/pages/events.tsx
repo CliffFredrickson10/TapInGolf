@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
@@ -426,6 +426,11 @@ export default function Events() {
   const [slotsLoading, setSlotsLoading]       = useState(false);
   const [genDialogOpen, setGenDialogOpen]     = useState(false);
   const [genDialogDate, setGenDialogDate]     = useState("");
+  const [shotgunDlgOpen, setShotgunDlgOpen]   = useState(false);
+  const [shotgunDlgDate, setShotgunDlgDate]   = useState("");
+  const [shotgunTime, setShotgunTime]         = useState("07:30");
+  const [shotgunHoles, setShotgunHoles]       = useState(18);
+  const [shotgunPPG, setShotgunPPG]           = useState(4);
   const tempSlotCounter                       = useRef(-1);
   const [newSlotDate, setNewSlotDate]         = useState("");
   const [newSlotTime, setNewSlotTime]         = useState("");
@@ -2953,7 +2958,13 @@ export default function Events() {
                                         </div>
                                         <button type="button"
                                           className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                          onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}>
+                                          onClick={() => {
+                                            if (form.shotgun_start) {
+                                              setShotgunDlgDate(date); setShotgunDlgOpen(true);
+                                            } else {
+                                              setGenDialogDate(date); setGenDialogOpen(true);
+                                            }
+                                          }}>
                                           <Plus className="h-3 w-3" />Generate
                                         </button>
                                       </div>
@@ -3153,6 +3164,107 @@ export default function Events() {
           ]);
         } : undefined}
       />
+
+      {/* ── Shotgun Start Generator ─────────────────────────────────────── */}
+      <Dialog open={shotgunDlgOpen} onOpenChange={setShotgunDlgOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>🔫</span> Generate Shotgun Schedule
+            </DialogTitle>
+            <DialogDescription>
+              All groups start simultaneously from different holes at a single start time.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            {shotgunDlgDate && (
+              <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                Date: <span className="font-medium text-foreground">{fmtDate(shotgunDlgDate)}</span>
+              </div>
+            )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs font-medium">Start Time</Label>
+              <input
+                type="time"
+                value={shotgunTime}
+                onChange={e => setShotgunTime(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Number of Holes</Label>
+                <select
+                  value={shotgunHoles}
+                  onChange={e => setShotgunHoles(Number(e.target.value))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]">
+                  {[9, 18].map(n => <option key={n} value={n}>{n} holes</option>)}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Players per Group</Label>
+                <select
+                  value={shotgunPPG}
+                  onChange={e => setShotgunPPG(Number(e.target.value))}
+                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]">
+                  {[2, 3, 4].map(n => <option key={n} value={n}>{n} players</option>)}
+                </select>
+              </div>
+            </div>
+
+            <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-3 py-2 space-y-1 text-xs">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Groups</span>
+                <span className="font-semibold">{shotgunHoles}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Total capacity</span>
+                <span className="font-semibold">{shotgunHoles * shotgunPPG} players</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Start time</span>
+                <span className="font-semibold">{shotgunTime}</span>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShotgunDlgOpen(false)}>Cancel</Button>
+            <Button
+              className="bg-[#1a5c38] hover:bg-[#1a5c38]/90"
+              onClick={() => {
+                if (!shotgunDlgDate || !shotgunTime) return;
+                const totalSlots = shotgunHoles * shotgunPPG;
+                if (editId) {
+                  // Persist directly for existing events
+                  api("/api/portal/tee-times", {
+                    method: "POST",
+                    body: JSON.stringify({
+                      date: shotgunDlgDate,
+                      time: shotgunTime,
+                      total_slots: totalSlots,
+                      active: true,
+                      event_id: editId,
+                    }),
+                  }).then(() => loadEventSlots(editId)).catch(() => {});
+                } else {
+                  // Stage for new events
+                  const id = tempSlotCounter.current--;
+                  setEventSlots(prev => [
+                    ...prev.filter(s => String(s.date).slice(0, 10) !== shotgunDlgDate),
+                    { id, date: shotgunDlgDate, time: shotgunTime, total_slots: totalSlots, active: true },
+                  ]);
+                }
+                setShotgunDlgOpen(false);
+              }}>
+              Generate
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Cancel Tournament Dialog ──────────────────────────────────────────── */}
       <Dialog open={cancelDlg.open} onOpenChange={o => { if (!o && !cancelDlg.cancelling) setCancelDlg(prev => ({ ...prev, open: false })); }}>

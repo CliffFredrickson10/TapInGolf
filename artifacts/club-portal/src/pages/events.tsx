@@ -3057,7 +3057,7 @@ export default function Events() {
                   {wizardStep < 5 ? (
                     <Button type="button" onClick={() => setWizardStep(w => w + 1)}
                       className="bg-[#1a5c38] hover:bg-[#164d30]">
-                      Next \u2192
+                      Next →
                     </Button>
                   ) : (
                     <Button type="button" onClick={handleSave}

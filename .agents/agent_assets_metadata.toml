@@ -12,6 +12,12 @@ uri = "file://attached_assets/tapin-golf-logo-alt.png"
 type = "image"
 title = "tapin golf logo alt"
 
+[[generated]]
+id = "37Lm9z2UbeiFqsfRwd0cJ"
+uri = "file://attached_assets/tapin-golf-letterhead.png"
+type = "image"
+title = "tapin golf letterhead exact"
+
 [[outputs]]
 id = "EIdvwQwGd8TL3lpZ-UEr8"
 uri = "file://attached_assets/tapin-golf-logo.png"
@@ -23,3 +29,9 @@ id = "668Uxw6zQ9z8so_gJhOrS"
 uri = "file://attached_assets/tapin-golf-logo-alt.png"
 type = "image"
 title = "TapIn Golf Logo — Option B (Top-down Hole)"
+
+[[outputs]]
+id = "Xz5mKtViyH9Vwg6Rp7TB0"
+uri = "file://attached_assets/tapin-golf-letterhead.png"
+type = "image"
+title = "TapIn Golf — Letterhead Logo"

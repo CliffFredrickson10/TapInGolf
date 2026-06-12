@@ -2,45 +2,15 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import {
-  LayoutDashboard,
-  Building2,
-  CalendarDays,
-  Star,
-  Megaphone,
-  Calendar,
-  Users,
-  Ticket,
-  Bell,
-  LogOut,
-  CircleDollarSign,
-  CreditCard,
-  FileX2,
-  Receipt,
-  ShieldCheck,
-  UserCircle2,
-  ShieldOff,
-  BookOpen,
-} from "lucide-react";
+import { LogOut, ShieldCheck, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ALL_NAV_ITEMS } from "@/lib/nav-items";
 
-const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard, section: "dashboard" },
-  { href: "/profile", label: "Club Profile", icon: Building2, section: "profile" },
-  { href: "/tee-times", label: "Tee Schedule", icon: CalendarDays, section: "schedule" },
-  { href: "/payments", label: "Payments", icon: CreditCard, section: "payments" },
-  { href: "/reviews", label: "Reviews", icon: Star, section: "reviews" },
-  { href: "/ads", label: "Advertisements", icon: Megaphone, section: "ads" },
-  { href: "/events", label: "Tournaments", icon: Calendar, section: "events" },
-  { href: "/members", label: "Members", icon: Users, section: "members" },
-  { href: "/invoices", label: "Invoices", icon: Receipt, section: "members", invoices: true },
-  { href: "/bans", label: "Banned Golfers", icon: ShieldOff, section: "bans" },
-  { href: "/bookings", label: "Bookings", icon: BookOpen, section: "schedule" },
-  { href: "/pricing", label: "Pricing Tiers", icon: CircleDollarSign, section: "pricing" },
-  { href: "/vouchers", label: "Vouchers", icon: Ticket, section: "vouchers" },
-  { href: "/cancellation-policy", label: "Cancellation Policy", icon: FileX2, section: "cancellation_policy" },
-  { href: "/notifications", label: "Notifications", icon: Bell, section: "notifications", inbox: true },
-];
+const navItems = ALL_NAV_ITEMS.filter(i => !i.adminOnly).map(i => ({
+  ...i,
+  inbox:    i.href === "/notifications",
+  invoices: i.href === "/invoices",
+}));
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();

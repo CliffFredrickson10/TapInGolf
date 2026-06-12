@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Clock, CalendarCheck, Users, Calendar, TrendingUp, Banknote, Building2, PersonStanding, Smartphone } from "lucide-react";
 import { format } from "date-fns";
+import { ShortcutsBar } from "@/components/shortcuts-bar";
 
 interface DashboardData {
   tee_times_today: number;
@@ -235,6 +236,9 @@ export default function Dashboard() {
           {periodLabel(period, selectedMonth, selectedMonthYear, selectedFQ, selectedFQYear, selectedFYear, from, to, fiscalStartMonth)}.
         </p>
       </div>
+
+      {/* Shortcuts */}
+      <ShortcutsBar />
 
       {/* Period selector */}
       <div className="space-y-3">

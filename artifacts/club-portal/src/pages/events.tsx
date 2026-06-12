@@ -2741,17 +2741,22 @@ export default function Events() {
                             + Add Fee
                           </Button>
                         </div>
-                        {(form.additional_fees ?? []).length === 0 && (
-                          <div className="flex flex-wrap gap-2">
-                            {["Competition Fee", "Two-Club Fee", "Longest Drive Fee", "Nearest the Pin Fee", "Hole-in-One Pool"].map(preset => (
-                              <button key={preset} type="button"
+                        <div className="flex flex-wrap gap-2">
+                          {["Competition Fee", "Two-Club Fee", "Longest Drive Fee", "Nearest the Pin Fee", "Hole-in-One Pool"].map(preset => {
+                            const already = (form.additional_fees ?? []).some(f => f.name === preset);
+                            return (
+                              <button key={preset} type="button" disabled={already}
                                 onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: preset, amount: 0 }] }))}
-                                className="px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors">
-                                + {preset}
+                                className={`px-3 py-1.5 rounded-full border text-xs font-medium transition-colors ${
+                                  already
+                                    ? "border-[#1a5c38]/40 text-[#1a5c38] bg-[#1a5c38]/8 cursor-default opacity-50"
+                                    : "text-muted-foreground hover:border-primary hover:text-primary"
+                                }`}>
+                                {already ? "✓" : "+"} {preset}
                               </button>
-                            ))}
-                          </div>
-                        )}
+                            );
+                          })}
+                        </div>
                         {(form.additional_fees ?? []).map((fee, idx) => (
                           <div key={idx} className="flex items-center gap-2">
                             <Input className="flex-1" placeholder="Fee name (e.g. Competition Fee)" value={fee.name}
@@ -2763,7 +2768,7 @@ export default function Events() {
                             </div>
                             <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive"
                               onClick={() => setForm(f => ({ ...f, additional_fees: (f.additional_fees ?? []).filter((_, i) => i !== idx) }))}>
-                              \u00d7
+                              ×
                             </Button>
                           </div>
                         ))}
@@ -3023,7 +3028,7 @@ export default function Events() {
                               <div className="flex justify-between"><span className="text-muted-foreground">Pricing</span><span>Tiered (by golfer type)</span></div>
                             )}
                             {(form.additional_fees ?? []).length > 0 && (
-                              <div className="flex justify-between"><span className="text-muted-foreground">Add. fees</span><span>{(form.additional_fees ?? []).length} \u00d7 (R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(0)} total)</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Add. fees</span><span>{(form.additional_fees ?? []).length} × (R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(0)} total)</span></div>
                             )}
                           </div>
                         </CardContent>

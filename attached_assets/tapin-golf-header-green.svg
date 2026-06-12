@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="160" viewBox="0 0 640 160">
+    <defs>
+      <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@600;700&amp;display=swap');
+        .tapin  { font-family: 'Inter', sans-serif; font-weight: 700; font-size: 52px; fill: #ffffff; letter-spacing: -0.5px; }
+        .golf   { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 52px; fill: rgba(255,255,255,0.85); letter-spacing: -0.5px; }
+      </style>
+    </defs>
+    <!-- Green background -->
+    <rect width="640" height="160" fill="#1a5c38" rx="0"/>
+    <!-- Ionicons golf icon, scaled to ~56px, white fill -->
+    <g transform="translate(32, 52) scale(0.109375)">
+      <path d="M272 320.46V202.3l166.62-75.73a16 16 0 000-29.14l-176-80A16 16 0 00240 32v288.46q8-.45 16-.46t16 .46z" fill="#ffffff"/>
+      <path d="M463.33 457.5c-8.56-42.85-35.11-78.74-76.78-103.8-32.5-19.55-72.67-31.3-114.55-33.7v79.75a16 16 0 11-32 0V320c-41.88 2.4-82.05 14.15-114.55 33.7-41.67 25.06-68.22 60.95-76.78 103.8a32.49 32.49 0 006.44 27.08C61.13 492 70 496 80 496h352c10 0 18.88-4.05 24.9-11.42a32.49 32.49 0 006.43-27.08z" fill="#ffffff"/>
+    </g>
+    <!-- TapIn Golf text -->
+    <text x="104" y="107">
+      <tspan class="tapin">TapIn</tspan><tspan class="golf"> Golf</tspan>
+    </text>
+  </svg>

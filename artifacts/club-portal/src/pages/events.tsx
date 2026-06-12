@@ -2308,7 +2308,7 @@ export default function Events() {
                           i === wizardStep ? "bg-[#1a5c38] text-white"
                           : i < wizardStep ? "bg-[#1a5c38]/20 text-[#1a5c38]"
                           : "bg-muted text-muted-foreground/40"}`}>
-                          {i < wizardStep ? "\u2713" : i + 1}
+                          {i < wizardStep ? "✓" : i + 1}
                         </span>
                         <span className="hidden lg:inline">{label}</span>
                       </button>
@@ -2344,7 +2344,7 @@ export default function Events() {
                       </div>
                       {showTplSave && (
                         <form className="flex gap-2" onSubmit={handleSaveTemplate}>
-                          <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup\u2026"
+                          <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
                             value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} autoFocus />
                           <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
                             {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
@@ -2356,9 +2356,9 @@ export default function Events() {
                         </form>
                       )}
                       {templatesLoading ? (
-                        <p className="text-xs text-muted-foreground italic">Loading templates\u2026</p>
+                        <p className="text-xs text-muted-foreground italic">Loading templates…</p>
                       ) : templates.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">No templates yet \u2014 configure below and save for quick reuse.</p>
+                        <p className="text-xs text-muted-foreground italic">No templates yet — configure below and save for quick reuse.</p>
                       ) : (
                         <div className="space-y-1.5">
                           {templates.map(tpl => (
@@ -2405,7 +2405,7 @@ export default function Events() {
                         value={form.description}
                         onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                         onInput={e => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; }}
-                        placeholder="Tournament details, rules, conditions\u2026" />
+                        placeholder="Tournament details, rules, conditions…" />
                     </div>
                     {/* Image */}
                     <div className="space-y-1.5">
@@ -2424,7 +2424,7 @@ export default function Events() {
                         <button type="button"
                           className="w-full h-28 rounded-lg border-2 border-dashed border-border hover:border-[#1a5c38]/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-[#1a5c38] transition-colors"
                           onClick={() => imgInputRef.current?.click()} disabled={imgUploading}>
-                          {imgUploading ? <span className="text-xs">Uploading\u2026</span> : (<><ImageIcon className="h-6 w-6" /><span className="text-xs">Click to upload tournament image</span></>)}
+                          {imgUploading ? <span className="text-xs">Uploading…</span> : (<><ImageIcon className="h-6 w-6" /><span className="text-xs">Click to upload tournament image</span></>)}
                         </button>
                       )}
                     </div>
@@ -2530,7 +2530,7 @@ export default function Events() {
                           </SelectContent>
                         </Select>
                         {form.format === "other" && (
-                          <Input placeholder="Describe the format\u2026" value={form.format_custom}
+                          <Input placeholder="Describe the format…" value={form.format_custom}
                             onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))} />
                         )}
                       </div>
@@ -2577,7 +2577,7 @@ export default function Events() {
                           </SelectContent>
                         </Select>
                         {form.format2 === "other" && (
-                          <Input placeholder="Describe the format\u2026" value={form.format2_custom}
+                          <Input placeholder="Describe the format…" value={form.format2_custom}
                             onChange={e => setForm(f => ({ ...f, format2_custom: e.target.value }))} />
                         )}
                       </div>
@@ -2587,7 +2587,7 @@ export default function Events() {
                         <Users className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
                         <p className="text-xs text-blue-800">
                           <span className="font-semibold">Team format detected.</span>{" "}
-                          {isGroupFmt ? "Groups of 2\u20134 players compete together." : "Players compete in pairs."}{" "}
+                          {isGroupFmt ? "Groups of 2–4 players compete together." : "Players compete in pairs."}{" "}
                           Golfers select a partner when registering. Manage pairings from the Pairings tab after publishing.
                         </p>
                       </div>
@@ -2618,7 +2618,7 @@ export default function Events() {
                           <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
                             <span className="w-20 shrink-0">Division</span>
                             <span style={{ width: 70 }} className="shrink-0">WHS From</span>
-                            <span className="shrink-0 invisible">\u2013</span>
+                            <span className="shrink-0 invisible">–</span>
                             <span style={{ width: 70 }} className="shrink-0">WHS To</span>
                             <span style={{ width: 260 }} className="shrink-0">Format</span>
                             <span className="flex-1 min-w-0">Tees</span>
@@ -2628,7 +2628,7 @@ export default function Events() {
                               <span className="font-medium w-20 shrink-0">{d.label}</span>
                               <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
                                 onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
-                              <span className="text-muted-foreground shrink-0">\u2013</span>
+                              <span className="text-muted-foreground shrink-0">–</span>
                               <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
                                 onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
                               <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
@@ -2653,7 +2653,7 @@ export default function Events() {
                         <div className="flex items-center justify-between gap-4">
                           <div>
                             <p className="text-sm font-medium">Entries required</p>
-                            <p className="text-xs text-muted-foreground">Golfers must formally enter \u2014 open/close dates apply, and a ballot is used if the field is full.</p>
+                            <p className="text-xs text-muted-foreground">Golfers must formally enter — open/close dates apply, and a ballot is used if the field is full.</p>
                           </div>
                           <Switch checked={!!form.entries_required}
                             onCheckedChange={v => setForm(f => ({ ...f, entries_required: v, ballot: v }))} />
@@ -2711,7 +2711,7 @@ export default function Events() {
                           <div className="pt-1 border-t space-y-3">
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment methods</p>
                             {[
-                              { key: "use_tiered_pricing", label: "Tiered pricing",  desc: "Each golfer pays their standard club rate (member, visitor, junior\u2026)" },
+                              { key: "use_tiered_pricing", label: "Tiered pricing",  desc: "Each golfer pays their standard club rate (member, visitor, junior…)" },
                               { key: "allow_wallet",       label: "Allow wallet",     desc: "Golfers can pay from their TapIn wallet balance" },
                               { key: "allow_prepaid",      label: "Allow prepaid",    desc: "Members can redeem a prepaid round credit" },
                               { key: "allow_voucher",      label: "Allow vouchers",   desc: "Golfers can apply a discount or cancellation voucher" },
@@ -2791,7 +2791,7 @@ export default function Events() {
                         </div>
                         <p className="text-sm text-muted-foreground">
                           {isGroupFmt
-                            ? "Groups of 2\u20134 players compete as a single team. Players select their group when registering, or you can assign pairings from the Pairings tab."
+                            ? "Groups of 2–4 players compete as a single team. Players select their group when registering, or you can assign pairings from the Pairings tab."
                             : "Players compete in pairs. Each golfer must nominate a partner when registering for this tournament."}
                         </p>
                         <p className="text-xs text-muted-foreground border-t pt-2">
@@ -2858,7 +2858,7 @@ export default function Events() {
                             </div>
                             {eventSlots.length > 0 && (
                               <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                                {eventSlots.length} slot{eventSlots.length !== 1 ? "s" : ""} \u00b7 {totalSpots} spots
+                                {eventSlots.length} slot{eventSlots.length !== 1 ? "s" : ""} · {totalSpots} spots
                               </span>
                             )}
                           </div>
@@ -2868,7 +2868,7 @@ export default function Events() {
                               <div className="flex-1 min-w-0">
                                 {checkingExistingSlots ? (
                                   <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                                    <Loader2 className="h-3 w-3 animate-spin" />Checking for existing tee slots on this date\u2026
+                                    <Loader2 className="h-3 w-3 animate-spin" />Checking for existing tee slots on this date…
                                   </p>
                                 ) : (<>
                                   <p className="text-xs font-semibold text-amber-800">
@@ -2909,7 +2909,7 @@ export default function Events() {
                                         </button>
                                       </div>
                                       {daySlots.length === 0 ? (
-                                        <p className="text-[11px] text-amber-600 py-1">No tee times yet \u2014 click Generate to build a schedule for this day.</p>
+                                        <p className="text-[11px] text-amber-600 py-1">No tee times yet — click Generate to build a schedule for this day.</p>
                                       ) : (
                                         <div className="space-y-0.5 max-h-48 overflow-y-auto">
                                           {daySlots.map(slot => {
@@ -2987,8 +2987,8 @@ export default function Events() {
                             <button type="button" onClick={() => setWizardStep(0)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
                           </div>
                           <div className="space-y-1 text-xs">
-                            <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className={`font-medium truncate max-w-[220px] ${!form.name ? "text-destructive" : ""}`}>{form.name || "Not set \u26a0"}</span></div>
-                            <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span className={!form.event_date ? "text-destructive" : ""}>{form.event_date ? fmtDate(form.event_date) : "Not set \u26a0"}{form.end_date ? ` \u2013 ${fmtDate(form.end_date)}` : ""}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className={`font-medium truncate max-w-[220px] ${!form.name ? "text-destructive" : ""}`}>{form.name || "Not set ⚠"}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span className={!form.event_date ? "text-destructive" : ""}>{form.event_date ? fmtDate(form.event_date) : "Not set ⚠"}{form.end_date ? ` – ${fmtDate(form.end_date)}` : ""}</span></div>
                             <div className="flex justify-between"><span className="text-muted-foreground">Holes / Rounds</span><span>{form.holes} holes, {computeDays(form.event_date, form.end_date) * form.rounds_per_day} total rounds</span></div>
                             <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{TYPE_LABELS[form.event_type] ?? form.event_type}</span></div>
                             <div className="flex justify-between"><span className="text-muted-foreground">Access</span><span>{RESTRICT_LABELS[form.restriction] ?? form.restriction}</span></div>
@@ -3022,7 +3022,7 @@ export default function Events() {
                             <div className="flex justify-between"><span className="text-muted-foreground">Entries</span><span>{form.entries_required ? "Required" : "Open (tee booking)"}</span></div>
                             <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><span>{form.payment_required ? "Required" : "Free"}</span></div>
                             {form.payment_required && !form.use_tiered_pricing && (
-                              <div className="flex justify-between"><span className="text-muted-foreground">Entry Fee</span><span className={(!form.entry_fee || Number(form.entry_fee) <= 0) ? "text-amber-600" : ""}>{form.entry_fee ? `R${form.entry_fee}` : "Not set \u26a0"}</span></div>
+                              <div className="flex justify-between"><span className="text-muted-foreground">Entry Fee</span><span className={(!form.entry_fee || Number(form.entry_fee) <= 0) ? "text-amber-600" : ""}>{form.entry_fee ? `R${form.entry_fee}` : "Not set ⚠"}</span></div>
                             )}
                             {form.payment_required && form.use_tiered_pricing && (
                               <div className="flex justify-between"><span className="text-muted-foreground">Pricing</span><span>Tiered (by golfer type)</span></div>
@@ -3043,7 +3043,7 @@ export default function Events() {
                           <div className="space-y-1 text-xs">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Tee slots</span>
-                              <span>{eventSlots.length > 0 ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} \u00b7 ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots` : <span className="italic text-muted-foreground">None configured yet</span>}</span>
+                              <span>{eventSlots.length > 0 ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} · ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots` : <span className="italic text-muted-foreground">None configured yet</span>}</span>
                             </div>
                           </div>
                         </CardContent>
@@ -3056,7 +3056,7 @@ export default function Events() {
                 <div className="flex items-center gap-2 pt-4 border-t mt-2">
                   <Button type="button" variant="outline"
                     onClick={() => wizardStep === 0 ? setDlgOpen(false) : setWizardStep(w => w - 1)}>
-                    {wizardStep === 0 ? "Cancel" : "\u2190 Back"}
+                    {wizardStep === 0 ? "Cancel" : "← Back"}
                   </Button>
                   <div className="flex-1" />
                   {wizardStep < 5 ? (
@@ -3068,7 +3068,7 @@ export default function Events() {
                     <Button type="button" onClick={handleSave}
                       disabled={saving || readOnly || !form.name || !form.event_date}
                       className="bg-[#1a5c38] hover:bg-[#164d30]">
-                      {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving\u2026</> : editId ? "Update Tournament" : "Create Tournament"}
+                      {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving…</> : editId ? "Update Tournament" : "Create Tournament"}
                     </Button>
                   )}
                 </div>

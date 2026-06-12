@@ -429,8 +429,15 @@ export default function Events() {
   const [shotgunDlgOpen, setShotgunDlgOpen]   = useState(false);
   const [shotgunDlgDate, setShotgunDlgDate]   = useState("");
   const [shotgunTime, setShotgunTime]         = useState("07:30");
-  const [shotgunHoles, setShotgunHoles]       = useState(18);
+  const [shotgunHoles, setShotgunHoles]       = useState<9 | 18>(18);
   const [shotgunPPG, setShotgunPPG]           = useState(4);
+  const [shotgunTwoSessions, setShotgunTwoSessions] = useState(false);
+  const [shotgunAmTime, setShotgunAmTime]     = useState("07:30");
+  const [shotgunPmTime, setShotgunPmTime]     = useState("13:00");
+  const [shotgunDoubleTee, setShotgunDoubleTee] = useState(false);
+  const [shotgunDoubleTeeMode, setShotgunDoubleTeeMode] = useState<"all" | "exclude_par3">("exclude_par3");
+  const DEFAULT_PAR3: Record<9 | 18, number[]> = { 9: [3, 7], 18: [3, 7, 12, 16] };
+  const [shotgunPar3Holes, setShotgunPar3Holes] = useState<Set<number>>(new Set(DEFAULT_PAR3[18]));
   const tempSlotCounter                       = useRef(-1);
   const [newSlotDate, setNewSlotDate]         = useState("");
   const [newSlotTime, setNewSlotTime]         = useState("");
@@ -3166,105 +3173,238 @@ export default function Events() {
       />
 
       {/* ── Shotgun Start Generator ─────────────────────────────────────── */}
-      <Dialog open={shotgunDlgOpen} onOpenChange={setShotgunDlgOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <span>🔫</span> Generate Shotgun Schedule
-            </DialogTitle>
-            <DialogDescription>
-              All groups start simultaneously from different holes at a single start time.
-            </DialogDescription>
-          </DialogHeader>
+      {(() => {
+        const par3Excluded = shotgunDoubleTee && shotgunDoubleTeeMode === "exclude_par3";
+        const par3Count    = par3Excluded ? shotgunPar3Holes.size : 0;
+        const doubleHoles  = par3Excluded ? shotgunHoles - par3Count : shotgunHoles;
+        const singleHoles  = par3Excluded ? par3Count : 0;
+        const groupsPerSession = shotgunDoubleTee ? doubleHoles * 2 + singleHoles : shotgunHoles;
+        const sessions     = shotgunTwoSessions ? 2 : 1;
+        const totalGroups  = groupsPerSession * sessions;
+        const totalPlayers = totalGroups * shotgunPPG;
+        const sessionTimes = shotgunTwoSessions ? [shotgunAmTime, shotgunPmTime] : [shotgunTime];
 
-          <div className="space-y-4 py-2">
-            {shotgunDlgDate && (
-              <div className="rounded-lg bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
-                Date: <span className="font-medium text-foreground">{fmtDate(shotgunDlgDate)}</span>
-              </div>
-            )}
+        const handleGenerate = () => {
+          if (!shotgunDlgDate) return;
+          const slotsToCreate = sessionTimes.map(time => ({
+            date: shotgunDlgDate,
+            time,
+            total_slots: groupsPerSession * shotgunPPG,
+          }));
+          if (editId) {
+            Promise.all(slotsToCreate.map(s =>
+              api("/api/portal/tee-times", {
+                method: "POST",
+                body: JSON.stringify({ ...s, active: true, event_id: editId }),
+              })
+            )).then(() => loadEventSlots(editId)).catch(() => {});
+          } else {
+            setEventSlots(prev => {
+              const withoutDate = prev.filter(s => String(s.date).slice(0, 10) !== shotgunDlgDate);
+              const newSlots = slotsToCreate.map(s => ({
+                id: tempSlotCounter.current--,
+                date: s.date,
+                time: s.time,
+                total_slots: s.total_slots,
+                active: true,
+              }));
+              return [...withoutDate, ...newSlots];
+            });
+          }
+          setShotgunDlgOpen(false);
+        };
 
-            <div className="space-y-1.5">
-              <Label className="text-xs font-medium">Start Time</Label>
-              <input
-                type="time"
-                value={shotgunTime}
-                onChange={e => setShotgunTime(e.target.value)}
-                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]"
-              />
-            </div>
+        return (
+          <Dialog open={shotgunDlgOpen} onOpenChange={setShotgunDlgOpen}>
+            <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <span>🔫</span> Generate Shotgun Schedule
+                </DialogTitle>
+                <DialogDescription>
+                  {shotgunDlgDate ? fmtDate(shotgunDlgDate) + " · " : ""}All groups start simultaneously from different holes.
+                </DialogDescription>
+              </DialogHeader>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Number of Holes</Label>
-                <select
-                  value={shotgunHoles}
-                  onChange={e => setShotgunHoles(Number(e.target.value))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]">
-                  {[9, 18].map(n => <option key={n} value={n}>{n} holes</option>)}
-                </select>
-              </div>
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Players per Group</Label>
-                <select
-                  value={shotgunPPG}
-                  onChange={e => setShotgunPPG(Number(e.target.value))}
-                  className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]">
-                  {[2, 3, 4].map(n => <option key={n} value={n}>{n} players</option>)}
-                </select>
-              </div>
-            </div>
+              <div className="space-y-5 py-1">
 
-            <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-3 py-2 space-y-1 text-xs">
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Groups</span>
-                <span className="font-semibold">{shotgunHoles}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Total capacity</span>
-                <span className="font-semibold">{shotgunHoles * shotgunPPG} players</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Start time</span>
-                <span className="font-semibold">{shotgunTime}</span>
-              </div>
-            </div>
-          </div>
+                {/* ── Holes + Players per group ─── */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Number of Holes</Label>
+                    <div className="flex gap-2">
+                      {([9, 18] as const).map(n => (
+                        <button key={n} type="button"
+                          onClick={() => {
+                            setShotgunHoles(n);
+                            setShotgunPar3Holes(new Set(DEFAULT_PAR3[n]));
+                          }}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${shotgunHoles === n ? "text-white border-[#1a5c38] bg-[#1a5c38]" : "border-border text-foreground hover:border-[#1a5c38]/40"}`}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-medium">Players per Group</Label>
+                    <div className="flex gap-1.5">
+                      {[2, 3, 4].map(n => (
+                        <button key={n} type="button"
+                          onClick={() => setShotgunPPG(n)}
+                          className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-all ${shotgunPPG === n ? "text-white border-[#1a5c38] bg-[#1a5c38]" : "border-border text-foreground hover:border-[#1a5c38]/40"}`}>
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
 
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShotgunDlgOpen(false)}>Cancel</Button>
-            <Button
-              className="bg-[#1a5c38] hover:bg-[#1a5c38]/90"
-              onClick={() => {
-                if (!shotgunDlgDate || !shotgunTime) return;
-                const totalSlots = shotgunHoles * shotgunPPG;
-                if (editId) {
-                  // Persist directly for existing events
-                  api("/api/portal/tee-times", {
-                    method: "POST",
-                    body: JSON.stringify({
-                      date: shotgunDlgDate,
-                      time: shotgunTime,
-                      total_slots: totalSlots,
-                      active: true,
-                      event_id: editId,
-                    }),
-                  }).then(() => loadEventSlots(editId)).catch(() => {});
-                } else {
-                  // Stage for new events
-                  const id = tempSlotCounter.current--;
-                  setEventSlots(prev => [
-                    ...prev.filter(s => String(s.date).slice(0, 10) !== shotgunDlgDate),
-                    { id, date: shotgunDlgDate, time: shotgunTime, total_slots: totalSlots, active: true },
-                  ]);
-                }
-                setShotgunDlgOpen(false);
-              }}>
-              Generate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+                {/* ── Two sessions (AM + PM) ─── */}
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Two Sessions (AM + PM)</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Run a morning and afternoon field on the same day</p>
+                    </div>
+                    <button type="button"
+                      onClick={() => setShotgunTwoSessions(v => !v)}
+                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ml-3"
+                      style={{ background: shotgunTwoSessions ? "#1a5c38" : "#d1d5db" }}>
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${shotgunTwoSessions ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+                  {shotgunTwoSessions ? (
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-[#1a5c38]" />AM Start
+                        </Label>
+                        <input type="time" value={shotgunAmTime} onChange={e => setShotgunAmTime(e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs font-medium flex items-center gap-1.5">
+                          <span className="inline-block w-2 h-2 rounded-full bg-[#7c3aed]" />PM Start
+                        </Label>
+                        <input type="time" value={shotgunPmTime} onChange={e => setShotgunPmTime(e.target.value)}
+                          className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]" />
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <Label className="text-xs font-medium">Start Time</Label>
+                      <input type="time" value={shotgunTime} onChange={e => setShotgunTime(e.target.value)}
+                        className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-[#1a5c38]" />
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Double-teeing ─── */}
+                <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium">Double-Teeing</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">Two groups start from the same hole (A + B groups)</p>
+                    </div>
+                    <button type="button"
+                      onClick={() => setShotgunDoubleTee(v => !v)}
+                      className="relative inline-flex h-5 w-9 items-center rounded-full transition-colors flex-shrink-0 ml-3"
+                      style={{ background: shotgunDoubleTee ? "#1a5c38" : "#d1d5db" }}>
+                      <span className={`inline-block h-4 w-4 rounded-full bg-white shadow transition-transform ${shotgunDoubleTee ? "translate-x-4" : "translate-x-0.5"}`} />
+                    </button>
+                  </div>
+
+                  {shotgunDoubleTee && (
+                    <div className="space-y-3">
+                      <div className="flex gap-2">
+                        {([["all", "All holes"], ["exclude_par3", "Exclude par 3s"]] as const).map(([v, lbl]) => (
+                          <button key={v} type="button"
+                            onClick={() => setShotgunDoubleTeeMode(v)}
+                            className={`flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all ${shotgunDoubleTeeMode === v ? "text-white border-[#1a5c38] bg-[#1a5c38]" : "border-border text-foreground hover:border-[#1a5c38]/40"}`}>
+                            {lbl}
+                          </button>
+                        ))}
+                      </div>
+
+                      {shotgunDoubleTeeMode === "exclude_par3" && (
+                        <div className="space-y-1.5">
+                          <p className="text-xs text-muted-foreground">Mark your par 3 holes (they will only have one group):</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {Array.from({ length: shotgunHoles }, (_, i) => i + 1).map(hole => {
+                              const isPar3 = shotgunPar3Holes.has(hole);
+                              return (
+                                <button key={hole} type="button"
+                                  onClick={() => setShotgunPar3Holes(prev => {
+                                    const next = new Set(prev);
+                                    next.has(hole) ? next.delete(hole) : next.add(hole);
+                                    return next;
+                                  })}
+                                  className={`w-8 h-8 rounded-lg border text-xs font-bold transition-all ${isPar3 ? "bg-amber-500 border-amber-500 text-white" : "border-border text-muted-foreground hover:border-[#1a5c38]/40"}`}
+                                  title={isPar3 ? `Hole ${hole} — par 3 (single group)` : `Hole ${hole} — double tee`}>
+                                  {hole}
+                                </button>
+                              );
+                            })}
+                          </div>
+                          <p className="text-[10px] text-muted-foreground">
+                            <span className="inline-block w-3 h-3 rounded bg-amber-500 align-middle mr-1" />amber = par 3 (single group)
+                          </p>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* ── Capacity summary ─── */}
+                <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-4 py-3 space-y-1.5 text-xs">
+                  <p className="text-xs font-semibold text-[#1a5c38] mb-2">Capacity Summary</p>
+                  {shotgunTwoSessions && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-[#1a5c38]" />AM Session ({shotgunAmTime})</span>
+                        <span className="font-medium">{groupsPerSession} groups · {groupsPerSession * shotgunPPG} players</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="flex items-center gap-1.5 text-muted-foreground"><span className="w-2 h-2 rounded-full bg-[#7c3aed]" />PM Session ({shotgunPmTime})</span>
+                        <span className="font-medium">{groupsPerSession} groups · {groupsPerSession * shotgunPPG} players</span>
+                      </div>
+                      <div className="border-t border-[#1a5c38]/20 pt-1.5 flex justify-between font-semibold text-[#1a5c38]">
+                        <span>Total</span>
+                        <span>{totalGroups} groups · {totalPlayers} players</span>
+                      </div>
+                    </>
+                  )}
+                  {!shotgunTwoSessions && (
+                    <>
+                      <div className="flex justify-between">
+                        <span className="text-muted-foreground">Groups</span>
+                        <span className="font-medium">{groupsPerSession}</span>
+                      </div>
+                      {shotgunDoubleTee && shotgunDoubleTeeMode === "exclude_par3" && par3Count > 0 && (
+                        <div className="flex justify-between text-amber-700">
+                          <span>Par 3 holes (single group)</span>
+                          <span className="font-medium">{par3Count} holes</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between font-semibold text-[#1a5c38]">
+                        <span>Total capacity</span>
+                        <span>{totalPlayers} players</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShotgunDlgOpen(false)}>Cancel</Button>
+                <Button className="bg-[#1a5c38] hover:bg-[#1a5c38]/90" onClick={handleGenerate}>
+                  Generate {sessions > 1 ? `${sessions} Slots` : "Schedule"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        );
+      })()}
 
       {/* ── Cancel Tournament Dialog ──────────────────────────────────────────── */}
       <Dialog open={cancelDlg.open} onOpenChange={o => { if (!o && !cancelDlg.cancelling) setCancelDlg(prev => ({ ...prev, open: false })); }}>

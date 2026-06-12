@@ -376,10 +376,13 @@ export default function EventDetailScreen() {
 
   // What action should the CTA show?
   const entriesRequired = event.entries_required !== 0; // default true for existing events
+  // Team-format events always need a registration step to link partners — open_all
+  // ("book a tee time directly") only applies to individual-format events.
+  const isTeamFormat = teamFormat !== "individual";
   const ctaState = !user
     ? "login"
-    : !entriesRequired
-    ? "open_all"                // no enrollment step — open to all
+    : (!entriesRequired && !isTeamFormat)
+    ? "open_all"                // no enrollment step — open to all (individual formats only)
     : !reg
     ? (event.status === "active" ? "register" : "closed")
     : reg.status === "pending"

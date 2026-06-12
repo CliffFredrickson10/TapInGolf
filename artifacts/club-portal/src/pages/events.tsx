@@ -80,6 +80,7 @@ interface GolfEvent {
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
+  shotgun_start: number;
   rounds: number; holes: number;
   additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
@@ -258,6 +259,7 @@ const EMPTY_FORM = {
   additional_fees: [] as { name: string; amount: number }[],
   ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
   use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
+  shotgun_start: false,
   use_divisions: true,
   divisions: DEFAULT_DIVISIONS,
 };
@@ -815,6 +817,7 @@ export default function Events() {
       entries_required: ev.entries_required !== 0,
       use_tiered_pricing: !!ev.use_tiered_pricing,
       allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
+      shotgun_start: !!ev.shotgun_start,
       use_divisions: Array.isArray(ev.divisions) ? ev.divisions.length > 0 : true,
       divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
     });
@@ -2822,6 +2825,52 @@ export default function Events() {
 
                   {/* ━━━ STEP 4: SCHEDULE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 4 && (<>
+                    {/* ── Start type ─────────────────────────────────────────────── */}
+                    <div>
+                      <Label className="text-sm font-semibold mb-2 block">Start Type</Label>
+                      <div className="grid grid-cols-2 gap-3">
+                        {([
+                          {
+                            value: false,
+                            label: "Interval Start",
+                            icon: "🕗",
+                            desc: "Groups tee off sequentially at regular intervals (e.g. 7:00, 7:08, 7:16…). Standard for most club competitions.",
+                          },
+                          {
+                            value: true,
+                            label: "Shotgun Start",
+                            icon: "🔫",
+                            desc: "All groups start simultaneously from different holes at the same time. Common for large corporate and charity events.",
+                          },
+                        ] as const).map(opt => (
+                          <button key={String(opt.value)} type="button"
+                            onClick={() => setForm(f => ({ ...f, shotgun_start: opt.value }))}
+                            className={`text-left rounded-xl border-2 p-4 transition-all ${
+                              !!form.shotgun_start === opt.value
+                                ? "border-[#1a5c38] bg-[#1a5c38]/5 shadow-sm"
+                                : "border-border bg-background hover:border-[#1a5c38]/40"}`}>
+                            <div className="flex items-center gap-2 mb-1.5">
+                              <span className="text-xl">{opt.icon}</span>
+                              <span className={`text-sm font-semibold ${!!form.shotgun_start === opt.value ? "text-[#1a5c38]" : ""}`}>
+                                {opt.label}
+                              </span>
+                              {!!form.shotgun_start === opt.value && (
+                                <span className="ml-auto text-[10px] font-bold text-white bg-[#1a5c38] rounded-full px-1.5 py-0.5">Selected</span>
+                              )}
+                            </div>
+                            <p className="text-xs text-muted-foreground leading-relaxed">{opt.desc}</p>
+                          </button>
+                        ))}
+                      </div>
+                      {!!form.shotgun_start && (
+                        <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
+                          <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-700">
+                            For shotgun starts, add a <strong>single tee time</strong> below (the common start time). The draw will assign each group a starting hole rather than a start time.
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     {form.event_date ? (() => {
                       const getDatesInRange = (start: string, end?: string): string[] => {
                         const dates: string[] = [];
@@ -3041,6 +3090,12 @@ export default function Events() {
                             <button type="button" onClick={() => setWizardStep(4)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
                           </div>
                           <div className="space-y-1 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Start type</span>
+                              <span className={`font-medium ${form.shotgun_start ? "text-[#1a5c38]" : ""}`}>
+                                {form.shotgun_start ? "🔫 Shotgun" : "🕗 Interval"}
+                              </span>
+                            </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Tee slots</span>
                               <span>{eventSlots.length > 0 ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} · ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots` : <span className="italic text-muted-foreground">None configured yet</span>}</span>

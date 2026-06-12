@@ -59012,7 +59012,7 @@ router3.post("/events/:id/register", async (req, res) => {
   }
   const ts = teamSize(ev.format ?? "");
   let teamId = null;
-  const { partner_id } = req.body ?? {};
+  const { partner_id, partner_ids } = req.body ?? {};
   if (ts === "pair" && partner_id) {
     const partnerId = parseInt(partner_id, 10);
     const partnerReg = await row(
@@ -59020,7 +59020,7 @@ router3.post("/events/:id/register", async (req, res) => {
       [evId, partnerId]
     );
     if (!partnerReg) {
-      res.status(400).json({ message: "Selected partner is not yet registered for this event. Both players must register separately \u2014 you can link up once they have entered." });
+      res.status(400).json({ message: "Selected partner is not yet registered for this event. They need to register first \u2014 once they have entered you can both link up." });
       return;
     }
     if (partnerReg.team_id) {
@@ -59034,6 +59034,34 @@ router3.post("/events/:id/register", async (req, res) => {
       );
       teamId = newTeam.id;
       await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, partnerId]);
+    }
+  }
+  if (ts === "group" && Array.isArray(partner_ids) && partner_ids.length > 0) {
+    const partnerIdList = partner_ids.map((p) => parseInt(p, 10)).filter(Boolean);
+    const placeholders = partnerIdList.map(() => "?").join(",");
+    const partnerRegs = await query(
+      `SELECT user_id, team_id FROM event_registrations WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'approved'`,
+      [evId, ...partnerIdList]
+    );
+    if (partnerRegs.length > 0) {
+      const existingTeam = partnerRegs.find((p) => p.team_id);
+      if (existingTeam) {
+        teamId = existingTeam.team_id;
+      } else {
+        const partnerUsers = await query(
+          `SELECT name FROM users WHERE id IN (${placeholders})`,
+          partnerIdList
+        );
+        const teamName = [user.name, ...partnerUsers.map((p) => p.name)].join(" / ");
+        const newTeam = await row(
+          "INSERT INTO event_teams (event_id, name) VALUES (?, ?) RETURNING id",
+          [evId, teamName]
+        );
+        teamId = newTeam.id;
+        for (const pr of partnerRegs) {
+          await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, pr.user_id]);
+        }
+      }
     }
   }
   const status = "approved";
@@ -65957,6 +65985,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     allow_wallet,
     allow_prepaid,
     allow_voucher,
+    shotgun_start,
     rounds = 1
   } = req.body ?? {};
   const status = "pending_publish";
@@ -65973,8 +66002,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, entries_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       rounds, image_url, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       shotgun_start, rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -66002,6 +66031,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       allow_wallet ? 1 : 0,
       allow_prepaid ? 1 : 0,
       allow_voucher ? 1 : 0,
+      shotgun_start ? 1 : 0,
       Number(rounds),
       req.body?.image_url || null,
       status,
@@ -66154,6 +66184,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (allow_voucher !== void 0) {
     updates.push("allow_voucher = ?");
     vals.push(allow_voucher ? 1 : 0);
+  }
+  if (req.body?.shotgun_start !== void 0) {
+    updates.push("shotgun_start = ?");
+    vals.push(req.body.shotgun_start ? 1 : 0);
   }
   if (rounds !== void 0) {
     updates.push("rounds = ?");
@@ -66804,6 +66838,31 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
       }
     }
   }
+  const teamPairRows = await query(
+    "SELECT user_id, team_id FROM event_registrations WHERE event_id = ? AND status = 'approved' AND team_id IS NOT NULL",
+    [evId]
+  );
+  if (teamPairRows.length > 0) {
+    const playerTeamMap = /* @__PURE__ */ new Map();
+    for (const r of teamPairRows) playerTeamMap.set(Number(r.user_id), Number(r.team_id));
+    const clustered = [];
+    const seenC = /* @__PURE__ */ new Set();
+    for (const p of players) {
+      if (seenC.has(p.user_id)) continue;
+      clustered.push(p);
+      seenC.add(p.user_id);
+      const tid = playerTeamMap.get(p.user_id);
+      if (tid != null) {
+        for (const q of players) {
+          if (!seenC.has(q.user_id) && playerTeamMap.get(q.user_id) === tid) {
+            clustered.push(q);
+            seenC.add(q.user_id);
+          }
+        }
+      }
+    }
+    players = clustered;
+  }
   const pgSize = Math.max(1, Math.min(4, Number(players_per_group)));
   const entries = [];
   let playerIdx = 0;
@@ -66848,6 +66907,72 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     while (playerIdx < players.length) assignGroup("08:00", 1);
   }
   res.json({ entries });
+});
+router14.get("/portal/events/:id/pairings", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const rows = await query(
+    `SELECT et.id AS team_id, et.name AS team_name,
+            er.user_id, u.name AS user_name, er.status AS reg_status
+     FROM event_teams et
+     JOIN event_registrations er ON er.team_id = et.id AND er.event_id = et.event_id
+     JOIN users u ON u.id = er.user_id
+     WHERE et.event_id = ?
+     ORDER BY et.id, u.name`,
+    [evId]
+  );
+  const teamMap = /* @__PURE__ */ new Map();
+  for (const r of rows) {
+    if (!teamMap.has(r.team_id)) teamMap.set(r.team_id, { id: r.team_id, name: r.team_name, players: [] });
+    teamMap.get(r.team_id).players.push({ user_id: r.user_id, user_name: r.user_name, reg_status: r.reg_status });
+  }
+  res.json({ teams: [...teamMap.values()] });
+});
+router14.post("/portal/events/:id/pairings", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const { player_ids, name } = req.body ?? {};
+  if (!Array.isArray(player_ids) || player_ids.length < 2) {
+    res.status(400).json({ message: "At least 2 players required" });
+    return;
+  }
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  const result = await query("INSERT INTO event_teams (event_id, name) VALUES (?, ?)", [evId, name ?? null]);
+  const teamId = result.insertId ?? result[0]?.id;
+  await query(
+    `UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ANY(ARRAY[${player_ids.map(() => "?").join(",")}]::int[])`,
+    [teamId, evId, ...player_ids]
+  ).catch(
+    () => (
+      // Fallback for MySQL-style ? placeholder
+      Promise.all(player_ids.map(
+        (uid) => query("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, uid])
+      ))
+    )
+  );
+  res.json({ team_id: teamId });
+});
+router14.delete("/portal/events/:id/pairings/:teamId", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const teamId = Number(req.params.teamId);
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await query("UPDATE event_registrations SET team_id = NULL WHERE event_id = ? AND team_id = ?", [evId, teamId]);
+  await query("DELETE FROM event_teams WHERE id = ? AND event_id = ?", [teamId, evId]);
+  res.json({ ok: true });
 });
 router14.get("/portal/events/:id/draw", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -70971,6 +71096,7 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_close DATE");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS ballot SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS shotgun_start SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS holes SMALLINT NOT NULL DEFAULT 18");

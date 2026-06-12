@@ -943,7 +943,7 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
   // ── Team pairing (betterball/scramble formats) ────────────────────────────
   const ts = teamSize(ev.format ?? "");
   let teamId: number | null = null;
-  const { partner_id } = req.body ?? {};
+  const { partner_id, partner_ids } = req.body ?? {};
 
   if (ts === "pair" && partner_id) {
     const partnerId = parseInt(partner_id, 10);
@@ -953,13 +953,11 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
       [evId, partnerId]
     );
     if (!partnerReg) {
-      res.status(400).json({ message: "Selected partner is not yet registered for this event. Both players must register separately — you can link up once they have entered." }); return;
+      res.status(400).json({ message: "Selected partner is not yet registered for this event. They need to register first — once they have entered you can both link up." }); return;
     }
     if (partnerReg.team_id) {
-      // Partner already has a team — join it
       teamId = partnerReg.team_id;
     } else {
-      // Create a new team and assign the partner to it
       const partnerUser = await row<any>("SELECT name FROM users WHERE id = ?", [partnerId]);
       const teamName = `${user.name} / ${partnerUser?.name ?? "Partner"}`;
       const newTeam = await row<any>(
@@ -968,6 +966,36 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
       );
       teamId = newTeam!.id;
       await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, partnerId]);
+    }
+  }
+
+  if (ts === "group" && Array.isArray(partner_ids) && partner_ids.length > 0) {
+    const partnerIdList: number[] = partner_ids.map((p: any) => parseInt(p, 10)).filter(Boolean);
+    // Fetch whichever of these partners are already registered
+    const placeholders = partnerIdList.map(() => "?").join(",");
+    const partnerRegs = await query<any>(
+      `SELECT user_id, team_id FROM event_registrations WHERE event_id = ? AND user_id IN (${placeholders}) AND status = 'approved'`,
+      [evId, ...partnerIdList]
+    );
+    if (partnerRegs.length > 0) {
+      const existingTeam = partnerRegs.find((p: any) => p.team_id);
+      if (existingTeam) {
+        teamId = existingTeam.team_id;
+      } else {
+        const partnerUsers = await query<any>(
+          `SELECT name FROM users WHERE id IN (${placeholders})`,
+          partnerIdList
+        );
+        const teamName = [user.name, ...partnerUsers.map((p: any) => p.name)].join(" / ");
+        const newTeam = await row<any>(
+          "INSERT INTO event_teams (event_id, name) VALUES (?, ?) RETURNING id",
+          [evId, teamName]
+        );
+        teamId = newTeam!.id;
+        for (const pr of partnerRegs) {
+          await exec("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, pr.user_id]);
+        }
+      }
     }
   }
 

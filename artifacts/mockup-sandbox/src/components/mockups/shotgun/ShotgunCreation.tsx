@@ -96,6 +96,15 @@ export function ShotgunCreation() {
   const [step, setStep] = useState(3);
   const STEPS = ["Details", "Format", "Pricing", "Teams", "Schedule", "Review"];
 
+  // Simulates the tournament's Format 1 selection — drives whether Teams is required
+  const TEAM_FORMATS = ["betterball", "fourball", "scramble", "alliance", "fourball_stableford"];
+  const FORMAT_LABELS: Record<string, string> = {
+    betterball: "Betterball", fourball: "Fourball", scramble: "Scramble",
+    alliance: "Alliance", fourball_stableford: "Fourball Stableford", stroke_play: "Stroke Play",
+  };
+  const [selectedFormat, setSelectedFormat] = useState("betterball");
+  const isTeamFormat = TEAM_FORMATS.includes(selectedFormat);
+
   // ── Team pairing state ────────────────────────────────────────────
   const TEAM_COLORS = ["#1a5c38", "#7c3aed", "#b45309", "#be123c", "#0369a1", "#d97706"];
   const MOCK_PLAYERS = [
@@ -209,14 +218,45 @@ export function ShotgunCreation() {
         {/* Teams step — step 3 */}
         {step === 3 && (
           <div className="space-y-4">
+
+            {/* Demo toggle — simulates Format selection from step 1 */}
+            <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-3 flex items-center gap-3 text-xs text-gray-500">
+              <span className="font-medium text-gray-600">Demo: Format 1 =</span>
+              <select
+                value={selectedFormat}
+                onChange={e => setSelectedFormat(e.target.value)}
+                className="border border-gray-200 rounded px-2 py-1 text-xs text-gray-700 bg-white"
+              >
+                {Object.entries(FORMAT_LABELS).map(([k, v]) => (
+                  <option key={k} value={k}>{v}</option>
+                ))}
+              </select>
+              <span className={`ml-auto px-2 py-0.5 rounded text-[10px] font-bold ${isTeamFormat ? "bg-red-600 text-white" : "bg-gray-200 text-gray-500"}`}>
+                {isTeamFormat ? "TEAM FORMAT — REQUIRED" : "INDIVIDUAL — OPTIONAL"}
+              </span>
+            </div>
+
+            {/* Required banner when team format is active */}
+            {isTeamFormat && (
+              <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 flex items-start gap-2.5">
+                <svg className="h-4 w-4 text-amber-600 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                </svg>
+                <div>
+                  <p className="text-xs font-semibold text-amber-800">{FORMAT_LABELS[selectedFormat]} selected — player pairings are required</p>
+                  <p className="text-xs text-amber-700 mt-0.5">Players in a team must stay together in the same draw group. Unpaired players will be blocked from entering the tournament from the app until a partner is selected.</p>
+                </div>
+              </div>
+            )}
+
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
                 <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
                 <h3 className="text-sm font-semibold text-gray-800">Player Pairings</h3>
-                <span className="ml-auto text-xs text-gray-400">
-                  Optional · {pairedTeams.length} team{pairedTeams.length !== 1 ? "s" : ""} defined
+                <span className={`ml-auto text-xs font-medium px-2 py-0.5 rounded ${isTeamFormat ? "bg-red-100 text-red-700" : "text-gray-400"}`}>
+                  {isTeamFormat ? "Required" : "Optional"} · {pairedTeams.length} team{pairedTeams.length !== 1 ? "s" : ""} defined
                 </span>
               </div>
 

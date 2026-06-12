@@ -147,6 +147,7 @@ export default function EventDetailScreen() {
   const [partnerQuery, setPartnerQuery] = useState("");
   const [partnerResults, setPartnerResults] = useState<PartnerResult[]>([]);
   const [selectedPartner, setSelectedPartner] = useState<PartnerResult | null>(null);
+  const [selectedGroupPartners, setSelectedGroupPartners] = useState<PartnerResult[]>([]);
   const [partnerSearching, setPartnerSearching] = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
@@ -221,11 +222,21 @@ export default function EventDetailScreen() {
 
   const handleRegister = async () => {
     if (!user) { router.push("/(auth)/login"); return; }
+    // Enforce compulsory team partner selection
+    if (event?.team_format === "pair" && !selectedPartner) {
+      setRegisterError("A partner is required for this team format event. Search for your playing partner above.");
+      return;
+    }
+    if (event?.team_format === "group" && selectedGroupPartners.length === 0) {
+      setRegisterError("At least one teammate is required for this team format event. Search for your playing partners above.");
+      return;
+    }
     setRegistering(true);
     setRegisterError(null);
     try {
       const body: Record<string, any> = {};
       if (selectedPartner) body.partner_id = selectedPartner.id;
+      if (selectedGroupPartners.length > 0) body.partner_ids = selectedGroupPartners.map(p => p.id);
       const res = await apiFetch(`/events/${id}/register`, user.token, { method: "POST", body: JSON.stringify(body) });
       await loadEvent(true);
       const msg = res.status === "pending"
@@ -539,40 +550,96 @@ export default function EventDetailScreen() {
                     </Text>
                   )}
 
-                  {/* Partner picker — betterball / pair formats */}
-                  {event.team_format === "pair" && (
+                  {/* Partner / team picker — required for all team format events */}
+                  {event.team_format !== "individual" && (
                     <View style={{ marginBottom: 8 }}>
-                      <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground, marginBottom: 6 }}>
-                        Select your partner <Text style={{ fontWeight: "400", color: colors.mutedForeground }}>(optional — can link later)</Text>
-                      </Text>
-                      {selectedPartner ? (
-                        <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10 }}>
-                          <Ionicons name="people-outline" size={16} color={colors.primary} />
-                          <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.primary }}>{selectedPartner.name}</Text>
-                          <TouchableOpacity onPress={() => { setSelectedPartner(null); setPartnerQuery(""); }}>
-                            <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
-                          </TouchableOpacity>
+                      {/* Header */}
+                      <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6, gap: 6 }}>
+                        <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
+                          {event.team_format === "pair" ? "Select your partner" : "Select your teammates"}
+                        </Text>
+                        <View style={{ backgroundColor: "#dc2626", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                          <Text style={{ fontSize: 10, fontWeight: "700", color: "#fff" }}>REQUIRED</Text>
                         </View>
-                      ) : (
+                      </View>
+                      <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 8 }}>
+                        {event.team_format === "pair"
+                          ? "This is a Betterball/team format — you must enter with a partner. Your partner must have an account on TapIn Golf."
+                          : "This is a team format — you must enter with at least one teammate. Teammates must have accounts on TapIn Golf."}
+                      </Text>
+
+                      {/* PAIR: single partner select */}
+                      {event.team_format === "pair" && (
                         <>
-                          <TextInput
-                            style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.foreground, backgroundColor: colors.card }}
-                            placeholder="Search by name…"
-                            placeholderTextColor={colors.mutedForeground}
-                            value={partnerQuery}
-                            onChangeText={q => { setPartnerQuery(q); searchPartners(q); }}
-                          />
-                          {partnerSearching && <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>Searching…</Text>}
-                          {partnerResults.map(p => (
-                            <TouchableOpacity key={p.id}
-                              style={{ flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: colors.border, gap: 8 }}
-                              onPress={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerQuery(""); }}
-                            >
-                              <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
-                              <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
-                              {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Has partner</Text>}
-                            </TouchableOpacity>
+                          {selectedPartner ? (
+                            <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 4 }}>
+                              <Ionicons name="people-outline" size={16} color={colors.primary} />
+                              <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.primary }}>{selectedPartner.name}</Text>
+                              <TouchableOpacity onPress={() => { setSelectedPartner(null); setPartnerQuery(""); }}>
+                                <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                              </TouchableOpacity>
+                            </View>
+                          ) : (
+                            <>
+                              <TextInput
+                                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.foreground, backgroundColor: colors.card }}
+                                placeholder="Search by name…"
+                                placeholderTextColor={colors.mutedForeground}
+                                value={partnerQuery}
+                                onChangeText={q => { setPartnerQuery(q); searchPartners(q); }}
+                              />
+                              {partnerSearching && <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>Searching…</Text>}
+                              {partnerResults.map(p => (
+                                <TouchableOpacity key={p.id}
+                                  style={{ flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: colors.border, gap: 8 }}
+                                  onPress={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerQuery(""); }}
+                                >
+                                  <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
+                                  <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
+                                  {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Has partner</Text>}
+                                </TouchableOpacity>
+                              ))}
+                            </>
+                          )}
+                        </>
+                      )}
+
+                      {/* GROUP: multi-partner select (up to 3 teammates for a 4-ball) */}
+                      {event.team_format === "group" && (
+                        <>
+                          {selectedGroupPartners.map(p => (
+                            <View key={p.id} style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 4 }}>
+                              <Ionicons name="person-outline" size={16} color={colors.primary} />
+                              <Text style={{ flex: 1, fontSize: 13, fontWeight: "600", color: colors.primary }}>{p.name}{p.handicap_index != null ? ` · HCP ${p.handicap_index}` : ""}</Text>
+                              <TouchableOpacity onPress={() => setSelectedGroupPartners(prev => prev.filter(g => g.id !== p.id))}>
+                                <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                              </TouchableOpacity>
+                            </View>
                           ))}
+                          {selectedGroupPartners.length < 3 && (
+                            <>
+                              <TextInput
+                                style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.foreground, backgroundColor: colors.card, marginTop: selectedGroupPartners.length > 0 ? 6 : 0 }}
+                                placeholder={selectedGroupPartners.length === 0 ? "Search for a teammate…" : "Add another teammate…"}
+                                placeholderTextColor={colors.mutedForeground}
+                                value={partnerQuery}
+                                onChangeText={q => { setPartnerQuery(q); searchPartners(q); }}
+                              />
+                              {partnerSearching && <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 4 }}>Searching…</Text>}
+                              {partnerResults
+                                .filter(p => !selectedGroupPartners.find(g => g.id === p.id))
+                                .map(p => (
+                                  <TouchableOpacity key={p.id}
+                                    style={{ flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: colors.border, gap: 8 }}
+                                    onPress={() => { setSelectedGroupPartners(prev => [...prev, p]); setPartnerResults([]); setPartnerQuery(""); }}
+                                  >
+                                    <Ionicons name="person-add-outline" size={14} color={colors.mutedForeground} />
+                                    <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
+                                    {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Has team</Text>}
+                                  </TouchableOpacity>
+                                ))}
+                            </>
+                          )}
                         </>
                       )}
                     </View>
@@ -584,7 +651,11 @@ export default function EventDetailScreen() {
                       <Text style={[styles.inlineErrorText, { color: "#dc2626" }]}>{registerError}</Text>
                     </View>
                   )}
-                  <TouchableOpacity style={[styles.primaryBtn, { backgroundColor: colors.primary }]} onPress={handleRegister} disabled={registering}>
+                  <TouchableOpacity
+                    style={[styles.primaryBtn, { backgroundColor: colors.primary, opacity: registering ? 0.7 : 1 }]}
+                    onPress={handleRegister}
+                    disabled={registering}
+                  >
                     {registering ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.primaryBtnText}>Enter This Event</Text>}
                   </TouchableOpacity>
                 </>

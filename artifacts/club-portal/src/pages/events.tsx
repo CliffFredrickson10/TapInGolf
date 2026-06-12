@@ -2539,7 +2539,7 @@ export default function Events() {
                         <Select value={form.format2 || "none"} onValueChange={v => setForm(f => ({ ...f, format2: v === "none" ? "" : v, format2_custom: v !== "other" ? "" : f.format2_custom }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent className="max-h-80">
-                            <SelectItem value="none">\u2014 No second format \u2014</SelectItem>
+                            <SelectItem value="none">— No second format —</SelectItem>
                             <SelectGroup><SelectLabel>Individual</SelectLabel>
                               <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
                               <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>

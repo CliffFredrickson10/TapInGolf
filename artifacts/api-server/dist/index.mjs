@@ -66249,6 +66249,14 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     updates.push("shotgun_start = ?");
     vals.push(req.body.shotgun_start ? 1 : 0);
   }
+  if (req.body?.shotgun_double_tee !== void 0) {
+    updates.push("shotgun_double_tee = ?");
+    vals.push(req.body.shotgun_double_tee ? 1 : 0);
+  }
+  if (req.body?.shotgun_par3_holes !== void 0) {
+    updates.push("shotgun_par3_holes = ?");
+    vals.push(req.body.shotgun_par3_holes != null ? JSON.stringify(req.body.shotgun_par3_holes) : null);
+  }
   if (rounds !== void 0) {
     updates.push("rounds = ?");
     vals.push(Number(rounds));
@@ -66675,9 +66683,11 @@ router14.get("/portal/events/:id/registrations", requireClubAuth2, async (req, r
   const regs = await query(
     `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
             er.payment_status, er.paid_at,
+            er.team_id, et.name as team_name,
             u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
      FROM event_registrations er
      JOIN users u ON u.id = er.user_id
+     LEFT JOIN event_teams et ON et.id = er.team_id
      WHERE er.event_id = ?
      ORDER BY er.division ASC, er.registered_at ASC`,
     [evId]
@@ -66814,10 +66824,13 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     players_per_group = 4,
     seed_metric = "points",
     seed_round,
-    group_by_division = false
+    group_by_division = false,
+    double_tee,
+    par3_holes,
+    start_time
   } = req.body ?? {};
   const event = await row(
-    "SELECT id, event_date, end_date, rounds FROM golf_events WHERE id = ? AND club_id = ?",
+    "SELECT id, event_date, end_date, rounds, holes, shotgun_start, shotgun_double_tee, shotgun_par3_holes FROM golf_events WHERE id = ? AND club_id = ?",
     [evId, club.id]
   );
   if (!event) {
@@ -66950,7 +66963,27 @@ router14.post("/portal/events/:id/draw/generate", requireClubAuth2, async (req, 
     }
     groupNum++;
   };
-  if (slots.length > 0) {
+  if (event.shotgun_start) {
+    const doubleTee = double_tee !== void 0 ? !!double_tee : !!event.shotgun_double_tee;
+    const holeCount = Number(event.holes) || 18;
+    const par3Stored = Array.isArray(event.shotgun_par3_holes) ? event.shotgun_par3_holes.map(Number) : holeCount === 9 ? [3, 7] : [3, 7, 12, 16];
+    const par3Set = new Set(
+      Array.isArray(par3_holes) ? par3_holes.map(Number) : par3Stored
+    );
+    const shotgunTime = start_time ? String(start_time).slice(0, 5) : slots.length > 0 ? String(slots[0].tee_time).slice(0, 5) : "08:00";
+    const holeSlots = [];
+    for (let h = 1; h <= holeCount; h++) {
+      const isPar3 = par3Set.has(h);
+      const count = doubleTee && !isPar3 ? 2 : 1;
+      for (let c = 0; c < count; c++) holeSlots.push(h);
+    }
+    let slotIdx = 0;
+    while (playerIdx < players.length) {
+      const hole = holeSlots[slotIdx % holeSlots.length];
+      slotIdx++;
+      assignGroup(shotgunTime, hole);
+    }
+  } else if (slots.length > 0) {
     for (const slot of slots) {
       if (playerIdx >= players.length) break;
       const teeTime = String(slot.tee_time).slice(0, 5);
@@ -71157,6 +71190,8 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS ballot SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS scoring_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS shotgun_start SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS shotgun_double_tee SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS shotgun_par3_holes JSONB");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS payment_required SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS rounds INT NOT NULL DEFAULT 1");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS holes SMALLINT NOT NULL DEFAULT 18");

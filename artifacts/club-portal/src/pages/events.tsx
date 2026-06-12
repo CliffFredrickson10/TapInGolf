@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useSearch } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
@@ -252,6 +253,7 @@ const EMPTY_FORM = {
 export default function Events() {
   const { toast } = useToast();
   const readOnly  = useReadOnly();
+  const search    = useSearch();
 
   const [events, setEvents]     = useState<GolfEvent[]>([]);
   const [loading, setLoading]   = useState(true);
@@ -357,6 +359,11 @@ export default function Events() {
 
   // Create/Edit dialog
   const [dlgOpen, setDlgOpen]   = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("action") === "new") setDlgOpen(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm]         = useState(EMPTY_FORM);
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);

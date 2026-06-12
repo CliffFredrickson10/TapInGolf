@@ -1,22 +1,24 @@
 import { useState, useEffect } from "react";
 import { Link } from "wouter";
-import { Settings2, Plus, X } from "lucide-react";
+import { Settings2, Plus } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { ALL_NAV_ITEMS } from "@/lib/nav-items";
+import { SHORTCUT_ITEMS } from "@/lib/nav-items";
 import { Button } from "@/components/ui/button";
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription,
 } from "@/components/ui/dialog";
 
 const MAX_SHORTCUTS = 10;
-const STORAGE_KEY_PREFIX = "portal_shortcuts_v1_";
+const STORAGE_KEY_PREFIX = "portal_shortcuts_v2_";
 
 function storageKey(clubId: number | string) {
   return `${STORAGE_KEY_PREFIX}${clubId}`;
 }
 
+const CATEGORIES = Array.from(new Set(SHORTCUT_ITEMS.map(i => i.category)));
+
 export function ShortcutsBar() {
-  const { club, clubUser, canView, isClubAdmin } = useAuth();
+  const { club, canView, isClubAdmin } = useAuth();
   const [shortcuts, setShortcuts] = useState<string[]>([]);
   const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState<string[]>([]);
@@ -33,15 +35,15 @@ export function ShortcutsBar() {
     }
   }, [key]);
 
-  const availableItems = ALL_NAV_ITEMS.filter(item => {
-    if (item.href === "/") return false;
+  const availableItems = SHORTCUT_ITEMS.filter(item => {
     if (item.adminOnly) return isClubAdmin;
+    if (item.section === "admin") return isClubAdmin;
     return canView(item.section);
   });
 
-  function save(hrefs: string[]) {
-    setShortcuts(hrefs);
-    if (key) localStorage.setItem(key, JSON.stringify(hrefs));
+  function save(ids: string[]) {
+    setShortcuts(ids);
+    if (key) localStorage.setItem(key, JSON.stringify(ids));
   }
 
   function openDialog() {
@@ -49,21 +51,21 @@ export function ShortcutsBar() {
     setOpen(true);
   }
 
-  function toggleDraft(href: string) {
+  function toggleDraft(id: string) {
     setDraft(prev => {
-      if (prev.includes(href)) return prev.filter(h => h !== href);
+      if (prev.includes(id)) return prev.filter(h => h !== id);
       if (prev.length >= MAX_SHORTCUTS) return prev;
-      return [...prev, href];
+      return [...prev, id];
     });
   }
 
   function applyDraft() {
-    save(draft.filter(h => availableItems.some(i => i.href === h)));
+    save(draft.filter(id => availableItems.some(i => i.id === id)));
     setOpen(false);
   }
 
   const shortcutItems = shortcuts
-    .map(href => availableItems.find(i => i.href === href))
+    .map(id => availableItems.find(i => i.id === id))
     .filter(Boolean) as typeof availableItems;
 
   return (
@@ -75,14 +77,14 @@ export function ShortcutsBar() {
             className="flex items-center gap-2 px-4 py-2 rounded-lg border-2 border-dashed border-muted-foreground/30 text-muted-foreground text-sm hover:border-[#1a5c38]/50 hover:text-[#1a5c38] transition-colors"
           >
             <Plus className="h-4 w-4" />
-            Add shortcuts
+            Add quick actions
           </button>
         ) : (
           shortcutItems.map(item => {
             const Icon = item.icon;
             return (
-              <Link key={item.href} href={item.href}>
-                <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-border shadow-sm hover:border-[#1a5c38]/50 hover:shadow-md hover:bg-[#1a5c38]/5 transition-all cursor-pointer group">
+              <Link key={item.id} href={item.href}>
+                <div className="flex items-center gap-2 px-3.5 py-2 rounded-lg bg-white border border-border shadow-sm hover:border-[#1a5c38]/50 hover:shadow-md hover:bg-[#1a5c38]/5 transition-all cursor-pointer">
                   <Icon className="h-4 w-4 text-[#1a5c38] flex-shrink-0" />
                   <span className="text-sm font-medium text-foreground whitespace-nowrap">{item.label}</span>
                 </div>
@@ -94,7 +96,7 @@ export function ShortcutsBar() {
         {shortcutItems.length > 0 && (
           <button
             onClick={openDialog}
-            title="Customize shortcuts"
+            title="Customize quick actions"
             className="flex items-center justify-center w-9 h-9 rounded-lg border border-border bg-white shadow-sm hover:border-[#1a5c38]/50 hover:bg-[#1a5c38]/5 transition-all text-muted-foreground hover:text-[#1a5c38]"
           >
             <Settings2 className="h-4 w-4" />
@@ -103,47 +105,63 @@ export function ShortcutsBar() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Customize Shortcuts</DialogTitle>
+            <DialogTitle>Customize Quick Actions</DialogTitle>
             <DialogDescription>
-              Choose up to {MAX_SHORTCUTS} pages to pin as shortcuts on your dashboard.
+              Pin up to {MAX_SHORTCUTS} actions to your dashboard for fast access.
               {draft.length >= MAX_SHORTCUTS && (
                 <span className="text-amber-600 font-medium"> Maximum reached.</span>
               )}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-1 max-h-80 overflow-y-auto pr-1">
-            {availableItems.map(item => {
-              const Icon = item.icon;
-              const selected = draft.includes(item.href);
-              const disabled = !selected && draft.length >= MAX_SHORTCUTS;
+          <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+            {CATEGORIES.map(category => {
+              const items = availableItems.filter(i => i.category === category);
+              if (items.length === 0) return null;
               return (
-                <button
-                  key={item.href}
-                  onClick={() => !disabled && toggleDraft(item.href)}
-                  disabled={disabled}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-all ${
-                    selected
-                      ? "bg-[#1a5c38]/10 border border-[#1a5c38]/30 text-[#1a5c38]"
-                      : disabled
-                      ? "opacity-40 cursor-not-allowed bg-muted/30"
-                      : "hover:bg-muted/60 border border-transparent"
-                  }`}
-                >
-                  <div className={`flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 ${
-                    selected ? "bg-[#1a5c38] text-white" : "bg-muted text-muted-foreground"
-                  }`}>
-                    <Icon className="h-3.5 w-3.5" />
+                <div key={category}>
+                  <p className="text-[11px] font-semibold uppercase tracking-widest text-muted-foreground mb-1.5 px-1">
+                    {category}
+                  </p>
+                  <div className="space-y-0.5">
+                    {items.map(item => {
+                      const Icon = item.icon;
+                      const selected = draft.includes(item.id);
+                      const disabled = !selected && draft.length >= MAX_SHORTCUTS;
+                      return (
+                        <button
+                          key={item.id}
+                          onClick={() => !disabled && toggleDraft(item.id)}
+                          disabled={disabled}
+                          className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-left transition-all ${
+                            selected
+                              ? "bg-[#1a5c38]/10 border border-[#1a5c38]/30 text-[#1a5c38]"
+                              : disabled
+                              ? "opacity-40 cursor-not-allowed border border-transparent"
+                              : "hover:bg-muted/60 border border-transparent"
+                          }`}
+                        >
+                          <div className={`flex items-center justify-center w-7 h-7 rounded-md flex-shrink-0 ${
+                            selected ? "bg-[#1a5c38] text-white" : "bg-muted text-muted-foreground"
+                          }`}>
+                            <Icon className="h-3.5 w-3.5" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium leading-tight">{item.label}</p>
+                            <p className="text-xs text-muted-foreground truncate">{item.description}</p>
+                          </div>
+                          {selected && (
+                            <span className="text-[10px] font-bold text-[#1a5c38] bg-[#1a5c38]/10 px-1.5 py-0.5 rounded flex-shrink-0">
+                              {draft.indexOf(item.id) + 1}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
                   </div>
-                  <span className="text-sm font-medium flex-1">{item.label}</span>
-                  {selected && (
-                    <span className="text-[10px] font-semibold text-[#1a5c38] bg-[#1a5c38]/10 px-1.5 py-0.5 rounded">
-                      {draft.indexOf(item.href) + 1}
-                    </span>
-                  )}
-                </button>
+                </div>
               );
             })}
           </div>

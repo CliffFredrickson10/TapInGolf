@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSearch } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -23,6 +24,7 @@ const DEFAULT_FORM = { date: today(), time: "07:00", price: 500, price_9: "" as 
 
 export default function TeeTimes() {
   const { toast } = useToast();
+  const search = useSearch();
   const [teeTimes, setTeeTimes] = useState<TeeTime[]>([]);
   const [loading, setLoading] = useState(true);
   const [fromDate, setFromDate] = useState(today());
@@ -49,6 +51,11 @@ export default function TeeTimes() {
   useEffect(() => { load(); }, [fromDate, toDate]);
 
   const openAdd = () => { setForm(DEFAULT_FORM); setEditId(null); setDialogOpen(true); };
+
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    if (params.get("action") === "new") openAdd();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const openEdit = (tt: TeeTime) => {
     setForm({ date: tt.date, time: tt.time, price: tt.price, price_9: tt.price_9 ?? "", total_slots: tt.total_slots, active: tt.active, promotional_price: tt.promotional_price ?? "" });
     setEditId(tt.id);

@@ -112,6 +112,12 @@ function DiscountVouchersTab() {
     setForm({ ...EMPTY_FORM, code: generateCode() });
     setEditId(null); resetDialog(); setOpen(true);
   };
+
+  const searchStr = useSearch();
+  useEffect(() => {
+    const params = new URLSearchParams(searchStr);
+    if (params.get("action") === "new") openAdd();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   const openEdit = (v: DiscountVoucher) => {
     setForm({
       code: v.code, discount_value: v.discount_value,

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearch } from "wouter";
 import * as XLSX from "xlsx";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -537,6 +538,7 @@ function PrepaidBadge({ total, used }: { total: number; used: number }) {
 export default function Members() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
+  const urlSearch = useSearch();
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [email, setEmail] = useState("");
@@ -568,6 +570,11 @@ export default function Members() {
       .catch(() => { /* pending list is best-effort */ });
   };
   useEffect(() => { load(); loadPending(); }, []);
+
+  useEffect(() => {
+    const params = new URLSearchParams(urlSearch);
+    if (params.get("action") === "new") setOpen(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const reloadAll = () => { load(); loadPending(); };
 

@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import {
   BookOpen, Download, Search, X, Users, FileSpreadsheet,
   CheckCircle2, Clock, XCircle, CalendarDays, BadgeCheck,
-  User, Mail, Phone, CreditCard,
+  User, Mail, Phone, CreditCard, UserPlus,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -118,7 +118,7 @@ export default function Bookings() {
   const [updating, setUpdating]       = useState<number | null>(null);
 
   const [q, setQ]                     = useState("");
-  const [statusFilter, setStatus]     = useState("all");
+  const [statusFilter, setStatus]     = useState(() => new URLSearchParams(search).get("status") ?? "all");
   const [methodFilter, setMethod]     = useState("all");
   const [fromDate, setFrom]           = useState("");
   const [toDate, setTo]               = useState("");
@@ -130,7 +130,62 @@ export default function Bookings() {
   const toggleField = (k: ExportFieldKey) =>
     setExportFields(prev => { const s = new Set(prev); s.has(k) ? s.delete(k) : s.add(k); return s; });
 
+  // Walk-in booking dialog
+  interface TeeSlot { id: number; date: string; time: string; total_slots: number; active: boolean; }
+  const [walkOpen, setWalkOpen]         = useState(false);
+  const [walkDate, setWalkDate]         = useState(format(new Date(), "yyyy-MM-dd"));
+  const [walkSlots, setWalkSlots]       = useState<TeeSlot[]>([]);
+  const [walkSlotsLoading, setWalkSlotsLoading] = useState(false);
+  const [walkSlotId, setWalkSlotId]     = useState("");
+  const [walkPlayers, setWalkPlayers]   = useState("1");
+  const [walkName, setWalkName]         = useState("");
+  const [walkEmail, setWalkEmail]       = useState("");
+  const [walkPhone, setWalkPhone]       = useState("");
+  const [walkSaving, setWalkSaving]     = useState(false);
+
   const autoOpenedRef = useRef(false);
+
+  // Handle ?action= and ?status= URL shortcuts
+  useEffect(() => {
+    const params = new URLSearchParams(search);
+    const action = params.get("action");
+    if (action === "export") setExportOpen(true);
+    if (action === "new")    setWalkOpen(true);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Fetch tee slots when walk-in dialog opens or date changes
+  useEffect(() => {
+    if (!walkOpen) return;
+    setWalkSlotsLoading(true);
+    setWalkSlotId("");
+    api<TeeSlot[]>(`/api/portal/tee-times?from=${walkDate}&to=${walkDate}`)
+      .then(d => setWalkSlots(d.filter((s: TeeSlot) => s.active)))
+      .catch(() => setWalkSlots([]))
+      .finally(() => setWalkSlotsLoading(false));
+  }, [walkOpen, walkDate]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleWalkIn = async () => {
+    if (!walkSlotId || !walkName.trim() || !walkPlayers) return;
+    setWalkSaving(true);
+    try {
+      await api("/api/portal/counter-bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          tee_time_id: Number(walkSlotId),
+          players: Number(walkPlayers),
+          guest_name: walkName.trim(),
+          guest_email: walkEmail.trim() || undefined,
+          guest_phone: walkPhone.trim() || undefined,
+        }),
+      });
+      toast({ title: "Walk-in booking created!" });
+      setWalkOpen(false);
+      setWalkName(""); setWalkEmail(""); setWalkPhone(""); setWalkSlotId(""); setWalkPlayers("1");
+      load();
+    } catch (e: any) {
+      toast({ title: "Booking failed", description: e.message, variant: "destructive" });
+    } finally { setWalkSaving(false); }
+  };
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -431,6 +486,115 @@ export default function Bookings() {
             >
               <Download className="h-4 w-4" />
               Download Excel
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Walk-in Booking Dialog */}
+      <Dialog open={walkOpen} onOpenChange={v => { setWalkOpen(v); if (!v) { setWalkName(""); setWalkEmail(""); setWalkPhone(""); setWalkSlotId(""); setWalkPlayers("1"); } }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="h-5 w-5 text-[#1a5c38]" />
+              Add Walk-in Booking
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Date</Label>
+              <input
+                type="date"
+                value={walkDate}
+                onChange={e => setWalkDate(e.target.value)}
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Tee Time</Label>
+              {walkSlotsLoading ? (
+                <div className="h-9 rounded-md bg-muted animate-pulse" />
+              ) : walkSlots.length === 0 ? (
+                <p className="text-sm text-muted-foreground">No active tee times on this date.</p>
+              ) : (
+                <Select value={walkSlotId} onValueChange={setWalkSlotId}>
+                  <SelectTrigger><SelectValue placeholder="Select a tee time…" /></SelectTrigger>
+                  <SelectContent>
+                    {walkSlots.map(s => (
+                      <SelectItem key={s.id} value={String(s.id)}>
+                        {s.time.slice(0, 5)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Players</Label>
+              <Select value={walkPlayers} onValueChange={setWalkPlayers}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {[1, 2, 3, 4].map(n => (
+                    <SelectItem key={n} value={String(n)}>{n} player{n !== 1 ? "s" : ""}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Guest Name <span className="text-destructive">*</span></Label>
+              <div className="relative">
+                <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <input
+                  value={walkName}
+                  onChange={e => setWalkName(e.target.value)}
+                  placeholder="Full name"
+                  className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Email <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="email"
+                    value={walkEmail}
+                    onChange={e => setWalkEmail(e.target.value)}
+                    placeholder="email@example.com"
+                    className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone <span className="text-muted-foreground text-xs">(optional)</span></Label>
+                <div className="relative">
+                  <Phone className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <input
+                    type="tel"
+                    value={walkPhone}
+                    onChange={e => setWalkPhone(e.target.value)}
+                    placeholder="0XX XXX XXXX"
+                    className="flex h-9 w-full rounded-md border border-input bg-background pl-9 pr-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                  />
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2 flex-row justify-end pt-2">
+            <Button variant="outline" onClick={() => setWalkOpen(false)}>Cancel</Button>
+            <Button
+              className="gap-2 bg-[#1a5c38] hover:bg-[#154d30]"
+              onClick={handleWalkIn}
+              disabled={walkSaving || !walkSlotId || !walkName.trim()}
+            >
+              <UserPlus className="h-4 w-4" />
+              {walkSaving ? "Creating…" : "Create Booking"}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -967,19 +967,49 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
 
   if (ts === "pair" && partner_id) {
     const partnerId = parseInt(partner_id, 10);
-    // Verify partner is already registered and approved for this event
-    const partnerReg = await row<any>(
+    const partnerUser = await row<any>("SELECT id, name, handicap, push_token FROM users WHERE id = ?", [partnerId]);
+    if (!partnerUser) {
+      res.status(400).json({ message: "Partner not found." }); return;
+    }
+    // Check if partner is already registered
+    let partnerReg = await row<any>(
       "SELECT id, team_id FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
       [evId, partnerId]
     );
     if (!partnerReg) {
-      res.status(400).json({ message: "Selected partner is not yet registered for this event. They need to register first — once they have entered you can both link up." }); return;
+      // Auto-register the partner so the pair can be created immediately.
+      // The partner gets a push notification to let them know they've been entered.
+      let partnerDiv: string | null = null;
+      let partnerHcp: number | null = partnerUser.handicap != null ? parseFloat(partnerUser.handicap) : null;
+      if (evDivisions.length > 0 && partnerHcp != null) {
+        for (const d of evDivisions) {
+          if (partnerHcp >= parseFloat(d.min_hcp) && partnerHcp <= parseFloat(d.max_hcp)) { partnerDiv = d.key; break; }
+        }
+      }
+      const partnRegId = await exec(
+        "INSERT INTO event_registrations (event_id, user_id, status, division, frozen_handicap) VALUES (?, ?, 'approved', ?, ?)",
+        [evId, partnerId, partnerDiv, partnerHcp]
+      );
+      partnerReg = { id: partnRegId, team_id: null };
+      // Notify the auto-registered partner
+      const notifTitle = "You've been entered in a tournament! ⛳";
+      const notifBody  = `${user.name} has entered you as their partner in "${ev.name}". Open TapIn Golf to confirm your spot.`;
+      await exec(
+        "INSERT INTO user_notifications (user_id, type, title, body, data) VALUES (?, ?, ?, ?, ?::jsonb)",
+        [partnerId, "event_registration_update", notifTitle, notifBody,
+         JSON.stringify({ type: "event_registration_update", event_id: evId, status: "approved" })]
+      );
+      if (partnerUser.push_token) {
+        const { sendPushNotifications } = await import("../lib/notifications");
+        sendPushNotifications([{ to: partnerUser.push_token, sound: "default", title: notifTitle, body: notifBody,
+          data: { type: "event_registration_update", event_id: evId } }]);
+      }
     }
+    // Link or join existing team
     if (partnerReg.team_id) {
       teamId = partnerReg.team_id;
     } else {
-      const partnerUser = await row<any>("SELECT name FROM users WHERE id = ?", [partnerId]);
-      const teamName = `${user.name} / ${partnerUser?.name ?? "Partner"}`;
+      const teamName = `${user.name} / ${partnerUser.name}`;
       const newTeam = await row<any>(
         "INSERT INTO event_teams (event_id, name) VALUES (?, ?) RETURNING id",
         [evId, teamName]
@@ -1167,7 +1197,9 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
 });
 
-// GET /events/:id/partner-search  — search registered players to pick a partner
+// GET /events/:id/partner-search  — search all TapIn Golf users to pick a partner
+// We search across all users (not just those already registered) so the first
+// person registering isn't blocked by an empty list.
 router.get("/events/:id/partner-search", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Login required" }); return; }
@@ -1175,19 +1207,23 @@ router.get("/events/:id/partner-search", async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
   if (!q || q.length < 2) { res.json({ players: [] }); return; }
   const players = await query<any>(
-    `SELECT u.id, u.name, u.handicap_index, er.team_id
-     FROM event_registrations er
-     JOIN users u ON u.id = er.user_id
-     WHERE er.event_id = ? AND er.status = 'approved' AND er.user_id <> ?
-       AND (LOWER(u.name) LIKE LOWER(?) OR CAST(u.handicap_index AS TEXT) LIKE ?)
-     ORDER BY u.name
+    `SELECT u.id, u.name, u.handicap,
+            er.team_id,
+            CASE WHEN er.id IS NOT NULL THEN TRUE ELSE FALSE END AS already_registered
+     FROM users u
+     LEFT JOIN event_registrations er
+       ON er.event_id = ? AND er.user_id = u.id AND er.status = 'approved'
+     WHERE u.id <> ?
+       AND (LOWER(u.name) LIKE LOWER(?) OR CAST(u.handicap AS TEXT) LIKE ?)
+     ORDER BY already_registered DESC, u.name
      LIMIT 20`,
     [evId, user.id, `%${q}%`, `%${q}%`]
   );
   res.json({ players: players.map((p: any) => ({
     id: p.id, name: p.name,
-    handicap_index: p.handicap_index != null ? parseFloat(p.handicap_index) : null,
+    handicap_index: p.handicap != null ? parseFloat(p.handicap) : null,
     has_partner: !!p.team_id,
+    already_registered: !!p.already_registered,
   })) });
 });
 

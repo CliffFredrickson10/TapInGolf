@@ -26,7 +26,8 @@ interface UserRegistration {
 }
 
 interface PartnerResult {
-  id: number; name: string; handicap_index: number | null; has_partner: boolean;
+  id: number; name: string; handicap_index: number | null;
+  has_partner: boolean; already_registered: boolean;
 }
 
 interface EventDetail {
@@ -640,7 +641,13 @@ export default function EventDetailScreen() {
                                   onPress={() => { setSelectedPartner(p); setPartnerResults([]); setPartnerQuery(""); }}
                                 >
                                   <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
-                                  <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
+                                  <View style={{ flex: 1 }}>
+                                    <Text style={{ fontSize: 13, color: colors.foreground }}>{p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}</Text>
+                                    {p.already_registered
+                                      ? <Text style={{ fontSize: 10, color: "#16a34a" }}>Already entered</Text>
+                                      : <Text style={{ fontSize: 10, color: colors.mutedForeground }}>Will be auto-entered as your partner</Text>
+                                    }
+                                  </View>
                                   {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Has partner</Text>}
                                 </TouchableOpacity>
                               ))}

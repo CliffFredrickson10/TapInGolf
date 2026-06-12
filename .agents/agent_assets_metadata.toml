@@ -71,3 +71,21 @@ id = "4rHKG2wusRkCt72r3AT9S"
 uri = "file://attached_assets/tapin-golf-logo-white.jpg"
 type = "image"
 title = "TapIn Golf Logo — White Background (Green + Gold)"
+
+[[outputs]]
+id = "fGg_KEzAdoyoyJPkbpaP5"
+uri = "file://attached_assets/email-sig-marco-steyn.jpg"
+type = "image"
+title = "Email Signature — Marco Steyn"
+
+[[outputs]]
+id = "skWIFOJ5NaCfrVo-zPNn1"
+uri = "file://attached_assets/email-sig-clifford-fredrickson.jpg"
+type = "image"
+title = "Email Signature — Clifford Fredrickson"
+
+[[outputs]]
+id = "WbZmiRVo1Chpvqe_3H08u"
+uri = "file://attached_assets/email-sig-diederich-kruyt.jpg"
+type = "image"
+title = "Email Signature — Diederich Kruyt"

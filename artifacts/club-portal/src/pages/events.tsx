@@ -1393,8 +1393,9 @@ export default function Events() {
                     <div className="space-y-2">
                       {(() => {
                         // Build team_id → partner names map for team-format events
+                        const isTeamFmt = isTeamFormatFE(detail.format, detail.format2);
                         const teamPartners = new Map<number, string[]>();
-                        if (isTeamDtl) {
+                        if (isTeamFmt) {
                           for (const reg of regs) {
                             if (reg.team_id == null) continue;
                             if (!teamPartners.has(reg.team_id)) teamPartners.set(reg.team_id, []);
@@ -1420,7 +1421,7 @@ export default function Events() {
                             registered:       "Registered",
                             rejected:         "Rejected",
                           };
-                          const partners = isTeamDtl && r.team_id != null
+                          const partners = isTeamFmt && r.team_id != null
                             ? (teamPartners.get(r.team_id) ?? []).filter((n: string) => n !== r.user_name)
                             : [];
                           return (
@@ -1435,7 +1436,7 @@ export default function Events() {
                                         {entryState === "confirmed" && <CheckCircle className="h-3 w-3 inline mr-1" />}
                                         {stateLabel[entryState]}
                                       </span>
-                                      {isTeamDtl && (
+                                      {isTeamFmt && (
                                         partners.length > 0
                                           ? <span className="text-xs bg-[#c8a84b]/15 text-[#8a6e20] px-2 py-0.5 rounded-full font-medium">
                                               🤝 {partners.join(" & ")}

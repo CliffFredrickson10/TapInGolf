@@ -69,9 +69,44 @@ interface LeaderboardEntry {
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const FORMAT_LABELS: Record<string, string> = {
+  // Individual formats
+  gross_stroke_play: "Gross Stroke Play", net_stroke_play: "Net Stroke Play",
+  singles_match_play: "Singles Match Play", individual_stableford: "Individual Stableford",
+  modified_stableford: "Individual Modified Stableford", par_bogey: "Par / Bogey",
+  maximum_score: "Maximum Score", chairman: "Chairman (The Perch)",
+  individual_bonus_bogey: "Individual Bonus Bogey", individual_par: "Individual Par",
+  individual_bogey: "Individual Bogey", eclectic: "Eclectic (Multi-Round)",
+  // Legacy keys
   stroke_play: "Stroke Play", stableford: "Stableford", match_play: "Match Play",
-  fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey", other: "Other",
+  fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",
+  // Betterball / Two-Player Team
+  fourball_gross_betterball: "Four-Ball Gross Betterball",
+  fourball_net_betterball: "Four-Ball Net Betterball",
+  betterball_match_play: "Betterball Match Play",
+  fourball_stableford: "Four-Ball Stableford",
+  shamble: "Shamble", best_ball_aggregate: "Best Ball Aggregate",
+  high_low: "High-Low", daytona: "Daytona (Las Vegas)",
+  low_ball_total: "Low Ball / Total Score", the_ghost: "The Ghost",
+  betterball_bonus_bogey: "Betterball Bonus Bogey",
+  pinehurst_points: "Multiplication Betterball (Pinehurst)",
+  // Full-Group Team
+  american_scramble: "American Scramble",
+  other: "Other",
 };
+
+// Mirror of the server-side teamSize() — used as a local fallback if team_format
+// is not returned by the API (e.g. stale cache or older API version)
+const PAIR_FORMATS_LOCAL = new Set([
+  "betterball","fourball","fourball_gross_betterball","fourball_net_betterball",
+  "betterball_match_play","fourball_stableford","shamble","best_ball_aggregate",
+  "high_low","daytona","low_ball_total","the_ghost","betterball_bonus_bogey","pinehurst_points",
+]);
+const GROUP_FORMATS_LOCAL = new Set(["american_scramble","scramble"]);
+function localTeamSize(fmt: string): "pair" | "group" | "individual" {
+  if (PAIR_FORMATS_LOCAL.has(fmt)) return "pair";
+  if (GROUP_FORMATS_LOCAL.has(fmt)) return "group";
+  return "individual";
+}
 const RESTRICT_LABELS: Record<string, string> = {
   open: "Open", members_only: "Members Only", invitation_only: "Invite Only", whs_players_only: "WHS Index Players Only",
 };
@@ -222,12 +257,14 @@ export default function EventDetailScreen() {
 
   const handleRegister = async () => {
     if (!user) { router.push("/(auth)/login"); return; }
-    // Enforce compulsory team partner selection
-    if (event?.team_format === "pair" && !selectedPartner) {
+    // Compute team format with local fallback so enforcement never depends solely
+    // on the API having returned team_format (guards race conditions on first load)
+    const tf = event?.team_format ?? localTeamSize(event?.format ?? "");
+    if (tf === "pair" && !selectedPartner) {
       setRegisterError("A partner is required for this team format event. Search for your playing partner above.");
       return;
     }
-    if (event?.team_format === "group" && selectedGroupPartners.length === 0) {
+    if (tf === "group" && selectedGroupPartners.length === 0) {
       setRegisterError("At least one teammate is required for this team format event. Search for your playing partners above.");
       return;
     }
@@ -331,6 +368,11 @@ export default function EventDetailScreen() {
 
   const reg      = event.user_registration;
   const division = reg?.division ?? event.user_division_preview;
+
+  // team_format is always returned by the API now; local fallback guards against
+  // stale caches or a first load that races before the auth token is attached
+  const teamFormat: "pair" | "group" | "individual" =
+    event.team_format ?? localTeamSize(event.format ?? "");
 
   // What action should the CTA show?
   const entriesRequired = event.entries_required !== 0; // default true for existing events
@@ -551,25 +593,25 @@ export default function EventDetailScreen() {
                   )}
 
                   {/* Partner / team picker — required for all team format events */}
-                  {event.team_format !== "individual" && (
+                  {teamFormat !== "individual" && (
                     <View style={{ marginBottom: 8 }}>
                       {/* Header */}
                       <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6, gap: 6 }}>
                         <Text style={{ fontSize: 13, fontWeight: "600", color: colors.foreground }}>
-                          {event.team_format === "pair" ? "Select your partner" : "Select your teammates"}
+                          {teamFormat === "pair" ? "Select your partner" : "Select your teammates"}
                         </Text>
                         <View style={{ backgroundColor: "#dc2626", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                           <Text style={{ fontSize: 10, fontWeight: "700", color: "#fff" }}>REQUIRED</Text>
                         </View>
                       </View>
                       <Text style={{ fontSize: 11, color: colors.mutedForeground, marginBottom: 8 }}>
-                        {event.team_format === "pair"
+                        {teamFormat === "pair"
                           ? "This is a Betterball/team format — you must enter with a partner. Your partner must have an account on TapIn Golf."
                           : "This is a team format — you must enter with at least one teammate. Teammates must have accounts on TapIn Golf."}
                       </Text>
 
                       {/* PAIR: single partner select */}
-                      {event.team_format === "pair" && (
+                      {teamFormat === "pair" && (
                         <>
                           {selectedPartner ? (
                             <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 4 }}>
@@ -605,7 +647,7 @@ export default function EventDetailScreen() {
                       )}
 
                       {/* GROUP: multi-partner select (up to 3 teammates for a 4-ball) */}
-                      {event.team_format === "group" && (
+                      {teamFormat === "group" && (
                         <>
                           {selectedGroupPartners.map(p => (
                             <View key={p.id} style={{ flexDirection: "row", alignItems: "center", backgroundColor: colors.primary + "18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 4 }}>
@@ -935,12 +977,12 @@ export default function EventDetailScreen() {
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: "700", color: colors.primary }}>{reg.team_name}</Text>
                       <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
-                        {event.team_format === "pair" ? "Betterball pair — one shared score" : "Team — one shared score for the group"}
+                        {teamFormat === "pair" ? "Betterball pair — one shared score" : "Team — one shared score for the group"}
                       </Text>
                     </View>
                   </View>
                 )}
-                {event.team_format !== "individual" && !reg?.team_name && (
+                {teamFormat !== "individual" && !reg?.team_name && (
                   <View style={{ backgroundColor: "#fef3c7", borderRadius: 10, padding: 12, marginBottom: 12 }}>
                     <Text style={{ fontSize: 12, color: "#92400e" }}>
                       ⚠️ You haven't been linked to a partner/team yet. Submit your score individually and the club can group teams later.

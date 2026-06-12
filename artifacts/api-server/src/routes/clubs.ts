@@ -838,6 +838,9 @@ router.get("/events/:id", async (req, res): Promise<void> => {
   ev.allow_prepaid     = Number(ev.allow_prepaid ?? 0);
   ev.allow_voucher     = Number(ev.allow_voucher ?? 0);
   ev.rounds            = Number(ev.rounds ?? 1);
+  // Always expose team_format so the mobile client can enforce partner selection
+  // regardless of whether the user is authenticated
+  ev.team_format = teamSize(ev.format ?? "");
 
   if (userId) {
     const reg = await row<any>(
@@ -854,7 +857,6 @@ router.get("/events/:id", async (req, res): Promise<void> => {
       [evId, userId]
     );
     ev.user_registration = reg ?? null;
-    ev.team_format = teamSize(ev.format ?? "");
 
     // Preview which division they'd be assigned based on handicap
     if (!reg && ev.divisions?.length && user?.handicap_index != null) {
@@ -944,6 +946,24 @@ router.post("/events/:id/register", async (req, res): Promise<void> => {
   const ts = teamSize(ev.format ?? "");
   let teamId: number | null = null;
   const { partner_id, partner_ids } = req.body ?? {};
+
+  // Enforce partner requirement — reject registrations that arrive without one
+  if (ts === "pair" && !partner_id) {
+    res.status(400).json({
+      message: "A playing partner is required for this team format event. Search for your partner on the registration screen and select them before entering.",
+      requires_partner: true,
+      team_format: "pair",
+    });
+    return;
+  }
+  if (ts === "group" && (!Array.isArray(partner_ids) || partner_ids.length === 0)) {
+    res.status(400).json({
+      message: "At least one teammate is required for this group format event. Select your teammates before entering.",
+      requires_partner: true,
+      team_format: "group",
+    });
+    return;
+  }
 
   if (ts === "pair" && partner_id) {
     const partnerId = parseInt(partner_id, 10);

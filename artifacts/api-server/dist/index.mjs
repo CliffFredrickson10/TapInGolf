@@ -58896,6 +58896,7 @@ router3.get("/events/:id", async (req, res) => {
   ev.allow_prepaid = Number(ev.allow_prepaid ?? 0);
   ev.allow_voucher = Number(ev.allow_voucher ?? 0);
   ev.rounds = Number(ev.rounds ?? 1);
+  ev.team_format = teamSize(ev.format ?? "");
   if (userId) {
     const reg = await row(
       `SELECT er.id, er.status, er.payment_status, er.payment_url, er.division, er.frozen_handicap,
@@ -58911,7 +58912,6 @@ router3.get("/events/:id", async (req, res) => {
       [evId, userId]
     );
     ev.user_registration = reg ?? null;
-    ev.team_format = teamSize(ev.format ?? "");
     if (!reg && ev.divisions?.length && user?.handicap_index != null) {
       const hcp = parseFloat(user.handicap_index);
       for (const d of ev.divisions) {
@@ -59013,6 +59013,22 @@ router3.post("/events/:id/register", async (req, res) => {
   const ts = teamSize(ev.format ?? "");
   let teamId = null;
   const { partner_id, partner_ids } = req.body ?? {};
+  if (ts === "pair" && !partner_id) {
+    res.status(400).json({
+      message: "A playing partner is required for this team format event. Search for your partner on the registration screen and select them before entering.",
+      requires_partner: true,
+      team_format: "pair"
+    });
+    return;
+  }
+  if (ts === "group" && (!Array.isArray(partner_ids) || partner_ids.length === 0)) {
+    res.status(400).json({
+      message: "At least one teammate is required for this group format event. Select your teammates before entering.",
+      requires_partner: true,
+      team_format: "group"
+    });
+    return;
+  }
   if (ts === "pair" && partner_id) {
     const partnerId = parseInt(partner_id, 10);
     const partnerReg = await row(
@@ -65357,7 +65373,8 @@ router14.get("/portal/tee-times", requireClubAuth2, async (req, res) => {
        pts.is_active AS active, pts.session_type, pts.tee_start_type, pts.notes,
        pts.weekday_rate_code, pts.weekend_rate_code, COALESCE(pts.blocked_slots,'[]') AS blocked_slots,
        pts.event_id,
-       ge.name AS event_name
+       ge.name AS event_name,
+       COALESCE(ge.shotgun_start, 0) AS shotgun_start
      FROM portal_tee_slots pts
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ?

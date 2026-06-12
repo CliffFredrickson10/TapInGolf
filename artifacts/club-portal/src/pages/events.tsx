@@ -1391,59 +1391,82 @@ export default function Events() {
                     <p className="text-sm text-muted-foreground py-8 text-center">No registrations yet.</p>
                   ) : (
                     <div className="space-y-2">
-                      {regs.map(r => {
-                        // Derive a single human-readable entry state
-                        const entryState: "confirmed" | "awaiting_payment" | "registered" | "rejected" =
-                          r.status === "rejected" ? "rejected"
-                          : r.payment_status === "paid" ? "confirmed"
-                          : detail.payment_required ? "awaiting_payment"
-                          : "registered";
-                        const stateBadge: Record<string, string> = {
-                          confirmed:        "bg-green-100 text-green-700",
-                          awaiting_payment: "bg-amber-100 text-amber-700",
-                          registered:       "bg-blue-100 text-blue-700",
-                          rejected:         "bg-red-100 text-red-700",
-                        };
-                        const stateLabel: Record<string, string> = {
-                          confirmed:        "Confirmed",
-                          awaiting_payment: "Awaiting Payment",
-                          registered:       "Registered",
-                          rejected:         "Rejected",
-                        };
-                        return (
-                          <Card key={r.id} className={entryState === "rejected" ? "opacity-60" : ""}>
-                            <CardContent className="p-3">
-                              <div className="flex items-center justify-between gap-3">
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="font-medium text-sm">{r.user_name}</span>
-                                    {r.division && <span className="text-xs bg-[#1a5c38]/10 text-[#1a5c38] px-2 py-0.5 rounded-full font-medium">{r.division} Div</span>}
-                                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stateBadge[entryState]}`}>
-                                      {entryState === "confirmed" && <CheckCircle className="h-3 w-3 inline mr-1" />}
-                                      {stateLabel[entryState]}
-                                    </span>
+                      {(() => {
+                        // Build team_id → partner names map for team-format events
+                        const teamPartners = new Map<number, string[]>();
+                        if (isTeamDtl) {
+                          for (const reg of regs) {
+                            if (reg.team_id == null) continue;
+                            if (!teamPartners.has(reg.team_id)) teamPartners.set(reg.team_id, []);
+                            teamPartners.get(reg.team_id)!.push(reg.user_name);
+                          }
+                        }
+                        return regs.map(r => {
+                          // Derive a single human-readable entry state
+                          const entryState: "confirmed" | "awaiting_payment" | "registered" | "rejected" =
+                            r.status === "rejected" ? "rejected"
+                            : r.payment_status === "paid" ? "confirmed"
+                            : detail.payment_required ? "awaiting_payment"
+                            : "registered";
+                          const stateBadge: Record<string, string> = {
+                            confirmed:        "bg-green-100 text-green-700",
+                            awaiting_payment: "bg-amber-100 text-amber-700",
+                            registered:       "bg-blue-100 text-blue-700",
+                            rejected:         "bg-red-100 text-red-700",
+                          };
+                          const stateLabel: Record<string, string> = {
+                            confirmed:        "Confirmed",
+                            awaiting_payment: "Awaiting Payment",
+                            registered:       "Registered",
+                            rejected:         "Rejected",
+                          };
+                          const partners = isTeamDtl && r.team_id != null
+                            ? (teamPartners.get(r.team_id) ?? []).filter((n: string) => n !== r.user_name)
+                            : [];
+                          return (
+                            <Card key={r.id} className={entryState === "rejected" ? "opacity-60" : ""}>
+                              <CardContent className="p-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="min-w-0">
+                                    <div className="flex items-center gap-2 flex-wrap">
+                                      <span className="font-medium text-sm">{r.user_name}</span>
+                                      {r.division && <span className="text-xs bg-[#1a5c38]/10 text-[#1a5c38] px-2 py-0.5 rounded-full font-medium">{r.division} Div</span>}
+                                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${stateBadge[entryState]}`}>
+                                        {entryState === "confirmed" && <CheckCircle className="h-3 w-3 inline mr-1" />}
+                                        {stateLabel[entryState]}
+                                      </span>
+                                      {isTeamDtl && (
+                                        partners.length > 0
+                                          ? <span className="text-xs bg-[#c8a84b]/15 text-[#8a6e20] px-2 py-0.5 rounded-full font-medium">
+                                              🤝 {partners.join(" & ")}
+                                            </span>
+                                          : <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full font-medium">
+                                              No partner
+                                            </span>
+                                      )}
+                                    </div>
+                                    <p className="text-xs text-muted-foreground mt-0.5">
+                                      {r.user_email}
+                                      {r.frozen_handicap != null ? ` · HCP ${r.frozen_handicap}` : ""}
+                                      {r.registered_at ? ` · Entered ${new Date(r.registered_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
+                                    </p>
                                   </div>
-                                  <p className="text-xs text-muted-foreground mt-0.5">
-                                    {r.user_email}
-                                    {r.frozen_handicap != null ? ` · HCP ${r.frozen_handicap}` : ""}
-                                    {r.registered_at ? ` · Entered ${new Date(r.registered_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
-                                  </p>
+                                  {/* Staff can manually remove an entry if needed */}
+                                  {!readOnly && r.status !== "rejected" && (
+                                    <Button
+                                      size="sm" variant="ghost"
+                                      className="h-7 gap-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
+                                      onClick={() => updateReg(r.user_id, "rejected")}
+                                    >
+                                      <XCircle className="h-3.5 w-3.5" />Remove
+                                    </Button>
+                                  )}
                                 </div>
-                                {/* Staff can manually remove an entry if needed */}
-                                {!readOnly && r.status !== "rejected" && (
-                                  <Button
-                                    size="sm" variant="ghost"
-                                    className="h-7 gap-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
-                                    onClick={() => updateReg(r.user_id, "rejected")}
-                                  >
-                                    <XCircle className="h-3.5 w-3.5" />Remove
-                                  </Button>
-                                )}
-                              </div>
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
+                              </CardContent>
+                            </Card>
+                          );
+                        });
+                      })()}
                     </div>
                   )}
                 </TabsContent>
@@ -2086,7 +2109,7 @@ export default function Events() {
                           <p className="text-sm font-semibold">Team Pairings</p>
                           <p className="text-xs text-muted-foreground mt-0.5">
                             {isGroupFormatFE(detail.format, detail.format2) ? "Groups compete together as a team." : "Each pair competes together."}
-                            {" "}Assign players to teams below.
+                            {" "}Golfers who registered as partners are already paired — use the button to manually pair any unpaired players.
                           </p>
                         </div>
                         <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] h-8"
@@ -2139,8 +2162,8 @@ export default function Events() {
                       ) : pairings.length === 0 ? (
                         <div className="py-8 text-center space-y-2">
                           <Users className="h-8 w-8 text-muted-foreground/40 mx-auto" />
-                          <p className="text-sm text-muted-foreground">No pairings created yet.</p>
-                          <p className="text-xs text-muted-foreground">Use the button above to assign players to teams.</p>
+                          <p className="text-sm text-muted-foreground">No pairs formed yet.</p>
+                          <p className="text-xs text-muted-foreground">Golfers who selected a playing partner when registering will appear here automatically. You can also create pairs manually above.</p>
                         </div>
                       ) : (
                         <div className="space-y-2">

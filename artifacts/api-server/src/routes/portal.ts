@@ -1556,9 +1556,11 @@ router.get("/portal/events/:id/registrations", requireClubAuth, async (req: Requ
   const regs = await query<any>(
     `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
             er.payment_status, er.paid_at,
+            er.team_id, et.name as team_name,
             u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
      FROM event_registrations er
      JOIN users u ON u.id = er.user_id
+     LEFT JOIN event_teams et ON et.id = er.team_id
      WHERE er.event_id = ?
      ORDER BY er.division ASC, er.registered_at ASC`,
     [evId]

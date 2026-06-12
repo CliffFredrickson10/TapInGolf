@@ -18,6 +18,12 @@ uri = "file://attached_assets/tapin-golf-letterhead.png"
 type = "image"
 title = "tapin golf letterhead exact"
 
+[[generated]]
+id = "AdeCp76NV8IV1oHFdcizg"
+uri = "file://attached_assets/tapin-golf-logo-white.png"
+type = "image"
+title = "tapin golf white background logo"
+
 [[outputs]]
 id = "EIdvwQwGd8TL3lpZ-UEr8"
 uri = "file://attached_assets/tapin-golf-logo.png"
@@ -35,3 +41,9 @@ id = "Xz5mKtViyH9Vwg6Rp7TB0"
 uri = "file://attached_assets/tapin-golf-letterhead.png"
 type = "image"
 title = "TapIn Golf — Letterhead Logo"
+
+[[outputs]]
+id = "86UMlXzxO0AXtKD7ho9iB"
+uri = "file://attached_assets/tapin-golf-logo-white.png"
+type = "image"
+title = "TapIn Golf — White Background (Green + Gold)"

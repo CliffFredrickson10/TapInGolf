@@ -93,6 +93,9 @@ export function ShotgunCreation() {
   const registeredGroups  = Math.ceil(registeredPlayers / 4);
   const capacityOk = registeredGroups <= maxGroupsTotal;
 
+  const [step, setStep] = useState(3);
+  const STEPS = ["Details", "Format", "Pricing", "Schedule", "Review"];
+
   const allHoles    = Array.from({ length: holes }, (_, i) => i + 1);
   const previewHoles = Array.from({ length: Math.min(6, holes) }, (_, i) => i + 1);
 
@@ -116,22 +119,59 @@ export function ShotgunCreation() {
 
         {/* Step indicator */}
         <div className="flex items-center gap-0">
-          {["Details", "Format", "Pricing", "Schedule", "Review"].map((step, i) => (
-            <div key={step} className="flex items-center">
-              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${i === 3 ? "text-white" : "text-gray-400"}`}
-                style={i === 3 ? { background: GREEN } : {}}>
-                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${i < 3 ? "bg-green-100 text-green-700" : i === 3 ? "bg-white/30 text-white" : "bg-gray-200 text-gray-500"}`}>
-                  {i < 3 ? "✓" : i + 1}
+          {STEPS.map((label, i) => (
+            <div key={label} className="flex items-center">
+              <div className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium ${i === step ? "text-white" : "text-gray-400"}`}
+                style={i === step ? { background: GREEN } : {}}>
+                <span className={`w-4 h-4 rounded-full flex items-center justify-center text-[10px] font-bold ${i < step ? "bg-green-100 text-green-700" : i === step ? "bg-white/30 text-white" : "bg-gray-200 text-gray-500"}`}>
+                  {i < step ? "✓" : i + 1}
                 </span>
-                {step}
+                {label}
               </div>
               {i < 4 && <span className="text-gray-300 text-xs">›</span>}
             </div>
           ))}
         </div>
 
-        {/* Schedule card */}
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Review screen — step 4 */}
+        {step === 4 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
+                <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <h3 className="text-sm font-semibold text-gray-800">Review &amp; Publish</h3>
+              </div>
+              <div className="divide-y divide-gray-100">
+                {[
+                  { label: "Event", value: "Club Championship 2025" },
+                  { label: "Date", value: "Sat 14 Jun 2025" },
+                  { label: "Format", value: "Strokeplay · 18 holes · Competition" },
+                  { label: "Start type", value: startType === "shotgun" ? "Shotgun Start" : startType === "double-tee" ? "Double Tee" : "Sequential" },
+                  { label: "Shotgun time", value: shotgunTime },
+                  { label: "Groups", value: `${maxGroupsTotal} groups · ${maxPlayersTotal} players max` },
+                  { label: "Entry fee", value: "R450.00 per player" },
+                  { label: "Registered", value: `${registeredPlayers} players (${registeredGroups} groups)` },
+                ].map(row => (
+                  <div key={row.label} className="flex items-center justify-between px-5 py-3">
+                    <span className="text-sm text-gray-500">{row.label}</span>
+                    <span className="text-sm font-medium text-gray-900">{row.value}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="flex items-start gap-3 px-4 py-3 rounded-xl border bg-amber-50 border-amber-200">
+              <svg className="h-4 w-4 mt-0.5 flex-shrink-0 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <p className="text-xs text-amber-800">Publishing will notify all registered players by email and make the draw visible in the app.</p>
+            </div>
+          </div>
+        )}
+
+        {/* Schedule card — step 3 */}
+        {step === 3 && (<div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
             <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -463,12 +503,23 @@ export function ShotgunCreation() {
               </div>
             )}
           </div>
-        </div>
+        </div>)}
 
         {/* Navigation */}
         <div className="flex items-center justify-between pb-6">
-          <button className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50">← Back</button>
-          <button className="px-5 py-2 rounded-lg text-sm font-medium text-white" style={{ background: GREEN }}>Next: Review →</button>
+          <button
+            onClick={() => setStep(s => Math.max(0, s - 1))}
+            className="px-4 py-2 rounded-lg border border-gray-200 text-sm font-medium text-gray-600 bg-white hover:bg-gray-50"
+          >
+            ← Back
+          </button>
+          <button
+            onClick={() => setStep(s => Math.min(4, s + 1))}
+            className="px-5 py-2 rounded-lg text-sm font-medium text-white"
+            style={{ background: step === 4 ? GOLD : GREEN }}
+          >
+            {step === 4 ? "Publish Tournament" : "Next: Review →"}
+          </button>
         </div>
       </div>
     </div>

@@ -59,3 +59,15 @@ id = "2h0OUVaAatto78fH5CpRa"
 uri = "file://attached_assets/tapin-golf-header-white.svg"
 type = "image"
 title = "TapIn Golf Logo — White Background (Green + Gold)"
+
+[[outputs]]
+id = "fKBXP4sNGIsOi5Gp0Rh8K"
+uri = "file://attached_assets/tapin-golf-logo-green.jpg"
+type = "image"
+title = "TapIn Golf Logo — Green Background"
+
+[[outputs]]
+id = "4rHKG2wusRkCt72r3AT9S"
+uri = "file://attached_assets/tapin-golf-logo-white.jpg"
+type = "image"
+title = "TapIn Golf Logo — White Background (Green + Gold)"

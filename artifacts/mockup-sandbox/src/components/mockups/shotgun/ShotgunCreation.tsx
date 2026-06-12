@@ -94,7 +94,43 @@ export function ShotgunCreation() {
   const capacityOk = registeredGroups <= maxGroupsTotal;
 
   const [step, setStep] = useState(3);
-  const STEPS = ["Details", "Format", "Pricing", "Schedule", "Review"];
+  const STEPS = ["Details", "Format", "Pricing", "Teams", "Schedule", "Review"];
+
+  // ── Team pairing state ────────────────────────────────────────────
+  const TEAM_COLORS = ["#1a5c38", "#7c3aed", "#b45309", "#be123c", "#0369a1", "#d97706"];
+  const MOCK_PLAYERS = [
+    "Pieter van Wyk", "Johan Botha", "Andre Smit", "Louis Nel",
+    "Morne Visser", "Thabo Dlamini", "Rikus Pretorius", "Jaco Venter",
+    "Eugene Steyn", "Charl Fourie", "Danie Grobler", "Herman Louw",
+    "Francois Meyer", "Jan Naudé", "Gert Botes", "Rian Joubert",
+    "Petrus Jacobs", "Schalk Burger", "Ernst Bekker", "Cobus Viljoen",
+  ];
+  const [teamSize, setTeamSize]   = useState(2);
+  const [pairedTeams, setPairedTeams] = useState([
+    { id: 1, players: ["Pieter van Wyk", "Johan Botha"],         color: "#1a5c38" },
+    { id: 2, players: ["Morne Visser", "Thabo Dlamini"],         color: "#7c3aed" },
+    { id: 3, players: ["Eugene Steyn", "Charl Fourie", "Danie Grobler"], color: "#b45309" },
+  ]);
+  const [addingPairing, setAddingPairing] = useState(false);
+  const [draftTeam, setDraftTeam] = useState<string[]>([]);
+
+  const pairedSet       = new Set(pairedTeams.flatMap(t => t.players));
+  const unpairedPlayers = MOCK_PLAYERS.filter(p => !pairedSet.has(p));
+
+  const toggleDraft = (p: string) =>
+    setDraftTeam(prev =>
+      prev.includes(p) ? prev.filter(x => x !== p) : prev.length < teamSize ? [...prev, p] : prev
+    );
+
+  const savePairing = () => {
+    if (draftTeam.length < 2) return;
+    const color = TEAM_COLORS[pairedTeams.length % TEAM_COLORS.length];
+    setPairedTeams(prev => [...prev, { id: Date.now(), players: draftTeam, color }]);
+    setDraftTeam([]);
+    setAddingPairing(false);
+  };
+
+  const removePairing = (id: number) => setPairedTeams(prev => prev.filter(t => t.id !== id));
 
   const allHoles    = Array.from({ length: holes }, (_, i) => i + 1);
   const previewHoles = Array.from({ length: Math.min(6, holes) }, (_, i) => i + 1);
@@ -133,8 +169,8 @@ export function ShotgunCreation() {
           ))}
         </div>
 
-        {/* Review screen — step 4 */}
-        {step === 4 && (
+        {/* Review screen — step 5 */}
+        {step === 5 && (
           <div className="space-y-4">
             <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
@@ -170,8 +206,122 @@ export function ShotgunCreation() {
           </div>
         )}
 
-        {/* Schedule card — step 3 */}
-        {step === 3 && (<div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+        {/* Teams step — step 3 */}
+        {step === 3 && (
+          <div className="space-y-4">
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
+                <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+                <h3 className="text-sm font-semibold text-gray-800">Player Pairings</h3>
+                <span className="ml-auto text-xs text-gray-400">
+                  Optional · {pairedTeams.length} team{pairedTeams.length !== 1 ? "s" : ""} defined
+                </span>
+              </div>
+
+              <div className="p-5 space-y-5">
+                {/* Team size selector */}
+                <div>
+                  <div className="flex items-center gap-1.5 mb-1.5">
+                    <label className="text-sm font-medium text-gray-700">Team Size</label>
+                    <span className="text-xs text-gray-400">players per team</span>
+                  </div>
+                  <div className="flex gap-2">
+                    {[2, 3, 4].map(n => (
+                      <button key={n} onClick={() => setTeamSize(n)}
+                        className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${teamSize === n ? "text-white" : "border-gray-200 text-gray-600 hover:bg-gray-50"}`}
+                        style={teamSize === n ? { background: GREEN, borderColor: GREEN } : {}}>
+                        {n}-Ball
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-xs text-gray-400 mt-1.5">Teams will always be placed in the same group. Mixed sizes are supported.</p>
+                </div>
+
+                {/* Existing pairings */}
+                {pairedTeams.length > 0 && (
+                  <div className="space-y-2">
+                    {pairedTeams.map((team, ti) => (
+                      <div key={team.id} className="flex items-start gap-3 p-3 rounded-lg border border-gray-200 bg-white">
+                        <div className="w-2.5 h-2.5 rounded-full mt-1 flex-shrink-0" style={{ background: team.color }} />
+                        <div className="flex flex-wrap gap-1.5 flex-1">
+                          {team.players.map(p => (
+                            <span key={p} className="px-2.5 py-1 rounded-full text-xs font-medium text-white" style={{ background: team.color }}>
+                              {p}
+                            </span>
+                          ))}
+                        </div>
+                        <span className="text-xs text-gray-400 flex-shrink-0 mt-0.5">{team.players.length}-ball</span>
+                        <button onClick={() => removePairing(team.id)} className="text-gray-300 hover:text-red-400 flex-shrink-0" title="Remove">
+                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Add pairing inline form */}
+                {addingPairing ? (
+                  <div className="rounded-lg border-2 border-dashed p-4 space-y-3" style={{ borderColor: "#b7dfc8", background: "#f8fdf9" }}>
+                    <p className="text-xs font-medium text-gray-700">
+                      Select {teamSize} players ({draftTeam.length}/{teamSize} selected)
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unpairedPlayers.map(p => {
+                        const selected = draftTeam.includes(p);
+                        const disabled = !selected && draftTeam.length >= teamSize;
+                        return (
+                          <button key={p} onClick={() => toggleDraft(p)} disabled={disabled}
+                            className={`px-2.5 py-1.5 rounded-full text-xs font-medium border transition-colors
+                              ${selected ? "text-white border-transparent" : "border-gray-200 text-gray-600"}
+                              ${disabled ? "opacity-40 cursor-default" : "hover:border-green-300"}`}
+                            style={selected ? { background: TEAM_COLORS[pairedTeams.length % TEAM_COLORS.length] } : {}}>
+                            {p}
+                          </button>
+                        );
+                      })}
+                      {unpairedPlayers.length === 0 && <p className="text-xs text-gray-400">All players already paired.</p>}
+                    </div>
+                    <div className="flex gap-2">
+                      <button onClick={() => { setAddingPairing(false); setDraftTeam([]); }}
+                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 hover:bg-gray-50">
+                        Cancel
+                      </button>
+                      <button onClick={savePairing} disabled={draftTeam.length < 2}
+                        className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
+                        style={{ background: GREEN }}>
+                        Add Team ({draftTeam.length} player{draftTeam.length !== 1 ? "s" : ""})
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button onClick={() => setAddingPairing(true)}
+                    className="w-full py-2.5 rounded-lg border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-green-300 hover:text-green-700 transition-colors">
+                    + Add Pairing
+                  </button>
+                )}
+
+                {/* Unpaired pool */}
+                {unpairedPlayers.length > 0 && (
+                  <div>
+                    <p className="text-xs text-gray-500 mb-2">Unpaired ({unpairedPlayers.length}) — will be randomly assigned</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {unpairedPlayers.map(p => (
+                        <span key={p} className="px-2 py-1 bg-gray-100 rounded-full text-xs text-gray-600">{p}</span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Schedule card — step 4 */}
+        {step === 4 && (<div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
           <div className="px-5 py-3.5 border-b border-gray-100 flex items-center gap-2" style={{ background: "#f8fdf9" }}>
             <svg className="h-4 w-4" style={{ color: GREEN }} fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
@@ -514,11 +664,11 @@ export function ShotgunCreation() {
             ← Back
           </button>
           <button
-            onClick={() => setStep(s => Math.min(4, s + 1))}
+            onClick={() => setStep(s => Math.min(5, s + 1))}
             className="px-5 py-2 rounded-lg text-sm font-medium text-white"
-            style={{ background: step === 4 ? GOLD : GREEN }}
+            style={{ background: step === 5 ? GOLD : GREEN }}
           >
-            {step === 4 ? "Publish Tournament" : "Next: Review →"}
+            {step === 5 ? "Publish Tournament" : step === 4 ? "Next: Review →" : "Next →"}
           </button>
         </div>
       </div>

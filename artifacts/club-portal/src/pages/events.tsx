@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+import { Fragment, useEffect, useState, useCallback, useRef } from "react";
 import { useSearch } from "wouter";
 import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
@@ -142,6 +142,20 @@ interface ConflictEvent {
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
+const PAIR_FORMATS_FE = new Set([
+  "betterball", "fourball", "fourball_gross_betterball", "fourball_net_betterball",
+  "betterball_match_play", "fourball_stableford", "shamble", "best_ball_aggregate",
+  "high_low", "daytona", "low_ball_total", "the_ghost", "betterball_bonus_bogey",
+  "pinehurst_points",
+]);
+const GROUP_FORMATS_FE = new Set(["american_scramble", "scramble", "alliance"]);
+function isTeamFormatFE(f1: string, f2?: string | null) {
+  return PAIR_FORMATS_FE.has(f1) || GROUP_FORMATS_FE.has(f1) || PAIR_FORMATS_FE.has(f2 ?? "") || GROUP_FORMATS_FE.has(f2 ?? "");
+}
+function isGroupFormatFE(f1: string, f2?: string | null) {
+  return GROUP_FORMATS_FE.has(f1) || GROUP_FORMATS_FE.has(f2 ?? "");
+}
+
 const FORMAT_LABELS: Record<string, string> = {
   // Legacy keys kept for backwards compatibility
   stroke_play: "Stroke Play", stableford: "Stableford", match_play: "Match Play",
@@ -280,7 +294,7 @@ export default function Events() {
   // Draw generation dialog
   const [genDlg, setGenDlg]               = useState(false);
   const [genMode, setGenMode]             = useState<"random"|"seeded">("random");
-  const [genMetric, setGenMetric]         = useState<"gross"|"net"|"points">("points");
+  const [genMetric, setGenMetric]         = useState<"gross"|"net"|"points"|"handicap">("points");
   const [genSeedRound, setGenSeedRound]   = useState(1);
   const [genPerGroup, setGenPerGroup]     = useState(4);
   const [genAllRounds, setGenAllRounds]   = useState(false);
@@ -311,6 +325,16 @@ export default function Events() {
   const [inviteSearching, setInviteSearching] = useState(false);
   const [inviteAdding, setInviteAdding]     = useState<number | null>(null);
   const [inviteRemoving, setInviteRemoving] = useState<number | null>(null);
+
+  // Pairings tab (team events)
+  const [pairings, setPairings] = useState<Array<{
+    id: number; name: string | null;
+    players: Array<{ user_id: number; user_name: string; reg_status: string }>;
+  }>>([]);
+  const [pairingsLoading, setPairingsLoading] = useState(false);
+  const [addPairingOpen, setAddPairingOpen] = useState(false);
+  const [addPairingDraft, setAddPairingDraft] = useState<Array<{ user_id: number; user_name: string }>>([]);
+  const [pairingSaving, setPairingSaving] = useState(false);
 
   // Conflict resolution dialog
   const [conflictDialog, setConflictDialog] = useState<{
@@ -359,6 +383,7 @@ export default function Events() {
 
   // Create/Edit dialog
   const [dlgOpen, setDlgOpen]   = useState(false);
+  const [wizardStep, setWizardStep] = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -545,6 +570,46 @@ export default function Events() {
     } catch {} finally { setInviteRemoving(null); }
   };
 
+  const loadPairings = useCallback(async (evId: number) => {
+    setPairingsLoading(true);
+    try {
+      const data = await api<{ teams: typeof pairings }>(`/api/portal/events/${evId}/pairings`);
+      setPairings(data.teams ?? []);
+    } catch {} finally { setPairingsLoading(false); }
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (detailTab === "pairings" && detail) loadPairings(detail.id);
+  }, [detailTab, detail?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleCreatePairing = async () => {
+    if (!detail || addPairingDraft.length < 2) return;
+    setPairingSaving(true);
+    try {
+      await api(`/api/portal/events/${detail.id}/pairings`, {
+        method: "POST",
+        body: JSON.stringify({ player_ids: addPairingDraft.map(p => p.user_id) }),
+      });
+      setAddPairingDraft([]);
+      setAddPairingOpen(false);
+      loadPairings(detail.id);
+      toast({ title: "Pairing created" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setPairingSaving(false); }
+  };
+
+  const handleDeletePairing = async (teamId: number) => {
+    if (!detail || !confirm("Remove this pairing?")) return;
+    try {
+      await api(`/api/portal/events/${detail.id}/pairings/${teamId}`, { method: "DELETE" });
+      setPairings(prev => prev.filter(t => t.id !== teamId));
+      toast({ title: "Pairing removed" });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    }
+  };
+
   const openDetail = (ev: GolfEvent) => {
     setDetail(ev);
     setDetailTab("registrations");
@@ -716,6 +781,7 @@ export default function Events() {
     setPendingTeeConfig(null);
     setExistingGeneralSlots([]);
     setImportBannerDismissed(false);
+    setWizardStep(0);
     setDlgOpen(true);
   };
 
@@ -758,6 +824,7 @@ export default function Events() {
     setNewSlotDate("");
     setNewSlotTime("");
     setNewSlotPlayers(4);
+    setWizardStep(0);
     setDlgOpen(true);
     // Load exclusive event slots after opening (existing events only)
     loadEventSlots(ev.id);
@@ -1256,22 +1323,34 @@ export default function Events() {
               </SheetHeader>
 
               <Tabs value={detailTab} onValueChange={setDetailTab} className="px-6 pt-4">
-                <TabsList className={`w-full grid mb-4 h-10 ${detail.restriction === "invitation_only" ? "grid-cols-6" : "grid-cols-5"}`}>
-                  <TabsTrigger value="registrations" className="text-xs gap-1">
-                    <Users className="h-3.5 w-3.5" />Entries
-                    {detail.pending_count > 0 && <span className="ml-0.5 bg-amber-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{detail.pending_count}</span>}
-                  </TabsTrigger>
-                  <TabsTrigger value="schedule" className="text-xs gap-1"><Clock className="h-3.5 w-3.5" />Schedule</TabsTrigger>
-                  <TabsTrigger value="divisions" className="text-xs gap-1"><Trophy className="h-3.5 w-3.5" />Divisions</TabsTrigger>
-                  <TabsTrigger value="draw" className="text-xs gap-1"><ListOrdered className="h-3.5 w-3.5" />Draw</TabsTrigger>
-                  <TabsTrigger value="scores" className="text-xs gap-1"><BarChart2 className="h-3.5 w-3.5" />Scores</TabsTrigger>
-                  {detail.restriction === "invitation_only" && (
-                    <TabsTrigger value="invites" className="text-xs gap-1">
-                      <Send className="h-3.5 w-3.5" />Invites
-                      {invites.length > 0 && <span className="ml-0.5 bg-blue-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{invites.length}</span>}
-                    </TabsTrigger>
-                  )}
-                </TabsList>
+                {(() => {
+                  const isTeamDtl = isTeamFormatFE(detail.format, detail.format2);
+                  const cols = 5 + (isTeamDtl ? 1 : 0) + (detail.restriction === "invitation_only" ? 1 : 0);
+                  return (
+                    <TabsList className={`w-full grid mb-4 h-10 grid-cols-${cols}`}>
+                      <TabsTrigger value="registrations" className="text-xs gap-1">
+                        <Users className="h-3.5 w-3.5" />Entries
+                        {detail.pending_count > 0 && <span className="ml-0.5 bg-amber-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{detail.pending_count}</span>}
+                      </TabsTrigger>
+                      <TabsTrigger value="schedule" className="text-xs gap-1"><Clock className="h-3.5 w-3.5" />Schedule</TabsTrigger>
+                      <TabsTrigger value="divisions" className="text-xs gap-1"><Trophy className="h-3.5 w-3.5" />Divisions</TabsTrigger>
+                      <TabsTrigger value="draw" className="text-xs gap-1"><ListOrdered className="h-3.5 w-3.5" />Draw</TabsTrigger>
+                      <TabsTrigger value="scores" className="text-xs gap-1"><BarChart2 className="h-3.5 w-3.5" />Scores</TabsTrigger>
+                      {isTeamDtl && (
+                        <TabsTrigger value="pairings" className="text-xs gap-1">
+                          <Users className="h-3.5 w-3.5" />Pairings
+                          {pairings.length > 0 && <span className="ml-0.5 bg-[#1a5c38] text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{pairings.length}</span>}
+                        </TabsTrigger>
+                      )}
+                      {detail.restriction === "invitation_only" && (
+                        <TabsTrigger value="invites" className="text-xs gap-1">
+                          <Send className="h-3.5 w-3.5" />Invites
+                          {invites.length > 0 && <span className="ml-0.5 bg-blue-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{invites.length}</span>}
+                        </TabsTrigger>
+                      )}
+                    </TabsList>
+                  );
+                })()}
 
                 {/* REGISTRATIONS TAB */}
                 <TabsContent value="registrations" className="pb-8">
@@ -1983,6 +2062,131 @@ export default function Events() {
                   )}
                 </TabsContent>
 
+                {/* PAIRINGS TAB — team-format events only */}
+                {isTeamFormatFE(detail.format, detail.format2) && (
+                  <TabsContent value="pairings" className="pb-8">
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <p className="text-sm font-semibold">Team Pairings</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {isGroupFormatFE(detail.format, detail.format2) ? "Groups compete together as a team." : "Each pair competes together."}
+                            {" "}Assign players to teams below.
+                          </p>
+                        </div>
+                        <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] h-8"
+                          onClick={() => { setAddPairingDraft([]); setAddPairingOpen(true); }}>
+                          <Plus className="h-3.5 w-3.5 mr-1" />New Pairing
+                        </Button>
+                      </div>
+
+                      {/* Add pairing panel */}
+                      {addPairingOpen && (
+                        <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 p-4 space-y-3">
+                          <p className="text-sm font-semibold text-[#1a5c38]">Create New Pairing</p>
+                          <p className="text-xs text-muted-foreground">Select 2+ registered players to pair together.</p>
+                          <div className="space-y-2">
+                            {regs.filter(r => r.status === "approved").map(r => {
+                              const inDraft = addPairingDraft.some(p => p.user_id === r.user_id);
+                              return (
+                                <label key={r.user_id} className="flex items-center gap-2.5 rounded-md border bg-white px-3 py-2 cursor-pointer hover:border-[#1a5c38]/40">
+                                  <input type="checkbox" checked={inDraft} className="accent-[#1a5c38]"
+                                    onChange={e => {
+                                      if (e.target.checked) setAddPairingDraft(d => [...d, { user_id: r.user_id, user_name: r.user_name }]);
+                                      else setAddPairingDraft(d => d.filter(p => p.user_id !== r.user_id));
+                                    }} />
+                                  <span className="text-sm">{r.user_name}</span>
+                                  {r.handicap != null && <span className="text-xs text-muted-foreground ml-auto">HI {Number(r.handicap).toFixed(1)}</span>}
+                                </label>
+                              );
+                            })}
+                            {regs.filter(r => r.status === "approved").length === 0 && (
+                              <p className="text-xs text-muted-foreground italic">No approved registrations yet.</p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 pt-1">
+                            <span className="text-xs text-muted-foreground">{addPairingDraft.length} selected</span>
+                            <div className="flex-1" />
+                            <Button size="sm" variant="outline" onClick={() => { setAddPairingOpen(false); setAddPairingDraft([]); }}>Cancel</Button>
+                            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]"
+                              onClick={handleCreatePairing}
+                              disabled={addPairingDraft.length < 2 || pairingSaving}>
+                              {pairingSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Create Pairing"}
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                      {pairingsLoading ? (
+                        <div className="space-y-2">
+                          {[1, 2, 3].map(i => <div key={i} className="h-20 rounded-lg border bg-muted/20 animate-pulse" />)}
+                        </div>
+                      ) : pairings.length === 0 ? (
+                        <div className="py-8 text-center space-y-2">
+                          <Users className="h-8 w-8 text-muted-foreground/40 mx-auto" />
+                          <p className="text-sm text-muted-foreground">No pairings created yet.</p>
+                          <p className="text-xs text-muted-foreground">Use the button above to assign players to teams.</p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {pairings.map((team, idx) => {
+                            const colors = [
+                              "border-blue-200 bg-blue-50",
+                              "border-purple-200 bg-purple-50",
+                              "border-rose-200 bg-rose-50",
+                              "border-orange-200 bg-orange-50",
+                              "border-teal-200 bg-teal-50",
+                              "border-indigo-200 bg-indigo-50",
+                            ];
+                            const badgeColors = [
+                              "bg-blue-100 text-blue-700",
+                              "bg-purple-100 text-purple-700",
+                              "bg-rose-100 text-rose-700",
+                              "bg-orange-100 text-orange-700",
+                              "bg-teal-100 text-teal-700",
+                              "bg-indigo-100 text-indigo-700",
+                            ];
+                            const colorClass = colors[idx % colors.length]!;
+                            const badgeClass = badgeColors[idx % badgeColors.length]!;
+                            return (
+                              <Card key={team.id} className={`border ${colorClass}`}>
+                                <CardContent className="p-3">
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <div className="flex items-center gap-2">
+                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
+                                        Team {idx + 1}
+                                      </span>
+                                      {team.name && <span className="text-sm font-semibold">{team.name}</span>}
+                                    </div>
+                                    <button type="button"
+                                      onClick={() => handleDeletePairing(team.id)}
+                                      className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
+                                      title="Remove pairing">
+                                      <X className="h-3.5 w-3.5" />
+                                    </button>
+                                  </div>
+                                  <div className="space-y-1">
+                                    {team.players.map(p => (
+                                      <div key={p.user_id} className="flex items-center gap-2 text-sm">
+                                        <div className="h-2 w-2 rounded-full bg-current opacity-40" />
+                                        <span className="font-medium">{p.user_name}</span>
+                                        <span className={`ml-auto text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
+                                          p.reg_status === "approved" ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                                          {p.reg_status}
+                                        </span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </CardContent>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </TabsContent>
+                )}
+
                 {/* INVITES TAB — invitation_only events only */}
                 {detail.restriction === "invitation_only" && (
                   <TabsContent value="invites" className="pb-8">
@@ -2084,749 +2288,788 @@ export default function Events() {
       <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Tournament</DialogTitle></DialogHeader>
-          <div className="space-y-4 py-2">
-
-            {/* ── Templates ────────────────────────────────────────────────── */}
-            <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />
-                  <span className="text-sm font-semibold text-[#1a5c38]">Templates</span>
-                  {teeConfigSnapshot && (
-                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
-                  )}
-                </div>
-                {!readOnly && !showTplSave && (
-                  <Button size="sm" variant="outline"
-                    className="h-6 px-2 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10"
-                    onClick={() => setShowTplSave(true)}>
-                    <BookmarkPlus className="h-3 w-3 mr-1" />Save as Template
-                  </Button>
-                )}
-              </div>
-
-              {showTplSave && (
-                <form className="flex gap-2" onSubmit={handleSaveTemplate}>
-                  <Input
-                    className="h-7 text-xs flex-1"
-                    placeholder="Template name e.g. Club Championship Setup…"
-                    value={tplSaveName}
-                    onChange={e => setTplSaveName(e.target.value)}
-                    autoFocus
-                  />
-                  <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
-                    {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                  </Button>
-                  <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                    onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </form>
-              )}
-
-              {templatesLoading ? (
-                <p className="text-xs text-muted-foreground italic">Loading templates…</p>
-              ) : templates.length === 0 ? (
-                <p className="text-xs text-muted-foreground italic">No templates yet — configure below and save for quick reuse.</p>
-              ) : (
-                <div className="space-y-1.5">
-                  {templates.map(tpl => (
-                    <div key={tpl.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5">
-                      {tpl.template_data?.tee_config && (
-                        <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700" title="Includes tee schedule config">tee</span>
+          {(() => {
+            const isTeamFmt  = isTeamFormatFE(form.format, form.format2);
+            const isGroupFmt = isGroupFormatFE(form.format, form.format2);
+            const STEPS = ["Details", "Format", "Pricing", "Teams", "Schedule", "Review"];
+            return (
+              <>
+                {/* ── Step progress ────────────────────────────────────────────── */}
+                <div className="flex items-center gap-0 py-3">
+                  {STEPS.map((label, i) => (
+                    <Fragment key={i}>
+                      <button type="button"
+                        onClick={() => { if (i < wizardStep) setWizardStep(i); }}
+                        className={`flex items-center gap-1 px-1 py-0.5 rounded text-xs font-medium transition-colors ${
+                          i === wizardStep ? "text-[#1a5c38] font-semibold"
+                          : i < wizardStep ? "text-muted-foreground hover:text-foreground cursor-pointer"
+                          : "text-muted-foreground/40 cursor-default"}`}>
+                        <span className={`h-5 w-5 shrink-0 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                          i === wizardStep ? "bg-[#1a5c38] text-white"
+                          : i < wizardStep ? "bg-[#1a5c38]/20 text-[#1a5c38]"
+                          : "bg-muted text-muted-foreground/40"}`}>
+                          {i < wizardStep ? "\u2713" : i + 1}
+                        </span>
+                        <span className="hidden lg:inline">{label}</span>
+                      </button>
+                      {i < STEPS.length - 1 && (
+                        <div className={`flex-1 h-px mx-0.5 ${i < wizardStep ? "bg-[#1a5c38]/35" : "bg-border"}`} />
                       )}
-                      {renamingTplId === tpl.id ? (
-                        <form className="flex items-center gap-1.5 flex-1 min-w-0" onSubmit={e => { e.preventDefault(); handleRenameTpl(tpl.id); }}>
-                          <Input className="h-6 text-xs flex-1 min-w-0" value={renameTplVal}
-                            onChange={e => setRenameTplVal(e.target.value)} autoFocus onBlur={() => setRenamingTplId(null)} />
-                          <Button type="submit" size="sm" className="h-6 px-2 text-xs bg-[#1a5c38] hover:bg-[#164d30]">Save</Button>
-                        </form>
-                      ) : (
-                        <>
-                          <span
-                            className="flex-1 text-sm font-medium truncate cursor-pointer hover:text-[#1a5c38]"
-                            title="Double-click to rename"
-                            onDoubleClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}>
-                            {tpl.name}
-                          </span>
+                    </Fragment>
+                  ))}
+                </div>
+
+                {/* ── Step content ─────────────────────────────────────────────── */}
+                <div key={wizardStep} className="space-y-4 py-1 min-h-[320px]">
+
+                  {/* ━━━ STEP 0: DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 0 && (<>
+                    {/* Templates */}
+                    <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />
+                          <span className="text-sm font-semibold text-[#1a5c38]">Templates</span>
+                          {teeConfigSnapshot && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
+                          )}
+                        </div>
+                        {!readOnly && !showTplSave && (
                           <Button size="sm" variant="outline"
-                            className="h-6 px-2 text-xs flex-shrink-0 border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/10"
-                            onClick={() => handleLoadTemplate(tpl)}>Load</Button>
-                          <Button size="sm" variant="ghost"
-                            className="h-6 w-6 p-0 flex-shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}>
+                            className="h-6 px-2 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                            onClick={() => setShowTplSave(true)}>
+                            <BookmarkPlus className="h-3 w-3 mr-1" />Save as Template
+                          </Button>
+                        )}
+                      </div>
+                      {showTplSave && (
+                        <form className="flex gap-2" onSubmit={handleSaveTemplate}>
+                          <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup\u2026"
+                            value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} autoFocus />
+                          <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
+                            {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                          </Button>
+                          <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                            onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
                             <X className="h-3 w-3" />
                           </Button>
-                        </>
+                        </form>
+                      )}
+                      {templatesLoading ? (
+                        <p className="text-xs text-muted-foreground italic">Loading templates\u2026</p>
+                      ) : templates.length === 0 ? (
+                        <p className="text-xs text-muted-foreground italic">No templates yet \u2014 configure below and save for quick reuse.</p>
+                      ) : (
+                        <div className="space-y-1.5">
+                          {templates.map(tpl => (
+                            <div key={tpl.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5">
+                              {tpl.template_data?.tee_config && (
+                                <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700" title="Includes tee schedule config">tee</span>
+                              )}
+                              {renamingTplId === tpl.id ? (
+                                <form className="flex items-center gap-1.5 flex-1 min-w-0" onSubmit={e => { e.preventDefault(); handleRenameTpl(tpl.id); }}>
+                                  <Input className="h-6 text-xs flex-1 min-w-0" value={renameTplVal}
+                                    onChange={e => setRenameTplVal(e.target.value)} autoFocus onBlur={() => setRenamingTplId(null)} />
+                                  <Button type="submit" size="sm" className="h-6 px-2 text-xs bg-[#1a5c38] hover:bg-[#164d30]">Save</Button>
+                                </form>
+                              ) : (<>
+                                <span className="flex-1 text-sm font-medium truncate cursor-pointer hover:text-[#1a5c38]"
+                                  title="Double-click to rename"
+                                  onDoubleClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}>
+                                  {tpl.name}
+                                </span>
+                                <Button size="sm" variant="outline"
+                                  className="h-6 px-2 text-xs flex-shrink-0 border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                                  onClick={() => handleLoadTemplate(tpl)}>Load</Button>
+                                <Button size="sm" variant="ghost"
+                                  className="h-6 w-6 p-0 flex-shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
+                                  onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}>
+                                  <X className="h-3 w-3" />
+                                </Button>
+                              </>)}
+                            </div>
+                          ))}
+                        </div>
                       )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Basic info */}
-            <div className="space-y-1.5">
-              <Label>Tournament Name *</Label>
-              <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Club Championship 2026" />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Description</Label>
-              <textarea
-                ref={descRef}
-                className="w-full border rounded-md px-3 py-2 text-sm min-h-[100px] bg-background resize-none overflow-hidden"
-                value={form.description}
-                onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                onInput={e => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; }}
-                placeholder="Tournament details, rules, conditions…"
-              />
-            </div>
-
-            {/* Tournament image */}
-            <div className="space-y-1.5">
-              <Label>Tournament Image <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
-              <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImgSelect} />
-              {form.image_url ? (
-                <div className="relative w-full h-40 rounded-lg overflow-hidden border">
-                  <img src={form.image_url} alt="Tournament" className="w-full h-full object-cover" />
-                  <button
-                    type="button"
-                    className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
-                    onClick={() => setForm(f => ({ ...f, image_url: "" }))}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  className="w-full h-32 rounded-lg border-2 border-dashed border-border hover:border-[#1a5c38]/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-[#1a5c38] transition-colors"
-                  onClick={() => imgInputRef.current?.click()}
-                  disabled={imgUploading}
-                >
-                  {imgUploading
-                    ? <span className="text-xs">Uploading…</span>
-                    : (<><ImageIcon className="h-6 w-6" /><span className="text-xs">Click to upload tournament image</span></>)
-                  }
-                </button>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Start Date *</Label>
-                <Input type="date" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>End Date (multi-day)</Label>
-                <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Holes</Label>
-                <div className="flex gap-2">
-                  {([9, 18] as const).map(h => (
-                    <button
-                      key={h}
-                      type="button"
-                      onClick={() => setForm(f => ({ ...f, holes: h }))}
-                      className={`flex-1 py-2 rounded-md border text-sm font-semibold transition-colors ${
-                        form.holes === h
-                          ? "bg-primary text-primary-foreground border-primary"
-                          : "bg-background text-foreground border-border hover:border-primary/50"
-                      }`}
-                    >
-                      {h} holes
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-1.5 col-span-2">
-                <Label>Rounds per Day</Label>
-                <div className="flex items-center gap-3">
-                  <Select
-                    value={String(form.rounds_per_day)}
-                    onValueChange={v => setForm(f => ({ ...f, rounds_per_day: Number(v) as 1 | 2 }))}
-                  >
-                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">1 round per day</SelectItem>
-                      <SelectItem value="2">2 rounds per day</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <div className="flex items-center gap-1.5 text-sm text-muted-foreground bg-muted/40 rounded-md border px-3 py-2 h-10 flex-1">
-                    {(() => {
-                      const days = computeDays(form.event_date, form.end_date);
-                      const total = days * form.rounds_per_day;
-                      return (
-                        <>
-                          {days} {days === 1 ? "day" : "days"} × {form.rounds_per_day} = <span className="font-semibold text-foreground ml-1">{total} {total === 1 ? "round" : "rounds"} total</span>
-                        </>
-                      );
-                    })()}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* ── Tee Schedule ──────────────────────────────────────────────────────── */}
-            {form.event_date ? (() => {
-              const getDatesInRange = (start: string, end?: string): string[] => {
-                const dates: string[] = [];
-                const [sy, sm, sd] = start.split("-").map(Number);
-                if (!sy || !sm || !sd) return [start];
-                const [ey, em, ed] = (end || start).split("-").map(Number);
-                const cur = new Date(Date.UTC(sy, sm - 1, sd));
-                const last = new Date(Date.UTC(ey || sy, (em || sm) - 1, ed || sd));
-                const cap = new Date(Date.UTC(sy, sm - 1, sd));
-                cap.setUTCDate(cap.getUTCDate() + 30);
-                while (cur <= last && cur <= cap) {
-                  dates.push(cur.toISOString().split("T")[0]);
-                  cur.setUTCDate(cur.getUTCDate() + 1);
-                }
-                return dates;
-              };
-
-              const tournamentDates = getDatesInRange(form.event_date, form.end_date || undefined);
-              const isMultiDay = tournamentDates.length > 1;
-
-              const slotsByDate = eventSlots.reduce((acc, s) => {
-                const key = String(s.date).slice(0, 10);
-                (acc[key] ||= []).push(s);
-                return acc;
-              }, {} as Record<string, TeeSlot[]>);
-
-              const totalSpots = eventSlots.reduce((sum, s) => sum + s.total_slots, 0);
-
-              return (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-sm font-semibold flex items-center gap-1.5">
-                        <Clock className="h-3.5 w-3.5" />Tee Schedule
-                        {isMultiDay && <span className="text-xs font-normal text-muted-foreground">({tournamentDates.length} days)</span>}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        These tee slots are exclusive to this tournament.
-                      </p>
+                    {/* Name */}
+                    <div className="space-y-1.5">
+                      <Label>Tournament Name *</Label>
+                      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Club Championship 2026" />
                     </div>
-                    {eventSlots.length > 0 && (
-                      <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
-                        {eventSlots.length} slot{eventSlots.length !== 1 ? "s" : ""} · {totalSpots} spots
-                      </span>
-                    )}
-                  </div>
+                    {/* Description */}
+                    <div className="space-y-1.5">
+                      <Label>Description</Label>
+                      <textarea ref={descRef}
+                        className="w-full border rounded-md px-3 py-2 text-sm min-h-[80px] bg-background resize-none overflow-hidden"
+                        value={form.description}
+                        onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                        onInput={e => { const t = e.currentTarget; t.style.height = "auto"; t.style.height = t.scrollHeight + "px"; }}
+                        placeholder="Tournament details, rules, conditions\u2026" />
+                    </div>
+                    {/* Image */}
+                    <div className="space-y-1.5">
+                      <Label>Tournament Image <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                      <input ref={imgInputRef} type="file" accept="image/*" className="hidden" onChange={handleImgSelect} />
+                      {form.image_url ? (
+                        <div className="relative w-full h-36 rounded-lg overflow-hidden border">
+                          <img src={form.image_url} alt="Tournament" className="w-full h-full object-cover" />
+                          <button type="button"
+                            className="absolute top-2 right-2 bg-black/60 hover:bg-black/80 text-white rounded-full p-1"
+                            onClick={() => setForm(f => ({ ...f, image_url: "" }))}>
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <button type="button"
+                          className="w-full h-28 rounded-lg border-2 border-dashed border-border hover:border-[#1a5c38]/50 flex flex-col items-center justify-center gap-2 text-muted-foreground hover:text-[#1a5c38] transition-colors"
+                          onClick={() => imgInputRef.current?.click()} disabled={imgUploading}>
+                          {imgUploading ? <span className="text-xs">Uploading\u2026</span> : (<><ImageIcon className="h-6 w-6" /><span className="text-xs">Click to upload tournament image</span></>)}
+                        </button>
+                      )}
+                    </div>
+                    {/* Dates + Holes + Rounds */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Start Date *</Label>
+                        <Input type="date" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>End Date <span className="text-muted-foreground font-normal text-xs">(multi-day)</span></Label>
+                        <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Holes</Label>
+                        <div className="flex gap-2">
+                          {([9, 18] as const).map(h => (
+                            <button key={h} type="button" onClick={() => setForm(f => ({ ...f, holes: h }))}
+                              className={`flex-1 py-2 rounded-md border text-sm font-semibold transition-colors ${
+                                form.holes === h ? "bg-primary text-primary-foreground border-primary" : "bg-background text-foreground border-border hover:border-primary/50"}`}>
+                              {h} holes
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Rounds per Day</Label>
+                        <Select value={String(form.rounds_per_day)} onValueChange={v => setForm(f => ({ ...f, rounds_per_day: Number(v) as 1 | 2 }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1">1 round per day</SelectItem>
+                            <SelectItem value="2">2 rounds per day</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    {/* Type + Restriction */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Tournament Type</Label>
+                        <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Access</Label>
+                        <Select value={form.restriction} onValueChange={v => setForm(f => ({ ...f, restriction: v }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {Object.entries(RESTRICT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </>)}
 
-                  {/* Existing-slots import banner */}
-                  {!editId && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
-                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
-                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div className="flex-1 min-w-0">
-                        {checkingExistingSlots ? (
-                          <p className="text-xs text-amber-700 flex items-center gap-1.5">
-                            <Loader2 className="h-3 w-3 animate-spin" />Checking for existing tee slots on this date…
-                          </p>
-                        ) : (
-                          <>
-                            <p className="text-xs font-semibold text-amber-800">
-                              {existingGeneralSlots.length} existing tee slot{existingGeneralSlots.length !== 1 ? "s" : ""} found across{" "}
-                              {[...new Set(existingGeneralSlots.map(s => s.date))].length} date{[...new Set(existingGeneralSlots.map(s => s.date))].length !== 1 ? "s" : ""}
-                            </p>
-                            <p className="text-xs text-amber-700 mt-0.5">
-                              These are public tee slots already on the schedule. Import them as this tournament's exclusive tee times, or leave them as-is.
-                            </p>
-                            <div className="flex gap-2 mt-2">
-                              <Button
-                                type="button"
-                                size="sm"
-                                className="h-6 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 text-white"
-                                onClick={handleImportExistingSlots}
-                              >
-                                Import as tournament tee times
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="h-6 px-2 text-xs text-amber-700 hover:bg-amber-100"
-                                onClick={() => setImportBannerDismissed(true)}
-                              >
-                                Leave as public slots
-                              </Button>
-                            </div>
-                          </>
+                  {/* ━━━ STEP 1: FORMAT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 1 && (<>
+                    <p className="text-sm text-muted-foreground">Choose the playing format(s) for this tournament.</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Format 1 *</Label>
+                        <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent className="max-h-80">
+                            <SelectGroup><SelectLabel>Individual</SelectLabel>
+                              <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
+                              <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                              <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
+                              <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
+                              <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
+                              <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
+                              <SelectItem value="maximum_score">Maximum Score</SelectItem>
+                              <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
+                              <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
+                              <SelectItem value="individual_par">Individual Par Competition</SelectItem>
+                              <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
+                              <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Betterball / Two-Player Team</SelectLabel>
+                              <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
+                              <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
+                              <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
+                              <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                              <SelectItem value="shamble">Shamble</SelectItem>
+                              <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
+                              <SelectItem value="high_low">High-Low</SelectItem>
+                              <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
+                              <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
+                              <SelectItem value="the_ghost">The Ghost</SelectItem>
+                              <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
+                              <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
+                              <SelectItem value="american_scramble">American Scramble</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Other</SelectLabel>
+                              <SelectItem value="other">Other (specify below)</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        {form.format === "other" && (
+                          <Input placeholder="Describe the format\u2026" value={form.format_custom}
+                            onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))} />
+                        )}
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Format 2 <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
+                        <Select value={form.format2 || "none"} onValueChange={v => setForm(f => ({ ...f, format2: v === "none" ? "" : v, format2_custom: v !== "other" ? "" : f.format2_custom }))}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent className="max-h-80">
+                            <SelectItem value="none">\u2014 No second format \u2014</SelectItem>
+                            <SelectGroup><SelectLabel>Individual</SelectLabel>
+                              <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
+                              <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                              <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
+                              <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
+                              <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
+                              <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
+                              <SelectItem value="maximum_score">Maximum Score</SelectItem>
+                              <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
+                              <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
+                              <SelectItem value="individual_par">Individual Par Competition</SelectItem>
+                              <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
+                              <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Betterball / Two-Player Team</SelectLabel>
+                              <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
+                              <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
+                              <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
+                              <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                              <SelectItem value="shamble">Shamble</SelectItem>
+                              <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
+                              <SelectItem value="high_low">High-Low</SelectItem>
+                              <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
+                              <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
+                              <SelectItem value="the_ghost">The Ghost</SelectItem>
+                              <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
+                              <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
+                              <SelectItem value="american_scramble">American Scramble</SelectItem>
+                            </SelectGroup>
+                            <SelectGroup><SelectLabel>Other</SelectLabel>
+                              <SelectItem value="other">Other (specify below)</SelectItem>
+                            </SelectGroup>
+                          </SelectContent>
+                        </Select>
+                        {form.format2 === "other" && (
+                          <Input placeholder="Describe the format\u2026" value={form.format2_custom}
+                            onChange={e => setForm(f => ({ ...f, format2_custom: e.target.value }))} />
                         )}
                       </div>
                     </div>
-                  )}
-
-                  {slotsLoading ? (
-                    <div className="space-y-2">
-                      {tournamentDates.map(d => (
-                        <div key={d} className="h-20 rounded-lg border bg-muted/20 animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      {tournamentDates.map((date, idx) => {
-                        const daySlots = slotsByDate[date] ?? [];
-                        return (
-                          <Card key={date} className="border bg-card">
-                            <CardContent className="p-3 space-y-2">
-                              <div className="flex items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                  {isMultiDay && (
-                                    <span className="text-[10px] font-bold text-white bg-[#1a5c38] rounded px-1.5 py-0.5 shrink-0">
-                                      Day {idx + 1}
-                                    </span>
-                                  )}
-                                  <span className="text-sm font-semibold">{fmtDate(date)}</span>
-                                  <span className="text-[10px] text-muted-foreground">{daySlots.length} slot{daySlots.length !== 1 ? "s" : ""}</span>
-                                </div>
-                                <button
-                                  type="button"
-                                  className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                                  onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}
-                                >
-                                  <Plus className="h-3 w-3" />Generate
-                                </button>
-                              </div>
-
-
-                              {daySlots.length === 0 ? (
-                                <p className="text-[11px] text-amber-600 py-1">
-                                  No tee times yet — click Generate to build a schedule for this day.
-                                </p>
-                              ) : (
-                                <div className="space-y-0.5 max-h-48 overflow-y-auto">
-                                  {daySlots.map(slot => {
-                                    const isEditing = editingSlotId === slot.id;
-                                    if (isEditing) {
-                                      return (
-                                        <div key={slot.id} className="flex items-center gap-2 py-1.5 px-2 rounded-md bg-muted/60 border border-dashed">
-                                          <Input
-                                            type="time"
-                                            className="h-6 text-xs w-24 shrink-0"
-                                            value={editSlotTime}
-                                            onChange={e => setEditSlotTime(e.target.value)}
-                                            autoFocus
-                                          />
-                                          <Input
-                                            type="number" min={1} max={4}
-                                            className="h-6 text-xs w-12 shrink-0"
-                                            value={editSlotPlayers}
-                                            onChange={e => setEditSlotPlayers(Number(e.target.value))}
-                                          />
-                                          <span className="text-xs text-muted-foreground shrink-0">players</span>
-                                          <button
-                                            type="button"
-                                            disabled={slotSaving}
-                                            className="ml-auto h-5 w-5 rounded flex items-center justify-center text-white bg-[#1a5c38] hover:bg-[#164d30] disabled:opacity-50"
-                                            onClick={() => handleSlotUpdate(slot)}
-                                          ><Check className="h-3 w-3" /></button>
-                                          <button
-                                            type="button"
-                                            className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"
-                                            onClick={() => setEditingSlotId(null)}
-                                          ><X className="h-3 w-3" /></button>
-                                        </div>
-                                      );
-                                    }
-                                    return (
-                                      <div key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted group">
-                                        <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
-                                        <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
-                                        {slot.id < 0 && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">new</span>}
-                                        {!slot.active && slot.id > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
-                                        <button
-                                          type="button"
-                                          className="ml-auto h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
-                                          onClick={() => { setEditingSlotId(slot.id); setEditSlotTime(String(slot.time).slice(0, 5)); setEditSlotPlayers(slot.total_slots); }}
-                                          title="Edit slot"
-                                        ><Pencil className="h-3 w-3" /></button>
-                                        <button
-                                          type="button"
-                                          className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
-                                          onClick={() => {
-                                            if (slot.id > 0) setDeletedSlotIds(prev => [...prev, slot.id]);
-                                            setEventSlots(prev => prev.filter(s => s.id !== slot.id));
-                                          }}
-                                          title="Remove slot"
-                                        ><X className="h-3 w-3" /></button>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              )}
-                            </CardContent>
-                          </Card>
-                        );
-                      })}
-                    </div>
-                  )}
-
-                  {!editId && (
-                    <p className="text-[11px] text-muted-foreground">
-                      After saving, use the Generate button on each day to quickly build a full tee schedule.
-                    </p>
-                  )}
-                </div>
-              );
-            })() : (
-              <p className="text-xs text-muted-foreground flex items-center gap-1.5">
-                <Clock className="h-3.5 w-3.5" />Set a start date to configure the tee schedule.
-              </p>
-            )}
-
-            {/* Format selectors */}
-            <div className="grid grid-cols-2 gap-3">
-              {/* Format 1 */}
-              <div className="space-y-1.5">
-                <Label>Format 1</Label>
-                <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    <SelectGroup>
-                      <SelectLabel>Individual</SelectLabel>
-                      <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
-                      <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
-                      <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
-                      <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
-                      <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
-                      <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
-                      <SelectItem value="maximum_score">Maximum Score</SelectItem>
-                      <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
-                      <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
-                      <SelectItem value="individual_par">Individual Par Competition</SelectItem>
-                      <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
-                      <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Betterball / Two-Player Team</SelectLabel>
-                      <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
-                      <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
-                      <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
-                      <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
-                      <SelectItem value="shamble">Shamble</SelectItem>
-                      <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
-                      <SelectItem value="high_low">High-Low</SelectItem>
-                      <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
-                      <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
-                      <SelectItem value="the_ghost">The Ghost</SelectItem>
-                      <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
-                      <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Team</SelectLabel>
-                      <SelectItem value="american_scramble">American Scramble</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Other</SelectLabel>
-                      <SelectItem value="other">Other (specify below)</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                {form.format === "other" && (
-                  <Input
-                    placeholder="Describe the format…"
-                    value={form.format_custom}
-                    onChange={e => setForm(f => ({ ...f, format_custom: e.target.value }))}
-                  />
-                )}
-              </div>
-
-              {/* Format 2 — optional */}
-              <div className="space-y-1.5">
-                <Label>Format 2 <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
-                <Select value={form.format2 || "none"} onValueChange={v => setForm(f => ({ ...f, format2: v === "none" ? "" : v, format2_custom: v !== "other" ? "" : f.format2_custom }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-80">
-                    <SelectItem value="none">— No second format —</SelectItem>
-                    <SelectGroup>
-                      <SelectLabel>Individual</SelectLabel>
-                      <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
-                      <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
-                      <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
-                      <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
-                      <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
-                      <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
-                      <SelectItem value="maximum_score">Maximum Score</SelectItem>
-                      <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
-                      <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
-                      <SelectItem value="individual_par">Individual Par Competition</SelectItem>
-                      <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
-                      <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Betterball / Two-Player Team</SelectLabel>
-                      <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
-                      <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
-                      <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
-                      <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
-                      <SelectItem value="shamble">Shamble</SelectItem>
-                      <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
-                      <SelectItem value="high_low">High-Low</SelectItem>
-                      <SelectItem value="daytona">Daytona (Las Vegas)</SelectItem>
-                      <SelectItem value="low_ball_total">Low Ball / Total Score</SelectItem>
-                      <SelectItem value="the_ghost">The Ghost</SelectItem>
-                      <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
-                      <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Team</SelectLabel>
-                      <SelectItem value="american_scramble">American Scramble</SelectItem>
-                    </SelectGroup>
-                    <SelectGroup>
-                      <SelectLabel>Other</SelectLabel>
-                      <SelectItem value="other">Other (specify below)</SelectItem>
-                    </SelectGroup>
-                  </SelectContent>
-                </Select>
-                {form.format2 === "other" && (
-                  <Input
-                    placeholder="Describe the format…"
-                    value={form.format2_custom}
-                    onChange={e => setForm(f => ({ ...f, format2_custom: e.target.value }))}
-                  />
-                )}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Tournament Type</Label>
-                <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Access</Label>
-                <Select value={form.restriction} onValueChange={v => setForm(f => ({ ...f, restriction: v }))}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    {Object.entries(RESTRICT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            {/* Entry window */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className={`space-y-1.5 transition-opacity ${!form.entries_required ? "opacity-40 pointer-events-none" : ""}`}>
-                <Label>Entries Open</Label>
-                <Input type="date" value={form.entries_open} disabled={!form.entries_required}
-                  onChange={e => setForm(f => ({ ...f, entries_open: e.target.value }))} />
-              </div>
-              <div className={`space-y-1.5 transition-opacity ${!form.entries_required ? "opacity-40 pointer-events-none" : ""}`}>
-                <Label>Entries Close</Label>
-                <Input type="date" value={form.entries_close} disabled={!form.entries_required}
-                  onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>
-                  Entry Fee (ZAR)
-                  {form.payment_required && !form.use_tiered_pricing ? <span className="text-destructive ml-1">*</span> : ""}
-                </Label>
-                <Input
-                  type="number" value={form.entry_fee}
-                  onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))}
-                  placeholder={form.use_tiered_pricing ? "Not used (tiered pricing)" : form.payment_required ? "Required" : "Optional"}
-                  disabled={!!form.use_tiered_pricing}
-                />
-                {form.payment_required && !form.use_tiered_pricing && (!form.entry_fee || Number(form.entry_fee) <= 0) && (
-                  <p className="text-xs text-destructive">Required unless tiered pricing is enabled</p>
-                )}
-              </div>
-              <div className="space-y-1.5">
-                <Label>Max Participants</Label>
-                <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm text-muted-foreground h-10">
-                  <Users className="h-3.5 w-3.5 flex-shrink-0" />
-                  {eventSlots.length > 0
-                    ? `${eventSlots.reduce((sum, s) => sum + s.total_slots, 0)} spots (${eventSlots.length} tee slot${eventSlots.length !== 1 ? "s" : ""})`
-                    : "Auto-calculated from tee schedule"}
-                </div>
-              </div>
-            </div>
-
-            {/* ── Additional Fees ──────────────────────────────────────────────────── */}
-            {form.payment_required && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm font-semibold">Additional Fees</Label>
-                    <p className="text-xs text-muted-foreground mt-0.5">Charged on top of greens fee / entry fee. Each golfer pays these.</p>
-                  </div>
-                  <Button
-                    type="button" variant="outline" size="sm"
-                    onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: "", amount: 0 }] }))}
-                  >
-                    + Add Fee
-                  </Button>
-                </div>
-
-                {/* Quick-add presets */}
-                {(form.additional_fees ?? []).length === 0 && (
-                  <div className="flex flex-wrap gap-2">
-                    {["Competition Fee", "Two-Club Fee", "Longest Drive Fee", "Nearest the Pin Fee", "Hole-in-One Pool"].map(preset => (
-                      <button
-                        key={preset} type="button"
-                        onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: preset, amount: 0 }] }))}
-                        className="px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors"
-                      >
-                        + {preset}
-                      </button>
-                    ))}
-                  </div>
-                )}
-
-                {(form.additional_fees ?? []).map((fee, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <Input
-                      className="flex-1"
-                      placeholder="Fee name (e.g. Competition Fee)"
-                      value={fee.name}
-                      onChange={e => setForm(f => {
-                        const fees = [...(f.additional_fees ?? [])];
-                        fees[idx] = { ...fees[idx], name: e.target.value };
-                        return { ...f, additional_fees: fees };
-                      })}
-                    />
-                    <div className="relative w-32">
-                      <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R</span>
-                      <Input
-                        type="number" min="0" step="0.01"
-                        className="pl-7"
-                        placeholder="0.00"
-                        value={fee.amount || ""}
-                        onChange={e => setForm(f => {
-                          const fees = [...(f.additional_fees ?? [])];
-                          fees[idx] = { ...fees[idx], amount: parseFloat(e.target.value) || 0 };
-                          return { ...f, additional_fees: fees };
-                        })}
-                      />
-                    </div>
-                    <Button
-                      type="button" variant="ghost" size="icon"
-                      className="text-muted-foreground hover:text-destructive flex-shrink-0"
-                      onClick={() => setForm(f => ({ ...f, additional_fees: (f.additional_fees ?? []).filter((_, i) => i !== idx) }))}
-                    >
-                      ×
-                    </Button>
-                  </div>
-                ))}
-
-                {(form.additional_fees ?? []).length > 0 && (
-                  <p className="text-xs text-muted-foreground">
-                    Total additional: R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(2)} per golfer
-                  </p>
-                )}
-              </div>
-            )}
-
-            {/* Toggles */}
-            <Card className="bg-muted/30">
-              <CardContent className="p-4 space-y-3">
-                {[
-                  { key: "entries_required", label: "Entries required (ballot if oversubscribed)", desc: "Golfers must formally enter — entries open/close dates apply, and a ballot is used if the field is full. When off, a normal tee time booking is all that's needed." },
-                  { key: "payment_required", label: "Payment required", desc: "Golfers must pay before their spot is confirmed" },
-                  { key: "scoring_enabled",  label: "Live scoring",     desc: "Enable score submission and leaderboard in the mobile app" },
-                ].map(opt => (
-                  <div key={opt.key} className="flex items-center justify-between gap-4">
-                    <div>
-                      <p className="text-sm font-medium">{opt.label}</p>
-                      <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                    </div>
-                    <Switch
-                      checked={!!(form as any)[opt.key]}
-                      onCheckedChange={v => {
-                        setForm(f => ({
-                          ...f,
-                          [opt.key]: v,
-                          // ballot always mirrors entries_required
-                          ...(opt.key === "entries_required" ? { ballot: v } : {}),
-                        }));
-                      }}
-                    />
-                  </div>
-                ))}
-
-                {/* Payment method options — shown when payment is required */}
-                {form.payment_required && (
-                  <div className="pt-3 mt-1 border-t space-y-3">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Pricing &amp; payment methods</p>
-                    {[
-                      { key: "use_tiered_pricing", label: "Use tiered pricing",  desc: "Charge each golfer their standard club rate (member, visitor, junior…). Ignores the entry fee above." },
-                      { key: "allow_wallet",       label: "Allow wallet",         desc: "Golfers can pay from their TapIn wallet balance" },
-                      { key: "allow_prepaid",      label: "Allow prepaid rounds", desc: "Members can redeem one prepaid round credit to cover the entry" },
-                      { key: "allow_voucher",      label: "Allow vouchers",       desc: "Golfers can apply a discount or cancellation voucher" },
-                    ].map(opt => (
-                      <div key={opt.key} className="flex items-center justify-between gap-4">
-                        <div>
-                          <p className="text-sm font-medium">{opt.label}</p>
-                          <p className="text-xs text-muted-foreground">{opt.desc}</p>
-                        </div>
-                        <Switch
-                          checked={!!(form as any)[opt.key]}
-                          onCheckedChange={v => setForm(f => ({ ...f, [opt.key]: v }))}
-                        />
+                    {isTeamFmt && (
+                      <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 flex items-start gap-2">
+                        <Users className="h-4 w-4 text-blue-600 shrink-0 mt-0.5" />
+                        <p className="text-xs text-blue-800">
+                          <span className="font-semibold">Team format detected.</span>{" "}
+                          {isGroupFmt ? "Groups of 2\u20134 players compete together." : "Players compete in pairs."}{" "}
+                          Golfers select a partner when registering. Manage pairings from the Pairings tab after publishing.
+                        </p>
                       </div>
-                    ))}
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Divisions */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <Label>Divisions (auto-assigned from HNA handicap)</Label>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">{form.use_divisions ? "Enabled" : "Disabled"}</span>
-                  <Switch checked={form.use_divisions} onCheckedChange={v => setForm(f => ({ ...f, use_divisions: v }))} />
-                </div>
-              </div>
-              {!form.use_divisions && (
-                <p className="text-xs text-muted-foreground">Divisions are disabled — all golfers compete in a single field.</p>
-              )}
-              {form.use_divisions && (
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
-                    <span className="w-20 shrink-0">Division</span>
-                    <span style={{ width: 70 }} className="shrink-0">WHS Index From</span>
-                    <span className="shrink-0 invisible">–</span>
-                    <span style={{ width: 70 }} className="shrink-0">WHS Index To</span>
-                    <span style={{ width: 340 }} className="shrink-0">Format</span>
-                    <span className="flex-1 min-w-0">Tees</span>
-                  </div>
-                  {form.divisions.map((d, i) => (
-                    <div key={d.key} className="flex items-center gap-2 text-xs">
-                      <span className="font-medium w-20 shrink-0">{d.label}</span>
-                      <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
-                      <span className="text-muted-foreground shrink-0">–</span>
-                      <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
-                      <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
-                        <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 340 }}><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
-                        </SelectContent>
-                      </Select>
-                      <Input className="h-7 text-xs flex-1 min-w-0" placeholder="club" value={d.tees}
-                        onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
+                    )}
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">Live scoring</p>
+                            <p className="text-xs text-muted-foreground">Enable score submission and leaderboard in the mobile app</p>
+                          </div>
+                          <Switch checked={!!form.scoring_enabled} onCheckedChange={v => setForm(f => ({ ...f, scoring_enabled: v }))} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between">
+                        <Label>Divisions (auto-assigned from WHS handicap)</Label>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{form.use_divisions ? "Enabled" : "Disabled"}</span>
+                          <Switch checked={form.use_divisions} onCheckedChange={v => setForm(f => ({ ...f, use_divisions: v }))} />
+                        </div>
+                      </div>
+                      {!form.use_divisions ? (
+                        <p className="text-xs text-muted-foreground">All golfers compete in a single field.</p>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2 text-[11px] text-muted-foreground font-medium">
+                            <span className="w-20 shrink-0">Division</span>
+                            <span style={{ width: 70 }} className="shrink-0">WHS From</span>
+                            <span className="shrink-0 invisible">\u2013</span>
+                            <span style={{ width: 70 }} className="shrink-0">WHS To</span>
+                            <span style={{ width: 260 }} className="shrink-0">Format</span>
+                            <span className="flex-1 min-w-0">Tees</span>
+                          </div>
+                          {form.divisions.map((d, i) => (
+                            <div key={d.key} className="flex items-center gap-2 text-xs">
+                              <span className="font-medium w-20 shrink-0">{d.label}</span>
+                              <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.min_hcp}
+                                onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, min_hcp: Number(e.target.value) } : x) }))} />
+                              <span className="text-muted-foreground shrink-0">\u2013</span>
+                              <Input type="number" className="h-7 text-xs shrink-0" style={{ width: 70 }} value={d.max_hcp}
+                                onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, max_hcp: Number(e.target.value) } : x) }))} />
+                              <Select value={d.format} onValueChange={v => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, format: v } : x) }))}>
+                                <SelectTrigger className="h-7 text-xs shrink-0" style={{ width: 260 }}><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  {Object.entries(FORMAT_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
+                                </SelectContent>
+                              </Select>
+                              <Input className="h-7 text-xs flex-1 min-w-0" placeholder="club" value={d.tees}
+                                onChange={e => setForm(f => ({ ...f, divisions: f.divisions.map((x, j) => j === i ? { ...x, tees: e.target.value } : x) }))} />
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                  </>)}
 
-            <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
-              {saving ? "Saving…" : editId ? "Update Tournament" : "Create Tournament"}
-            </Button>
-          </div>
+                  {/* ━━━ STEP 2: PRICING ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 2 && (<>
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">Entries required</p>
+                            <p className="text-xs text-muted-foreground">Golfers must formally enter \u2014 open/close dates apply, and a ballot is used if the field is full.</p>
+                          </div>
+                          <Switch checked={!!form.entries_required}
+                            onCheckedChange={v => setForm(f => ({ ...f, entries_required: v, ballot: v }))} />
+                        </div>
+                        {!!form.entries_required && (
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Entries Open</Label>
+                              <Input type="date" className="h-8 text-sm" value={form.entries_open}
+                                onChange={e => setForm(f => ({ ...f, entries_open: e.target.value }))} />
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Entries Close</Label>
+                              <Input type="date" className="h-8 text-sm" value={form.entries_close}
+                                onChange={e => setForm(f => ({ ...f, entries_close: e.target.value }))} />
+                            </div>
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4 space-y-3">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">Payment required</p>
+                            <p className="text-xs text-muted-foreground">Golfers must pay before their spot is confirmed</p>
+                          </div>
+                          <Switch checked={!!form.payment_required}
+                            onCheckedChange={v => setForm(f => ({ ...f, payment_required: v }))} />
+                        </div>
+                        {!!form.payment_required && (<>
+                          <div className="grid grid-cols-2 gap-3 pt-1">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">
+                                Entry Fee (ZAR){!form.use_tiered_pricing ? <span className="text-destructive ml-1">*</span> : ""}
+                              </Label>
+                              <Input type="number" value={form.entry_fee}
+                                onChange={e => setForm(f => ({ ...f, entry_fee: e.target.value }))}
+                                placeholder={form.use_tiered_pricing ? "Not used (tiered)" : "Required"}
+                                disabled={!!form.use_tiered_pricing} />
+                              {!form.use_tiered_pricing && (!form.entry_fee || Number(form.entry_fee) <= 0) && (
+                                <p className="text-xs text-destructive">Required unless tiered pricing is enabled</p>
+                              )}
+                            </div>
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Max Participants</Label>
+                              <div className="flex items-center gap-2 rounded-md border px-3 py-2 bg-muted/40 text-sm text-muted-foreground h-10">
+                                <Users className="h-3.5 w-3.5 flex-shrink-0" />
+                                {eventSlots.length > 0
+                                  ? `${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots`
+                                  : "From tee schedule"}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="pt-1 border-t space-y-3">
+                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment methods</p>
+                            {[
+                              { key: "use_tiered_pricing", label: "Tiered pricing",  desc: "Each golfer pays their standard club rate (member, visitor, junior\u2026)" },
+                              { key: "allow_wallet",       label: "Allow wallet",     desc: "Golfers can pay from their TapIn wallet balance" },
+                              { key: "allow_prepaid",      label: "Allow prepaid",    desc: "Members can redeem a prepaid round credit" },
+                              { key: "allow_voucher",      label: "Allow vouchers",   desc: "Golfers can apply a discount or cancellation voucher" },
+                            ].map(opt => (
+                              <div key={opt.key} className="flex items-center justify-between gap-4">
+                                <div>
+                                  <p className="text-sm font-medium">{opt.label}</p>
+                                  <p className="text-xs text-muted-foreground">{opt.desc}</p>
+                                </div>
+                                <Switch checked={!!(form as any)[opt.key]}
+                                  onCheckedChange={v => setForm(f => ({ ...f, [opt.key]: v }))} />
+                              </div>
+                            ))}
+                          </div>
+                        </>)}
+                      </CardContent>
+                    </Card>
+                    {!!form.payment_required && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <Label className="text-sm font-semibold">Additional Fees</Label>
+                            <p className="text-xs text-muted-foreground mt-0.5">Charged on top of the entry fee. Each golfer pays these.</p>
+                          </div>
+                          <Button type="button" variant="outline" size="sm"
+                            onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: "", amount: 0 }] }))}>
+                            + Add Fee
+                          </Button>
+                        </div>
+                        {(form.additional_fees ?? []).length === 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {["Competition Fee", "Two-Club Fee", "Longest Drive Fee", "Nearest the Pin Fee", "Hole-in-One Pool"].map(preset => (
+                              <button key={preset} type="button"
+                                onClick={() => setForm(f => ({ ...f, additional_fees: [...(f.additional_fees ?? []), { name: preset, amount: 0 }] }))}
+                                className="px-3 py-1.5 rounded-full border text-xs font-medium text-muted-foreground hover:border-primary hover:text-primary transition-colors">
+                                + {preset}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                        {(form.additional_fees ?? []).map((fee, idx) => (
+                          <div key={idx} className="flex items-center gap-2">
+                            <Input className="flex-1" placeholder="Fee name (e.g. Competition Fee)" value={fee.name}
+                              onChange={e => setForm(f => { const fees = [...(f.additional_fees ?? [])]; fees[idx] = { ...fees[idx]!, name: e.target.value }; return { ...f, additional_fees: fees }; })} />
+                            <div className="relative w-32">
+                              <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">R</span>
+                              <Input type="number" min="0" step="0.01" className="pl-7" placeholder="0.00" value={fee.amount || ""}
+                                onChange={e => setForm(f => { const fees = [...(f.additional_fees ?? [])]; fees[idx] = { ...fees[idx]!, amount: parseFloat(e.target.value) || 0 }; return { ...f, additional_fees: fees }; })} />
+                            </div>
+                            <Button type="button" variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive"
+                              onClick={() => setForm(f => ({ ...f, additional_fees: (f.additional_fees ?? []).filter((_, i) => i !== idx) }))}>
+                              \u00d7
+                            </Button>
+                          </div>
+                        ))}
+                        {(form.additional_fees ?? []).length > 0 && (
+                          <p className="text-xs text-muted-foreground">Total: R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(2)} per golfer</p>
+                        )}
+                      </div>
+                    )}
+                  </>)}
+
+                  {/* ━━━ STEP 3: TEAMS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 3 && (<>
+                    {isTeamFmt ? (<>
+                      <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <Users className="h-5 w-5 text-[#1a5c38]" />
+                          <span className="text-sm font-semibold text-[#1a5c38]">
+                            {isGroupFmt ? "Full-Group Format" : "Two-Player Pair Format"}
+                          </span>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {isGroupFmt
+                            ? "Groups of 2\u20134 players compete as a single team. Players select their group when registering, or you can assign pairings from the Pairings tab."
+                            : "Players compete in pairs. Each golfer must nominate a partner when registering for this tournament."}
+                        </p>
+                        <p className="text-xs text-muted-foreground border-t pt-2">
+                          After the event is published and players have registered, open the event detail sheet and go to the <strong>Pairings</strong> tab to assign or re-arrange teams.
+                        </p>
+                      </div>
+                      {editId && (
+                        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                          <p className="text-xs text-amber-700">
+                            To manage current pairings for this event, close this dialog and open the <strong>Pairings</strong> tab in the event detail panel.
+                          </p>
+                        </div>
+                      )}
+                    </>) : (
+                      <div className="py-10 text-center space-y-3">
+                        <div className="w-14 h-14 rounded-full bg-muted flex items-center justify-center mx-auto">
+                          <Trophy className="h-7 w-7 text-muted-foreground" />
+                        </div>
+                        <p className="text-sm font-medium">Individual format selected</p>
+                        <p className="text-xs text-muted-foreground max-w-xs mx-auto">
+                          No team or partner assignments required. All golfers compete as individuals.
+                          To use team features, go back to Format and select a Betterball or Scramble format.
+                        </p>
+                      </div>
+                    )}
+                  </>)}
+
+                  {/* ━━━ STEP 4: SCHEDULE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 4 && (<>
+                    {form.event_date ? (() => {
+                      const getDatesInRange = (start: string, end?: string): string[] => {
+                        const dates: string[] = [];
+                        const [sy, sm, sd] = start.split("-").map(Number);
+                        if (!sy || !sm || !sd) return [start];
+                        const [ey, em, ed] = (end || start).split("-").map(Number);
+                        const cur = new Date(Date.UTC(sy, sm - 1, sd));
+                        const last = new Date(Date.UTC(ey || sy, (em || sm) - 1, ed || sd));
+                        const cap = new Date(Date.UTC(sy, sm - 1, sd));
+                        cap.setUTCDate(cap.getUTCDate() + 30);
+                        while (cur <= last && cur <= cap) {
+                          dates.push(cur.toISOString().split("T")[0]!);
+                          cur.setUTCDate(cur.getUTCDate() + 1);
+                        }
+                        return dates;
+                      };
+                      const tournamentDates = getDatesInRange(form.event_date, form.end_date || undefined);
+                      const isMultiDay = tournamentDates.length > 1;
+                      const slotsByDate = eventSlots.reduce((acc, s) => {
+                        const key = String(s.date).slice(0, 10);
+                        (acc[key] ||= []).push(s);
+                        return acc;
+                      }, {} as Record<string, TeeSlot[]>);
+                      const totalSpots = eventSlots.reduce((sum, s) => sum + s.total_slots, 0);
+                      return (
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div>
+                              <p className="text-sm font-semibold flex items-center gap-1.5">
+                                <Clock className="h-3.5 w-3.5" />Tee Schedule
+                                {isMultiDay && <span className="text-xs font-normal text-muted-foreground">({tournamentDates.length} days)</span>}
+                              </p>
+                              <p className="text-xs text-muted-foreground mt-0.5">These tee slots are exclusive to this tournament.</p>
+                            </div>
+                            {eventSlots.length > 0 && (
+                              <span className="text-xs font-medium text-[#1a5c38] bg-[#1a5c38]/10 px-2 py-1 rounded-full whitespace-nowrap">
+                                {eventSlots.length} slot{eventSlots.length !== 1 ? "s" : ""} \u00b7 {totalSpots} spots
+                              </span>
+                            )}
+                          </div>
+                          {!editId && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
+                            <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
+                              <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                              <div className="flex-1 min-w-0">
+                                {checkingExistingSlots ? (
+                                  <p className="text-xs text-amber-700 flex items-center gap-1.5">
+                                    <Loader2 className="h-3 w-3 animate-spin" />Checking for existing tee slots on this date\u2026
+                                  </p>
+                                ) : (<>
+                                  <p className="text-xs font-semibold text-amber-800">
+                                    {existingGeneralSlots.length} existing tee slot{existingGeneralSlots.length !== 1 ? "s" : ""} found
+                                  </p>
+                                  <p className="text-xs text-amber-700 mt-0.5">Import them as this tournament's exclusive tee times, or leave as public slots.</p>
+                                  <div className="flex gap-2 mt-2">
+                                    <Button type="button" size="sm" className="h-6 px-2.5 text-xs bg-amber-600 hover:bg-amber-700 text-white"
+                                      onClick={handleImportExistingSlots}>Import as tournament tee times</Button>
+                                    <Button type="button" size="sm" variant="ghost" className="h-6 px-2 text-xs text-amber-700 hover:bg-amber-100"
+                                      onClick={() => setImportBannerDismissed(true)}>Leave as public slots</Button>
+                                  </div>
+                                </>)}
+                              </div>
+                            </div>
+                          )}
+                          {slotsLoading ? (
+                            <div className="space-y-2">
+                              {tournamentDates.map(d => <div key={d} className="h-20 rounded-lg border bg-muted/20 animate-pulse" />)}
+                            </div>
+                          ) : (
+                            <div className="space-y-2">
+                              {tournamentDates.map((date, idx) => {
+                                const daySlots = slotsByDate[date] ?? [];
+                                return (
+                                  <Card key={date} className="border bg-card">
+                                    <CardContent className="p-3 space-y-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-2">
+                                          {isMultiDay && <span className="text-[10px] font-bold text-white bg-[#1a5c38] rounded px-1.5 py-0.5 shrink-0">Day {idx + 1}</span>}
+                                          <span className="text-sm font-semibold">{fmtDate(date)}</span>
+                                          <span className="text-[10px] text-muted-foreground">{daySlots.length} slot{daySlots.length !== 1 ? "s" : ""}</span>
+                                        </div>
+                                        <button type="button"
+                                          className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                                          onClick={() => { setGenDialogDate(date); setGenDialogOpen(true); }}>
+                                          <Plus className="h-3 w-3" />Generate
+                                        </button>
+                                      </div>
+                                      {daySlots.length === 0 ? (
+                                        <p className="text-[11px] text-amber-600 py-1">No tee times yet \u2014 click Generate to build a schedule for this day.</p>
+                                      ) : (
+                                        <div className="space-y-0.5 max-h-48 overflow-y-auto">
+                                          {daySlots.map(slot => {
+                                            const isEditing = editingSlotId === slot.id;
+                                            if (isEditing) {
+                                              return (
+                                                <div key={slot.id} className="flex items-center gap-2 py-1.5 px-2 rounded-md bg-muted/60 border border-dashed">
+                                                  <Input type="time" className="h-6 text-xs w-24 shrink-0" value={editSlotTime}
+                                                    onChange={e => setEditSlotTime(e.target.value)} autoFocus />
+                                                  <Input type="number" min={1} max={4} className="h-6 text-xs w-12 shrink-0" value={editSlotPlayers}
+                                                    onChange={e => setEditSlotPlayers(Number(e.target.value))} />
+                                                  <span className="text-xs text-muted-foreground shrink-0">players</span>
+                                                  <button type="button" disabled={slotSaving}
+                                                    className="ml-auto h-5 w-5 rounded flex items-center justify-center text-white bg-[#1a5c38] hover:bg-[#164d30] disabled:opacity-50"
+                                                    onClick={() => handleSlotUpdate(slot)}>
+                                                    <Check className="h-3 w-3" />
+                                                  </button>
+                                                  <button type="button"
+                                                    className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground"
+                                                    onClick={() => setEditingSlotId(null)}>
+                                                    <X className="h-3 w-3" />
+                                                  </button>
+                                                </div>
+                                              );
+                                            }
+                                            return (
+                                              <div key={slot.id} className="flex items-center gap-2.5 py-1.5 px-2 rounded-md hover:bg-muted group">
+                                                <span className="text-sm font-medium tabular-nums">{String(slot.time).slice(0, 5)}</span>
+                                                <span className="text-xs text-muted-foreground">{slot.total_slots} players</span>
+                                                {slot.id < 0 && <span className="text-[10px] text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">new</span>}
+                                                {!slot.active && slot.id > 0 && <span className="text-[10px] text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded">inactive</span>}
+                                                <button type="button"
+                                                  className="ml-auto h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  onClick={() => { setEditingSlotId(slot.id); setEditSlotTime(String(slot.time).slice(0, 5)); setEditSlotPlayers(slot.total_slots); }}
+                                                  title="Edit slot"><Pencil className="h-3 w-3" /></button>
+                                                <button type="button"
+                                                  className="h-5 w-5 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                  onClick={() => {
+                                                    if (slot.id > 0) setDeletedSlotIds(prev => [...prev, slot.id]);
+                                                    setEventSlots(prev => prev.filter(s => s.id !== slot.id));
+                                                  }}
+                                                  title="Remove slot"><X className="h-3 w-3" /></button>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                      )}
+                                    </CardContent>
+                                  </Card>
+                                );
+                              })}
+                            </div>
+                          )}
+                          {!editId && (
+                            <p className="text-[11px] text-muted-foreground">After saving, use Generate on each day to quickly build a full tee schedule.</p>
+                          )}
+                        </div>
+                      );
+                    })() : (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 py-6 justify-center">
+                        <Clock className="h-4 w-4" />Go back to Details and set a start date to configure the tee schedule.
+                      </p>
+                    )}
+                  </>)}
+
+                  {/* ━━━ STEP 5: REVIEW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
+                  {wizardStep === 5 && (<>
+                    <p className="text-sm text-muted-foreground">Review your configuration before {editId ? "updating" : "creating"} the tournament.</p>
+                    <div className="grid gap-3">
+                      <Card className="bg-card">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Calendar className="h-4 w-4 text-[#1a5c38]" />
+                            <span className="text-sm font-semibold">Details</span>
+                            <button type="button" onClick={() => setWizardStep(0)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Name</span><span className={`font-medium truncate max-w-[220px] ${!form.name ? "text-destructive" : ""}`}>{form.name || "Not set \u26a0"}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Date</span><span className={!form.event_date ? "text-destructive" : ""}>{form.event_date ? fmtDate(form.event_date) : "Not set \u26a0"}{form.end_date ? ` \u2013 ${fmtDate(form.end_date)}` : ""}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Holes / Rounds</span><span>{form.holes} holes, {computeDays(form.event_date, form.end_date) * form.rounds_per_day} total rounds</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Type</span><span>{TYPE_LABELS[form.event_type] ?? form.event_type}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Access</span><span>{RESTRICT_LABELS[form.restriction] ?? form.restriction}</span></div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Trophy className="h-4 w-4 text-[#1a5c38]" />
+                            <span className="text-sm font-semibold">Format</span>
+                            <button type="button" onClick={() => setWizardStep(1)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Format 1</span><span>{FORMAT_LABELS[form.format] ?? form.format}</span></div>
+                            {form.format2 && <div className="flex justify-between"><span className="text-muted-foreground">Format 2</span><span>{FORMAT_LABELS[form.format2] ?? form.format2}</span></div>}
+                            <div className="flex justify-between"><span className="text-muted-foreground">Live Scoring</span><span>{form.scoring_enabled ? "Enabled" : "Disabled"}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Divisions</span><span>{form.use_divisions ? `${form.divisions.length} divisions` : "Single field"}</span></div>
+                            {isTeamFmt && <div className="flex justify-between"><span className="text-muted-foreground">Team type</span><span className="text-[#1a5c38] font-medium">{isGroupFmt ? "Full group" : "Pairs"}</span></div>}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <CreditCard className="h-4 w-4 text-[#1a5c38]" />
+                            <span className="text-sm font-semibold">Pricing</span>
+                            <button type="button" onClick={() => setWizardStep(2)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between"><span className="text-muted-foreground">Entries</span><span>{form.entries_required ? "Required" : "Open (tee booking)"}</span></div>
+                            <div className="flex justify-between"><span className="text-muted-foreground">Payment</span><span>{form.payment_required ? "Required" : "Free"}</span></div>
+                            {form.payment_required && !form.use_tiered_pricing && (
+                              <div className="flex justify-between"><span className="text-muted-foreground">Entry Fee</span><span className={(!form.entry_fee || Number(form.entry_fee) <= 0) ? "text-amber-600" : ""}>{form.entry_fee ? `R${form.entry_fee}` : "Not set \u26a0"}</span></div>
+                            )}
+                            {form.payment_required && form.use_tiered_pricing && (
+                              <div className="flex justify-between"><span className="text-muted-foreground">Pricing</span><span>Tiered (by golfer type)</span></div>
+                            )}
+                            {(form.additional_fees ?? []).length > 0 && (
+                              <div className="flex justify-between"><span className="text-muted-foreground">Add. fees</span><span>{(form.additional_fees ?? []).length} \u00d7 (R{(form.additional_fees ?? []).reduce((s, f) => s + (f.amount || 0), 0).toFixed(0)} total)</span></div>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="bg-card">
+                        <CardContent className="p-4 space-y-2">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Clock className="h-4 w-4 text-[#1a5c38]" />
+                            <span className="text-sm font-semibold">Schedule</span>
+                            <button type="button" onClick={() => setWizardStep(4)} className="ml-auto text-xs text-[#1a5c38] hover:underline">Edit</button>
+                          </div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-muted-foreground">Tee slots</span>
+                              <span>{eventSlots.length > 0 ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} \u00b7 ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots` : <span className="italic text-muted-foreground">None configured yet</span>}</span>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </>)}
+                </div>
+
+                {/* ── Navigation ───────────────────────────────────────────────── */}
+                <div className="flex items-center gap-2 pt-4 border-t mt-2">
+                  <Button type="button" variant="outline"
+                    onClick={() => wizardStep === 0 ? setDlgOpen(false) : setWizardStep(w => w - 1)}>
+                    {wizardStep === 0 ? "Cancel" : "\u2190 Back"}
+                  </Button>
+                  <div className="flex-1" />
+                  {wizardStep < 5 ? (
+                    <Button type="button" onClick={() => setWizardStep(w => w + 1)}
+                      className="bg-[#1a5c38] hover:bg-[#164d30]">
+                      Next \u2192
+                    </Button>
+                  ) : (
+                    <Button type="button" onClick={handleSave}
+                      disabled={saving || readOnly || !form.name || !form.event_date}
+                      className="bg-[#1a5c38] hover:bg-[#164d30]">
+                      {saving ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving\u2026</> : editId ? "Update Tournament" : "Create Tournament"}
+                    </Button>
+                  )}
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 

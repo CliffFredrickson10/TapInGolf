@@ -1812,6 +1812,33 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     }
   }
 
+  // ── Team-aware ordering: cluster teammates together so they land in the same draw group ──
+  const teamPairRows = await query<any>(
+    "SELECT user_id, team_id FROM event_registrations WHERE event_id = ? AND status = 'approved' AND team_id IS NOT NULL",
+    [evId]
+  );
+  if (teamPairRows.length > 0) {
+    const playerTeamMap = new Map<number, number>();
+    for (const r of teamPairRows) playerTeamMap.set(Number(r.user_id), Number(r.team_id));
+    const clustered: any[] = [];
+    const seenC = new Set<number>();
+    for (const p of players) {
+      if (seenC.has(p.user_id)) continue;
+      clustered.push(p);
+      seenC.add(p.user_id);
+      const tid = playerTeamMap.get(p.user_id);
+      if (tid != null) {
+        for (const q of players) {
+          if (!seenC.has(q.user_id) && playerTeamMap.get(q.user_id) === tid) {
+            clustered.push(q);
+            seenC.add(q.user_id);
+          }
+        }
+      }
+    }
+    players = clustered;
+  }
+
   const pgSize = Math.max(1, Math.min(4, Number(players_per_group)));
   const entries: any[] = [];
   let playerIdx = 0;
@@ -1861,6 +1888,72 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
   }
 
   res.json({ entries });
+});
+
+// ── Pairings / teams ────────────────────────────────────────────────────────
+
+router.get("/portal/events/:id/pairings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const rows = await query<any>(
+    `SELECT et.id AS team_id, et.name AS team_name,
+            er.user_id, u.name AS user_name, er.status AS reg_status
+     FROM event_teams et
+     JOIN event_registrations er ON er.team_id = et.id AND er.event_id = et.event_id
+     JOIN users u ON u.id = er.user_id
+     WHERE et.event_id = ?
+     ORDER BY et.id, u.name`,
+    [evId]
+  );
+
+  const teamMap = new Map<number, { id: number; name: string | null; players: any[] }>();
+  for (const r of rows) {
+    if (!teamMap.has(r.team_id)) teamMap.set(r.team_id, { id: r.team_id, name: r.team_name, players: [] });
+    teamMap.get(r.team_id)!.players.push({ user_id: r.user_id, user_name: r.user_name, reg_status: r.reg_status });
+  }
+
+  res.json({ teams: [...teamMap.values()] });
+});
+
+router.post("/portal/events/:id/pairings", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const { player_ids, name } = req.body ?? {};
+  if (!Array.isArray(player_ids) || player_ids.length < 2) {
+    res.status(400).json({ message: "At least 2 players required" }); return;
+  }
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const result: any = await query("INSERT INTO event_teams (event_id, name) VALUES (?, ?)", [evId, name ?? null]);
+  const teamId = result.insertId ?? result[0]?.id;
+
+  await query(
+    `UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ANY(ARRAY[${player_ids.map(() => "?").join(",")}]::int[])`,
+    [teamId, evId, ...player_ids]
+  ).catch(() =>
+    // Fallback for MySQL-style ? placeholder
+    Promise.all(player_ids.map((uid: number) =>
+      query("UPDATE event_registrations SET team_id = ? WHERE event_id = ? AND user_id = ?", [teamId, evId, uid])
+    ))
+  );
+
+  res.json({ team_id: teamId });
+});
+
+router.delete("/portal/events/:id/pairings/:teamId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId  = Number(req.params.id);
+  const teamId = Number(req.params.teamId);
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  await query("UPDATE event_registrations SET team_id = NULL WHERE event_id = ? AND team_id = ?", [evId, teamId]);
+  await query("DELETE FROM event_teams WHERE id = ? AND event_id = ?", [teamId, evId]);
+  res.json({ ok: true });
 });
 
 router.get("/portal/events/:id/draw", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

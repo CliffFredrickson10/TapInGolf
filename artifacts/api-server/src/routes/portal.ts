@@ -1103,7 +1103,9 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (allow_wallet !== undefined)        { updates.push("allow_wallet = ?");       vals.push(allow_wallet ? 1 : 0); }
   if (allow_prepaid !== undefined)       { updates.push("allow_prepaid = ?");      vals.push(allow_prepaid ? 1 : 0); }
   if (allow_voucher !== undefined)       { updates.push("allow_voucher = ?");      vals.push(allow_voucher ? 1 : 0); }
-  if (req.body?.shotgun_start !== undefined) { updates.push("shotgun_start = ?"); vals.push(req.body.shotgun_start ? 1 : 0); }
+  if (req.body?.shotgun_start !== undefined)       { updates.push("shotgun_start = ?");       vals.push(req.body.shotgun_start ? 1 : 0); }
+  if (req.body?.shotgun_double_tee !== undefined)  { updates.push("shotgun_double_tee = ?");  vals.push(req.body.shotgun_double_tee ? 1 : 0); }
+  if (req.body?.shotgun_par3_holes !== undefined)  { updates.push("shotgun_par3_holes = ?");  vals.push(req.body.shotgun_par3_holes != null ? JSON.stringify(req.body.shotgun_par3_holes) : null); }
   if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
   if (holes !== undefined)               { updates.push("holes = ?");             vals.push(Number(holes)); }
   // Editing a published tournament requires republishing — reset to pending_publish
@@ -1715,10 +1717,13 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     seed_metric = "points",
     seed_round,
     group_by_division = false,
+    double_tee,
+    par3_holes,
+    start_time,
   } = req.body ?? {};
 
   const event = await row<any>(
-    "SELECT id, event_date, end_date, rounds FROM golf_events WHERE id = ? AND club_id = ?",
+    "SELECT id, event_date, end_date, rounds, holes, shotgun_start, shotgun_double_tee, shotgun_par3_holes FROM golf_events WHERE id = ? AND club_id = ?",
     [evId, club.id]
   );
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
@@ -1874,7 +1879,34 @@ router.post("/portal/events/:id/draw/generate", requireClubAuth, async (req: Req
     groupNum++;
   };
 
-  if (slots.length > 0) {
+  if (event.shotgun_start) {
+    // ── Shotgun: assign each group to a starting hole ──────────────────────
+    // Priority: explicit request params > stored event config > sensible defaults
+    const doubleTee  = double_tee !== undefined ? !!double_tee : !!event.shotgun_double_tee;
+    const holeCount  = Number(event.holes) || 18;
+    const par3Stored = Array.isArray(event.shotgun_par3_holes)
+      ? event.shotgun_par3_holes.map(Number)
+      : (holeCount === 9 ? [3, 7] : [3, 7, 12, 16]);
+    const par3Set = new Set<number>(
+      Array.isArray(par3_holes) ? par3_holes.map(Number) : par3Stored
+    );
+    const shotgunTime = start_time
+      ? String(start_time).slice(0, 5)
+      : (slots.length > 0 ? String(slots[0].tee_time).slice(0, 5) : "08:00");
+    // Build hole slot list: 2 slots per non-par3 hole when double teeing, 1 for par3
+    const holeSlots: number[] = [];
+    for (let h = 1; h <= holeCount; h++) {
+      const isPar3 = par3Set.has(h);
+      const count  = (doubleTee && !isPar3) ? 2 : 1;
+      for (let c = 0; c < count; c++) holeSlots.push(h);
+    }
+    let slotIdx = 0;
+    while (playerIdx < players.length) {
+      const hole = holeSlots[slotIdx % holeSlots.length]!;
+      slotIdx++;
+      assignGroup(shotgunTime, hole);
+    }
+  } else if (slots.length > 0) {
     for (const slot of slots) {
       if (playerIdx >= players.length) break;
       const teeTime     = String(slot.tee_time).slice(0, 5);

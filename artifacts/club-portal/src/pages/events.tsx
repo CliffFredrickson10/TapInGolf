@@ -80,7 +80,7 @@ interface GolfEvent {
   entries_open: string | null; entries_close: string | null;
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
-  shotgun_start: number;
+  shotgun_start: number; shotgun_double_tee?: number; shotgun_par3_holes?: number[] | null;
   rounds: number; holes: number;
   additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
@@ -92,6 +92,7 @@ interface Registration {
   division: string | null; status: string;
   payment_status: string; paid_at: string | null; registered_at: string;
   phone: string | null;
+  team_id?: number | null; team_name?: string | null;
 }
 
 interface DrawEntry {
@@ -438,6 +439,10 @@ export default function Events() {
   const [shotgunDoubleTeeMode, setShotgunDoubleTeeMode] = useState<"all" | "exclude_par3">("exclude_par3");
   const DEFAULT_PAR3: Record<9 | 18, number[]> = { 9: [3, 7], 18: [3, 7, 12, 16] };
   const [shotgunPar3Holes, setShotgunPar3Holes] = useState<Set<number>>(new Set(DEFAULT_PAR3[18]));
+  // Generate draw — shotgun config state
+  const [genShotgunDoubleTee, setGenShotgunDoubleTee]       = useState(false);
+  const [genShotgunExcludePar3, setGenShotgunExcludePar3]   = useState(true);
+  const [genShotgunPar3Holes, setGenShotgunPar3Holes]       = useState<number[]>(DEFAULT_PAR3[18]);
   const tempSlotCounter                       = useRef(-1);
   const [newSlotDate, setNewSlotDate]         = useState("");
   const [newSlotTime, setNewSlotTime]         = useState("");
@@ -1076,7 +1081,8 @@ export default function Events() {
           const date = d.toISOString().split("T")[0];
           const data = await api<{ entries: DrawEntry[] }>(`/api/portal/events/${detail.id}/draw/generate`, {
             method: "POST",
-            body: JSON.stringify({ round: r, date, mode: "random", players_per_group: genPerGroup, group_by_division: genGroupByDiv }),
+            body: JSON.stringify({ round: r, date, mode: "random", players_per_group: genPerGroup, group_by_division: genGroupByDiv,
+            ...(detail.shotgun_start ? { double_tee: genShotgunDoubleTee, par3_holes: genShotgunExcludePar3 ? genShotgunPar3Holes : [] } : {}) }),
           });
           await api(`/api/portal/events/${detail.id}/draw`, {
             method: "PUT",
@@ -1098,6 +1104,7 @@ export default function Events() {
             seed_metric: genMetric,
             seed_round: genSeedRound,
             group_by_division: genGroupByDiv,
+            ...(detail.shotgun_start ? { double_tee: genShotgunDoubleTee, par3_holes: genShotgunExcludePar3 ? genShotgunPar3Holes : [] } : {}),
           }),
         });
         setDraw(data.entries);
@@ -1620,7 +1627,7 @@ export default function Events() {
                     </div>
                     <div className="flex gap-1.5 flex-wrap justify-end">
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); if (detail?.shotgun_start) { setGenShotgunDoubleTee(!!detail.shotgun_double_tee); setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0); setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]); } setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>
                     </div>
                   </div>
@@ -1647,7 +1654,7 @@ export default function Events() {
                       <p className="text-sm text-muted-foreground">No draw yet for Round {drawRound}.</p>
                       <div className="flex gap-2 justify-center">
                         <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All Players</Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); if (detail?.shotgun_start) { setGenShotgunDoubleTee(!!detail.shotgun_double_tee); setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0); setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]); } setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       </div>
                     </div>
                   ) : (() => {
@@ -1666,32 +1673,52 @@ export default function Events() {
                                 {/* Group header — tee time + starting hole editable for whole group */}
                                 <div className="flex items-center gap-3 mb-2">
                                   <span className="text-xs font-bold text-[#1a5c38] w-16 shrink-0">Group {gk}</span>
-                                  <div className="flex items-center gap-1.5">
-                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                    <Input
-                                      type="time"
-                                      value={String(rep.tee_time).slice(0, 5)}
-                                      className="h-7 w-28 text-xs font-mono"
-                                      disabled={readOnly}
-                                      onChange={e => setDraw(prev => prev.map(x =>
-                                        x.draw_group === gk
-                                          ? { ...x, tee_time: e.target.value, starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value) }
-                                          : x
-                                      ))}
-                                    />
-                                  </div>
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs text-muted-foreground whitespace-nowrap">Tee</span>
-                                    <Input
-                                      type="number" min="1" max="18"
-                                      value={rep.starting_tee ?? 1}
-                                      className="h-7 w-14 text-xs"
-                                      disabled={readOnly}
-                                      onChange={e => setDraw(prev => prev.map(x =>
-                                        x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
-                                      ))}
-                                    />
-                                  </div>
+                                  {detail.shotgun_start ? (
+                                    <>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">🕳️ Hole</span>
+                                        <Input
+                                          type="number" min="1" max="18"
+                                          value={rep.starting_tee ?? 1}
+                                          className="h-7 w-14 text-xs font-bold text-[#1a5c38]"
+                                          disabled={readOnly}
+                                          onChange={e => setDraw(prev => prev.map(x =>
+                                            x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
+                                          ))}
+                                        />
+                                      </div>
+                                      <span className="text-xs text-muted-foreground font-mono ml-auto">{String(rep.tee_time).slice(0, 5)}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div className="flex items-center gap-1.5">
+                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                        <Input
+                                          type="time"
+                                          value={String(rep.tee_time).slice(0, 5)}
+                                          className="h-7 w-28 text-xs font-mono"
+                                          disabled={readOnly}
+                                          onChange={e => setDraw(prev => prev.map(x =>
+                                            x.draw_group === gk
+                                              ? { ...x, tee_time: e.target.value, starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value) }
+                                              : x
+                                          ))}
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-1.5">
+                                        <span className="text-xs text-muted-foreground whitespace-nowrap">Tee</span>
+                                        <Input
+                                          type="number" min="1" max="18"
+                                          value={rep.starting_tee ?? 1}
+                                          className="h-7 w-14 text-xs"
+                                          disabled={readOnly}
+                                          onChange={e => setDraw(prev => prev.map(x =>
+                                            x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
+                                          ))}
+                                        />
+                                      </div>
+                                    </>
+                                  )}
                                   <span className="text-xs text-muted-foreground ml-auto">{grp.length} player{grp.length !== 1 ? "s" : ""}</span>
                                 </div>
                                 {/* Players in this group */}
@@ -1774,6 +1801,49 @@ export default function Events() {
                             <p className="text-xs text-muted-foreground">Keep players from the same division together in groups.</p>
                           </div>
                         </div>
+
+                        {/* Shotgun hole assignment */}
+                        {!!detail?.shotgun_start && (
+                          <div className="rounded-lg border border-[#1a5c38]/30 bg-[#1a5c38]/5 p-3 space-y-3">
+                            <p className="text-sm font-semibold text-[#1a5c38]">🔫 Shotgun Hole Assignment</p>
+                            <div className="flex items-center gap-3">
+                              <Switch checked={genShotgunDoubleTee} onCheckedChange={setGenShotgunDoubleTee} />
+                              <div>
+                                <p className="text-sm font-medium">Double Teeing</p>
+                                <p className="text-xs text-muted-foreground">2 groups per hole — doubles capacity</p>
+                              </div>
+                            </div>
+                            {genShotgunDoubleTee && (
+                              <div className="flex items-center gap-3 pl-1">
+                                <Switch checked={genShotgunExcludePar3} onCheckedChange={setGenShotgunExcludePar3} />
+                                <div>
+                                  <p className="text-sm font-medium">Exclude Par 3s</p>
+                                  <p className="text-xs text-muted-foreground">1 group on par 3 holes, 2 on all others</p>
+                                </div>
+                              </div>
+                            )}
+                            {genShotgunDoubleTee && genShotgunExcludePar3 && (
+                              <div>
+                                <p className="text-xs text-muted-foreground mb-1.5">Par 3 holes (tap to toggle)</p>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {Array.from({ length: detail.holes ?? 18 }, (_, i) => i + 1).map(h => (
+                                    <button key={h} type="button"
+                                      onClick={() => setGenShotgunPar3Holes(prev =>
+                                        prev.includes(h) ? prev.filter(x => x !== h) : [...prev, h].sort((a, b) => a - b)
+                                      )}
+                                      className={`w-8 h-8 rounded text-xs font-medium border transition-all ${
+                                        genShotgunPar3Holes.includes(h)
+                                          ? "bg-[#1a5c38] text-white border-[#1a5c38]"
+                                          : "border-border bg-white text-foreground hover:border-[#1a5c38]/40"
+                                      }`}>
+                                      {h}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
 
                         {/* Seeded options */}
                         {genMode === "seeded" && (
@@ -3216,6 +3286,14 @@ export default function Events() {
             total_slots: groupsPerSession * shotgunPPG,
           }));
           if (editId) {
+            // Persist double-tee + par3 config on the event so draw generation can use them
+            api(`/api/portal/events/${editId}`, {
+              method: "PATCH",
+              body: JSON.stringify({
+                shotgun_double_tee: shotgunDoubleTee ? 1 : 0,
+                shotgun_par3_holes: par3Excluded ? [...shotgunPar3Holes] : [],
+              }),
+            }).catch(() => {});
             Promise.all(slotsToCreate.map(s =>
               api("/api/portal/tee-times", {
                 method: "POST",

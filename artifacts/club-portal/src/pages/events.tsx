@@ -299,6 +299,7 @@ export default function Events() {
   const [savingDraw, setSavingDraw] = useState(false);
   // Draw generation dialog
   const [genDlg, setGenDlg]               = useState(false);
+  const [regenWarnDlg, setRegenWarnDlg]   = useState(false);
   const [genMode, setGenMode]             = useState<"random"|"seeded">("random");
   const [genMetric, setGenMetric]         = useState<"gross"|"net"|"points"|"handicap">("points");
   const [genSeedRound, setGenSeedRound]   = useState(1);
@@ -1039,6 +1040,23 @@ export default function Events() {
 
   // ── Draw ──────────────────────────────────────────────────────────────────
 
+  const openGenDlg = () => {
+    setGenMode("random");
+    setGenAllRounds(false);
+    setGenSeedRound(Math.max(1, drawRound - 1));
+    if (detail?.shotgun_start) {
+      setGenShotgunDoubleTee(!!detail.shotgun_double_tee);
+      setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0);
+      setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]);
+    }
+    setGenDlg(true);
+  };
+
+  const handleGenerateDrawClick = () => {
+    if (drawIsPublished) { setRegenWarnDlg(true); return; }
+    openGenDlg();
+  };
+
   const saveDraw = async () => {
     if (!detail) return;
     setSavingDraw(true);
@@ -1758,7 +1776,7 @@ ${bodyHtml}
                     <div className="flex gap-1.5 flex-wrap justify-end">
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={printDraw} disabled={draw.length === 0}><Printer className="h-3.5 w-3.5" />Print Draw</Button>
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); if (detail?.shotgun_start) { setGenShotgunDoubleTee(!!detail.shotgun_double_tee); setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0); setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]); } setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleGenerateDrawClick} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>
                     </div>
                   </div>
@@ -1785,7 +1803,7 @@ ${bodyHtml}
                       <p className="text-sm text-muted-foreground">No draw yet for Round {drawRound}.</p>
                       <div className="flex gap-2 justify-center">
                         <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All Players</Button>
-                        <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); if (detail?.shotgun_start) { setGenShotgunDoubleTee(!!detail.shotgun_double_tee); setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0); setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]); } setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
+                        <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleGenerateDrawClick} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       </div>
                     </div>
                   ) : (() => {
@@ -1935,6 +1953,38 @@ ${bodyHtml}
                       </div>
                     );
                   })()}
+
+                  {/* Re-generate warning dialog */}
+                  <AlertDialog open={regenWarnDlg} onOpenChange={setRegenWarnDlg}>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle className="flex items-center gap-2">
+                          <AlertTriangle className="h-5 w-5 text-amber-500" />
+                          Draw Already Published
+                        </AlertDialogTitle>
+                        <AlertDialogDescription className="text-sm text-muted-foreground space-y-2">
+                          <span className="block">
+                            The Round {drawRound} draw has already been published — players have been notified of their tee times and groups.
+                          </span>
+                          <span className="block">
+                            Generating a new draw will <strong>overwrite the existing one</strong>. You'll need to re-publish it, and players will receive an updated notification.
+                          </span>
+                          <span className="block">
+                            Are you sure you want to continue?
+                          </span>
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction
+                          className="bg-amber-600 hover:bg-amber-700 text-white"
+                          onClick={() => { setRegenWarnDlg(false); openGenDlg(); }}
+                        >
+                          Yes, Generate New Draw
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
 
                   {/* Generate Draw dialog */}
                   <Dialog open={genDlg} onOpenChange={setGenDlg}>

@@ -66081,6 +66081,7 @@ router14.get("/portal/events", requireClubAuth2, async (req, res) => {
   );
   res.json(events.map((e) => ({
     ...e,
+    club_name: club.name,
     entry_fee: e.entry_fee != null ? parseFloat(e.entry_fee) : null,
     total_registrations: parseInt(e.total_registrations ?? "0"),
     approved_count: parseInt(e.approved_count ?? "0"),

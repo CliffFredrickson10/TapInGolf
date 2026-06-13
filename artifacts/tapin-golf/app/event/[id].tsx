@@ -85,7 +85,7 @@ const FORMAT_LABELS: Record<string, string> = {
   fourball_gross_betterball: "Four-Ball Gross Betterball",
   fourball_net_betterball: "Four-Ball Net Betterball",
   betterball_match_play: "Betterball Match Play",
-  fourball_stableford: "Four-Ball Stableford",
+  fourball_stableford: "Betterball Stableford (Four-Ball Stableford)",
   shamble: "Shamble", best_ball_aggregate: "Best Ball Aggregate",
   high_low: "High-Low", daytona: "Daytona (Las Vegas)",
   low_ball_total: "Low Ball / Total Score", the_ghost: "The Ghost",

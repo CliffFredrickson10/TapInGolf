@@ -183,7 +183,7 @@ const FORMAT_LABELS: Record<string, string> = {
   fourball_gross_betterball: "Four-Ball Gross Betterball",
   fourball_net_betterball: "Four-Ball Net Betterball",
   betterball_match_play: "Betterball Match Play",
-  fourball_stableford: "Four-Ball Stableford",
+  fourball_stableford: "Betterball Stableford (Four-Ball Stableford)",
   shamble: "Shamble",
   best_ball_aggregate: "Best Ball Aggregate",
   high_low: "High-Low",
@@ -2784,7 +2784,7 @@ ${bodyHtml}
                               <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
                               <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
                               <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
-                              <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                              <SelectItem value="fourball_stableford">Betterball Stableford (Four-Ball Stableford)</SelectItem>
                               <SelectItem value="shamble">Shamble</SelectItem>
                               <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
                               <SelectItem value="high_low">High-Low</SelectItem>
@@ -2831,7 +2831,7 @@ ${bodyHtml}
                               <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
                               <SelectItem value="fourball_net_betterball">Four-Ball Net Betterball</SelectItem>
                               <SelectItem value="betterball_match_play">Betterball Match Play</SelectItem>
-                              <SelectItem value="fourball_stableford">Four-Ball Stableford</SelectItem>
+                              <SelectItem value="fourball_stableford">Betterball Stableford (Four-Ball Stableford)</SelectItem>
                               <SelectItem value="shamble">Shamble</SelectItem>
                               <SelectItem value="best_ball_aggregate">Best Ball Aggregate</SelectItem>
                               <SelectItem value="high_low">High-Low</SelectItem>

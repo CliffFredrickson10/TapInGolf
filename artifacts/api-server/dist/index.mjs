@@ -32253,50 +32253,50 @@ var require_result = __commonJS({
         }
       }
       _parseRowAsArray(rowData) {
-        const row3 = new Array(rowData.length);
+        const row4 = new Array(rowData.length);
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           if (rawValue !== null) {
-            row3[i] = this._parsers[i](rawValue);
+            row4[i] = this._parsers[i](rawValue);
           } else {
-            row3[i] = null;
+            row4[i] = null;
           }
         }
-        return row3;
+        return row4;
       }
       parseRow(rowData) {
-        const row3 = { ...this._prebuiltEmptyResultObject };
+        const row4 = { ...this._prebuiltEmptyResultObject };
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           const field = this.fields[i].name;
           if (rawValue !== null) {
             const v = this.fields[i].format === "binary" ? Buffer.from(rawValue) : rawValue;
-            row3[field] = this._parsers[i](v);
+            row4[field] = this._parsers[i](v);
           } else {
-            row3[field] = null;
+            row4[field] = null;
           }
         }
-        return row3;
+        return row4;
       }
-      addRow(row3) {
-        this.rows.push(row3);
+      addRow(row4) {
+        this.rows.push(row4);
       }
       addFields(fieldDescriptions) {
         this.fields = fieldDescriptions;
         if (this.fields.length) {
           this._parsers = new Array(fieldDescriptions.length);
         }
-        const row3 = {};
+        const row4 = {};
         for (let i = 0; i < fieldDescriptions.length; i++) {
           const desc = fieldDescriptions[i];
-          row3[desc.name] = null;
+          row4[desc.name] = null;
           if (this._types) {
             this._parsers[i] = this._types.getTypeParser(desc.dataTypeID, desc.format || "text");
           } else {
             this._parsers[i] = types2.getTypeParser(desc.dataTypeID, desc.format || "text");
           }
         }
-        this._prebuiltEmptyResultObject = { ...row3 };
+        this._prebuiltEmptyResultObject = { ...row4 };
       }
     };
     module.exports = Result2;
@@ -32367,19 +32367,19 @@ var require_query = __commonJS({
         this._accumulateRows = this.callback || !this.listeners("row").length;
       }
       handleDataRow(msg) {
-        let row3;
+        let row4;
         if (this._canceledDueToError) {
           return;
         }
         try {
-          row3 = this._result.parseRow(msg.fields);
+          row4 = this._result.parseRow(msg.fields);
         } catch (err) {
           this._canceledDueToError = err;
           return;
         }
-        this.emit("row", row3, this._result);
+        this.emit("row", row4, this._result);
         if (this._accumulateRows) {
-          this._result.addRow(row3);
+          this._result.addRow(row4);
         }
       }
       handleCommandComplete(msg, connection) {
@@ -35035,13 +35035,13 @@ var require_query2 = __commonJS({
         if (self2._emitRowEvents) {
           if (results.length > 1) {
             rows.forEach((rowOfRows, i) => {
-              rowOfRows.forEach((row3) => {
-                self2.emit("row", row3, results[i]);
+              rowOfRows.forEach((row4) => {
+                self2.emit("row", row4, results[i]);
               });
             });
           } else {
-            rows.forEach(function(row3) {
-              self2.emit("row", row3, results);
+            rows.forEach(function(row4) {
+              self2.emit("row", row4, results);
             });
           }
         }
@@ -53221,11 +53221,50 @@ async function runAutoRuleNow(rule) {
   let datesProcessed = 0;
   let slotsCreated = 0;
   for (const date of dates) {
-    const tournamentSlots = await row(
-      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
+    const tournamentRows = await query(
+      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes
+       FROM portal_tee_slots pts
+       JOIN golf_events ge ON ge.id = pts.event_id
+       WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')`,
       [club_id, date]
     );
-    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
+    if (tournamentRows.length === 0) {
+    } else {
+      const hasNonShotgun = tournamentRows.some((r) => !r.shotgun_start);
+      if (hasNonShotgun) {
+        continue;
+      }
+      const windows = [];
+      for (const r of tournamentRows) {
+        const shotgunMin = toMin(String(r.tee_time).slice(0, 5));
+        const durationMin = Number(r.holes) >= 18 ? 270 : 150;
+        windows.push({
+          start: Math.max(0, shotgunMin - durationMin),
+          end: shotgunMin + durationMin
+        });
+      }
+      const isBlocked = (time) => {
+        const m = toMin(time);
+        return windows.some((w) => m >= w.start && m <= w.end);
+      };
+      let newForDay2 = 0;
+      for (const s of slotTemplate) {
+        if (isBlocked(s.time)) continue;
+        try {
+          const inserted = await run(
+            "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING",
+            [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type]
+          );
+          if (inserted > 0) newForDay2++;
+        } catch {
+        }
+      }
+      if (newForDay2 > 0) {
+        datesProcessed++;
+        slotsCreated += newForDay2;
+      }
+      continue;
+    }
     let newForDay = 0;
     for (const s of slotTemplate) {
       try {

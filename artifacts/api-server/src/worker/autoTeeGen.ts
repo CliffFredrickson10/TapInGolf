@@ -110,12 +110,54 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   let slotsCreated   = 0;
 
   for (const date of dates) {
-    // Skip the whole day if there are any active tournament slots
-    const tournamentSlots = await row<{ cnt: string }>(
-      "SELECT COUNT(*) AS cnt FROM portal_tee_slots pts JOIN golf_events ge ON ge.id = pts.event_id WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')",
+    // Fetch active tournament slots for this day (with shotgun/holes info)
+    const tournamentRows = await query<any>(
+      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes
+       FROM portal_tee_slots pts
+       JOIN golf_events ge ON ge.id = pts.event_id
+       WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')`,
       [club_id, date]
     );
-    if (Number(tournamentSlots?.cnt ?? 0) > 0) continue;
+
+    if (tournamentRows.length === 0) {
+      // No tournament on this day — generate all slots normally
+    } else {
+      const hasNonShotgun = tournamentRows.some((r: any) => !r.shotgun_start);
+      if (hasNonShotgun) {
+        // Interval-start tournament occupies the whole day — skip entirely
+        continue;
+      }
+
+      // Shotgun-only: build blocked windows and skip slots that fall inside them
+      const windows: Array<{ start: number; end: number }> = [];
+      for (const r of tournamentRows) {
+        const shotgunMin  = toMin(String(r.tee_time).slice(0, 5));
+        const durationMin = Number(r.holes) >= 18 ? 270 : 150;
+        windows.push({
+          start: Math.max(0, shotgunMin - durationMin),
+          end:   shotgunMin + durationMin,
+        });
+      }
+
+      const isBlocked = (time: string) => {
+        const m = toMin(time);
+        return windows.some(w => m >= w.start && m <= w.end);
+      };
+
+      let newForDay = 0;
+      for (const s of slotTemplate) {
+        if (isBlocked(s.time)) continue;
+        try {
+          const inserted = await run(
+            "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type) VALUES (?, ?, ?, ?, 1, ?, ?) ON CONFLICT DO NOTHING",
+            [club_id, date, s.time, Number(players_per_slot ?? 4), s.session_type, s.tee_start_type]
+          );
+          if (inserted > 0) newForDay++;
+        } catch { /* skip constraint errors */ }
+      }
+      if (newForDay > 0) { datesProcessed++; slotsCreated += newForDay; }
+      continue; // handled above — don't fall through to the normal insert block
+    }
 
     let newForDay = 0;
     for (const s of slotTemplate) {

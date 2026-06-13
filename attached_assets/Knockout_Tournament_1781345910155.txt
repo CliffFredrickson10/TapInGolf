@@ -1,0 +1,46 @@
+**Objective:** Expand the existing tournament creation architecture to support a "Knockout" (Single-Elimination / Match Play) tournament format utilizing a strict single-flow, one-sided hierarchy.
+
+**Context:** The app currently handles stroke-play tournaments with linear leaderboards. This feature introduces a bracket-based match-play system where players or teams compete head-to-head in "rounds." The winner of each match advances to the next round, and the loser is eliminated. The entire progression must flow in one direction (left-to-right) rather than a split-bracket format meeting in the middle.
+
+**Data Schema Adjustments:**
+1. **Tournament Model:** Add `knockout` to the tournament format options. Add a `bracket_size` integer field (e.g., 8, 16, 32, 64).
+2. **Round Model:** Create a `KnockoutRound` model linked to the tournament (e.g., Round of 16, Quarter-finals, Semi-finals, Finals). It tracks `round_number` and `is_complete`. Rounds must progress linearly.
+3. **Match Model:** Create a `KnockoutMatch` model that tracks:
+   - `round_id` (foreign key)
+   - `player_1_id` and `player_2_id` (or team IDs)
+   - `player_1_score` and `player_2_score` (stored as holes won, e.g., "3 & 2" or standard match play results)
+   - `winner_id`
+   - `next_match_id` (the single match downstream that the winner advances to)
+   - `slot_position` (ENUM: 'top' or 'bottom' — defines which slot the winner occupies in the next match)
+   - `match_sequence` (Integer tracking vertical order within that specific round)
+
+**Core Functional Logic to Implement:**
+
+1. **One-Sided Seeding & Bracket Generation Algorithm:**
+   - Require the bracket size to be a power of 2 (8, 16, 32, 64, etc.).
+   - **Linear Bracket Mapping:** Generate all matches for Round 1 sequentially from top to bottom. 
+   - **Seeding Rule:** Implement standard tournament seeding arranged linearly. For a 16-player bracket, the vertical order of Round 1 matches must be:
+     - Match 1: Seed 1 vs Seed 16 (Winner goes to Match 9, 'top' slot)
+     - Match 2: Seed 8 vs Seed 9  (Winner goes to Match 9, 'bottom' slot)
+     - Match 3: Seed 5 vs Seed 12 (Winner goes to Match 10, 'top' slot)
+     - Match 4: Seed 4 vs Seed 13 (Winner goes to Match 10, 'bottom' slot)
+     - (Continue this linear progression down to Match 8: Seed 2 vs Seed 15).
+   - **Byes Handling:** If registered players are fewer than the bracket size, automatically award "Byes" to top seeds. The system must immediately advance them to the next round's slot.
+
+2. **Single-Flow Progression Automation:**
+   - Write a backend trigger: When a final score is submitted for a `KnockoutMatch`:
+     - Set the `winner_id`.
+     - Identify the `next_match_id`.
+     - Check the `slot_position`. If 'top', insert the `winner_id` into `player_1_id` of the next match. If 'bottom', insert it into `player_2_id`.
+   - **No Split Brackets:** Ensure that *all* matches in a round feed directly into the adjacent column to the right. There are no "left brackets" and "right brackets"—only consecutive rounds.
+
+3. **Golf-Specific Scoring Adjustments:**
+   - The score entry interface must allow entering match play results that can end before 18 holes (e.g., "4 & 3", "2 Up", or "Won on 19th hole" for sudden-death playoffs).
+
+4. **UI/UX One-Sided Visual Layout:**
+   - Create a front-end Bracket View component that displays rounds as strict vertical columns progressing horizontally from left to right:
+     `[Round of 16] ---> [Quarter-Finals] ---> [Semi-Finals] ---> [Finals] ---> [Champion Box]`
+   - The UI must be horizontally scrollable or zoomable on mobile devices to comfortably view the progression from the initial field on the far left to the final champion on the far right.
+
+**Output Deliverable:**
+Generate backend models supporting single-flow progression, the linear seeding algorithm, and a left-to-right responsive front-end bracket component.

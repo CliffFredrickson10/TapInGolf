@@ -3565,7 +3565,12 @@ ${bodyHtml}
                             </div>
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Tee slots</span>
-                              <span>{eventSlots.length > 0 ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} · ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots` : <span className="italic text-muted-foreground">None configured yet</span>}</span>
+                              <span>{eventSlots.length > 0
+                                ? `${eventSlots.length} slot${eventSlots.length !== 1 ? "s" : ""} · ${eventSlots.reduce((s, sl) => s + sl.total_slots, 0)} spots`
+                                : teeConfigSnapshot
+                                  ? <span className="text-[#1a5c38] font-medium">✓ Schedule config saved</span>
+                                  : <span className="italic text-muted-foreground">None configured yet</span>
+                              }</span>
                             </div>
                           </div>
                         </CardContent>

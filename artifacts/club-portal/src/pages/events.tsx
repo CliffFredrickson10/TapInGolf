@@ -3126,6 +3126,24 @@ ${bodyHtml}
 
                   {/* ━━━ STEP 4: SCHEDULE ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 4 && (<>
+                    {/* ── Block full day ──────────────────────────────────────────── */}
+                    <div className={`rounded-xl border-2 p-4 flex items-start gap-4 transition-colors ${form.block_full_day ? "border-red-400 bg-red-50" : "border-border bg-muted/30"}`}>
+                      <div className="flex-1">
+                        <p className="text-sm font-semibold flex items-center gap-1.5">
+                          🚫 Block full day to public
+                        </p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Remove <strong>all</strong> public tee time slots for the entire tournament date. No public bookings will be available on this day.
+                        </p>
+                        {form.block_full_day && (
+                          <p className="text-xs text-red-600 font-medium mt-1.5">
+                            ⚠ Publishing will cancel and delete all existing public tee time bookings on this date.
+                          </p>
+                        )}
+                      </div>
+                      <Switch checked={!!form.block_full_day} onCheckedChange={v => setForm(f => ({ ...f, block_full_day: v }))} />
+                    </div>
+
                     {/* ── Start type ─────────────────────────────────────────────── */}
                     <div>
                       <Label className="text-sm font-semibold mb-2 block">Start Type</Label>
@@ -3163,17 +3181,6 @@ ${bodyHtml}
                           </button>
                         ))}
                       </div>
-                    <Card className="bg-muted/30">
-                      <CardContent className="p-4">
-                        <div className="flex items-center justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-medium">Block full day to public</p>
-                            <p className="text-xs text-muted-foreground">Remove all public tee time slots for the entire tournament date — no public bookings on this day</p>
-                          </div>
-                          <Switch checked={!!form.block_full_day} onCheckedChange={v => setForm(f => ({ ...f, block_full_day: v }))} />
-                        </div>
-                      </CardContent>
-                    </Card>
                       {!!form.shotgun_start && (
                         <div className="mt-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 flex items-start gap-2">
                           <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0 mt-0.5" />

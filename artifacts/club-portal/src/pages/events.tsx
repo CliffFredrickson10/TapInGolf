@@ -399,7 +399,7 @@ export default function Events() {
 
   useEffect(() => {
     const params = new URLSearchParams(search);
-    if (params.get("action") === "new") setDlgOpen(true);
+    if (params.get("action") === "new") { setWizardStep(0); setDlgOpen(true); }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Deep-link: ?event=<id>&tab=<tab> — wait for events list to be ready
@@ -937,6 +937,12 @@ export default function Events() {
     setNewSlotDate("");
     setNewSlotTime("");
     setNewSlotPlayers(4);
+    setTeeConfigSnapshot(null);
+    setPendingTeeConfig(null);
+    setSelectedTplId(null);
+    setRenamingTplId(null);
+    setRenameTplVal("");
+    setTemplateMode(false);
     setWizardStep(0);
     setDlgOpen(true);
     // Load exclusive event slots after opening (existing events only)
@@ -2694,7 +2700,7 @@ ${bodyHtml}
 
                   {/* ━━━ STEP 0: DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 0 && (<>
-                    {/* Saved templates list — in templateMode for management; in normal mode as a load-only dropdown */}
+                    {/* Saved templates list — templateMode: management; new tournament: load dropdown; editing: hidden */}
                     {templateMode ? (
                       <div className="space-y-2">
                         <div className="flex items-center justify-between">
@@ -2754,7 +2760,7 @@ ${bodyHtml}
                           )}
                         </div>
                       </div>
-                    ) : (
+                    ) : !editId && (
                     <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2.5">
                       <div className="flex items-center gap-2">
                         <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />

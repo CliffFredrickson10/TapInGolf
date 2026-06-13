@@ -2683,8 +2683,70 @@ ${bodyHtml}
 
                   {/* ━━━ STEP 0: DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 0 && (<>
-                    {/* Templates — only shown in normal tournament mode, not when creating a template */}
-                    {!templateMode && (
+                    {/* Saved templates list — in templateMode for management; in normal mode as a load-only dropdown */}
+                    {templateMode ? (
+                      <div className="space-y-2">
+                        <div className="flex items-center justify-between">
+                          <p className="text-sm font-semibold flex items-center gap-1.5">
+                            <BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />Saved Templates
+                          </p>
+                          {templatesLoading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+                        </div>
+                        {!templatesLoading && templates.length === 0 && (
+                          <p className="text-xs text-muted-foreground italic py-2 text-center border border-dashed border-border rounded-lg">
+                            No templates saved yet — create one below.
+                          </p>
+                        )}
+                        {templates.map(tpl => (
+                          <div key={tpl.id} className="rounded-lg border bg-card">
+                            {renamingTplId === tpl.id ? (
+                              <div className="p-3 space-y-2">
+                                <p className="text-xs font-semibold text-[#1a5c38]">Rename template</p>
+                                <div className="flex gap-2">
+                                  <Input className="h-7 text-xs flex-1" placeholder="Template name…"
+                                    value={renameTplVal} onChange={e => setRenameTplVal(e.target.value)} autoFocus />
+                                  <Button size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]"
+                                    disabled={savingTpl} onClick={handleUpdateTemplate}>
+                                    {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                                  </Button>
+                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                                    onClick={() => { setRenamingTplId(null); setRenameTplVal(""); }}>
+                                    Cancel
+                                  </Button>
+                                </div>
+                              </div>
+                            ) : (
+                              <div className="flex items-center gap-2 px-3 py-2">
+                                <BookmarkPlus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                                <span className="text-sm font-medium flex-1 truncate">{tpl.name}</span>
+                                {tpl.template_data?.tee_config && (
+                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">tee</span>
+                                )}
+                                {!readOnly && (
+                                  <>
+                                    <Button size="sm" variant="ghost"
+                                      className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                                      onClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}
+                                      title="Rename">
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="sm" variant="ghost"
+                                      className="h-7 w-7 p-0 shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
+                                      onClick={() => setDeleteTplDlg({ open: true, id: tpl.id, name: tpl.name })}
+                                      title="Delete">
+                                      <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                  </>
+                                )}
+                              </div>
+                            )}
+                          </div>
+                        ))}
+                        <div className="border-t border-dashed border-border pt-3">
+                          <p className="text-xs font-semibold text-muted-foreground mb-2">Create new template</p>
+                        </div>
+                      </div>
+                    ) : (
                     <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2.5">
                       <div className="flex items-center gap-2">
                         <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
@@ -2693,90 +2755,37 @@ ${bodyHtml}
                           <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
                         )}
                       </div>
-
-                      {/* Dropdown row */}
-                      <div className="flex items-center gap-2">
-                        <Select
-                          value={selectedTplId ? String(selectedTplId) : ""}
-                          onValueChange={val => {
-                            const tpl = templates.find(t => t.id === Number(val));
-                            if (!tpl) return;
-                            setSelectedTplId(tpl.id);
-                            handleLoadTemplate(tpl);
-                            setRenamingTplId(null);
-                            setRenameTplVal("");
-                          }}
-                          disabled={templatesLoading || templates.length === 0}
-                        >
-                          <SelectTrigger className="h-8 text-xs flex-1 bg-white">
-                            <SelectValue placeholder={
-                              templatesLoading ? "Loading…" :
-                              templates.length === 0 ? "No templates saved yet" :
-                              "Select a template to load…"
-                            } />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {templates.map(tpl => (
-                              <SelectItem key={tpl.id} value={String(tpl.id)}>
-                                <span className="flex items-center gap-2">
-                                  {tpl.name}
-                                  {tpl.template_data?.tee_config && (
-                                    <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-blue-100 text-blue-700">tee</span>
-                                  )}
-                                </span>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-
-                        {/* Edit selected template */}
-                        {selectedTplId && !readOnly && (
-                          <Button size="sm" variant="outline"
-                            className="h-8 px-2.5 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10 shrink-0"
-                            onClick={() => {
-                              const tpl = templates.find(t => t.id === selectedTplId);
-                              if (tpl) { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }
-                            }}>
-                            <Pencil className="h-3 w-3 mr-1" />Edit
-                          </Button>
-                        )}
-
-                        {/* Delete selected template */}
-                        {selectedTplId && !readOnly && (
-                          <Button size="sm" variant="ghost"
-                            className="h-8 w-8 p-0 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
-                            onClick={() => {
-                              const tpl = templates.find(t => t.id === selectedTplId);
-                              if (tpl) setDeleteTplDlg({ open: true, id: tpl.id, name: tpl.name });
-                            }}>
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
-                        )}
-                      </div>
-
-                      {/* Edit panel — shown when editing a template */}
-                      {renamingTplId !== null && selectedTplId === renamingTplId && (
-                        <div className="rounded-lg border border-[#1a5c38]/30 bg-white p-3 space-y-2">
-                          <p className="text-xs font-semibold text-[#1a5c38]">Edit template</p>
-                          <div className="flex gap-2">
-                            <Input className="h-7 text-xs flex-1" placeholder="Template name…"
-                              value={renameTplVal} onChange={e => setRenameTplVal(e.target.value)} autoFocus />
-                          </div>
-                          <p className="text-[11px] text-muted-foreground">You can also save the current wizard settings into this template.</p>
-                          <div className="flex gap-2">
-                            <Button size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]"
-                              disabled={savingTpl} onClick={handleUpdateTemplate}>
-                              {savingTpl ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                              Save changes
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                              onClick={() => { setRenamingTplId(null); setRenameTplVal(""); }}>
-                              Cancel
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-
+                      {/* Load-only dropdown */}
+                      <Select
+                        value={selectedTplId ? String(selectedTplId) : ""}
+                        onValueChange={val => {
+                          const tpl = templates.find(t => t.id === Number(val));
+                          if (!tpl) return;
+                          setSelectedTplId(tpl.id);
+                          handleLoadTemplate(tpl);
+                        }}
+                        disabled={templatesLoading || templates.length === 0}
+                      >
+                        <SelectTrigger className="h-8 text-xs bg-white">
+                          <SelectValue placeholder={
+                            templatesLoading ? "Loading…" :
+                            templates.length === 0 ? "No templates saved yet" :
+                            "Select a template to load…"
+                          } />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {templates.map(tpl => (
+                            <SelectItem key={tpl.id} value={String(tpl.id)}>
+                              <span className="flex items-center gap-2">
+                                {tpl.name}
+                                {tpl.template_data?.tee_config && (
+                                  <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-blue-100 text-blue-700">tee</span>
+                                )}
+                              </span>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     )}
                     {/* Name */}

@@ -1777,7 +1777,6 @@ ${bodyHtml}
                       )}
                     </div>
                     <div className="flex gap-1.5 flex-wrap justify-end">
-                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={printDraw} disabled={draw.length === 0}><Printer className="h-3.5 w-3.5" />Print Draw</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleGenerateDrawClick} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>
@@ -1805,7 +1804,6 @@ ${bodyHtml}
                       <Shuffle className="h-8 w-8 text-muted-foreground mx-auto opacity-40" />
                       <p className="text-sm text-muted-foreground">No draw yet for Round {drawRound}.</p>
                       <div className="flex gap-2 justify-center">
-                        <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All Players</Button>
                         <Button size="sm" variant="outline" className="gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={handleGenerateDrawClick} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       </div>
                     </div>
@@ -2402,56 +2400,13 @@ ${bodyHtml}
                 {isTeamFormatFE(detail.format, detail.format2) && (
                   <TabsContent value="pairings" className="pb-8">
                     <div className="space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="text-sm font-semibold">Team Pairings</p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {isGroupFormatFE(detail.format, detail.format2) ? "Groups compete together as a team." : "Each pair competes together."}
-                            {" "}Golfers who registered as partners are already paired — use the button to manually pair any unpaired players.
-                          </p>
-                        </div>
-                        <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30] h-8"
-                          onClick={() => { setAddPairingDraft([]); setAddPairingOpen(true); }}>
-                          <Plus className="h-3.5 w-3.5 mr-1" />New Pairing
-                        </Button>
+                      <div>
+                        <p className="text-sm font-semibold">Team Pairings</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          {isGroupFormatFE(detail.format, detail.format2) ? "Groups compete together as a team." : "Each pair competes together."}
+                          {" "}Pairings are set when players register together.
+                        </p>
                       </div>
-
-                      {/* Add pairing panel */}
-                      {addPairingOpen && (
-                        <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 p-4 space-y-3">
-                          <p className="text-sm font-semibold text-[#1a5c38]">Create New Pairing</p>
-                          <p className="text-xs text-muted-foreground">Select 2+ registered players to pair together.</p>
-                          <div className="space-y-2">
-                            {regs.filter(r => r.status === "approved").map(r => {
-                              const inDraft = addPairingDraft.some(p => p.user_id === r.user_id);
-                              return (
-                                <label key={r.user_id} className="flex items-center gap-2.5 rounded-md border bg-white px-3 py-2 cursor-pointer hover:border-[#1a5c38]/40">
-                                  <input type="checkbox" checked={inDraft} className="accent-[#1a5c38]"
-                                    onChange={e => {
-                                      if (e.target.checked) setAddPairingDraft(d => [...d, { user_id: r.user_id, user_name: r.user_name }]);
-                                      else setAddPairingDraft(d => d.filter(p => p.user_id !== r.user_id));
-                                    }} />
-                                  <span className="text-sm">{r.user_name}</span>
-                                  {r.handicap != null && <span className="text-xs text-muted-foreground ml-auto">HI {Number(r.handicap).toFixed(1)}</span>}
-                                </label>
-                              );
-                            })}
-                            {regs.filter(r => r.status === "approved").length === 0 && (
-                              <p className="text-xs text-muted-foreground italic">No approved registrations yet.</p>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2 pt-1">
-                            <span className="text-xs text-muted-foreground">{addPairingDraft.length} selected</span>
-                            <div className="flex-1" />
-                            <Button size="sm" variant="outline" onClick={() => { setAddPairingOpen(false); setAddPairingDraft([]); }}>Cancel</Button>
-                            <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]"
-                              onClick={handleCreatePairing}
-                              disabled={addPairingDraft.length < 2 || pairingSaving}>
-                              {pairingSaving ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Create Pairing"}
-                            </Button>
-                          </div>
-                        </div>
-                      )}
 
                       {pairingsLoading ? (
                         <div className="space-y-2">

@@ -2036,7 +2036,7 @@ export default function Schedule() {
                           </p>
                         </div>
                         <button
-                          onClick={() => navigate("/events")}
+                          onClick={() => navigate(`/events?event=${tt.event_id}&tab=draw`)}
                           className="flex-shrink-0 text-[11px] font-semibold text-[#1a5c38] border border-[#1a5c38]/40 rounded-lg px-3 py-1.5 hover:bg-[#1a5c38]/8 transition-colors whitespace-nowrap">
                           View Draw &rarr;
                         </button>

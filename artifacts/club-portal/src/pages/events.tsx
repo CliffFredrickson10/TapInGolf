@@ -398,6 +398,19 @@ export default function Events() {
     const params = new URLSearchParams(search);
     if (params.get("action") === "new") setDlgOpen(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deep-link: ?event=<id>&tab=<tab> — wait for events list to be ready
+  useEffect(() => {
+    if (loading || events.length === 0) return;
+    const params = new URLSearchParams(search);
+    const eventId = params.get("event");
+    const tab     = params.get("tab");
+    if (!eventId) return;
+    const ev = events.find(e => String(e.id) === eventId);
+    if (!ev) return;
+    openDetail(ev);
+    if (tab) setDetailTab(tab);
+  }, [loading, events]); // eslint-disable-line react-hooks/exhaustive-deps
   const [form, setForm]         = useState(EMPTY_FORM);
   const [editId, setEditId]     = useState<number | null>(null);
   const [saving, setSaving]     = useState(false);

@@ -715,6 +715,14 @@ export default function Events() {
       .finally(() => setCheckingExistingSlots(false));
   }, [editId, dlgOpen, form.event_date, form.end_date]);
 
+  // ── Auto-open shotgun dialog when shotgun start is selected with no slots yet ──
+  useEffect(() => {
+    if (!form.shotgun_start || wizardStep !== 4 || !form.event_date || editId) return;
+    if (eventSlots.length > 0) return;
+    setShotgunDlgDate(form.event_date);
+    setShotgunDlgOpen(true);
+  }, [form.shotgun_start, wizardStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleImportExistingSlots = () => {
     const staged = existingGeneralSlots.map(s => ({
       ...s,
@@ -3188,7 +3196,7 @@ ${bodyHtml}
                               </span>
                             )}
                           </div>
-                          {!editId && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
+                          {!editId && !form.shotgun_start && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
                               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                               <div className="flex-1 min-w-0">

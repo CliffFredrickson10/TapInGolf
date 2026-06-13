@@ -259,7 +259,7 @@ const EMPTY_FORM = {
   holes: 18 as 9 | 18,
   additional_fees: [] as { name: string; amount: number }[],
   ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
-  use_tiered_pricing: false, allow_wallet: false, allow_prepaid: false, allow_voucher: false,
+  use_tiered_pricing: false, allow_wallet: true, allow_prepaid: false, allow_voucher: false,
   shotgun_start: false,
   use_divisions: true,
   divisions: DEFAULT_DIVISIONS,
@@ -833,7 +833,7 @@ export default function Events() {
       payment_required: !!ev.payment_required,
       entries_required: ev.entries_required !== 0,
       use_tiered_pricing: !!ev.use_tiered_pricing,
-      allow_wallet: !!ev.allow_wallet, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
+      allow_wallet: true, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
       shotgun_start: !!ev.shotgun_start,
       use_divisions: Array.isArray(ev.divisions) ? ev.divisions.length > 0 : true,
       divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
@@ -2995,9 +2995,16 @@ ${bodyHtml}
                           </div>
                           <div className="pt-1 border-t space-y-3">
                             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Payment methods</p>
+                            {/* Wallet — always enabled, locked */}
+                            <div className="flex items-center justify-between gap-4">
+                              <div>
+                                <p className="text-sm font-medium">Allow wallet</p>
+                                <p className="text-xs text-muted-foreground">Golfers can pay from their TapIn wallet balance — always enabled</p>
+                              </div>
+                              <Switch checked={true} disabled className="opacity-70" />
+                            </div>
                             {[
                               { key: "use_tiered_pricing", label: "Tiered pricing",  desc: "Each golfer pays their standard club rate (member, visitor, junior…)" },
-                              { key: "allow_wallet",       label: "Allow wallet",     desc: "Golfers can pay from their TapIn wallet balance" },
                               { key: "allow_prepaid",      label: "Allow prepaid",    desc: "Members can redeem a prepaid round credit" },
                               { key: "allow_voucher",      label: "Allow vouchers",   desc: "Golfers can apply a discount or cancellation voucher" },
                             ].map(opt => (

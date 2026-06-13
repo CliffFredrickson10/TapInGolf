@@ -66088,7 +66088,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       payment_required ? 1 : 0,
       entries_required === false || entries_required === 0 ? 0 : 1,
       use_tiered_pricing ? 1 : 0,
-      allow_wallet ? 1 : 0,
+      1,
       allow_prepaid ? 1 : 0,
       allow_voucher ? 1 : 0,
       shotgun_start ? 1 : 0,
@@ -66233,10 +66233,7 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     updates.push("use_tiered_pricing = ?");
     vals.push(use_tiered_pricing ? 1 : 0);
   }
-  if (allow_wallet !== void 0) {
-    updates.push("allow_wallet = ?");
-    vals.push(allow_wallet ? 1 : 0);
-  }
+  updates.push("allow_wallet = 1");
   if (allow_prepaid !== void 0) {
     updates.push("allow_prepaid = ?");
     vals.push(allow_prepaid ? 1 : 0);

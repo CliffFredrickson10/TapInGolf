@@ -1056,7 +1056,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      entries_open ?? null, entries_close ?? null,
      ballot ? 1 : 0, scoring_enabled ? 1 : 0, payment_required ? 1 : 0,
      entries_required === false || entries_required === 0 ? 0 : 1,
-     use_tiered_pricing ? 1 : 0, allow_wallet ? 1 : 0, allow_prepaid ? 1 : 0, allow_voucher ? 1 : 0,
+     use_tiered_pricing ? 1 : 0, 1 /* allow_wallet always on */, allow_prepaid ? 1 : 0, allow_voucher ? 1 : 0,
      shotgun_start ? 1 : 0,
      Number(rounds), (req.body?.image_url) || null, status, club.id]
   );
@@ -1100,7 +1100,7 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (payment_required !== undefined)    { updates.push("payment_required = ?");  vals.push(payment_required ? 1 : 0); }
   if (entries_required !== undefined)    { updates.push("entries_required = ?");  vals.push(entries_required === false || entries_required === 0 ? 0 : 1); }
   if (use_tiered_pricing !== undefined)  { updates.push("use_tiered_pricing = ?"); vals.push(use_tiered_pricing ? 1 : 0); }
-  if (allow_wallet !== undefined)        { updates.push("allow_wallet = ?");       vals.push(allow_wallet ? 1 : 0); }
+  updates.push("allow_wallet = 1"); /* always enabled */
   if (allow_prepaid !== undefined)       { updates.push("allow_prepaid = ?");      vals.push(allow_prepaid ? 1 : 0); }
   if (allow_voucher !== undefined)       { updates.push("allow_voucher = ?");      vals.push(allow_voucher ? 1 : 0); }
   if (req.body?.shotgun_start !== undefined)       { updates.push("shotgun_start = ?");       vals.push(req.body.shotgun_start ? 1 : 0); }

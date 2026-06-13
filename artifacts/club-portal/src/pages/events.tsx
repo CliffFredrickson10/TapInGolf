@@ -421,8 +421,6 @@ export default function Events() {
   // Tournament templates
   const [templates, setTemplates]         = useState<Array<{ id: number; name: string; template_data: any }>>([]);
   const [templatesLoading, setTemplatesLoading] = useState(false);
-  const [showTplSave, setShowTplSave]     = useState(false);
-  const [tplSaveName, setTplSaveName]     = useState("");
   const [savingTpl, setSavingTpl]         = useState(false);
   const [renamingTplId, setRenamingTplId] = useState<number | null>(null);
   const [renameTplVal, setRenameTplVal]   = useState("");
@@ -761,7 +759,7 @@ export default function Events() {
   // ── Tournament template handlers ──────────────────────────────────────────
 
   useEffect(() => {
-    if (!dlgOpen) { setShowTplSave(false); setTplSaveName(""); return; }
+    if (!dlgOpen) { return; }
     setTemplatesLoading(true);
     api<Array<{ id: number; name: string; template_data: any }>>("/api/portal/tournament-templates")
       .then(setTemplates)
@@ -794,19 +792,12 @@ export default function Events() {
           body: JSON.stringify({ name: trimmed, template_data }),
         });
         setTemplates(prev => [...prev, saved]);
-        setTplSaveName("");
-        setShowTplSave(false);
         toast({ title: "Template saved", description: `"${trimmed}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
       }
       if (templateMode) { setDlgOpen(false); setTemplateMode(false); }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally { setSavingTpl(false); }
-  };
-
-  const handleSaveTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    await doSaveTemplate(tplSaveName);
   };
 
   const handleLoadTemplate = (tpl: { id: number; name: string; template_data: any }) => {
@@ -3575,26 +3566,6 @@ ${bodyHtml}
                       </Card>
                     </div>
 
-                    {/* Save as template — only in normal mode; template mode uses the nav button */}
-                    {!readOnly && !editId && !templateMode && (
-                      <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
-                        <div className="flex items-center gap-2">
-                          <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
-                          <span className="text-sm font-semibold text-[#1a5c38]">Save as template</span>
-                          {teeConfigSnapshot && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">includes tee config</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground">Save the current configuration as a reusable template for future tournaments.</p>
-                        <form className="flex gap-2" onSubmit={handleSaveTemplate}>
-                          <Input className="h-8 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
-                            value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} />
-                          <Button type="submit" size="sm" className="h-8 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30] shrink-0" disabled={savingTpl || !tplSaveName.trim()}>
-                            {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : <><BookmarkPlus className="h-3 w-3 mr-1" />Save</>}
-                          </Button>
-                        </form>
-                      </div>
-                    )}
                   </>)}
                 </div>
 

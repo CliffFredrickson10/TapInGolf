@@ -2741,28 +2741,6 @@ ${bodyHtml}
                         </div>
                       )}
 
-                      {/* Save as new template */}
-                      {!readOnly && (
-                        showTplSave ? (
-                          <form className="flex gap-2" onSubmit={handleSaveTemplate}>
-                            <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
-                              value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} autoFocus />
-                            <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
-                              {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                            </Button>
-                            <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                              onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </form>
-                        ) : (
-                          <Button size="sm" variant="ghost"
-                            className="h-7 px-2 text-xs text-[#1a5c38] hover:bg-[#1a5c38]/10 w-fit"
-                            onClick={() => setShowTplSave(true)}>
-                            <BookmarkPlus className="h-3 w-3 mr-1" />Save current settings as new template
-                          </Button>
-                        )
-                      )}
                     </div>
                     {/* Name */}
                     <div className="space-y-1.5">
@@ -3504,6 +3482,27 @@ ${bodyHtml}
                         </CardContent>
                       </Card>
                     </div>
+
+                    {/* Save as template — intentional, after full config */}
+                    {!readOnly && !editId && (
+                      <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
+                        <div className="flex items-center gap-2">
+                          <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
+                          <span className="text-sm font-semibold text-[#1a5c38]">Save as template</span>
+                          {teeConfigSnapshot && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">includes tee config</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-muted-foreground">Save the current configuration as a reusable template for future tournaments.</p>
+                        <form className="flex gap-2" onSubmit={handleSaveTemplate}>
+                          <Input className="h-8 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
+                            value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} />
+                          <Button type="submit" size="sm" className="h-8 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30] shrink-0" disabled={savingTpl || !tplSaveName.trim()}>
+                            {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : <><BookmarkPlus className="h-3 w-3 mr-1" />Save</>}
+                          </Button>
+                        </form>
+                      </div>
+                    )}
                   </>)}
                 </div>
 

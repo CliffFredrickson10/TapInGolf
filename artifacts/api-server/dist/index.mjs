@@ -65479,10 +65479,12 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
     const _frM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
     const slotMin = _toM(time);
     for (const w of shotgunRows) {
-      const startMin = _toM(String(w.start_time).slice(0, 5));
-      const endMin = startMin + (Number(w.holes) === 9 ? 150 : 270);
-      if (slotMin >= startMin && slotMin < endMin) {
-        res.status(409).json({ message: `${String(time).slice(0, 5)} is blocked by shotgun tournament "${w.event_name}" (${String(w.start_time).slice(0, 5)}\u2013${_frM(endMin)})` });
+      const shotgunMin = _toM(String(w.start_time).slice(0, 5));
+      const durationMin = Number(w.holes) === 9 ? 150 : 270;
+      const windowStart = Math.max(0, shotgunMin - durationMin);
+      const windowEnd = shotgunMin + durationMin;
+      if (slotMin >= windowStart && slotMin < windowEnd) {
+        res.status(409).json({ message: `${String(time).slice(0, 5)} is blocked by shotgun tournament "${w.event_name}" \u2014 course occupied ${_frM(windowStart)}\u2013${_frM(windowEnd)} (shotgun fires ${_frM(shotgunMin)})` });
         return;
       }
     }
@@ -65556,14 +65558,19 @@ router14.get("/portal/tee-times/shotgun-windows", requireClubAuth2, async (req, 
     [club.id, from, to]
   );
   res.json(rows.map((r) => {
-    const startMin = toM(String(r.start_time).slice(0, 5));
+    const shotgunMin = toM(String(r.start_time).slice(0, 5));
     const durationMin = Number(r.holes) === 9 ? 150 : 270;
+    const windowStart = Math.max(0, shotgunMin - durationMin);
     return {
       date: String(r.date).slice(0, 10),
       event_id: r.event_id,
       event_name: r.event_name,
-      start_time: String(r.start_time).slice(0, 5),
-      end_time: frM(startMin + durationMin),
+      shotgun_start: String(r.start_time).slice(0, 5),
+      // actual tournament start time
+      start_time: frM(windowStart),
+      // extended: last safe pre-shotgun tee time
+      end_time: frM(shotgunMin + durationMin),
+      // course clear after tournament finishes
       holes: Number(r.holes)
     };
   }));
@@ -66476,7 +66483,10 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
 router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const ev = await row("SELECT id, event_date, end_date FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row(
+    "SELECT id, event_date, end_date, shotgun_start, COALESCE(holes, 18) AS holes FROM golf_events WHERE id = ? AND club_id = ?",
+    [evId, club.id]
+  );
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
     return;
@@ -66484,33 +66494,73 @@ router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) 
   const toIso = (d) => d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
   const dateFrom = toIso(ev.event_date);
   const dateTo = ev.end_date ? toIso(ev.end_date) : dateFrom;
-  const conflicting_bookings = await query(
+  const cToM = (t) => {
+    const [h, m] = String(t).slice(0, 5).split(":").map(Number);
+    return h * 60 + m;
+  };
+  const cFrM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  let windowFilter = null;
+  if (ev.shotgun_start) {
+    const shotgunSlot = await row(
+      "SELECT MIN(tee_time) AS start_time FROM portal_tee_slots WHERE event_id = ?",
+      [evId]
+    );
+    if (shotgunSlot?.start_time) {
+      const shotgunMin = cToM(String(shotgunSlot.start_time).slice(0, 5));
+      const durationMin = Number(ev.holes) === 9 ? 150 : 270;
+      windowFilter = {
+        shotgun_start: cFrM(shotgunMin),
+        start: cFrM(Math.max(0, shotgunMin - durationMin)),
+        end: cFrM(shotgunMin + durationMin)
+      };
+    }
+  }
+  const conflicting_bookings = windowFilter ? await query(
     `SELECT b.id, b.booking_ref, u.name AS user_name, u.id AS user_id,
-            pts.date AS tee_date, pts.tee_time, b.status, b.players
-     FROM bookings b
-     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
-     JOIN users u ON u.id = b.user_id
-     WHERE pts.club_id = ?
-       AND pts.event_id IS NULL
-       AND pts.date BETWEEN ? AND ?
-       AND b.status NOT IN ('cancelled', 'refunded')
-     ORDER BY pts.date, pts.tee_time`,
+                pts.date AS tee_date, pts.tee_time, b.status, b.players
+         FROM bookings b
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+         JOIN users u ON u.id = b.user_id
+         WHERE pts.club_id = ? AND pts.event_id IS NULL
+           AND pts.date BETWEEN ? AND ?
+           AND pts.tee_time >= ? AND pts.tee_time < ?
+           AND b.status NOT IN ('cancelled', 'refunded')
+         ORDER BY pts.date, pts.tee_time`,
+    [club.id, dateFrom, dateTo, windowFilter.start, windowFilter.end]
+  ) : await query(
+    `SELECT b.id, b.booking_ref, u.name AS user_name, u.id AS user_id,
+                pts.date AS tee_date, pts.tee_time, b.status, b.players
+         FROM bookings b
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+         JOIN users u ON u.id = b.user_id
+         WHERE pts.club_id = ? AND pts.event_id IS NULL
+           AND pts.date BETWEEN ? AND ?
+           AND b.status NOT IN ('cancelled', 'refunded')
+         ORDER BY pts.date, pts.tee_time`,
     [club.id, dateFrom, dateTo]
   );
+  const conflicting_tee_slots = windowFilter ? await query(
+    `SELECT pts.id, pts.date, pts.tee_time,
+                (SELECT COUNT(*) FROM bookings b WHERE b.portal_slot_id = pts.id AND b.status NOT IN ('cancelled','refunded')) AS booking_count
+         FROM portal_tee_slots pts
+         WHERE pts.club_id = ? AND pts.event_id IS NULL
+           AND pts.date BETWEEN ? AND ?
+           AND pts.tee_time >= ? AND pts.tee_time < ?
+         ORDER BY pts.date, pts.tee_time`,
+    [club.id, dateFrom, dateTo, windowFilter.start, windowFilter.end]
+  ) : [];
   const conflicting_events = await query(
     `SELECT ge.id, ge.name, ge.event_date, ge.end_date, ge.status,
             (SELECT COUNT(*) FROM portal_tee_slots pts WHERE pts.event_id = ge.id) AS slot_count,
             (SELECT COUNT(*) FROM event_registrations er WHERE er.event_id = ge.id) AS registrant_count
      FROM golf_events ge
-     WHERE ge.club_id = ?
-       AND ge.id != ?
+     WHERE ge.club_id = ? AND ge.id != ?
        AND ge.status NOT IN ('cancelled')
-       AND ge.event_date <= ?
-       AND COALESCE(ge.end_date, ge.event_date) >= ?
+       AND ge.event_date <= ? AND COALESCE(ge.end_date, ge.event_date) >= ?
      ORDER BY ge.event_date ASC`,
     [club.id, evId, dateTo, dateFrom]
   );
-  res.json({ conflicting_bookings, conflicting_events });
+  res.json({ conflicting_bookings, conflicting_events, conflicting_tee_slots, window: windowFilter });
 });
 router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -66522,6 +66572,33 @@ router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async 
   }
   const cancel_booking_ids = (req.body?.cancel_booking_ids ?? []).map(Number).filter(Boolean);
   const cancel_event_ids = (req.body?.cancel_event_ids ?? []).map(Number).filter(Boolean);
+  const clear_slot_ids = (req.body?.clear_slot_ids ?? []).map(Number).filter(Boolean);
+  if (clear_slot_ids.length > 0) {
+    const cPh = clear_slot_ids.map(() => "?").join(",");
+    const slotBookings = await query(
+      `SELECT b.id, u.id AS user_id, u.push_token
+       FROM bookings b JOIN users u ON u.id = b.user_id
+       WHERE b.portal_slot_id IN (${cPh}) AND b.status NOT IN ('cancelled','refunded')`,
+      clear_slot_ids
+    );
+    if (slotBookings.length > 0) {
+      await exec(
+        `UPDATE bookings SET status = 'cancelled' WHERE portal_slot_id IN (${cPh}) AND status NOT IN ('cancelled','refunded')`,
+        clear_slot_ids
+      );
+      const sTitle = `Booking Cancelled \u2014 ${club.name}`;
+      const sBody = `Your tee time booking has been cancelled to make way for a shotgun tournament. We apologise for the inconvenience.`;
+      const sData = { type: "booking_cancelled_tournament", club_id: club.id, event_id: evId };
+      const sPush = slotBookings.filter((u) => u.push_token);
+      if (sPush.length > 0) {
+        sendPushNotifications(sPush.map((u) => ({ to: u.push_token, sound: "default", title: sTitle, body: sBody, data: sData })));
+      }
+      for (const u of slotBookings) {
+        saveUserNotification(u.user_id, "booking_cancelled", sTitle, sBody, sData);
+      }
+    }
+    await exec(`DELETE FROM portal_tee_slots WHERE id IN (${cPh}) AND club_id = ? AND event_id IS NULL`, [...clear_slot_ids, club.id]);
+  }
   if (cancel_booking_ids.length > 0) {
     const ph = cancel_booking_ids.map(() => "?").join(",");
     const affected = await query(

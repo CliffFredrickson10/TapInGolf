@@ -141,6 +141,9 @@ interface ConflictEvent {
   id: number; name: string; event_date: string; end_date: string | null;
   status: string; slot_count: number; registrant_count: number;
 }
+interface ConflictTeeSlot {
+  id: number; date: string; tee_time: string; booking_count: number;
+}
 
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
@@ -345,8 +348,9 @@ export default function Events() {
     eventId: number | null;
     bookings: ConflictBooking[];
     events: ConflictEvent[];
+    teeSlots: ConflictTeeSlot[];
     resolving: boolean;
-  }>({ open: false, eventId: null, bookings: [], events: [], resolving: false });
+  }>({ open: false, eventId: null, bookings: [], events: [], teeSlots: [], resolving: false });
 
   // Cancel tournament dialog
   const [cancelDlg, setCancelDlg] = useState<{ open: boolean; eventId: number | null; eventName: string; cancelling: boolean }>({
@@ -923,8 +927,8 @@ export default function Events() {
     // Check for date-range conflicts before asking to publish
     try {
       const data = await api(`/api/portal/events/${id}/conflicts`);
-      if ((data.conflicting_bookings?.length ?? 0) > 0 || (data.conflicting_events?.length ?? 0) > 0) {
-        setConflictDialog({ open: true, eventId: id, bookings: data.conflicting_bookings, events: data.conflicting_events, resolving: false });
+      if ((data.conflicting_bookings?.length ?? 0) > 0 || (data.conflicting_events?.length ?? 0) > 0 || (data.conflicting_tee_slots?.length ?? 0) > 0) {
+        setConflictDialog({ open: true, eventId: id, bookings: data.conflicting_bookings ?? [], events: data.conflicting_events ?? [], teeSlots: data.conflicting_tee_slots ?? [], resolving: false });
         return;
       }
     } catch { /* if conflict check fails, fall through to normal publish */ }
@@ -954,13 +958,14 @@ export default function Events() {
         body: JSON.stringify({
           cancel_booking_ids: conflictDialog.bookings.map(b => b.id),
           cancel_event_ids:   conflictDialog.events.map(ev => ev.id),
+          clear_slot_ids:     conflictDialog.teeSlots.map(s => s.id),
         }),
       });
       setEvents(prev => prev.map(ev =>
         ev.id === conflictDialog.eventId ? { ...ev, ...updated, status: "active" } :
         conflictDialog.events.some(ce => ce.id === ev.id) ? { ...ev, status: "cancelled" } : ev
       ));
-      setConflictDialog({ open: false, eventId: null, bookings: [], events: [], resolving: false });
+      setConflictDialog({ open: false, eventId: null, bookings: [], events: [], teeSlots: [], resolving: false });
       toast({ title: "Tournament published", description: "Conflicts resolved. Golfers have been notified." });
     } catch (e: any) {
       setConflictDialog(prev => ({ ...prev, resolving: false }));
@@ -3775,8 +3780,9 @@ ${bodyHtml}
           </DialogHeader>
 
           <p className="text-sm text-muted-foreground">
-            This tournament's dates overlap with the following existing items. You must resolve all
-            conflicts before publishing. Affected golfers will be notified automatically.
+            {conflictDialog.teeSlots.length > 0
+              ? "This shotgun tournament requires exclusive use of the course. The items below fall within the occupied window and must be cleared before publishing."
+              : "This tournament's dates overlap with the following existing items. You must resolve all conflicts before publishing. Affected golfers will be notified automatically."}
           </p>
 
           {/* Conflicting regular bookings */}
@@ -3821,6 +3827,30 @@ ${bodyHtml}
               </div>
               <p className="text-xs text-red-700">
                 These tournaments will be cancelled and all registrants will be notified.
+              </p>
+            </div>
+          )}
+
+          {/* Conflicting general tee slots in shotgun window */}
+          {conflictDialog.teeSlots.length > 0 && (
+            <div className="rounded-lg border border-orange-200 bg-orange-50 p-3 space-y-2">
+              <p className="text-sm font-semibold text-orange-800 flex items-center gap-1.5">
+                <Clock className="h-4 w-4" />
+                {conflictDialog.teeSlots.length} General Tee Slot{conflictDialog.teeSlots.length !== 1 ? "s" : ""} Will Be Removed from Schedule
+              </p>
+              <div className="max-h-36 overflow-y-auto space-y-1">
+                {conflictDialog.teeSlots.map(s => (
+                  <div key={s.id} className="flex items-center justify-between text-xs bg-white rounded px-2 py-1 border border-orange-100">
+                    <span className="font-mono font-medium">{fmtDate(s.date)}</span>
+                    <span className="text-muted-foreground font-mono">{String(s.tee_time).slice(0, 5)}</span>
+                    <span className={s.booking_count > 0 ? "text-red-600 font-medium" : "text-muted-foreground"}>
+                      {s.booking_count > 0 ? `${s.booking_count} booking${s.booking_count !== 1 ? "s" : ""} cancelled` : "no bookings"}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-orange-700">
+                These slots fall within the shotgun tournament's course window. They will be permanently removed and any bookings cancelled.
               </p>
             </div>
           )}

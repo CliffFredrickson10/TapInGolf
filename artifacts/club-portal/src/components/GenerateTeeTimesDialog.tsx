@@ -178,7 +178,7 @@ export function GenerateTeeTimesDialog({
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [tournamentConflicts, setTournamentConflicts] = useState<Array<{ date: string; time: string; event_name: string }>>([]);
-  const [shotgunWindows, setShotgunWindows] = useState<Array<{ date: string; event_id: number; event_name: string; start_time: string; end_time: string; holes: number }>>([]);
+  const [shotgunWindows, setShotgunWindows] = useState<Array<{ date: string; event_id: number; event_name: string; shotgun_start: string; start_time: string; end_time: string; holes: number }>>([]);
   const [conflictsLoading, setConflictsLoading] = useState(false);
 
   // Saved configs state
@@ -763,7 +763,7 @@ export function GenerateTeeTimesDialog({
                 <div className="flex flex-col gap-1 max-h-24 overflow-y-auto">
                   {shotgunWindows.map((w, i) => (
                     <span key={i} className="text-[10px] bg-red-100 border border-red-300 text-red-800 rounded px-1.5 py-0.5 font-mono">
-                      {String(w.date).slice(5)} · {w.start_time}–{w.end_time} ({w.holes}H) · {w.event_name}
+                      {String(w.date).slice(5)} · blocked {w.start_time}–{w.end_time} · 🔫 fires {w.shotgun_start} ({w.holes}H) · {w.event_name}
                     </span>
                   ))}
                 </div>

@@ -16,7 +16,7 @@ import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
-  AlertTriangle, BookmarkPlus, Loader2, Shuffle, UserPlus,
+  AlertTriangle, BookmarkPlus, Loader2, Shuffle, UserPlus, Printer,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
@@ -1048,6 +1048,131 @@ export default function Events() {
     finally { setSavingDraw(false); }
   };
 
+  const printDraw = () => {
+    if (!detail || draw.length === 0) return;
+    const esc = (s: string) => s.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+    const fmtD = (d: string) => { try { return new Date(String(d).slice(0,10)+"T00:00:00").toLocaleDateString("en-ZA",{day:"numeric",month:"long",year:"numeric"}); } catch { return d; } };
+    const roundDraw = draw.filter(d => d.round === drawRound);
+    const metric = roundDraw.find(d => d.seed_metric)?.seed_metric ?? null;
+    const drawTypeLabel = !metric ? "Random Draw" : metric === "handicap" ? "Seeded by Handicap" : metric === "points" ? "Seeded by Stableford Points" : metric === "gross" ? "Seeded by Gross Score" : "Seeded by Net Score";
+
+    // Build groups
+    const groups: Record<number, DrawEntry[]> = {};
+    for (const d of roundDraw) { (groups[d.draw_group] ??= []).push(d); }
+    const groupKeys = Object.keys(groups).map(Number).sort((a,b)=>a-b);
+
+    let bodyHtml = "";
+
+    if (detail.shotgun_start) {
+      // Shotgun: group by hole
+      const byHole: Record<number, number[]> = {};
+      for (const gk of groupKeys) {
+        const hole = groups[gk]![0]!.starting_tee ?? 1;
+        (byHole[hole] ??= []).push(gk);
+      }
+      const holeKeys = Object.keys(byHole).map(Number).sort((a,b)=>a-b);
+      for (const hole of holeKeys) {
+        const holeGks = (byHole[hole]??[]).sort((a,b)=>a-b);
+        bodyHtml += `<div class="hole-section">
+          <div class="hole-header">&#9975; Hole ${hole}</div>
+          <div class="groups">`;
+        holeGks.forEach((gk, posIdx) => {
+          const grp = groups[gk]!;
+          const rep = grp[0]!;
+          const posLabel = posIdx === 0 ? "1st off" : "2nd off";
+          const labelClass = posIdx === 0 ? "first" : "second";
+          const players = grp.map(p =>
+            `<div class="player"><span class="player-name">${esc(p.user_name)}</span><span class="player-meta">${p.division ? esc(p.division)+" Div" : ""}${p.frozen_handicap != null ? " · HCP "+p.frozen_handicap : ""}</span></div>`
+          ).join("");
+          bodyHtml += `<div class="group">
+            <div class="group-header">
+              <span class="group-label ${labelClass}">${posLabel}</span>
+              <span class="group-time">${String(rep.tee_time).slice(0,5)}</span>
+              <span class="group-count">${grp.length} player${grp.length!==1?"s":""}</span>
+            </div>
+            ${players}
+          </div>`;
+        });
+        bodyHtml += `</div></div>`;
+      }
+    } else {
+      // Regular: group by draw_group
+      for (const gk of groupKeys) {
+        const grp = groups[gk]!;
+        const rep = grp[0]!;
+        const players = grp.map(p =>
+          `<div class="player"><span class="player-name">${esc(p.user_name)}</span><span class="player-meta">${p.division ? esc(p.division)+" Div" : ""}${p.frozen_handicap != null ? " · HCP "+p.frozen_handicap : ""}</span></div>`
+        ).join("");
+        bodyHtml += `<div class="tee-group">
+          <div class="tee-label">Group ${gk} &nbsp;·&nbsp; ${String(rep.tee_time).slice(0,5)} &nbsp;·&nbsp; Tee ${rep.starting_tee ?? 1}</div>
+          ${players}
+        </div>`;
+      }
+    }
+
+    const shotgunBadge = detail.shotgun_start ? `<span class="badge-shotgun">&#128296; Shotgun Start</span>` : "";
+    const html = `<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
+<title>Draw — ${esc(detail.name)} — Round ${drawRound}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;color:#111;background:#fff;padding:28px 32px;font-size:13px}
+.header{display:flex;align-items:flex-start;justify-content:space-between;border-bottom:2.5px solid #1a5c38;padding-bottom:14px;margin-bottom:20px}
+.logo{font-size:21px;font-weight:800;color:#1a5c38;letter-spacing:-0.5px}.logo span{color:#c8a84b}
+.logo-sub{font-size:10px;color:#6b7c72;letter-spacing:1px;text-transform:uppercase;margin-top:2px}
+.event-block{text-align:right}
+.event-name{font-size:18px;font-weight:700;color:#111}
+.meta{font-size:11px;color:#6b7c72;margin-top:3px}
+.draw-type{font-size:10px;color:#6b7c72;margin-top:12px;margin-bottom:16px;letter-spacing:0.5px;text-transform:uppercase}
+.badge-shotgun{background:#1a5c38;color:#fff;border-radius:12px;padding:2px 10px;font-size:10px;font-weight:700;margin-left:6px}
+/* Shotgun */
+.hole-section{margin-bottom:18px;break-inside:avoid}
+.hole-header{background:#1a5c38;color:#fff;padding:5px 14px;border-radius:20px;display:inline-block;font-size:12px;font-weight:700;margin-bottom:8px}
+.groups{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-left:6px}
+.group{border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px}
+.group-header{display:flex;align-items:center;gap:8px;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #f3f4f6}
+.group-label{font-size:11px;font-weight:700}
+.group-label.first{color:#1a5c38}.group-label.second{color:#c8a84b}
+.group-time{font-size:11px;color:#666;font-family:monospace}
+.group-count{font-size:10px;color:#999;margin-left:auto}
+/* Regular */
+.tee-group{border:1px solid #e5e7eb;border-radius:8px;padding:9px 12px;margin-bottom:10px;break-inside:avoid}
+.tee-label{font-size:12px;font-weight:700;color:#1a5c38;margin-bottom:7px;padding-bottom:5px;border-bottom:1px solid #f3f4f6}
+/* Players */
+.player{display:flex;justify-content:space-between;align-items:center;padding:4px 0;border-bottom:1px solid #f9fafb;font-size:12px}
+.player:last-child{border-bottom:none}
+.player-name{font-weight:500}
+.player-meta{color:#999;font-size:11px}
+/* Footer */
+.footer{margin-top:24px;padding-top:10px;border-top:1px solid #e5e7eb;font-size:10px;color:#aaa;text-align:center}
+@media print{
+  body{padding:16px 20px}
+  @page{margin:15mm}
+  .no-print{display:none}
+  .hole-section{break-inside:avoid}
+  .group{break-inside:avoid}
+  .tee-group{break-inside:avoid}
+}
+</style></head><body>
+<div class="header">
+  <div>
+    <div class="logo">TapIn<span> Golf</span></div>
+    <div class="logo-sub">Official Draw Sheet</div>
+  </div>
+  <div class="event-block">
+    <div class="event-name">${esc(detail.name)}</div>
+    <div class="meta">${esc(detail.club_name ?? "")} &nbsp;·&nbsp; ${fmtD(detail.event_date)} &nbsp;·&nbsp; Round ${drawRound} &nbsp;·&nbsp; ${roundDraw.length} player${roundDraw.length!==1?"s":""}</div>
+  </div>
+</div>
+<div class="draw-type">${esc(drawTypeLabel)}${shotgunBadge}</div>
+${bodyHtml}
+<div class="footer">Generated by TapIn Golf &nbsp;·&nbsp; www.tapingolfza.co.za &nbsp;·&nbsp; ${new Date().toLocaleDateString("en-ZA",{day:"numeric",month:"long",year:"numeric"})}</div>
+<script>window.onload=function(){window.print();}<\/script>
+</body></html>`;
+
+    const win = window.open("","_blank","width=900,height=700");
+    if (win) { win.document.write(html); win.document.close(); }
+  };
+
   // Add all approved players not yet in the draw (ungrouped, staff arranges groups)
   const handleAddAll = () => {
     if (!detail) return;
@@ -1627,6 +1752,7 @@ export default function Events() {
                     </div>
                     <div className="flex gap-1.5 flex-wrap justify-end">
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={handleAddAll} disabled={readOnly}><UserPlus className="h-3.5 w-3.5" />Add All</Button>
+                      <Button size="sm" variant="outline" className="h-8 gap-1 text-xs" onClick={printDraw} disabled={draw.length === 0}><Printer className="h-3.5 w-3.5" />Print Draw</Button>
                       <Button size="sm" variant="outline" className="h-8 gap-1 text-xs border-amber-300 text-amber-700 hover:bg-amber-50" onClick={() => { setGenMode("random"); setGenAllRounds(false); setGenSeedRound(Math.max(1, drawRound - 1)); if (detail?.shotgun_start) { setGenShotgunDoubleTee(!!detail.shotgun_double_tee); setGenShotgunExcludePar3(Array.isArray(detail.shotgun_par3_holes) && detail.shotgun_par3_holes.length > 0); setGenShotgunPar3Holes(Array.isArray(detail.shotgun_par3_holes) ? detail.shotgun_par3_holes.map(Number) : DEFAULT_PAR3[18]); } setGenDlg(true); }} disabled={readOnly}><Shuffle className="h-3.5 w-3.5" />Generate Draw</Button>
                       <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveDraw} disabled={savingDraw || readOnly || draw.length === 0}>{savingDraw ? <><Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />Saving…</> : "Publish Draw"}</Button>
                     </div>

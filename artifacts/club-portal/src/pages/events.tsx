@@ -776,14 +776,28 @@ export default function Events() {
     try {
       const { event_date, end_date, entries_open, entries_close, ...rest } = form;
       const template_data = { ...rest, ...(teeConfigSnapshot ? { tee_config: teeConfigSnapshot } : {}) };
-      const saved = await api<{ id: number; name: string; template_data: any }>("/api/portal/tournament-templates", {
-        method: "POST",
-        body: JSON.stringify({ name: trimmed, template_data }),
-      });
-      setTemplates(prev => [...prev, saved]);
-      setTplSaveName("");
-      setShowTplSave(false);
-      toast({ title: "Template saved", description: `"${trimmed}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
+      if (templateMode && selectedTplId !== null) {
+        // UPDATE existing template
+        const updated = await api<{ id: number; name: string; template_data: any }>(
+          `/api/portal/tournament-templates/${selectedTplId}`,
+          { method: "PUT", body: JSON.stringify({ name: trimmed, template_data }) }
+        );
+        setTemplates(prev => prev.map(t => t.id === selectedTplId
+          ? { ...t, name: updated.name ?? trimmed, template_data }
+          : t
+        ));
+        toast({ title: "Template updated", description: `"${trimmed}" has been updated.` });
+      } else {
+        // CREATE new template
+        const saved = await api<{ id: number; name: string; template_data: any }>("/api/portal/tournament-templates", {
+          method: "POST",
+          body: JSON.stringify({ name: trimmed, template_data }),
+        });
+        setTemplates(prev => [...prev, saved]);
+        setTplSaveName("");
+        setShowTplSave(false);
+        toast({ title: "Template saved", description: `"${trimmed}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
+      }
       if (templateMode) { setDlgOpen(false); setTemplateMode(false); }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -2704,52 +2718,49 @@ ${bodyHtml}
                           </p>
                         )}
                         {templates.map(tpl => (
-                          <div key={tpl.id} className="rounded-lg border bg-card">
-                            {renamingTplId === tpl.id ? (
-                              <div className="p-3 space-y-2">
-                                <p className="text-xs font-semibold text-[#1a5c38]">Rename template</p>
-                                <div className="flex gap-2">
-                                  <Input className="h-7 text-xs flex-1" placeholder="Template name…"
-                                    value={renameTplVal} onChange={e => setRenameTplVal(e.target.value)} autoFocus />
-                                  <Button size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]"
-                                    disabled={savingTpl} onClick={handleUpdateTemplate}>
-                                    {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                          <div key={tpl.id}
+                            className={`rounded-lg border bg-card transition-colors ${selectedTplId === tpl.id ? "border-[#1a5c38]/60 bg-[#1a5c38]/5" : ""}`}>
+                            <div className="flex items-center gap-2 px-3 py-2">
+                              <BookmarkPlus className={`h-3.5 w-3.5 shrink-0 ${selectedTplId === tpl.id ? "text-[#1a5c38]" : "text-muted-foreground"}`} />
+                              <span className="text-sm font-medium flex-1 truncate">{tpl.name}</span>
+                              {tpl.template_data?.tee_config && (
+                                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">tee</span>
+                              )}
+                              {selectedTplId === tpl.id && (
+                                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38] shrink-0">editing</span>
+                              )}
+                              {!readOnly && (
+                                <>
+                                  <Button size="sm" variant="ghost"
+                                    className="h-7 px-2 gap-1 text-xs shrink-0 text-muted-foreground hover:text-[#1a5c38] hover:bg-[#1a5c38]/10"
+                                    onClick={() => {
+                                      handleLoadTemplate(tpl);
+                                      setSelectedTplId(tpl.id);
+                                      setWizardStep(1);
+                                    }}
+                                    title="Edit this template">
+                                    <Pencil className="h-3 w-3" />Edit
                                   </Button>
-                                  <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
-                                    onClick={() => { setRenamingTplId(null); setRenameTplVal(""); }}>
-                                    Cancel
+                                  <Button size="sm" variant="ghost"
+                                    className="h-7 w-7 p-0 shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
+                                    onClick={() => setDeleteTplDlg({ open: true, id: tpl.id, name: tpl.name })}
+                                    title="Delete">
+                                    <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
-                                </div>
-                              </div>
-                            ) : (
-                              <div className="flex items-center gap-2 px-3 py-2">
-                                <BookmarkPlus className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                                <span className="text-sm font-medium flex-1 truncate">{tpl.name}</span>
-                                {tpl.template_data?.tee_config && (
-                                  <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 shrink-0">tee</span>
-                                )}
-                                {!readOnly && (
-                                  <>
-                                    <Button size="sm" variant="ghost"
-                                      className="h-7 w-7 p-0 shrink-0 text-muted-foreground hover:text-[#1a5c38] hover:bg-[#1a5c38]/10"
-                                      onClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}
-                                      title="Rename">
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button size="sm" variant="ghost"
-                                      className="h-7 w-7 p-0 shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
-                                      onClick={() => setDeleteTplDlg({ open: true, id: tpl.id, name: tpl.name })}
-                                      title="Delete">
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  </>
-                                )}
-                              </div>
-                            )}
+                                </>
+                              )}
+                            </div>
                           </div>
                         ))}
                         <div className="border-t border-dashed border-border pt-3">
-                          <p className="text-xs font-semibold text-muted-foreground mb-2">Create new template</p>
+                          {selectedTplId !== null ? (
+                            <p className="text-xs font-semibold text-[#1a5c38] mb-2 flex items-center gap-1.5">
+                              <Pencil className="h-3 w-3" />
+                              Editing — change name or proceed through steps
+                            </p>
+                          ) : (
+                            <p className="text-xs font-semibold text-muted-foreground mb-2">Create new template</p>
+                          )}
                         </div>
                       </div>
                     ) : (
@@ -3603,7 +3614,7 @@ ${bodyHtml}
                     <Button type="button" onClick={() => doSaveTemplate(form.name)}
                       disabled={savingTpl || !form.name.trim()}
                       className="bg-[#1a5c38] hover:bg-[#164d30]">
-                      {savingTpl ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving…</> : <><BookmarkPlus className="h-4 w-4 mr-1.5" />Save Template</>}
+                      {savingTpl ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving…</> : selectedTplId !== null ? <><BookmarkPlus className="h-4 w-4 mr-1.5" />Update Template</> : <><BookmarkPlus className="h-4 w-4 mr-1.5" />Save Template</>}
                     </Button>
                   ) : (
                     <Button type="button" onClick={handleSave}

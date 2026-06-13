@@ -2442,19 +2442,11 @@ ${bodyHtml}
                             return (
                               <Card key={team.id} className={`border ${colorClass}`}>
                                 <CardContent className="p-3">
-                                  <div className="flex items-center justify-between gap-2 mb-2">
-                                    <div className="flex items-center gap-2">
-                                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
-                                        Team {idx + 1}
-                                      </span>
-                                      {team.name && <span className="text-sm font-semibold">{team.name}</span>}
-                                    </div>
-                                    <button type="button"
-                                      onClick={() => handleDeletePairing(team.id)}
-                                      className="h-6 w-6 rounded flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                                      title="Remove pairing">
-                                      <X className="h-3.5 w-3.5" />
-                                    </button>
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${badgeClass}`}>
+                                      Team {idx + 1}
+                                    </span>
+                                    {team.name && <span className="text-sm font-semibold">{team.name}</span>}
                                   </div>
                                   <div className="space-y-1">
                                     {team.players.map(p => (

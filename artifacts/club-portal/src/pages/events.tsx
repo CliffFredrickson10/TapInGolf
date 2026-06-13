@@ -1658,10 +1658,106 @@ export default function Events() {
                       </div>
                     </div>
                   ) : (() => {
-                    // Group entries by draw_group for four-ball display
+                    // Group entries by draw_group
                     const groups: Record<number, DrawEntry[]> = {};
                     for (const d of draw) { (groups[d.draw_group] ??= []).push(d); }
                     const groupKeys = Object.keys(groups).map(Number).sort((a, b) => a - b);
+
+                    // Shared player row renderer
+                    const renderPlayers = (grp: DrawEntry[]) => (
+                      <div className="divide-y divide-gray-100">
+                        {grp.map((d) => {
+                          const globalIdx = draw.indexOf(d);
+                          return (
+                            <div key={d.id ?? d.user_id} className="flex items-center gap-2 py-1.5 text-sm">
+                              <span className="flex-1 font-medium">{d.user_name}</span>
+                              <span className="text-xs text-muted-foreground flex items-center gap-1.5">
+                                {d.division ? `${d.division}` : "—"}
+                                {d.frozen_handicap != null ? ` · HCP ${d.frozen_handicap}` : ""}
+                                {d.seed_metric && d.seed_value != null && d.seed_metric !== "handicap" && (
+                                  <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 font-mono text-[10px] leading-none ml-1">
+                                    {d.seed_metric === "points" ? `${d.seed_value} pts` : d.seed_metric === "gross" ? `${d.seed_value} gross` : `${d.seed_value} net`}
+                                  </span>
+                                )}
+                              </span>
+                              {!readOnly && (
+                                <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive flex-shrink-0"
+                                  onClick={() => setDraw(prev => prev.filter((_, j) => j !== globalIdx))}>
+                                  <XCircle className="h-3.5 w-3.5" />
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+
+                    if (detail.shotgun_start) {
+                      // ── Shotgun view: cards grouped by starting hole ────────────────────
+                      const byHole: Record<number, number[]> = {};
+                      for (const gk of groupKeys) {
+                        const hole = groups[gk]![0]!.starting_tee ?? 1;
+                        (byHole[hole] ??= []).push(gk);
+                      }
+                      const holeKeys = Object.keys(byHole).map(Number).sort((a, b) => a - b);
+
+                      return (
+                        <div className="space-y-5">
+                          {holeKeys.map(hole => {
+                            const holeGroupKeys = (byHole[hole] ?? []).sort((a, b) => a - b);
+                            return (
+                              <div key={hole}>
+                                {/* Hole section header */}
+                                <div className="flex items-center gap-3 mb-2">
+                                  <div className="flex items-center gap-1.5 bg-[#1a5c38] text-white px-3 py-1.5 rounded-full text-sm font-bold shrink-0">
+                                    🕳️ Hole {hole}
+                                  </div>
+                                  <div className="h-px flex-1 bg-[#1a5c38] opacity-20" />
+                                  <span className="text-xs text-muted-foreground shrink-0">{holeGroupKeys.length} group{holeGroupKeys.length !== 1 ? "s" : ""}</span>
+                                </div>
+                                {/* Groups on this hole */}
+                                <div className="space-y-2 pl-2">
+                                  {holeGroupKeys.map((gk, posIdx) => {
+                                    const grp = groups[gk]!;
+                                    const rep = grp[0]!;
+                                    const isFirst = posIdx === 0;
+                                    const posLabel = isFirst ? "1st off" : "2nd off";
+                                    const borderColor = isFirst ? "border-l-[#1a5c38]" : "border-l-[#c8a84b]";
+                                    const labelColor = isFirst ? "text-[#1a5c38]" : "text-[#c8a84b]";
+                                    return (
+                                      <Card key={gk} className={`border-l-4 ${borderColor}`}>
+                                        <CardContent className="p-3">
+                                          <div className="flex items-center gap-3 mb-2">
+                                            <span className={`text-xs font-bold w-14 shrink-0 ${labelColor}`}>{posLabel}</span>
+                                            <div className="flex items-center gap-1.5">
+                                              <span className="text-xs text-muted-foreground whitespace-nowrap">🕳️ Hole</span>
+                                              <Input
+                                                type="number" min="1" max="18"
+                                                value={rep.starting_tee ?? 1}
+                                                className="h-7 w-14 text-xs font-bold text-[#1a5c38]"
+                                                disabled={readOnly}
+                                                onChange={e => setDraw(prev => prev.map(x =>
+                                                  x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
+                                                ))}
+                                              />
+                                            </div>
+                                            <span className="text-xs text-muted-foreground font-mono">{String(rep.tee_time).slice(0, 5)}</span>
+                                            <span className="text-xs text-muted-foreground ml-auto">{grp.length} player{grp.length !== 1 ? "s" : ""}</span>
+                                          </div>
+                                          {renderPlayers(grp)}
+                                        </CardContent>
+                                      </Card>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      );
+                    }
+
+                    // ── Regular (non-shotgun) view ──────────────────────────────────────────
                     return (
                       <div className="space-y-2">
                         {groupKeys.map(gk => {
@@ -1670,83 +1766,37 @@ export default function Events() {
                           return (
                             <Card key={gk} className="border-l-4 border-l-[#1a5c38]">
                               <CardContent className="p-3">
-                                {/* Group header — tee time + starting hole editable for whole group */}
                                 <div className="flex items-center gap-3 mb-2">
                                   <span className="text-xs font-bold text-[#1a5c38] w-16 shrink-0">Group {gk}</span>
-                                  {detail.shotgun_start ? (
-                                    <>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">🕳️ Hole</span>
-                                        <Input
-                                          type="number" min="1" max="18"
-                                          value={rep.starting_tee ?? 1}
-                                          className="h-7 w-14 text-xs font-bold text-[#1a5c38]"
-                                          disabled={readOnly}
-                                          onChange={e => setDraw(prev => prev.map(x =>
-                                            x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
-                                          ))}
-                                        />
-                                      </div>
-                                      <span className="text-xs text-muted-foreground font-mono ml-auto">{String(rep.tee_time).slice(0, 5)}</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <div className="flex items-center gap-1.5">
-                                        <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                                        <Input
-                                          type="time"
-                                          value={String(rep.tee_time).slice(0, 5)}
-                                          className="h-7 w-28 text-xs font-mono"
-                                          disabled={readOnly}
-                                          onChange={e => setDraw(prev => prev.map(x =>
-                                            x.draw_group === gk
-                                              ? { ...x, tee_time: e.target.value, starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value) }
-                                              : x
-                                          ))}
-                                        />
-                                      </div>
-                                      <div className="flex items-center gap-1.5">
-                                        <span className="text-xs text-muted-foreground whitespace-nowrap">Tee</span>
-                                        <Input
-                                          type="number" min="1" max="18"
-                                          value={rep.starting_tee ?? 1}
-                                          className="h-7 w-14 text-xs"
-                                          disabled={readOnly}
-                                          onChange={e => setDraw(prev => prev.map(x =>
-                                            x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
-                                          ))}
-                                        />
-                                      </div>
-                                    </>
-                                  )}
+                                  <div className="flex items-center gap-1.5">
+                                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                                    <Input
+                                      type="time"
+                                      value={String(rep.tee_time).slice(0, 5)}
+                                      className="h-7 w-28 text-xs font-mono"
+                                      disabled={readOnly}
+                                      onChange={e => setDraw(prev => prev.map(x =>
+                                        x.draw_group === gk
+                                          ? { ...x, tee_time: e.target.value, starting_tee: startingHoleFromSlots(detailTeeSlots, x.tee_date, e.target.value) }
+                                          : x
+                                      ))}
+                                    />
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs text-muted-foreground whitespace-nowrap">Tee</span>
+                                    <Input
+                                      type="number" min="1" max="18"
+                                      value={rep.starting_tee ?? 1}
+                                      className="h-7 w-14 text-xs"
+                                      disabled={readOnly}
+                                      onChange={e => setDraw(prev => prev.map(x =>
+                                        x.draw_group === gk ? { ...x, starting_tee: Number(e.target.value) } : x
+                                      ))}
+                                    />
+                                  </div>
                                   <span className="text-xs text-muted-foreground ml-auto">{grp.length} player{grp.length !== 1 ? "s" : ""}</span>
                                 </div>
-                                {/* Players in this group */}
-                                <div className="divide-y divide-gray-100">
-                                  {grp.map((d) => {
-                                    const globalIdx = draw.indexOf(d);
-                                    return (
-                                      <div key={d.id ?? d.user_id} className="flex items-center gap-2 py-1.5 text-sm">
-                                        <span className="flex-1 font-medium">{d.user_name}</span>
-                                        <span className="text-xs text-muted-foreground flex items-center gap-1.5">
-                                          {d.division ? `${d.division}` : "—"}
-                                          {d.frozen_handicap != null ? ` · HCP ${d.frozen_handicap}` : ""}
-                                          {d.seed_metric && d.seed_value != null && d.seed_metric !== "handicap" && (
-                                            <span className="inline-flex items-center rounded px-1.5 py-0.5 bg-amber-50 border border-amber-200 text-amber-700 font-mono text-[10px] leading-none ml-1">
-                                              {d.seed_metric === "points" ? `${d.seed_value} pts` : d.seed_metric === "gross" ? `${d.seed_value} gross` : `${d.seed_value} net`}
-                                            </span>
-                                          )}
-                                        </span>
-                                        {!readOnly && (
-                                          <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive flex-shrink-0"
-                                            onClick={() => setDraw(prev => prev.filter((_, j) => j !== globalIdx))}>
-                                            <XCircle className="h-3.5 w-3.5" />
-                                          </Button>
-                                        )}
-                                      </div>
-                                    );
-                                  })}
-                                </div>
+                                {renderPlayers(grp)}
                               </CardContent>
                             </Card>
                           );

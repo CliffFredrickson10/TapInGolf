@@ -1143,6 +1143,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,san
 .logo{font-size:21px;font-weight:800;color:#1a5c38;letter-spacing:-0.5px}.logo span{color:#c8a84b}
 .logo-sub{font-size:10px;color:#6b7c72;letter-spacing:1px;text-transform:uppercase;margin-top:2px}
 .event-block{text-align:right}
+.club-name{font-size:13px;font-weight:600;color:#1a5c38;letter-spacing:0.2px;margin-bottom:3px}
 .event-name{font-size:18px;font-weight:700;color:#111}
 .meta{font-size:11px;color:#6b7c72;margin-top:3px}
 .draw-type{font-size:10px;color:#6b7c72;margin-top:12px;margin-bottom:16px;letter-spacing:0.5px;text-transform:uppercase}
@@ -1182,8 +1183,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,san
     <div class="logo-sub">Official Draw Sheet</div>
   </div>
   <div class="event-block">
+    ${detail.club_name ? `<div class="club-name">${esc(detail.club_name)}</div>` : ""}
     <div class="event-name">${esc(detail.name)}</div>
-    <div class="meta">${esc(detail.club_name ?? "")} &nbsp;·&nbsp; ${fmtD(detail.event_date)} &nbsp;·&nbsp; Round ${drawRound} &nbsp;·&nbsp; ${roundDraw.length} player${roundDraw.length!==1?"s":""}</div>
+    <div class="meta">${fmtD(detail.event_date)} &nbsp;·&nbsp; Round ${drawRound} &nbsp;·&nbsp; ${roundDraw.length} player${roundDraw.length!==1?"s":""}</div>
   </div>
 </div>
 <div class="draw-type">${esc(drawTypeLabel)}${shotgunBadge}</div>

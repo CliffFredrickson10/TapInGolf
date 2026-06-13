@@ -863,6 +863,9 @@ export default function Events() {
     setExistingGeneralSlots([]);
     setImportBannerDismissed(false);
     setTemplateMode(false);
+    setSelectedTplId(null);
+    setRenamingTplId(null);
+    setRenameTplVal("");
     setWizardStep(0);
     setDlgOpen(true);
   };
@@ -881,6 +884,9 @@ export default function Events() {
     setExistingGeneralSlots([]);
     setImportBannerDismissed(false);
     setTemplateMode(true);
+    setSelectedTplId(null);
+    setRenamingTplId(null);
+    setRenameTplVal("");
     setWizardStep(0);
     setDlgOpen(true);
   };

@@ -262,10 +262,10 @@ const EMPTY_FORM = {
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   holes: 18 as 9 | 18,
   additional_fees: [] as { name: string; amount: number }[],
-  ballot: false, scoring_enabled: false, payment_required: false, entries_required: true,
+  ballot: false, scoring_enabled: true, payment_required: true, entries_required: false,
   use_tiered_pricing: false, allow_wallet: true, allow_prepaid: false, allow_voucher: false,
   shotgun_start: false,
-  use_divisions: true,
+  use_divisions: false,
   divisions: DEFAULT_DIVISIONS,
 };
 

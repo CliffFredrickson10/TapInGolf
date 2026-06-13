@@ -65463,6 +65463,29 @@ router14.post("/portal/tee-times", requireClubAuth2, async (req, res) => {
     const cap = await row("SELECT COALESCE(SUM(max_players),0) AS total FROM portal_tee_slots WHERE event_id = ?", [evId]);
     await exec("UPDATE golf_events SET max_participants = ? WHERE id = ?", [Number(cap?.total ?? 0), evId]);
   } else {
+    const shotgunRows = await query(
+      `SELECT MIN(pts.tee_time) AS start_time, COALESCE(ge.holes, 18) AS holes, ge.name AS event_name
+       FROM portal_tee_slots pts
+       JOIN golf_events ge ON ge.id = pts.event_id
+       WHERE pts.club_id = ? AND pts.date = ? AND pts.event_id IS NOT NULL
+         AND ge.shotgun_start = 1 AND ge.status NOT IN ('cancelled')
+       GROUP BY ge.id, ge.holes, ge.name`,
+      [club.id, date]
+    );
+    const _toM = (t) => {
+      const [h, m] = String(t).slice(0, 5).split(":").map(Number);
+      return h * 60 + m;
+    };
+    const _frM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+    const slotMin = _toM(time);
+    for (const w of shotgunRows) {
+      const startMin = _toM(String(w.start_time).slice(0, 5));
+      const endMin = startMin + (Number(w.holes) === 9 ? 150 : 270);
+      if (slotMin >= startMin && slotMin < endMin) {
+        res.status(409).json({ message: `${String(time).slice(0, 5)} is blocked by shotgun tournament "${w.event_name}" (${String(w.start_time).slice(0, 5)}\u2013${_frM(endMin)})` });
+        return;
+      }
+    }
     const rows = await query(
       "INSERT INTO portal_tee_slots (club_id, date, tee_time, max_players, is_active, session_type, tee_start_type, notes) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT (club_id, date, tee_time, tee_start_type) WHERE event_id IS NULL DO NOTHING RETURNING id",
       [club.id, date, time, Number(total_slots), active ? 1 : 0, session_type, normTeeStart2(tee_start_type), notes ?? null]
@@ -65507,6 +65530,43 @@ router14.get("/portal/tee-times/tournament-conflicts", requireClubAuth2, async (
     [club.id, from, to]
   );
   res.json(conflicts);
+});
+router14.get("/portal/tee-times/shotgun-windows", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { from, to } = req.query;
+  if (!from || !to) {
+    res.status(400).json({ message: "from and to are required" });
+    return;
+  }
+  const toM = (t) => {
+    const [h, m] = String(t).slice(0, 5).split(":").map(Number);
+    return h * 60 + m;
+  };
+  const frM = (m) => `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
+  const rows = await query(
+    `SELECT pts.date, ge.id AS event_id, ge.name AS event_name,
+            MIN(pts.tee_time) AS start_time, COALESCE(ge.holes, 18) AS holes
+     FROM portal_tee_slots pts
+     JOIN golf_events ge ON ge.id = pts.event_id
+     WHERE pts.club_id = ? AND pts.date BETWEEN ? AND ?
+       AND pts.event_id IS NOT NULL AND ge.shotgun_start = 1
+       AND ge.status NOT IN ('cancelled')
+     GROUP BY pts.date, ge.id, ge.name, ge.holes
+     ORDER BY pts.date, start_time`,
+    [club.id, from, to]
+  );
+  res.json(rows.map((r) => {
+    const startMin = toM(String(r.start_time).slice(0, 5));
+    const durationMin = Number(r.holes) === 9 ? 150 : 270;
+    return {
+      date: String(r.date).slice(0, 10),
+      event_id: r.event_id,
+      event_name: r.event_name,
+      start_time: String(r.start_time).slice(0, 5),
+      end_time: frM(startMin + durationMin),
+      holes: Number(r.holes)
+    };
+  }));
 });
 router14.get("/portal/schedule-draw-entries", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);

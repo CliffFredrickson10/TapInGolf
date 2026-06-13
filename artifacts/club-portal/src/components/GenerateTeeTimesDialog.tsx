@@ -178,6 +178,7 @@ export function GenerateTeeTimesDialog({
   const [generating, setGenerating] = useState(false);
   const [progress, setProgress] = useState({ done: 0, total: 0 });
   const [tournamentConflicts, setTournamentConflicts] = useState<Array<{ date: string; time: string; event_name: string }>>([]);
+  const [shotgunWindows, setShotgunWindows] = useState<Array<{ date: string; event_id: number; event_name: string; start_time: string; end_time: string; holes: number }>>([]);
   const [conflictsLoading, setConflictsLoading] = useState(false);
 
   // Saved configs state
@@ -217,14 +218,21 @@ export function GenerateTeeTimesDialog({
     }
   }, [open, initialDate]);
 
-  // Fetch tournament conflicts when date range changes (only for general schedule generation)
+  // Fetch tournament conflicts + shotgun windows when date range changes (general schedule generation only)
   useEffect(() => {
-    if (!open || eventId || !dateFrom || !dateTo) { setTournamentConflicts([]); return; }
+    if (!open || eventId || !dateFrom || !dateTo) {
+      setTournamentConflicts([]);
+      setShotgunWindows([]);
+      return;
+    }
     setConflictsLoading(true);
-    api<Array<{ date: string; time: string; event_name: string }>>(`/api/portal/tee-times/tournament-conflicts?from=${dateFrom}&to=${dateTo}`)
-      .then(setTournamentConflicts)
-      .catch(() => setTournamentConflicts([]))
-      .finally(() => setConflictsLoading(false));
+    Promise.all([
+      api<Array<{ date: string; time: string; event_name: string }>>(`/api/portal/tee-times/tournament-conflicts?from=${dateFrom}&to=${dateTo}`).catch(() => []),
+      api<Array<{ date: string; event_id: number; event_name: string; start_time: string; end_time: string; holes: number }>>(`/api/portal/tee-times/shotgun-windows?from=${dateFrom}&to=${dateTo}`).catch(() => []),
+    ]).then(([conflicts, windows]) => {
+      setTournamentConflicts(conflicts);
+      setShotgunWindows(windows);
+    }).finally(() => setConflictsLoading(false));
   }, [open, eventId, dateFrom, dateTo]);
 
   // Live preview
@@ -335,16 +343,33 @@ export function GenerateTeeTimesDialog({
     setGenerating(true);
     const dates = datesInRange(dateFrom, dateTo);
 
-    // Build conflict lookup for general schedule generation (tournament-mode has no conflicts)
+    // Build conflict lookup: exact-time non-shotgun tournament slots
     const conflictSet = new Set(tournamentConflicts.map(c => `${String(c.date).slice(0, 10)}|${String(c.time).slice(0, 5)}`));
+    // Build shotgun window lookup: { "date": [{startMin, endMin}] }
+    const shotgunMap = new Map<string, Array<{ startMin: number; endMin: number; event_name: string }>>();
+    for (const w of shotgunWindows) {
+      const startMin = toMin(w.start_time);
+      const endMin   = toMin(w.end_time);
+      const key = w.date;
+      if (!shotgunMap.has(key)) shotgunMap.set(key, []);
+      shotgunMap.get(key)!.push({ startMin, endMin, event_name: w.event_name });
+    }
+    const isInShotgunWindow = (date: string, t: string) => {
+      const windows = shotgunMap.get(date);
+      if (!windows) return false;
+      const m = toMin(t);
+      return windows.some(w => m >= w.startMin && m < w.endMin);
+    };
 
     let allSlots: Array<{ date: string; time: string; tee_start_type: string; crossover_enabled: boolean }> = [];
     let skipped = 0;
+    let shotgunSkipped = 0;
     for (const date of dates) {
       if (tab === "A") {
         const addBlock = (b: Block) =>
           generateBlockTimes(b.start, b.end, b.interval).forEach(t => {
             if (!eventId && conflictSet.has(`${date}|${t}`)) { skipped++; return; }
+            if (!eventId && isInShotgunWindow(date, t)) { shotgunSkipped++; return; }
             if (b.tee_start_type === "two_tee") {
               allSlots.push({ date, time: t, tee_start_type: "first_tee", crossover_enabled: b.crossover_enabled });
               allSlots.push({ date, time: t, tee_start_type: "tenth_tee", crossover_enabled: b.crossover_enabled });
@@ -357,6 +382,7 @@ export function GenerateTeeTimesDialog({
         const addBlock = (b: Block) =>
           generateBlockTimes(b.start, b.end, b.interval).forEach(t => {
             if (!eventId && conflictSet.has(`${date}|${t}`)) { skipped++; return; }
+            if (!eventId && isInShotgunWindow(date, t)) { shotgunSkipped++; return; }
             allSlots.push({ date, time: t, tee_start_type: b.tee_start_type, crossover_enabled: false });
           });
         addBlock(cfgB.morning); addBlock(cfgB.midday);
@@ -366,7 +392,10 @@ export function GenerateTeeTimesDialog({
     // Staged mode: no event ID yet (new tournament) — return slots to caller in memory
     if (!eventId && onStagedSlots) {
       onStagedSlots(allSlots.map(s => ({ date: s.date, time: s.time, total_slots: slots })));
-      const skippedNote = skipped > 0 ? ` (${skipped} conflict${skipped > 1 ? "s" : ""} skipped)` : "";
+      const skippedParts: string[] = [];
+      if (skipped > 0) skippedParts.push(`${skipped} tournament conflict${skipped > 1 ? "s" : ""} skipped`);
+      if (shotgunSkipped > 0) skippedParts.push(`${shotgunSkipped} shotgun-blocked slot${shotgunSkipped > 1 ? "s" : ""} skipped`);
+      const skippedNote = skippedParts.length ? ` (${skippedParts.join(", ")})` : "";
       toast({
         title: "Schedule ready",
         description: `${allSlots.length} tee slot${allSlots.length !== 1 ? "s" : ""} staged${skippedNote} — saved when you create the tournament.`,
@@ -398,7 +427,10 @@ export function GenerateTeeTimesDialog({
         done = Math.min(i + BATCH, allSlots.length);
         setProgress({ done, total: allSlots.length });
       }
-      const skippedNote = skipped > 0 ? ` · ${skipped} tournament slot${skipped > 1 ? "s" : ""} preserved` : "";
+      const preservedParts: string[] = [];
+      if (skipped > 0) preservedParts.push(`${skipped} tournament slot${skipped > 1 ? "s" : ""} preserved`);
+      if (shotgunSkipped > 0) preservedParts.push(`${shotgunSkipped} shotgun window slot${shotgunSkipped > 1 ? "s" : ""} skipped`);
+      const skippedNote = preservedParts.length ? ` · ${preservedParts.join(" · ")}` : "";
       toast({
         title: errors > 0 ? `Generated with ${errors} errors` : "Schedule generated",
         description: `${done - errors} tee times created across ${dates.length} day${dates.length > 1 ? "s" : ""}${skippedNote}`,
@@ -713,6 +745,28 @@ export function GenerateTeeTimesDialog({
                     </div>
                   </>
                 )}
+              </div>
+            )}
+
+            {/* Shotgun window notice — blocked course periods from shotgun start tournaments */}
+            {!eventId && !conflictsLoading && shotgunWindows.length > 0 && (
+              <div className="rounded-lg border border-red-300 bg-red-50 px-3 py-2.5 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">🔫</span>
+                  <span className="text-xs font-semibold text-red-800">
+                    {shotgunWindows.length} shotgun tournament window{shotgunWindows.length > 1 ? "s" : ""} detected — course blocked during these periods
+                  </span>
+                </div>
+                <p className="text-xs text-red-700">
+                  Tee times that fall within these windows will be <strong>automatically skipped</strong> — the entire course is in use for the tournament.
+                </p>
+                <div className="flex flex-col gap-1 max-h-24 overflow-y-auto">
+                  {shotgunWindows.map((w, i) => (
+                    <span key={i} className="text-[10px] bg-red-100 border border-red-300 text-red-800 rounded px-1.5 py-0.5 font-mono">
+                      {String(w.date).slice(5)} · {w.start_time}–{w.end_time} ({w.holes}H) · {w.event_name}
+                    </span>
+                  ))}
+                </div>
               </div>
             )}
 

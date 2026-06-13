@@ -1447,7 +1447,7 @@ ${bodyHtml}
         </div>
         <div className="flex items-center gap-2">
           <Button variant="outline" className="gap-2 border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/5" onClick={openNewTemplate} disabled={readOnly}>
-            <BookmarkPlus className="h-4 w-4" />Create Template
+            <BookmarkPlus className="h-4 w-4" />Manage Templates
           </Button>
           <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
             <Plus className="h-4 w-4" />New Tournament

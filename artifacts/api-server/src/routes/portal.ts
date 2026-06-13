@@ -1448,11 +1448,13 @@ router.post("/portal/events/:id/resolve-and-publish", requireClubAuth, async (re
   const cancel_event_ids:   number[] = (req.body?.cancel_event_ids   ?? []).map(Number).filter(Boolean);
   let   clear_slot_ids:     number[] = (req.body?.clear_slot_ids     ?? []).map(Number).filter(Boolean);
 
-  // ── -1. block_full_day: expand clear_slot_ids to ALL general slots on the tournament date ──
+  // ── -1. block_full_day: expand clear_slot_ids to ALL general slots across every tournament date ──
   if (ev.block_full_day) {
     const allDaySlots = await query<{ id: number }>(
-      "SELECT id FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
-      [club.id, ev.event_date]
+      `SELECT id FROM portal_tee_slots
+       WHERE club_id = ? AND event_id IS NULL
+         AND date >= ? AND date <= COALESCE(?, ?)`,
+      [club.id, ev.event_date, ev.end_date, ev.event_date]
     );
     const allDayIds = allDaySlots.map((s: any) => s.id);
     clear_slot_ids = [...new Set([...clear_slot_ids, ...allDayIds])];

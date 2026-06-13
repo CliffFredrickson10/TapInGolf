@@ -66623,8 +66623,10 @@ router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async 
   let clear_slot_ids = (req.body?.clear_slot_ids ?? []).map(Number).filter(Boolean);
   if (ev.block_full_day) {
     const allDaySlots = await query(
-      "SELECT id FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
-      [club.id, ev.event_date]
+      `SELECT id FROM portal_tee_slots
+       WHERE club_id = ? AND event_id IS NULL
+         AND date >= ? AND date <= COALESCE(?, ?)`,
+      [club.id, ev.event_date, ev.end_date, ev.event_date]
     );
     const allDayIds = allDaySlots.map((s) => s.id);
     clear_slot_ids = [.../* @__PURE__ */ new Set([...clear_slot_ids, ...allDayIds])];

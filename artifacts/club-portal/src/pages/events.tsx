@@ -84,6 +84,7 @@ interface GolfEvent {
   rounds: number; holes: number;
   additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
+  club_name?: string | null;
 }
 
 interface Registration {
@@ -1957,36 +1958,29 @@ ${bodyHtml}
                   })()}
 
                   {/* Re-generate warning dialog */}
-                  <AlertDialog open={regenWarnDlg} onOpenChange={setRegenWarnDlg}>
-                    <AlertDialogContent>
-                      <AlertDialogHeader>
-                        <AlertDialogTitle className="flex items-center gap-2">
+                  <Dialog open={regenWarnDlg} onOpenChange={setRegenWarnDlg}>
+                    <DialogContent className="max-w-sm">
+                      <DialogHeader>
+                        <DialogTitle className="flex items-center gap-2">
                           <AlertTriangle className="h-5 w-5 text-amber-500" />
                           Draw Already Published
-                        </AlertDialogTitle>
-                        <AlertDialogDescription className="text-sm text-muted-foreground space-y-2">
-                          <span className="block">
-                            The Round {drawRound} draw has already been published — players have been notified of their tee times and groups.
-                          </span>
-                          <span className="block">
-                            Generating a new draw will <strong>overwrite the existing one</strong>. You'll need to re-publish it, and players will receive an updated notification.
-                          </span>
-                          <span className="block">
-                            Are you sure you want to continue?
-                          </span>
-                        </AlertDialogDescription>
-                      </AlertDialogHeader>
-                      <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction
-                          className="bg-amber-600 hover:bg-amber-700 text-white"
-                          onClick={() => { setRegenWarnDlg(false); openGenDlg(); }}
-                        >
+                        </DialogTitle>
+                        <DialogDescription asChild>
+                          <div className="text-sm text-muted-foreground space-y-2 pt-1">
+                            <p>The Round {drawRound} draw has already been published — players have been notified of their tee times and groups.</p>
+                            <p>Generating a new draw will <strong>overwrite the existing one</strong>. You'll need to re-publish it, and players will receive an updated notification.</p>
+                            <p>Are you sure you want to continue?</p>
+                          </div>
+                        </DialogDescription>
+                      </DialogHeader>
+                      <DialogFooter className="gap-2 sm:gap-0">
+                        <Button variant="outline" onClick={() => setRegenWarnDlg(false)}>Cancel</Button>
+                        <Button className="bg-amber-600 hover:bg-amber-700 text-white" onClick={() => { setRegenWarnDlg(false); openGenDlg(); }}>
                           Yes, Generate New Draw
-                        </AlertDialogAction>
-                      </AlertDialogFooter>
-                    </AlertDialogContent>
-                  </AlertDialog>
+                        </Button>
+                      </DialogFooter>
+                    </DialogContent>
+                  </Dialog>
 
                   {/* Generate Draw dialog */}
                   <Dialog open={genDlg} onOpenChange={setGenDlg}>

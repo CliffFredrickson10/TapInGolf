@@ -228,7 +228,7 @@ export function GenerateTeeTimesDialog({
     setConflictsLoading(true);
     Promise.all([
       api<Array<{ date: string; time: string; event_name: string }>>(`/api/portal/tee-times/tournament-conflicts?from=${dateFrom}&to=${dateTo}`).catch(() => []),
-      api<Array<{ date: string; event_id: number; event_name: string; start_time: string; end_time: string; holes: number }>>(`/api/portal/tee-times/shotgun-windows?from=${dateFrom}&to=${dateTo}`).catch(() => []),
+      api<Array<{ date: string; event_id: number; event_name: string; shotgun_start: string; start_time: string; end_time: string; holes: number }>>(`/api/portal/tee-times/shotgun-windows?from=${dateFrom}&to=${dateTo}`).catch(() => []),
     ]).then(([conflicts, windows]) => {
       setTournamentConflicts(conflicts);
       setShotgunWindows(windows);

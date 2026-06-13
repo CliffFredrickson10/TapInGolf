@@ -425,6 +425,8 @@ export default function Events() {
   const [savingTpl, setSavingTpl]         = useState(false);
   const [renamingTplId, setRenamingTplId] = useState<number | null>(null);
   const [renameTplVal, setRenameTplVal]   = useState("");
+  const [selectedTplId, setSelectedTplId] = useState<number | null>(null);
+  const [deleteTplDlg, setDeleteTplDlg]   = useState<{ open: boolean; id: number; name: string } | null>(null);
   const [teeConfigSnapshot, setTeeConfigSnapshot] = useState<{ config_type: "A" | "B"; config_data: any } | null>(null);
   const [pendingTeeConfig, setPendingTeeConfig]   = useState<{ config_type: "A" | "B"; config_data: any } | null>(null);
 
@@ -806,14 +808,39 @@ export default function Events() {
     }
   };
 
-  const handleDeleteTemplate = async (id: number, name: string) => {
-    if (!confirm(`Delete template "${name}"?`)) return;
+  const handleDeleteTemplate = async () => {
+    if (!deleteTplDlg) return;
+    const { id, name } = deleteTplDlg;
     try {
       await api(`/api/portal/tournament-templates/${id}`, { method: "DELETE" });
       setTemplates(prev => prev.filter(t => t.id !== id));
+      if (selectedTplId === id) setSelectedTplId(null);
+      setDeleteTplDlg(null);
+      toast({ title: "Template deleted", description: `"${name}" has been removed.` });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     }
+  };
+
+  const handleUpdateTemplate = async () => {
+    const tpl = templates.find(t => t.id === selectedTplId);
+    if (!tpl) return;
+    setSavingTpl(true);
+    try {
+      const { event_date, end_date, entries_open, entries_close, ...rest } = form;
+      const template_data = { ...rest, ...(teeConfigSnapshot ? { tee_config: teeConfigSnapshot } : {}) };
+      const name = renameTplVal.trim() || tpl.name;
+      const updated = await api<{ id: number; name: string; template_data: any }>(
+        `/api/portal/tournament-templates/${tpl.id}`,
+        { method: "PUT", body: JSON.stringify({ name, template_data }) }
+      );
+      setTemplates(prev => prev.map(t => t.id === tpl.id ? { ...t, name: updated.name ?? name, template_data } : t));
+      setRenamingTplId(null);
+      setRenameTplVal("");
+      toast({ title: "Template updated", description: `"${name}" has been updated with the current settings.` });
+    } catch (err: any) {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    } finally { setSavingTpl(false); }
   };
 
   const openAdd = () => {
@@ -2622,71 +2649,119 @@ ${bodyHtml}
                   {/* ━━━ STEP 0: DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 0 && (<>
                     {/* Templates */}
-                    <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />
-                          <span className="text-sm font-semibold text-[#1a5c38]">Templates</span>
-                          {teeConfigSnapshot && (
-                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
-                          )}
-                        </div>
-                        {!readOnly && !showTplSave && (
+                    <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2.5">
+                      <div className="flex items-center gap-2">
+                        <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
+                        <span className="text-sm font-semibold text-[#1a5c38]">Templates</span>
+                        {teeConfigSnapshot && (
+                          <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#1a5c38]/15 text-[#1a5c38]">tee config captured</span>
+                        )}
+                      </div>
+
+                      {/* Dropdown row */}
+                      <div className="flex items-center gap-2">
+                        <Select
+                          value={selectedTplId ? String(selectedTplId) : ""}
+                          onValueChange={val => {
+                            const tpl = templates.find(t => t.id === Number(val));
+                            if (!tpl) return;
+                            setSelectedTplId(tpl.id);
+                            handleLoadTemplate(tpl);
+                            setRenamingTplId(null);
+                            setRenameTplVal("");
+                          }}
+                          disabled={templatesLoading || templates.length === 0}
+                        >
+                          <SelectTrigger className="h-8 text-xs flex-1 bg-white">
+                            <SelectValue placeholder={
+                              templatesLoading ? "Loading…" :
+                              templates.length === 0 ? "No templates saved yet" :
+                              "Select a template to load…"
+                            } />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {templates.map(tpl => (
+                              <SelectItem key={tpl.id} value={String(tpl.id)}>
+                                <span className="flex items-center gap-2">
+                                  {tpl.name}
+                                  {tpl.template_data?.tee_config && (
+                                    <span className="text-[10px] font-bold px-1 py-0.5 rounded bg-blue-100 text-blue-700">tee</span>
+                                  )}
+                                </span>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+
+                        {/* Edit selected template */}
+                        {selectedTplId && !readOnly && (
                           <Button size="sm" variant="outline"
-                            className="h-6 px-2 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10"
-                            onClick={() => setShowTplSave(true)}>
-                            <BookmarkPlus className="h-3 w-3 mr-1" />Save as Template
+                            className="h-8 px-2.5 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/10 shrink-0"
+                            onClick={() => {
+                              const tpl = templates.find(t => t.id === selectedTplId);
+                              if (tpl) { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }
+                            }}>
+                            <Pencil className="h-3 w-3 mr-1" />Edit
+                          </Button>
+                        )}
+
+                        {/* Delete selected template */}
+                        {selectedTplId && !readOnly && (
+                          <Button size="sm" variant="ghost"
+                            className="h-8 w-8 p-0 shrink-0 text-destructive/60 hover:text-destructive hover:bg-destructive/10"
+                            onClick={() => {
+                              const tpl = templates.find(t => t.id === selectedTplId);
+                              if (tpl) setDeleteTplDlg({ open: true, id: tpl.id, name: tpl.name });
+                            }}>
+                            <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         )}
                       </div>
-                      {showTplSave && (
-                        <form className="flex gap-2" onSubmit={handleSaveTemplate}>
-                          <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
-                            value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} autoFocus />
-                          <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
-                            {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
-                          </Button>
-                          <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
-                            onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
-                            <X className="h-3 w-3" />
-                          </Button>
-                        </form>
-                      )}
-                      {templatesLoading ? (
-                        <p className="text-xs text-muted-foreground italic">Loading templates…</p>
-                      ) : templates.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">No templates yet — configure below and save for quick reuse.</p>
-                      ) : (
-                        <div className="space-y-1.5">
-                          {templates.map(tpl => (
-                            <div key={tpl.id} className="flex items-center gap-2 bg-white rounded-lg border border-gray-200 px-3 py-1.5">
-                              {tpl.template_data?.tee_config && (
-                                <span className="flex-shrink-0 text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-100 text-blue-700" title="Includes tee schedule config">tee</span>
-                              )}
-                              {renamingTplId === tpl.id ? (
-                                <form className="flex items-center gap-1.5 flex-1 min-w-0" onSubmit={e => { e.preventDefault(); handleRenameTpl(tpl.id); }}>
-                                  <Input className="h-6 text-xs flex-1 min-w-0" value={renameTplVal}
-                                    onChange={e => setRenameTplVal(e.target.value)} autoFocus onBlur={() => setRenamingTplId(null)} />
-                                  <Button type="submit" size="sm" className="h-6 px-2 text-xs bg-[#1a5c38] hover:bg-[#164d30]">Save</Button>
-                                </form>
-                              ) : (<>
-                                <span className="flex-1 text-sm font-medium truncate cursor-pointer hover:text-[#1a5c38]"
-                                  title="Double-click to rename"
-                                  onDoubleClick={() => { setRenamingTplId(tpl.id); setRenameTplVal(tpl.name); }}>
-                                  {tpl.name}
-                                </span>
-                                <Button size="sm" variant="outline"
-                                  className="h-6 px-2 text-xs flex-shrink-0 border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/10"
-                                  onClick={() => handleLoadTemplate(tpl)}>Load</Button>
-                                <Button size="sm" variant="ghost"
-                                  className="h-6 w-6 p-0 flex-shrink-0 text-destructive/50 hover:text-destructive hover:bg-destructive/10"
-                                  onClick={() => handleDeleteTemplate(tpl.id, tpl.name)}>
-                                  <X className="h-3 w-3" />
-                                </Button>
-                              </>)}
-                            </div>
-                          ))}
+
+                      {/* Edit panel — shown when editing a template */}
+                      {renamingTplId !== null && selectedTplId === renamingTplId && (
+                        <div className="rounded-lg border border-[#1a5c38]/30 bg-white p-3 space-y-2">
+                          <p className="text-xs font-semibold text-[#1a5c38]">Edit template</p>
+                          <div className="flex gap-2">
+                            <Input className="h-7 text-xs flex-1" placeholder="Template name…"
+                              value={renameTplVal} onChange={e => setRenameTplVal(e.target.value)} autoFocus />
+                          </div>
+                          <p className="text-[11px] text-muted-foreground">You can also save the current wizard settings into this template.</p>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]"
+                              disabled={savingTpl} onClick={handleUpdateTemplate}>
+                              {savingTpl ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                              Save changes
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                              onClick={() => { setRenamingTplId(null); setRenameTplVal(""); }}>
+                              Cancel
+                            </Button>
+                          </div>
                         </div>
+                      )}
+
+                      {/* Save as new template */}
+                      {!readOnly && (
+                        showTplSave ? (
+                          <form className="flex gap-2" onSubmit={handleSaveTemplate}>
+                            <Input className="h-7 text-xs flex-1" placeholder="Template name e.g. Club Championship Setup…"
+                              value={tplSaveName} onChange={e => setTplSaveName(e.target.value)} autoFocus />
+                            <Button type="submit" size="sm" className="h-7 px-3 text-xs bg-[#1a5c38] hover:bg-[#164d30]" disabled={savingTpl}>
+                              {savingTpl ? <Loader2 className="h-3 w-3 animate-spin" /> : "Save"}
+                            </Button>
+                            <Button type="button" size="sm" variant="ghost" className="h-7 w-7 p-0"
+                              onClick={() => { setShowTplSave(false); setTplSaveName(""); }}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </form>
+                        ) : (
+                          <Button size="sm" variant="ghost"
+                            className="h-7 px-2 text-xs text-[#1a5c38] hover:bg-[#1a5c38]/10 w-fit"
+                            onClick={() => setShowTplSave(true)}>
+                            <BookmarkPlus className="h-3 w-3 mr-1" />Save current settings as new template
+                          </Button>
+                        )
                       )}
                     </div>
                     {/* Name */}
@@ -3720,6 +3795,25 @@ ${bodyHtml}
           </Dialog>
         );
       })()}
+
+      {/* ── Delete Template Dialog ────────────────────────────────────────────── */}
+      <Dialog open={!!deleteTplDlg?.open} onOpenChange={o => { if (!o) setDeleteTplDlg(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <Trash2 className="h-4 w-4" /> Delete Template
+            </DialogTitle>
+            <DialogDescription>
+              You are about to permanently delete the template <span className="font-semibold text-foreground">"{deleteTplDlg?.name}"</span>.
+              This cannot be undone — the template and all its saved settings will be gone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setDeleteTplDlg(null)}>Keep Template</Button>
+            <Button variant="destructive" onClick={handleDeleteTemplate}>Delete Permanently</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Cancel Tournament Dialog ──────────────────────────────────────────── */}
       <Dialog open={cancelDlg.open} onOpenChange={o => { if (!o && !cancelDlg.cancelling) setCancelDlg(prev => ({ ...prev, open: false })); }}>

@@ -3340,12 +3340,13 @@ router.put("/portal/tournament-templates/:id", requireClubAuth, async (req: Requ
   const tplId = Number(req.params.id);
   const existing = await row<any>("SELECT id FROM tournament_templates WHERE id = ? AND club_id = ?", [tplId, club.id]);
   if (!existing) { res.status(404).json({ message: "Template not found" }); return; }
-  const { name } = req.body ?? {};
+  const { name, template_data } = req.body ?? {};
   await exec(
-    "UPDATE tournament_templates SET name = COALESCE(?, name) WHERE id = ? AND club_id = ?",
-    [name ? String(name).trim() : null, tplId, club.id]
+    "UPDATE tournament_templates SET name = COALESCE(?, name), template_data = COALESCE(?, template_data) WHERE id = ? AND club_id = ?",
+    [name ? String(name).trim() : null, template_data ? JSON.stringify(template_data) : null, tplId, club.id]
   );
-  res.json({ message: "Updated" });
+  const updated = await row<any>("SELECT * FROM tournament_templates WHERE id = ?", [tplId]);
+  res.json(updated);
 });
 
 router.delete("/portal/tournament-templates/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

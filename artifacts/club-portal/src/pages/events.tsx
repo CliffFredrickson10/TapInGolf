@@ -2733,7 +2733,7 @@ ${bodyHtml}
                                     onClick={() => {
                                       handleLoadTemplate(tpl);
                                       setSelectedTplId(tpl.id);
-                                      setWizardStep(1);
+                                      setWizardStep(0);
                                     }}
                                     title="Edit this template">
                                     <Pencil className="h-3 w-3" />Edit

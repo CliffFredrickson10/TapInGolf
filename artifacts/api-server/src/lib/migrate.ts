@@ -1473,6 +1473,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS block_full_day SMALLINT NOT NULL DEFAULT 0");
   await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
     id            SERIAL PRIMARY KEY,
     ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,

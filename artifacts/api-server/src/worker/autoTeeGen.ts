@@ -112,7 +112,7 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   for (const date of dates) {
     // Fetch active tournament slots for this day (with shotgun/holes info)
     const tournamentRows = await query<any>(
-      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes
+      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes, COALESCE(ge.block_full_day, 0) AS block_full_day
        FROM portal_tee_slots pts
        JOIN golf_events ge ON ge.id = pts.event_id
        WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')`,
@@ -127,6 +127,10 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
         // Interval-start tournament occupies the whole day — skip entirely
         continue;
       }
+
+      // If any shotgun event has block_full_day set, treat the whole day as blocked
+      const hasBlockFullDay = tournamentRows.some((r: any) => r.block_full_day);
+      if (hasBlockFullDay) continue;
 
       // Shotgun-only: build blocked windows and skip slots that fall inside them
       const windows: Array<{ start: number; end: number }> = [];

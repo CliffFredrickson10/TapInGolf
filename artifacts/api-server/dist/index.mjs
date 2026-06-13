@@ -53222,7 +53222,7 @@ async function runAutoRuleNow(rule) {
   let slotsCreated = 0;
   for (const date of dates) {
     const tournamentRows = await query(
-      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes
+      `SELECT pts.tee_time, ge.shotgun_start, COALESCE(ge.holes, 18) AS holes, COALESCE(ge.block_full_day, 0) AS block_full_day
        FROM portal_tee_slots pts
        JOIN golf_events ge ON ge.id = pts.event_id
        WHERE pts.club_id = ? AND pts.date = ? AND ge.status NOT IN ('cancelled')`,
@@ -53234,6 +53234,8 @@ async function runAutoRuleNow(rule) {
       if (hasNonShotgun) {
         continue;
       }
+      const hasBlockFullDay = tournamentRows.some((r) => r.block_full_day);
+      if (hasBlockFullDay) continue;
       const windows = [];
       for (const r of tournamentRows) {
         const shotgunMin = toMin(String(r.tee_time).slice(0, 5));
@@ -66153,6 +66155,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     allow_prepaid,
     allow_voucher,
     shotgun_start,
+    block_full_day,
     rounds = 1
   } = req.body ?? {};
   const status = "pending_publish";
@@ -66169,8 +66172,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, entries_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       shotgun_start, rounds, image_url, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       shotgun_start, block_full_day, rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -66199,6 +66202,7 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       allow_prepaid ? 1 : 0,
       allow_voucher ? 1 : 0,
       shotgun_start ? 1 : 0,
+      block_full_day ? 1 : 0,
       Number(rounds),
       req.body?.image_url || null,
       status,
@@ -66360,6 +66364,10 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
   if (req.body?.shotgun_par3_holes !== void 0) {
     updates.push("shotgun_par3_holes = ?");
     vals.push(req.body.shotgun_par3_holes != null ? JSON.stringify(req.body.shotgun_par3_holes) : null);
+  }
+  if (req.body?.block_full_day !== void 0) {
+    updates.push("block_full_day = ?");
+    vals.push(req.body.block_full_day ? 1 : 0);
   }
   if (rounds !== void 0) {
     updates.push("rounds = ?");
@@ -66605,14 +66613,22 @@ router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) 
 router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const evId = Number(req.params.id);
-  const ev = await row("SELECT id, name, event_date, end_date, restriction FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  const ev = await row("SELECT id, name, event_date, end_date, restriction, block_full_day FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
     return;
   }
   const cancel_booking_ids = (req.body?.cancel_booking_ids ?? []).map(Number).filter(Boolean);
   const cancel_event_ids = (req.body?.cancel_event_ids ?? []).map(Number).filter(Boolean);
-  const clear_slot_ids = (req.body?.clear_slot_ids ?? []).map(Number).filter(Boolean);
+  let clear_slot_ids = (req.body?.clear_slot_ids ?? []).map(Number).filter(Boolean);
+  if (ev.block_full_day) {
+    const allDaySlots = await query(
+      "SELECT id FROM portal_tee_slots WHERE club_id = ? AND date = ? AND event_id IS NULL",
+      [club.id, ev.event_date]
+    );
+    const allDayIds = allDaySlots.map((s) => s.id);
+    clear_slot_ids = [.../* @__PURE__ */ new Set([...clear_slot_ids, ...allDayIds])];
+  }
   if (clear_slot_ids.length > 0) {
     const cPh = clear_slot_ids.map(() => "?").join(",");
     const slotBookings = await query(
@@ -71802,6 +71818,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS featured_slot_seconds INT NULL DEFAULT NULL");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS block_full_day SMALLINT NOT NULL DEFAULT 0");
   await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
     id            SERIAL PRIMARY KEY,
     ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,

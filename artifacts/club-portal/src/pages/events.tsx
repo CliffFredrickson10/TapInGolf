@@ -81,6 +81,7 @@ interface GolfEvent {
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   shotgun_start: number; shotgun_double_tee?: number; shotgun_par3_holes?: number[] | null;
+  block_full_day: number;
   rounds: number; holes: number;
   additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
@@ -265,6 +266,7 @@ const EMPTY_FORM = {
   ballot: false, scoring_enabled: true, payment_required: true, entries_required: false,
   use_tiered_pricing: false, allow_wallet: true, allow_prepaid: false, allow_voucher: false,
   shotgun_start: false,
+  block_full_day: false,
   use_divisions: false,
   divisions: DEFAULT_DIVISIONS,
 };
@@ -862,6 +864,7 @@ export default function Events() {
       use_tiered_pricing: !!ev.use_tiered_pricing,
       allow_wallet: true, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
       shotgun_start: !!ev.shotgun_start,
+      block_full_day: !!ev.block_full_day,
       use_divisions: Array.isArray(ev.divisions) ? ev.divisions.length > 0 : true,
       divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
     });
@@ -2894,6 +2897,17 @@ ${bodyHtml}
                             <p className="text-xs text-muted-foreground">Enable score submission and leaderboard in the mobile app</p>
                           </div>
                           <Switch checked={!!form.scoring_enabled} onCheckedChange={v => setForm(f => ({ ...f, scoring_enabled: v }))} />
+                        </div>
+                      </CardContent>
+                    </Card>
+                    <Card className="bg-muted/30">
+                      <CardContent className="p-4">
+                        <div className="flex items-center justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-medium">Block full day to public</p>
+                            <p className="text-xs text-muted-foreground">Remove all public tee time slots for the entire tournament date — no public bookings on this day</p>
+                          </div>
+                          <Switch checked={!!form.block_full_day} onCheckedChange={v => setForm(f => ({ ...f, block_full_day: v }))} />
                         </div>
                       </CardContent>
                     </Card>

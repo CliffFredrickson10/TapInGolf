@@ -89,3 +89,21 @@ id = "WbZmiRVo1Chpvqe_3H08u"
 uri = "file://attached_assets/email-sig-diederich-kruyt.jpg"
 type = "image"
 title = "Email Signature — Diederich Kruyt"
+
+[[outputs]]
+id = "1_EvleD9qulPE3cM3lTLq"
+uri = "file://attached_assets/email-sig-marco-steyn.svg"
+type = "image"
+title = "Email Signature SVG — Marco Steyn"
+
+[[outputs]]
+id = "0XvfWNONmn1G8vfJ-LkPV"
+uri = "file://attached_assets/email-sig-clifford-fredrickson.svg"
+type = "image"
+title = "Email Signature SVG — Clifford Fredrickson"
+
+[[outputs]]
+id = "Ry7LZT5yzwR5Y9kXDKjMY"
+uri = "file://attached_assets/email-sig-diederich-kruyt.svg"
+type = "image"
+title = "Email Signature SVG — Diederich Kruyt"

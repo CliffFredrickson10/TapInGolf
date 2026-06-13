@@ -1610,16 +1610,6 @@ ${bodyHtml}
                                       {r.registered_at ? ` · Entered ${new Date(r.registered_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
                                     </p>
                                   </div>
-                                  {/* Staff can manually remove an entry if needed */}
-                                  {!readOnly && r.status !== "rejected" && (
-                                    <Button
-                                      size="sm" variant="ghost"
-                                      className="h-7 gap-1 text-xs text-red-600 hover:bg-red-50 hover:text-red-700 flex-shrink-0"
-                                      onClick={() => updateReg(r.user_id, "rejected")}
-                                    >
-                                      <XCircle className="h-3.5 w-3.5" />Remove
-                                    </Button>
-                                  )}
                                 </div>
                               </CardContent>
                             </Card>

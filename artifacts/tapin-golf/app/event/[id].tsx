@@ -44,6 +44,7 @@ interface EventDetail {
   ballot: number; scoring_enabled: number; payment_required: number; entries_required: number;
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   rounds: number; holes: number;
+  shotgun_start: number;
   additional_fees: { name: string; amount: number }[] | null;
   user_registration: UserRegistration | null;
   user_eligible: boolean | null;
@@ -879,13 +880,98 @@ export default function EventDetailScreen() {
                     {draw.length === 0 ? "Draw not yet published." : `Round ${drawRound} draw not yet published.`}
                   </Text>
                 </View>
-              ) : (
+              ) : event.shotgun_start ? (() => {
+                // ── Shotgun draw: grouped by hole, labelled 1st off / 2nd off ──────────
+                const byGroup: Record<number, DrawEntry[]> = {};
+                for (const d of roundDraw) { (byGroup[d.draw_group] ??= []).push(d); }
+                const groupKeys = Object.keys(byGroup).map(Number).sort((a, b) => a - b);
+                const byHole: Record<number, number[]> = {};
+                for (const gk of groupKeys) {
+                  const hole = byGroup[gk]![0]!.starting_tee ?? 1;
+                  (byHole[hole] ??= []).push(gk);
+                }
+                const holeKeys = Object.keys(byHole).map(Number).sort((a, b) => a - b);
+
+                const renderPlayerRow = (p: DrawEntry, i: number) => {
+                  const isMe = user && Number(p.user_id) === Number(user.id);
+                  return (
+                    <View key={i} style={[styles.drawPlayer, isMe && { backgroundColor: colors.primary + "12", marginHorizontal: -4, paddingHorizontal: 4, borderRadius: 6, alignItems: "flex-start", flexDirection: "column" }]}>
+                      <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between", width: "100%" }}>
+                        <Text style={[styles.drawPlayerName, { color: isMe ? colors.primary : colors.foreground }]}>{p.user_name}</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+                          <Text style={[styles.drawPlayerSub, { color: colors.mutedForeground }]}>
+                            {p.division ? `${p.division} Div` : ""}{p.frozen_handicap != null ? ` · HCP ${p.frozen_handicap}` : ""}
+                          </Text>
+                          {p.seed_metric && p.seed_value != null && p.seed_metric !== "handicap" && (
+                            <View style={{ backgroundColor: "#fef3c7", borderColor: "#fcd34d", borderWidth: 1, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 10, color: "#92400e", fontFamily: "monospace" }}>
+                                {p.seed_metric === "points" ? `${p.seed_value} pts` : p.seed_metric === "gross" ? `${p.seed_value} gross` : `${p.seed_value} net`}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                      {isMe && (
+                        <View style={{ backgroundColor: colors.primary, borderRadius: 4, paddingHorizontal: 6, paddingVertical: 2, marginTop: 3 }}>
+                          <Text style={{ fontSize: 9, color: "#fff", fontWeight: "700", letterSpacing: 0.5 }}>YOUR TEE TIME</Text>
+                        </View>
+                      )}
+                    </View>
+                  );
+                };
+
+                return (
+                  <>
+                    {holeKeys.map(hole => {
+                      const holeGroupKeys = (byHole[hole] ?? []).sort((a, b) => a - b);
+                      return (
+                        <View key={hole} style={{ marginBottom: 14 }}>
+                          {/* Hole header */}
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                            <View style={{ backgroundColor: colors.primary, borderRadius: 20, paddingHorizontal: 14, paddingVertical: 5 }}>
+                              <Text style={{ color: "#fff", fontSize: 13, fontWeight: "700" }}>🕳️ Hole {hole}</Text>
+                            </View>
+                            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+                          </View>
+                          {/* 1st off / 2nd off groups */}
+                          {holeGroupKeys.map((gk, posIdx) => {
+                            const grp = byGroup[gk]!;
+                            const isFirst = posIdx === 0;
+                            const posLabel = isFirst ? "1st off" : "2nd off";
+                            const accentColor = isFirst ? colors.primary : "#c8a84b";
+                            return (
+                              <View key={gk} style={[styles.drawGroup, {
+                                backgroundColor: colors.card, borderColor: colors.border,
+                                borderLeftWidth: 4, borderLeftColor: accentColor,
+                                marginLeft: 8, marginBottom: 8,
+                              }]}>
+                                <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+                                  <Text style={{ fontSize: 12, fontWeight: "700", color: accentColor }}>{posLabel}</Text>
+                                  <Text style={{ fontSize: 11, color: colors.mutedForeground, marginLeft: 8 }}>
+                                    {String(grp[0]!.tee_time).slice(0, 5)}
+                                  </Text>
+                                  <View style={{ flex: 1 }} />
+                                  <Text style={{ fontSize: 11, color: colors.mutedForeground }}>
+                                    {grp.length} player{grp.length !== 1 ? "s" : ""}
+                                  </Text>
+                                </View>
+                                {grp.map((p, i) => renderPlayerRow(p, i))}
+                              </View>
+                            );
+                          })}
+                        </View>
+                      );
+                    })}
+                  </>
+                );
+              })() : (
+                // ── Regular (non-shotgun) draw ──────────────────────────────────────
                 Object.entries(
                   roundDraw.reduce((acc, d) => {
                     const date = fmtDate(d.tee_date);
                     const time = String(d.tee_time).slice(0, 5);
                     const key = `${d.tee_date}__${d.tee_time}__${d.draw_group}__${d.starting_tee}`;
-                    if (!acc[key]) acc[key] = { label: `${date} · ${time} · Tee ${d.starting_tee ?? 1} (Group ${d.draw_group})`, players: [] };
+                    if (!acc[key]) acc[key] = { label: `${date} · ${time} · Tee ${d.starting_tee ?? 1} · Group ${d.draw_group}`, players: [] };
                     acc[key].players.push(d);
                     return acc;
                   }, {} as Record<string, { label: string; players: DrawEntry[] }>)

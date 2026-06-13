@@ -3395,11 +3395,36 @@ ${bodyHtml}
                           )}
                         </div>
                       );
-                    })() : (
-                      <p className="text-xs text-muted-foreground flex items-center gap-1.5 py-6 justify-center">
-                        <Clock className="h-4 w-4" />Go back to Details and set a start date to configure the tee schedule.
-                      </p>
-                    )}
+                    }) : (() => (
+                      <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 space-y-3">
+                        <div className="flex items-start gap-3">
+                          <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                          <div>
+                            <p className="text-sm font-medium">No tournament date set</p>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              Tee slot generation requires a date. You can still configure your schedule settings now and save them with this template.
+                            </p>
+                          </div>
+                        </div>
+                        <Button type="button" variant="outline" size="sm"
+                          className="h-8 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/5"
+                          onClick={() => {
+                            if (form.shotgun_start) {
+                              setShotgunDlgDate(""); setShotgunDlgOpen(true);
+                            } else {
+                              setGenDialogDate(""); setGenDialogOpen(true);
+                            }
+                          }}>
+                          <Clock className="h-3.5 w-3.5 mr-1.5" />
+                          Configure {form.shotgun_start ? "Shotgun" : "Interval"} Schedule Settings
+                        </Button>
+                        {teeConfigSnapshot && (
+                          <p className="text-xs text-[#1a5c38] flex items-center gap-1.5 font-medium">
+                            <span className="text-base leading-none">✓</span> Schedule config saved — will be included in template
+                          </p>
+                        )}
+                      </div>
+                    ))()}
                   </>)}
 
                   {/* ━━━ STEP 5: REVIEW ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
@@ -3566,7 +3591,26 @@ ${bodyHtml}
         const sessionTimes = shotgunTwoSessions ? [shotgunAmTime, shotgunPmTime] : [shotgunTime];
 
         const handleGenerate = () => {
-          if (!shotgunDlgDate) return;
+          // Always capture config snapshot (used by template save)
+          setTeeConfigSnapshot({
+            config_type: "B",
+            config_data: {
+              shotgun_holes: shotgunHoles,
+              shotgun_ppg: shotgunPPG,
+              shotgun_two_sessions: shotgunTwoSessions,
+              shotgun_time: shotgunTime,
+              shotgun_am_time: shotgunAmTime,
+              shotgun_pm_time: shotgunPmTime,
+              shotgun_double_tee: shotgunDoubleTee,
+              shotgun_double_tee_mode: shotgunDoubleTeeMode,
+              shotgun_par3_holes: [...shotgunPar3Holes],
+            },
+          });
+          // Config-only mode (no date = template setup, no slots to create)
+          if (!shotgunDlgDate) {
+            setShotgunDlgOpen(false);
+            return;
+          }
           const slotsToCreate = sessionTimes.map(time => ({
             date: shotgunDlgDate,
             time,
@@ -3787,7 +3831,7 @@ ${bodyHtml}
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShotgunDlgOpen(false)}>Cancel</Button>
                 <Button className="bg-[#1a5c38] hover:bg-[#1a5c38]/90" onClick={handleGenerate}>
-                  Generate {sessions > 1 ? `${sessions} Slots` : "Schedule"}
+                  {shotgunDlgDate ? (sessions > 1 ? `Generate ${sessions} Slots` : "Generate Schedule") : <><BookmarkPlus className="h-3.5 w-3.5 mr-1.5" />Save Config to Template</>}
                 </Button>
               </DialogFooter>
             </DialogContent>

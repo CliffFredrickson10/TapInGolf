@@ -393,8 +393,9 @@ export default function Events() {
   };
 
   // Create/Edit dialog
-  const [dlgOpen, setDlgOpen]   = useState(false);
-  const [wizardStep, setWizardStep] = useState(0);
+  const [dlgOpen, setDlgOpen]       = useState(false);
+  const [templateMode, setTemplateMode] = useState(false);
+  const [wizardStep, setWizardStep]  = useState(0);
 
   useEffect(() => {
     const params = new URLSearchParams(search);
@@ -768,25 +769,30 @@ export default function Events() {
       .finally(() => setTemplatesLoading(false));
   }, [dlgOpen]);
 
-  const handleSaveTemplate = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const name = tplSaveName.trim();
-    if (!name) return;
+  const doSaveTemplate = async (name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
     setSavingTpl(true);
     try {
       const { event_date, end_date, entries_open, entries_close, ...rest } = form;
       const template_data = { ...rest, ...(teeConfigSnapshot ? { tee_config: teeConfigSnapshot } : {}) };
       const saved = await api<{ id: number; name: string; template_data: any }>("/api/portal/tournament-templates", {
         method: "POST",
-        body: JSON.stringify({ name, template_data }),
+        body: JSON.stringify({ name: trimmed, template_data }),
       });
       setTemplates(prev => [...prev, saved]);
       setTplSaveName("");
       setShowTplSave(false);
-      toast({ title: "Template saved", description: `"${name}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
+      toast({ title: "Template saved", description: `"${trimmed}" saved${teeConfigSnapshot ? " (includes tee schedule config)" : ""}.` });
+      if (templateMode) { setDlgOpen(false); setTemplateMode(false); }
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally { setSavingTpl(false); }
+  };
+
+  const handleSaveTemplate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await doSaveTemplate(tplSaveName);
   };
 
   const handleLoadTemplate = (tpl: { id: number; name: string; template_data: any }) => {
@@ -856,6 +862,25 @@ export default function Events() {
     setPendingTeeConfig(null);
     setExistingGeneralSlots([]);
     setImportBannerDismissed(false);
+    setTemplateMode(false);
+    setWizardStep(0);
+    setDlgOpen(true);
+  };
+
+  const openNewTemplate = () => {
+    setForm(EMPTY_FORM);
+    setEditId(null);
+    setEventSlots([]);
+    setDeletedSlotIds([]);
+    tempSlotCounter.current = -1;
+    setNewSlotDate("");
+    setNewSlotTime("");
+    setNewSlotPlayers(4);
+    setTeeConfigSnapshot(null);
+    setPendingTeeConfig(null);
+    setExistingGeneralSlots([]);
+    setImportBannerDismissed(false);
+    setTemplateMode(true);
     setWizardStep(0);
     setDlgOpen(true);
   };
@@ -1403,9 +1428,14 @@ ${bodyHtml}
           <h1 className="text-3xl font-bold tracking-tight">Tournaments</h1>
           <p className="text-muted-foreground mt-1">Manage club tournaments and competitions.</p>
         </div>
-        <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
-          <Plus className="h-4 w-4" />New Tournament
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" className="gap-2 border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/5" onClick={openNewTemplate} disabled={readOnly}>
+            <BookmarkPlus className="h-4 w-4" />Create Template
+          </Button>
+          <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={openAdd} disabled={readOnly}>
+            <Plus className="h-4 w-4" />New Tournament
+          </Button>
+        </div>
       </div>
 
       {/* Tab bar */}
@@ -2609,9 +2639,14 @@ ${bodyHtml}
       </Sheet>
 
       {/* ── Create / Edit Dialog ───────────────────────────────────────────────── */}
-      <Dialog open={dlgOpen} onOpenChange={setDlgOpen}>
+      <Dialog open={dlgOpen} onOpenChange={o => { setDlgOpen(o); if (!o) setTemplateMode(false); }}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-          <DialogHeader><DialogTitle>{editId ? "Edit" : "New"} Tournament</DialogTitle></DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {templateMode ? <><BookmarkPlus className="h-4 w-4 text-[#1a5c38]" />New Tournament Template</> : editId ? "Edit Tournament" : "New Tournament"}
+            </DialogTitle>
+            {templateMode && <DialogDescription>Configure settings to reuse across future tournaments. No date needed — just set up the format, pricing, and schedule.</DialogDescription>}
+          </DialogHeader>
           {(() => {
             const isTeamFmt  = isTeamFormatFE(form.format, form.format2);
             const isGroupFmt = isGroupFormatFE(form.format, form.format2);
@@ -2648,7 +2683,8 @@ ${bodyHtml}
 
                   {/* ━━━ STEP 0: DETAILS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 0 && (<>
-                    {/* Templates */}
+                    {/* Templates — only shown in normal tournament mode, not when creating a template */}
+                    {!templateMode && (
                     <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2.5">
                       <div className="flex items-center gap-2">
                         <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
@@ -2742,10 +2778,11 @@ ${bodyHtml}
                       )}
 
                     </div>
+                    )}
                     {/* Name */}
                     <div className="space-y-1.5">
-                      <Label>Tournament Name *</Label>
-                      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="Club Championship 2026" />
+                      <Label>{templateMode ? "Template Name *" : "Tournament Name *"}</Label>
+                      <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder={templateMode ? "e.g. Club Championship Setup" : "Club Championship 2026"} />
                     </div>
                     {/* Description */}
                     <div className="space-y-1.5">
@@ -2780,14 +2817,16 @@ ${bodyHtml}
                     </div>
                     {/* Dates + Holes + Rounds */}
                     <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <Label>Start Date *</Label>
-                        <Input type="date" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label>End Date <span className="text-muted-foreground font-normal text-xs">(multi-day)</span></Label>
-                        <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
-                      </div>
+                      {!templateMode && (<>
+                        <div className="space-y-1.5">
+                          <Label>Start Date *</Label>
+                          <Input type="date" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label>End Date <span className="text-muted-foreground font-normal text-xs">(multi-day)</span></Label>
+                          <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+                        </div>
+                      </>)}
                       <div className="space-y-1.5">
                         <Label>Holes</Label>
                         <div className="flex gap-2">
@@ -3243,7 +3282,7 @@ ${bodyHtml}
                         </div>
                       )}
                     </div>
-                    {form.event_date ? (() => {
+                    {!templateMode && form.event_date ? (() => {
                       const getDatesInRange = (start: string, end?: string): string[] => {
                         const dates: string[] = [];
                         const [sy, sm, sd] = start.split("-").map(Number);
@@ -3397,15 +3436,17 @@ ${bodyHtml}
                       );
                     }) : (() => (
                       <div className="rounded-xl border border-dashed border-border bg-muted/30 p-4 space-y-3">
-                        <div className="flex items-start gap-3">
-                          <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
-                          <div>
-                            <p className="text-sm font-medium">No tournament date set</p>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              Tee slot generation requires a date. You can still configure your schedule settings now and save them with this template.
-                            </p>
+                        {!templateMode && (
+                          <div className="flex items-start gap-3">
+                            <Clock className="h-4 w-4 text-muted-foreground shrink-0 mt-0.5" />
+                            <div>
+                              <p className="text-sm font-medium">No tournament date set</p>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                Tee slot generation requires a date. You can still configure your schedule settings now and save them with this template.
+                              </p>
+                            </div>
                           </div>
-                        </div>
+                        )}
                         <Button type="button" variant="outline" size="sm"
                           className="h-8 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/5"
                           onClick={() => {
@@ -3508,8 +3549,8 @@ ${bodyHtml}
                       </Card>
                     </div>
 
-                    {/* Save as template — intentional, after full config */}
-                    {!readOnly && !editId && (
+                    {/* Save as template — only in normal mode; template mode uses the nav button */}
+                    {!readOnly && !editId && !templateMode && (
                       <div className="rounded-xl border border-[#1a5c38]/25 bg-[#1a5c38]/5 p-3 space-y-2">
                         <div className="flex items-center gap-2">
                           <BookmarkPlus className="h-4 w-4 text-[#1a5c38] shrink-0" />
@@ -3542,6 +3583,12 @@ ${bodyHtml}
                     <Button type="button" onClick={() => setWizardStep(w => w + 1)}
                       className="bg-[#1a5c38] hover:bg-[#164d30]">
                       Next →
+                    </Button>
+                  ) : templateMode ? (
+                    <Button type="button" onClick={() => doSaveTemplate(form.name)}
+                      disabled={savingTpl || !form.name.trim()}
+                      className="bg-[#1a5c38] hover:bg-[#164d30]">
+                      {savingTpl ? <><Loader2 className="h-4 w-4 animate-spin mr-1" />Saving…</> : <><BookmarkPlus className="h-4 w-4 mr-1.5" />Save Template</>}
                     </Button>
                   ) : (
                     <Button type="button" onClick={handleSave}

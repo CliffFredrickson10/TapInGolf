@@ -371,6 +371,186 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
     } finally { setPublishing(false); }
   };
 
+  const printDraw = () => {
+    if (!data) return;
+    const event   = data.event;
+    const rounds  = data.rounds;
+    const numR1   = rounds[0]!.matches.length;
+    const pos     = computePositions(numR1);
+    const nRounds = pos.length;
+    const cH      = numR1 * (CARD_H + SLOT_GAP) - SLOT_GAP;
+    const cW      = nRounds * (CARD_W + COL_GAP) + 130;
+    const today   = new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
+
+    // Scale bracket to fit A4 landscape (available ~1085px wide after 10mm margins)
+    const PRINT_W = 1085;
+    const scale   = Math.min(1, PRINT_W / cW);
+
+    // ── SVG connector lines ───────────────────────────────────────────────────
+    let svgLines = "";
+    for (let r = 0; r < nRounds - 1; r++) {
+      const prevR = pos[r]!;
+      const nextR = pos[r + 1]!;
+      const exitX  = colX(r) + CARD_W;
+      const enterX = colX(r + 1);
+      const midX   = (exitX + enterX) / 2;
+      nextR.forEach((next, j) => {
+        const top = prevR[j * 2];
+        const bot = prevR[j * 2 + 1];
+        if (!top || !bot) return;
+        svgLines += `<line x1="${exitX}"  y1="${top.centerY}" x2="${midX}"  y2="${top.centerY}"   stroke="#d1d5db" stroke-width="1.5"/>`;
+        svgLines += `<line x1="${exitX}"  y1="${bot.centerY}" x2="${midX}"  y2="${bot.centerY}"   stroke="#d1d5db" stroke-width="1.5"/>`;
+        svgLines += `<line x1="${midX}"   y1="${top.centerY}" x2="${midX}"  y2="${bot.centerY}"   stroke="#d1d5db" stroke-width="1.5"/>`;
+        svgLines += `<line x1="${midX}"   y1="${next.centerY}" x2="${enterX}" y2="${next.centerY}" stroke="#d1d5db" stroke-width="1.5"/>`;
+      });
+    }
+    // Final → champion dashed line
+    const finalPos = pos[nRounds - 1]?.[0];
+    if (finalPos) {
+      const fx = colX(nRounds - 1) + CARD_W;
+      const cx = colX(nRounds) + 8;
+      svgLines += `<line x1="${fx}" y1="${finalPos.centerY}" x2="${cx}" y2="${finalPos.centerY}" stroke="#c8a84b" stroke-width="1.5" stroke-dasharray="4 2"/>`;
+    }
+
+    // ── Round headers ─────────────────────────────────────────────────────────
+    let headerHtml = "";
+    rounds.forEach((round, r) => {
+      const done  = round.matches.filter(m => m.status === "complete").length;
+      const total = round.matches.filter(m => m.status !== "bye").length;
+      headerHtml += `
+        <div style="position:absolute;left:${colX(r)}px;top:0;width:${CARD_W}px">
+          <div style="font-size:11px;font-weight:700;color:#1a5c38;margin-bottom:2px">${round.label}</div>
+          ${round.deadline ? `<div style="font-size:9px;color:#6b7280">⏰ ${round.deadline}</div>` : ""}
+          ${total > 0 ? `<div style="font-size:9px;color:#9ca3af;margin-top:2px">${done}/${total} complete</div>` : ""}
+        </div>`;
+    });
+    headerHtml += `<div style="position:absolute;left:${colX(nRounds) + 8}px;top:0;width:110px">
+      <span style="font-size:11px;font-weight:700;color:#c8a84b">🏆 Champion</span>
+    </div>`;
+
+    // ── Match cards ───────────────────────────────────────────────────────────
+    let matchHtml = "";
+    pos.forEach((roundPos, r) => {
+      roundPos.forEach((p, i) => {
+        const match = rounds[r]?.matches[i];
+        if (!match) return;
+        const bye      = match.status === "bye";
+        const done     = match.status === "complete";
+        const live     = match.status === "in_progress";
+        const dotColor = done ? "#16a34a" : live ? "#c8a84b" : bye ? "#e5e7eb" : "#d1d5db";
+        const border   = done ? "#b7dfc8" : live ? "#c8a84b" : "#e5e7eb";
+        const barBg    = done ? "#f0faf4" : live ? "#c8a84b18" : "#f9fafb";
+        const p1win    = done && match.winner_id === match.player1_id;
+        const p2win    = done && match.winner_id === match.player2_id;
+        const status   = bye ? "Bye" : done ? "Complete" : live ? "Live" : "Pending";
+        const statusColor = done ? "#1a5c38" : live ? "#c8a84b" : "#9ca3af";
+
+        const playerRow = (name: string | null, hcp: number | null, isWinner: boolean, isByeRow: boolean) => {
+          if (!name || isByeRow) return `<div style="display:flex;align-items:center;gap:6px;padding:4px 8px;background:#f9fafb">
+            <div style="width:14px;height:14px;border-radius:50%;background:#e5e7eb;flex-shrink:0"></div>
+            <span style="font-size:10px;color:#d1d5db;font-style:italic">TBD</span>
+          </div>`;
+          return `<div style="display:flex;align-items:center;gap:5px;padding:4px 8px;background:${isWinner ? "#f0faf4" : "#fff"}">
+            <span style="font-size:10px;font-weight:${isWinner ? 700 : 500};color:${isWinner ? "#1a5c38" : "#374151"};flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${name}${isWinner ? " ✓" : ""}</span>
+            ${hcp != null ? `<span style="font-size:9px;color:#9ca3af;flex-shrink:0">+${hcp}</span>` : ""}
+          </div>`;
+        };
+
+        matchHtml += `
+          <div style="position:absolute;left:${colX(r)}px;top:${p.topY}px;width:${CARD_W}px;height:${CARD_H}px;border:1.5px solid ${border};border-radius:8px;overflow:hidden;background:#fff;display:flex;flex-direction:column">
+            <div style="display:flex;align-items:center;gap:5px;padding:3px 7px;background:${barBg};border-bottom:1px solid ${border}40">
+              <span style="width:7px;height:7px;border-radius:50%;background:${dotColor};flex-shrink:0;display:inline-block"></span>
+              <span style="font-size:9px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:${statusColor};flex:1">${status}</span>
+              ${match.score ? `<span style="font-size:9px;font-weight:700;color:#1a5c38">${match.score}</span>` : ""}
+            </div>
+            ${bye
+              ? `<div style="display:flex;align-items:center;justify-content:center;flex:1;color:#9ca3af;font-size:10px;font-weight:600">${match.player1_name ?? "Bye"}</div>`
+              : `${playerRow(match.player1_name, match.player1_handicap, p1win, false)}
+                 <div style="font-size:9px;text-align:center;color:#d1d5db;font-weight:700;line-height:10px">vs</div>
+                 ${playerRow(match.player2_name, match.player2_handicap, p2win, false)}`
+            }
+          </div>`;
+      });
+    });
+
+    // ── Champion box ──────────────────────────────────────────────────────────
+    let championHtml = "";
+    if (finalPos) {
+      const lastMatch = rounds[nRounds - 1]?.matches[0];
+      const champion  = lastMatch?.winner_name ?? null;
+      championHtml = `<div style="position:absolute;left:${colX(nRounds) + 8}px;top:${finalPos.topY - 4}px;width:110px">
+        <div style="border:2px solid #c8a84b;border-radius:12px;padding:10px 8px;background:#c8a84b26;text-align:center">
+          <div style="font-size:20px">🏆</div>
+          <div style="font-size:10px;font-weight:700;color:#c8a84b;margin-top:4px">${champion ?? "Champion"}</div>
+        </div>
+      </div>`;
+    }
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>${event.name} — Draw</title>
+  <style>
+    @page { size: A4 landscape; margin: 10mm; }
+    * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { background: #fff; }
+    .page-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 3px solid #1a5c38; display: flex; align-items: flex-end; justify-content: space-between; }
+    .tournament-name { font-size: 20px; font-weight: 800; color: #1a5c38; }
+    .tournament-sub  { font-size: 12px; color: #6b7280; margin-top: 4px; }
+    .print-meta      { font-size: 10px; color: #9ca3af; text-align: right; line-height: 1.6; }
+    .legend          { display: flex; gap: 16px; margin-bottom: 10px; align-items: center; }
+    .legend-item     { display: flex; align-items: center; gap: 5px; font-size: 10px; color: #6b7280; }
+    .legend-dot      { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .bracket-wrap    { transform-origin: top left; transform: scale(${scale.toFixed(4)}); width: ${cW}px; }
+    .bracket-outer   { width: ${Math.ceil(cW * scale)}px; height: ${Math.ceil((cH + HEADER_H + 16) * scale)}px; overflow: hidden; }
+  </style>
+</head>
+<body>
+  <div class="page-header">
+    <div>
+      <div class="tournament-name">${event.name}</div>
+      <div class="tournament-sub">
+        ${event.knockout_type === "team" ? "Team" : "Individual"} ·
+        ${event.knockout_draw_method === "seeded" ? "Seeded draw" : "Random draw"} ·
+        ${rounds[0]!.matches.length * 2}-player bracket
+      </div>
+    </div>
+    <div class="print-meta">
+      <div style="font-weight:700;color:#1a5c38">TapIn Golf</div>
+      <div>Printed: ${today}</div>
+    </div>
+  </div>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:#16a34a"></span>Complete</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#c8a84b"></span>Live</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#d1d5db"></span>Pending</div>
+    <div class="legend-item"><span class="legend-dot" style="background:#e5e7eb"></span>Bye</div>
+  </div>
+  <div class="bracket-outer">
+    <div class="bracket-wrap">
+      <div style="position:relative;height:${HEADER_H}px;width:${cW}px;margin-bottom:8px">${headerHtml}</div>
+      <div style="position:relative;width:${cW}px;height:${cH}px">
+        <svg style="position:absolute;top:0;left:0;width:${cW}px;height:${cH}px;overflow:visible;pointer-events:none">${svgLines}</svg>
+        ${matchHtml}
+        ${championHtml}
+      </div>
+    </div>
+  </div>
+</body>
+</html>`;
+
+    const win = window.open("", "_blank", "width=1200,height=900");
+    if (!win) {
+      toast({ title: "Pop-up blocked", description: "Allow pop-ups for this site to use Print Draw.", variant: "destructive" });
+      return;
+    }
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => { win.print(); }, 500);
+  };
+
   if (loading) {
     return <div className="space-y-3 py-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
   }
@@ -434,6 +614,13 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             {data!.event.knockout_type === "team" ? "Team" : "Individual"} · {data!.event.knockout_draw_method === "seeded" ? "Seeded" : "Random"} draw · {rounds[0]!.matches.length * 2} player bracket
           </span>
         </div>
+        <button
+          style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+          onClick={printDraw}
+          title="Print the draw as a PDF or paper sheet"
+        >
+          🖨 Print Draw
+        </button>
         {!readOnly && (
           <>
             <button

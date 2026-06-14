@@ -347,6 +347,16 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const [editScore, setEditScore]       = useState<KnockoutMatch | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
   const [publishing, setPublishing]     = useState(false);
+  const [showPrintMenu, setShowPrintMenu] = useState(false);
+
+  // Paper sizes (landscape) — available print width in px at 96dpi with 10mm margins
+  const PRINT_SIZES = [
+    { key: "A4", label: "A4",  css: "A4",  pxW: 1047, desc: "210 × 297mm — desktop printer" },
+    { key: "A3", label: "A3",  css: "A3",  pxW: 1512, desc: "297 × 420mm — large desktop / office" },
+    { key: "A2", label: "A2",  css: "A2",  pxW: 2170, desc: "420 × 594mm — print shop" },
+    { key: "A1", label: "A1",  css: "A1",  pxW: 3103, desc: "594 × 841mm — poster" },
+    { key: "A0", label: "A0",  css: "A0",  pxW: 4419, desc: "841 × 1189mm — noticeboard banner" },
+  ] as const;
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -371,8 +381,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
     } finally { setPublishing(false); }
   };
 
-  const printDraw = () => {
+  const printDraw = (size: typeof PRINT_SIZES[number]) => {
     if (!data) return;
+    setShowPrintMenu(false);
     const event   = data.event;
     const rounds  = data.rounds;
     const numR1   = rounds[0]!.matches.length;
@@ -382,9 +393,8 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
     const cW      = nRounds * (CARD_W + COL_GAP) + 130;
     const today   = new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
 
-    // Scale bracket to fit A4 landscape (available ~1085px wide after 10mm margins)
-    const PRINT_W = 1085;
-    const scale   = Math.min(1, PRINT_W / cW);
+    // Scale bracket to fit chosen paper size
+    const scale   = Math.min(1, size.pxW / cW);
 
     // ── SVG connector lines ───────────────────────────────────────────────────
     let svgLines = "";
@@ -492,7 +502,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   <meta charset="utf-8">
   <title>${event.name} — Draw</title>
   <style>
-    @page { size: A4 landscape; margin: 10mm; }
+    @page { size: ${size.css} landscape; margin: 10mm; }
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: system-ui, -apple-system, sans-serif; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     body { background: #fff; }
     .page-header { margin-bottom: 14px; padding-bottom: 10px; border-bottom: 3px solid #1a5c38; display: flex; align-items: flex-end; justify-content: space-between; }
@@ -614,13 +624,33 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             {data!.event.knockout_type === "team" ? "Team" : "Individual"} · {data!.event.knockout_draw_method === "seeded" ? "Seeded" : "Random"} draw · {rounds[0]!.matches.length * 2} player bracket
           </span>
         </div>
-        <button
-          style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
-          onClick={printDraw}
-          title="Print the draw as a PDF or paper sheet"
-        >
-          🖨 Print Draw
-        </button>
+        <div style={{ position: "relative" }}>
+          <button
+            style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer", display: "flex", alignItems: "center", gap: 4 }}
+            onClick={() => setShowPrintMenu(v => !v)}
+          >
+            🖨 Print Draw <span style={{ fontSize: 9, color: "#9ca3af" }}>▾</span>
+          </button>
+          {showPrintMenu && (
+            <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,.12)", minWidth: 240, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".5px", borderBottom: "1px solid #f3f4f6" }}>
+                Paper size (landscape)
+              </div>
+              {PRINT_SIZES.map(sz => (
+                <button
+                  key={sz.key}
+                  style={{ display: "block", width: "100%", textAlign: "left", padding: "9px 14px", border: "none", background: "none", cursor: "pointer", borderBottom: "1px solid #f9fafb" }}
+                  onMouseOver={e => (e.currentTarget.style.background = "#f9fafb")}
+                  onMouseOut={e  => (e.currentTarget.style.background = "none")}
+                  onClick={() => printDraw(sz)}
+                >
+                  <span style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>{sz.label}</span>
+                  <span style={{ fontSize: 10, color: "#6b7280", marginLeft: 8 }}>{sz.desc}</span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
         {!readOnly && (
           <>
             <button

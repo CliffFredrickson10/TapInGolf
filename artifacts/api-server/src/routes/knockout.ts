@@ -7,12 +7,13 @@ const router = Router();
 
 function getRoundLabels(totalRounds: number): string[] {
   const labels: string[] = [];
+  let roundNum = 1;
   for (let r = 1; r <= totalRounds; r++) {
-    const matchesInRound = Math.pow(2, totalRounds - r);
-    if (matchesInRound === 1)       labels.push("Final");
-    else if (matchesInRound === 2)  labels.push("Semi-Finals");
-    else if (matchesInRound === 4)  labels.push("Quarter-Finals");
-    else                            labels.push(`Round of ${matchesInRound * 2}`);
+    const fromEnd = totalRounds - r; // 0 = Final, 1 = SF, 2 = QF
+    if (fromEnd === 0)      labels.push("Final");
+    else if (fromEnd === 1) labels.push("Semi-Finals");
+    else if (fromEnd === 2) labels.push("Quarter-Finals");
+    else                    labels.push(`Round ${roundNum++}`);
   }
   return labels;
 }

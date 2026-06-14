@@ -70502,8 +70502,8 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        status, scoring_enabled, entries_required, payment_required)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0)`,
+        status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [
       club.id,
       name.trim(),
@@ -70512,7 +70512,8 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       end_date || null,
       format,
       knockout_type,
-      draw_method
+      draw_method,
+      club.id
     ]
   );
   res.json({ id });

@@ -21,6 +21,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/bookings",           label: "Bookings",           icon: BookOpen,        section: "schedule" },
   { href: "/payments",           label: "Payments",           icon: CreditCard,      section: "payments" },
   { href: "/events",             label: "Tournaments",        icon: Calendar,        section: "events" },
+  { href: "/knockout",           label: "Knockout",           icon: Trophy,          section: "events" },
   { href: "/members",            label: "Members",            icon: Users,           section: "members" },
   { href: "/invoices",           label: "Invoices",           icon: Receipt,         section: "members" },
   { href: "/reviews",            label: "Reviews",            icon: Star,            section: "reviews" },

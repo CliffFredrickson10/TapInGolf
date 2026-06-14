@@ -16,6 +16,7 @@ import Schedule from "@/pages/schedule";
 import Reviews from "@/pages/reviews";
 import Ads from "@/pages/ads";
 import Events from "@/pages/events";
+import Knockout from "@/pages/knockout";
 import Members from "@/pages/members";
 import Bans from "@/pages/bans";
 import Vouchers from "@/pages/vouchers";
@@ -128,6 +129,9 @@ function Router() {
         </Route>
         <Route path="/events">
           <SectionGuard section="events"><Events /></SectionGuard>
+        </Route>
+        <Route path="/knockout">
+          <SectionGuard section="events"><Knockout /></SectionGuard>
         </Route>
         <Route path="/members">
           <SectionGuard section="members"><Members /></SectionGuard>

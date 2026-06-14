@@ -36,7 +36,7 @@ const EMPTY_FORM = {
   description: "",
   event_date: "",
   end_date: "",
-  knockout_type: "individual" as "individual" | "team",
+  knockout_type: "" as "" | "individual" | "team",
   draw_method: "random" as "random" | "seeded",
 };
 
@@ -80,6 +80,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
   const save = async () => {
     if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    if (!form.knockout_type) { toast({ title: "Format is required", description: "Please select Singles or Betterball.", variant: "destructive" }); return; }
     setSaving(true);
     try {
       const r = await api<{ id: number }>("/api/portal/knockout", {
@@ -93,6 +94,8 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
     } finally { setSaving(false); }
   };
 
+  const isBetterball = form.knockout_type === "team";
+
   return (
     <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
       <DialogContent className="max-w-md">
@@ -104,14 +107,68 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-3 py-2.5 text-xs text-[#1a5c38]">
-            <p className="font-semibold mb-1">ℹ️ How knockout tournaments work</p>
-            <ul className="space-y-0.5 text-[#1a5c38]/80 list-disc list-inside">
-              <li>All active club members are automatically in the draw</li>
-              <li>No registration, entry fee, or tee times required</li>
-              <li>Players book their own tee times to complete each match</li>
-              <li>Generate the bracket once, then update results round by round</li>
-            </ul>
+          {/* Format picker — required */}
+          <div className="space-y-2">
+            <Label>
+              Format <span className="text-destructive">*</span>
+            </Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, knockout_type: "individual" }))}
+                className={[
+                  "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
+                  form.knockout_type === "individual"
+                    ? "border-[#1a5c38] bg-[#1a5c38]/5"
+                    : "border-border hover:border-[#1a5c38]/40",
+                ].join(" ")}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Swords className="h-3.5 w-3.5 text-[#1a5c38]" />
+                  <span className="text-sm font-semibold">Singles</span>
+                  {form.knockout_type === "individual" && (
+                    <span className="ml-auto text-[10px] font-bold text-[#1a5c38]">✓</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  1 vs 1 match play — each player competes individually
+                </p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setForm(f => ({ ...f, knockout_type: "team" }))}
+                className={[
+                  "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
+                  form.knockout_type === "team"
+                    ? "border-[#c8a84b] bg-[#c8a84b]/10"
+                    : "border-border hover:border-[#c8a84b]/40",
+                ].join(" ")}
+              >
+                <div className="flex items-center gap-1.5">
+                  <Users className="h-3.5 w-3.5 text-[#92711a]" />
+                  <span className="text-sm font-semibold">Betterball</span>
+                  {form.knockout_type === "team" && (
+                    <span className="ml-auto text-[10px] font-bold text-[#92711a]">✓</span>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground leading-snug">
+                  2 vs 2 pairs — each player must choose a partner
+                </p>
+              </button>
+            </div>
+
+            {/* Betterball partner note */}
+            {isBetterball && (
+              <div className="rounded-lg border border-[#c8a84b]/40 bg-[#c8a84b]/10 px-3 py-2.5 text-xs text-[#92711a]">
+                <p className="font-semibold mb-1">👥 Partner pairing required</p>
+                <ul className="space-y-0.5 list-disc list-inside text-[#92711a]/80">
+                  <li>After creating the tournament, members pair up in the app</li>
+                  <li>Each player must select their partner before the draw is generated</li>
+                  <li>Unpaired players cannot be included in the bracket</li>
+                </ul>
+              </div>
+            )}
           </div>
 
           <div className="space-y-1.5">
@@ -144,33 +201,36 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
-            <div className="space-y-1.5">
-              <Label>Type</Label>
-              <Select value={form.knockout_type} onValueChange={v => setForm(f => ({ ...f, knockout_type: v as "individual" | "team" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="individual">Individual</SelectItem>
-                  <SelectItem value="team">Team</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-1.5">
-              <Label>Draw method</Label>
-              <Select value={form.draw_method} onValueChange={v => setForm(f => ({ ...f, draw_method: v as "random" | "seeded" }))}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="random">Random draw</SelectItem>
-                  <SelectItem value="seeded">Seeded by handicap</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="space-y-1.5">
+            <Label>Draw method</Label>
+            <Select value={form.draw_method} onValueChange={v => setForm(f => ({ ...f, draw_method: v as "random" | "seeded" }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="random">Random draw</SelectItem>
+                <SelectItem value="seeded">Seeded by handicap</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-3 py-2.5 text-xs text-[#1a5c38]">
+            <p className="font-semibold mb-1">ℹ️ How knockout tournaments work</p>
+            <ul className="space-y-0.5 text-[#1a5c38]/80 list-disc list-inside">
+              <li>All active club members are automatically in the draw</li>
+              <li>No registration, entry fee, or tee times required</li>
+              <li>Players book their own tee times to complete each match</li>
+              <li>Generate the bracket once, then update results round by round</li>
+            </ul>
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={saving} onClick={save}>
+          <Button
+            size="sm"
+            className="bg-[#1a5c38] hover:bg-[#164d30]"
+            disabled={saving || !form.knockout_type}
+            onClick={save}
+          >
             {saving ? "Creating…" : "Create Tournament"}
           </Button>
         </DialogFooter>

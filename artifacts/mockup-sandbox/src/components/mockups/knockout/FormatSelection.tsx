@@ -4,17 +4,22 @@ const GREEN = "#1a5c38";
 const GOLD = "#c8a84b";
 
 const FORMAT_OPTIONS = [
-  { key: "gross_stroke_play", label: "Stroke Play (Gross)", icon: "🏌️", desc: "Total strokes, lowest wins" },
-  { key: "net_stroke_play", label: "Stroke Play (Net)", icon: "📊", desc: "Adjusted for handicap" },
-  { key: "individual_stableford", label: "Stableford", icon: "⭐", desc: "Points per hole" },
-  { key: "betterball", label: "Betterball (4-Ball)", icon: "👥", desc: "Best ball of pair counts" },
-  { key: "scramble", label: "Scramble", icon: "🔄", desc: "Team selects best shot" },
-  { key: "knockout", label: "Knockout", icon: "🏆", desc: "Single-elimination match play", isNew: true },
+  { key: "gross_stroke_play",      label: "Stroke Play (Gross)",  icon: "🏌️", desc: "Total strokes, lowest wins" },
+  { key: "net_stroke_play",        label: "Stroke Play (Net)",    icon: "📊", desc: "Adjusted for handicap" },
+  { key: "individual_stableford",  label: "Stableford",           icon: "⭐", desc: "Points per hole" },
+  { key: "betterball",             label: "Betterball (4-Ball)",  icon: "👥", desc: "Best ball of pair counts" },
+  { key: "scramble",               label: "Scramble",             icon: "🔄", desc: "Team selects best shot" },
+  { key: "knockout",               label: "Knockout",             icon: "🏆", desc: "Single-elimination match play", isNew: true },
 ];
 
-const BRACKET_SIZES = [8, 16, 32, 64];
-
 const STEPS = ["Details", "Format", "Pricing", "Tee Sheet", "Publish"];
+
+// Next power of 2 >= n
+function nextPow2(n: number): number {
+  let p = 1;
+  while (p < n) p <<= 1;
+  return p;
+}
 
 function StepBar({ current }: { current: number }) {
   return (
@@ -44,9 +49,14 @@ function StepBar({ current }: { current: number }) {
 
 export function FormatSelection() {
   const [selected, setSelected] = useState("knockout");
-  const [bracketSize, setBracketSize] = useState(16);
-  const [holes, setHoles] = useState<9 | 18>(18);
-  const [rounds, setRounds] = useState(1);
+  const [knockoutType, setKnockoutType] = useState<"individual" | "team">("individual");
+
+  // Simulated: how many members are registered at this club
+  const REGISTERED_MEMBERS = 47;
+  const bracketSize = nextPow2(REGISTERED_MEMBERS);
+  const byes = bracketSize - REGISTERED_MEMBERS;
+  const rounds = Math.log2(bracketSize);
+  const totalMatches = bracketSize - 1;
 
   const isKnockout = selected === "knockout";
 
@@ -70,6 +80,7 @@ export function FormatSelection() {
           <h2 className="text-base font-semibold text-gray-800 mb-1">Format</h2>
           <p className="text-xs text-gray-500 mb-4">Choose the scoring format for this tournament</p>
 
+          {/* Format grid */}
           <div className="grid grid-cols-2 gap-2 mb-5">
             {FORMAT_OPTIONS.map((f) => {
               const active = selected === f.key;
@@ -104,82 +115,111 @@ export function FormatSelection() {
             })}
           </div>
 
-          {/* Knockout-specific config */}
+          {/* Knockout config panel */}
           {isKnockout && (
-            <div className="rounded-lg border border-green-200 bg-green-50 p-4 mb-5">
-              <div className="flex items-center gap-2 mb-3">
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 mb-5 space-y-4">
+              <div className="flex items-center gap-2">
                 <span className="text-sm">🏆</span>
                 <span className="text-sm font-semibold" style={{ color: GREEN }}>Knockout Configuration</span>
               </div>
 
-              <div className="mb-3">
-                <label className="text-xs font-medium text-gray-700 mb-1.5 block">Bracket Size</label>
+              {/* Tournament type */}
+              <div>
+                <label className="text-xs font-medium text-gray-700 mb-1.5 block">Tournament Type</label>
                 <div className="flex gap-2">
-                  {BRACKET_SIZES.map((sz) => (
+                  {([
+                    { key: "individual", label: "Individual", icon: "🏌️", desc: "Player vs player, match play" },
+                    { key: "team",       label: "Team",       icon: "👥", desc: "Pair vs pair, best ball" },
+                  ] as const).map((t) => (
                     <button
-                      key={sz}
-                      onClick={() => setBracketSize(sz)}
-                      className="flex-1 py-1.5 rounded-md border text-xs font-semibold transition-all"
+                      key={t.key}
+                      onClick={() => setKnockoutType(t.key)}
+                      className="flex-1 rounded-lg border-2 p-3 text-left transition-all"
                       style={{
-                        borderColor: bracketSize === sz ? GREEN : "#d1d5db",
-                        background: bracketSize === sz ? GREEN : "#fff",
-                        color: bracketSize === sz ? "#fff" : "#374151",
+                        borderColor: knockoutType === t.key ? GREEN : "#d1d5db",
+                        background: knockoutType === t.key ? "#fff" : "#f9fafb",
                       }}
                     >
-                      {sz}
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[11px] text-gray-400 mt-1">Players needed for a full bracket. Byes are auto-assigned to top seeds.</p>
-              </div>
-
-              <div className="mb-3">
-                <label className="text-xs font-medium text-gray-700 mb-1.5 block">Holes per Match</label>
-                <div className="flex gap-2">
-                  {([9, 18] as const).map((h) => (
-                    <button
-                      key={h}
-                      onClick={() => setHoles(h)}
-                      className="flex-1 py-1.5 rounded-md border text-xs font-semibold transition-all"
-                      style={{
-                        borderColor: holes === h ? GREEN : "#d1d5db",
-                        background: holes === h ? GREEN : "#fff",
-                        color: holes === h ? "#fff" : "#374151",
-                      }}
-                    >
-                      {h} holes
+                      <div className="text-lg mb-1">{t.icon}</div>
+                      <div className="text-xs font-semibold" style={{ color: knockoutType === t.key ? GREEN : "#374151" }}>{t.label}</div>
+                      <div className="text-[10px] text-gray-400">{t.desc}</div>
                     </button>
                   ))}
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 mt-3">
-                <div className="bg-white rounded-md p-2 text-center border border-green-200">
-                  <div className="text-lg font-bold" style={{ color: GREEN }}>{bracketSize}</div>
-                  <div className="text-[10px] text-gray-500">Players</div>
+              {/* Fixed: 18 holes */}
+              <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-green-200 bg-white">
+                <span className="text-sm">⛳</span>
+                <div>
+                  <div className="text-xs font-semibold text-gray-800">18 Holes per Match</div>
+                  <div className="text-[10px] text-gray-400">All knockout matches are played over 18 holes. Sudden death on the 19th if tied.</div>
                 </div>
-                <div className="bg-white rounded-md p-2 text-center border border-green-200">
-                  <div className="text-lg font-bold" style={{ color: GREEN }}>{Math.log2(bracketSize)}</div>
-                  <div className="text-[10px] text-gray-500">Rounds</div>
+                <div className="ml-auto">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#e8f5ee", color: GREEN }}>Fixed</span>
                 </div>
-                <div className="bg-white rounded-md p-2 text-center border border-green-200">
-                  <div className="text-lg font-bold" style={{ color: GREEN }}>{bracketSize - 1}</div>
-                  <div className="text-[10px] text-gray-500">Matches</div>
+              </div>
+
+              {/* Auto bracket size notice */}
+              <div className="rounded-lg border border-green-200 bg-white p-3">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <div>
+                    <div className="text-xs font-semibold text-gray-800">Bracket Size — Auto Calculated</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">
+                      Bracket size is set automatically from your registered{" "}
+                      {knockoutType === "individual" ? "members" : "teams"} when you publish the draw.
+                    </div>
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full flex-shrink-0" style={{ background: "#e8f5ee", color: GREEN }}>Auto</span>
+                </div>
+
+                {/* Live preview based on simulated membership */}
+                <div className="rounded-lg bg-green-50 border border-green-100 p-3">
+                  <div className="text-[10px] text-gray-500 mb-2 font-medium">
+                    Preview based on {REGISTERED_MEMBERS} registered {knockoutType === "individual" ? "members" : "teams"}:
+                  </div>
+                  <div className="grid grid-cols-4 gap-2">
+                    {[
+                      { label: "Bracket", value: `${bracketSize}-player` },
+                      { label: "Byes",    value: byes > 0 ? String(byes) : "None" },
+                      { label: "Rounds",  value: String(rounds) },
+                      { label: "Matches", value: String(totalMatches) },
+                    ].map(({ label, value }) => (
+                      <div key={label} className="bg-white rounded-md p-2 text-center border border-green-100">
+                        <div className="text-sm font-bold" style={{ color: GREEN }}>{value}</div>
+                        <div className="text-[9px] text-gray-400 mt-0.5">{label}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {byes > 0 && (
+                    <p className="text-[10px] text-gray-400 mt-2">
+                      ⚡ {byes} bye{byes > 1 ? "s" : ""} auto-assigned to top seeds in Round 1.
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {/* Annual draw note */}
+              <div className="flex items-start gap-2 px-3 py-2 rounded-lg border border-amber-200 bg-amber-50">
+                <span className="text-sm mt-0.5">📅</span>
+                <div className="text-[11px] text-amber-800">
+                  <span className="font-semibold">Annual draw — </span>
+                  One knockout draw is published per year. The draw is seeded by handicap index at time of publishing.
                 </div>
               </div>
             </div>
           )}
 
-          {/* Standard format options (non-knockout) */}
+          {/* Standard options (non-knockout) */}
           {!isKnockout && (
             <div className="grid grid-cols-2 gap-3 mb-5">
               <div>
                 <label className="text-xs font-medium text-gray-700 mb-1.5 block">Holes</label>
                 <div className="flex gap-2">
                   {([9, 18] as const).map((h) => (
-                    <button key={h} onClick={() => setHoles(h)}
+                    <button key={h}
                       className="flex-1 py-1.5 rounded-md border text-xs font-semibold"
-                      style={{ borderColor: holes === h ? GREEN : "#d1d5db", background: holes === h ? GREEN : "#fff", color: holes === h ? "#fff" : "#374151" }}>
+                      style={{ borderColor: h === 18 ? GREEN : "#d1d5db", background: h === 18 ? GREEN : "#fff", color: h === 18 ? "#fff" : "#374151" }}>
                       {h}
                     </button>
                   ))}
@@ -189,9 +229,9 @@ export function FormatSelection() {
                 <label className="text-xs font-medium text-gray-700 mb-1.5 block">Rounds</label>
                 <div className="flex gap-2">
                   {[1, 2, 3, 4].map((r) => (
-                    <button key={r} onClick={() => setRounds(r)}
+                    <button key={r}
                       className="flex-1 py-1.5 rounded-md border text-xs font-semibold"
-                      style={{ borderColor: rounds === r ? GREEN : "#d1d5db", background: rounds === r ? GREEN : "#fff", color: rounds === r ? "#fff" : "#374151" }}>
+                      style={{ borderColor: r === 1 ? GREEN : "#d1d5db", background: r === 1 ? GREEN : "#fff", color: r === 1 ? "#fff" : "#374151" }}>
                       {r}
                     </button>
                   ))}

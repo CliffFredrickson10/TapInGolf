@@ -8,10 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
-import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords } from "lucide-react";
+import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -257,9 +256,9 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 }
 
-// ── Detail Sheet ──────────────────────────────────────────────────────────────
+// ── Detail View (full page) ───────────────────────────────────────────────────
 
-function DetailSheet({ ev, onClose, onDeleted, readOnly }: {
+function DetailView({ ev, onClose, onDeleted, readOnly }: {
   ev: KnockoutEvent;
   onClose: () => void;
   onDeleted: () => void;
@@ -281,70 +280,82 @@ function DetailSheet({ ev, onClose, onDeleted, readOnly }: {
   };
 
   return (
-    <Sheet open onOpenChange={o => { if (!o) onClose(); }}>
-      <SheetContent className="w-full max-w-4xl overflow-y-auto p-0" side="right">
-        <SheetHeader className="px-6 pt-6 pb-4 border-b sticky top-0 bg-background z-10">
-          <div className="flex items-start justify-between gap-4">
-            <div className="min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <Trophy className="h-4 w-4 text-[#c8a84b] flex-shrink-0" />
-                <SheetTitle className="text-base leading-tight truncate">{ev.name}</SheetTitle>
-              </div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <StatusBadge ev={ev} />
-                <span className="text-xs text-muted-foreground capitalize">
-                  {ev.knockout_type ?? "individual"} · {ev.knockout_draw_method === "seeded" ? "Seeded" : "Random"} draw
-                </span>
-                {ev.event_date && (
-                  <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                    <CalendarDays className="h-3 w-3" />
-                    {fmtDate(ev.event_date)}{ev.end_date ? ` – ${fmtDate(ev.end_date)}` : ""}
-                  </span>
-                )}
-                <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Users className="h-3 w-3" />
-                  {ev.member_count} members in draw
-                </span>
-              </div>
-            </div>
-            {!readOnly && (
-              <div className="flex-shrink-0">
-                {confirmDelete ? (
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs text-destructive font-medium">Delete tournament?</span>
-                    <Button variant="destructive" size="sm" className="h-7 text-xs" disabled={deleting} onClick={del}>
-                      {deleting ? "Deleting…" : "Confirm"}
-                    </Button>
-                    <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)}>
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
-                    onClick={() => setConfirmDelete(true)}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />Delete
-                  </Button>
-                )}
-              </div>
-            )}
-          </div>
-          {ev.description && (
-            <p className="text-xs text-muted-foreground mt-1">{ev.description}</p>
-          )}
-        </SheetHeader>
+    <div className="flex flex-col min-h-0 h-full">
+      {/* Sticky header */}
+      <div className="sticky top-0 z-10 bg-background border-b px-6 py-3">
+        <div className="flex items-center gap-3">
+          <Button
+            variant="ghost" size="sm"
+            className="h-8 gap-1.5 text-muted-foreground hover:text-foreground -ml-2"
+            onClick={onClose}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            All Tournaments
+          </Button>
 
-        <div className="px-6 pt-4 pb-8">
-          <KnockoutBracketTab
-            eventId={ev.id}
-            eventName={ev.name}
-            approvedCount={ev.member_count}
-            readOnly={readOnly}
-          />
+          <div className="w-px h-4 bg-border" />
+
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <Trophy className="h-4 w-4 text-[#c8a84b] flex-shrink-0" />
+            <span className="font-semibold text-sm truncate">{ev.name}</span>
+            <StatusBadge ev={ev} />
+          </div>
+
+          <div className="flex items-center gap-3 text-xs text-muted-foreground flex-shrink-0">
+            <span className="capitalize hidden sm:inline">
+              {ev.knockout_type ?? "individual"} · {ev.knockout_draw_method === "seeded" ? "Seeded" : "Random"} draw
+            </span>
+            {ev.event_date && (
+              <span className="flex items-center gap-1 hidden md:flex">
+                <CalendarDays className="h-3 w-3" />
+                {fmtDate(ev.event_date)}{ev.end_date ? ` – ${fmtDate(ev.end_date)}` : ""}
+              </span>
+            )}
+            <span className="flex items-center gap-1">
+              <Users className="h-3 w-3" />
+              {ev.member_count} members
+            </span>
+          </div>
+
+          {!readOnly && (
+            <div className="flex-shrink-0 ml-2">
+              {confirmDelete ? (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-destructive font-medium">Delete?</span>
+                  <Button variant="destructive" size="sm" className="h-7 text-xs" disabled={deleting} onClick={del}>
+                    {deleting ? "Deleting…" : "Confirm"}
+                  </Button>
+                  <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setConfirmDelete(false)}>
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
+                  onClick={() => setConfirmDelete(true)}
+                >
+                  <Trash2 className="h-3.5 w-3.5" />Delete
+                </Button>
+              )}
+            </div>
+          )}
         </div>
-      </SheetContent>
-    </Sheet>
+
+        {ev.description && (
+          <p className="text-xs text-muted-foreground mt-1.5 pl-2">{ev.description}</p>
+        )}
+      </div>
+
+      {/* Bracket — fills remaining space */}
+      <div className="flex-1 px-6 pt-4 pb-8 overflow-auto">
+        <KnockoutBracketTab
+          eventId={ev.id}
+          eventName={ev.name}
+          approvedCount={ev.member_count}
+          readOnly={readOnly}
+        />
+      </div>
+    </div>
   );
 }
 
@@ -369,6 +380,35 @@ export default function KnockoutPage() {
 
   useEffect(() => { load(); }, [load]);
 
+  // ── Full-page detail view when a tournament is selected ───────────────────
+  if (selected) {
+    return (
+      <>
+        <DetailView
+          ev={selected}
+          readOnly={readOnly}
+          onClose={() => setSelected(null)}
+          onDeleted={() => { setSelected(null); load(); }}
+        />
+        {createOpen && (
+          <CreateDialog
+            onClose={() => setCreateOpen(false)}
+            onCreated={id => {
+              setCreateOpen(false);
+              load().then(() => {
+                setEvents(evs => {
+                  const found = evs.find(e => e.id === id);
+                  if (found) setSelected(found);
+                  return evs;
+                });
+              });
+            }}
+          />
+        )}
+      </>
+    );
+  }
+
   return (
     <div className="p-6 max-w-5xl mx-auto">
       {/* Header */}
@@ -383,10 +423,7 @@ export default function KnockoutPage() {
           </p>
         </div>
         {!readOnly && (
-          <Button
-            className="bg-[#1a5c38] hover:bg-[#164d30] gap-2"
-            onClick={() => setCreateOpen(true)}
-          >
+          <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setCreateOpen(true)}>
             <Plus className="h-4 w-4" />
             New Tournament
           </Button>
@@ -396,7 +433,7 @@ export default function KnockoutPage() {
       {/* Info strip */}
       <div className="rounded-lg border border-dashed border-[#1a5c38]/30 bg-[#1a5c38]/3 px-4 py-3 mb-6 flex items-start gap-3">
         <Trophy className="h-4 w-4 text-[#c8a84b] mt-0.5 flex-shrink-0" />
-        <div className="text-xs text-muted-foreground space-y-0.5">
+        <div className="text-xs text-muted-foreground">
           <p><span className="font-semibold text-foreground">How it works:</span> Create a tournament → generate the bracket from all active members → publish the draw to notify players → update match results round by round as players complete their matches on any available tee time.</p>
         </div>
       </div>
@@ -437,7 +474,6 @@ export default function KnockoutPage() {
                   <div className="h-10 w-10 rounded-full bg-[#1a5c38]/10 flex items-center justify-center flex-shrink-0">
                     <Trophy className="h-5 w-5 text-[#c8a84b]" />
                   </div>
-
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <p className="font-semibold text-sm truncate">{ev.name}</p>
@@ -472,7 +508,6 @@ export default function KnockoutPage() {
                       <p className="text-xs text-muted-foreground mt-1 truncate">{ev.description}</p>
                     )}
                   </div>
-
                   <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 </div>
               </CardContent>
@@ -481,7 +516,6 @@ export default function KnockoutPage() {
         </div>
       )}
 
-      {/* Dialogs */}
       {createOpen && (
         <CreateDialog
           onClose={() => setCreateOpen(false)}
@@ -495,15 +529,6 @@ export default function KnockoutPage() {
               });
             });
           }}
-        />
-      )}
-
-      {selected && (
-        <DetailSheet
-          ev={selected}
-          readOnly={readOnly}
-          onClose={() => setSelected(null)}
-          onDeleted={() => { setSelected(null); load(); }}
         />
       )}
     </div>

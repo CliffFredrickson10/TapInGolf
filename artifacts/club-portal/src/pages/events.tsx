@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
+import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
 
 // ─── Official DQ Rules ─────────────────────────────────────────────────────
 
@@ -195,6 +196,10 @@ const FORMAT_LABELS: Record<string, string> = {
   pinehurst_points: "Multiplication Betterball (Pinehurst)",
   // Team
   american_scramble: "American Scramble",
+  // Knockout
+  knockout: "Knockout (Match Play Bracket)",
+  knockout_individual: "Knockout — Individual",
+  knockout_team: "Knockout — Team",
   // Other
   other: "Other",
 };
@@ -259,6 +264,7 @@ const EMPTY_FORM = {
   name: "", description: "", event_date: "", end_date: "",
   start_time: "", end_time: "", event_type: "competition",
   format: "gross_stroke_play", format_custom: "", format2: "", format2_custom: "", image_url: "", restriction: "open",
+  knockout_type: "individual" as "individual" | "team", knockout_draw_method: "random" as "random" | "seeded",
   entry_fee: "" as any, max_participants: "" as any,
   entries_open: "", entries_close: "", rounds_per_day: 1 as 1 | 2,
   holes: 18 as 9 | 18,
@@ -1595,8 +1601,9 @@ ${bodyHtml}
 
               <Tabs value={detailTab} onValueChange={setDetailTab} className="px-6 pt-4">
                 {(() => {
-                  const isTeamDtl = isTeamFormatFE(detail.format, detail.format2);
-                  const cols = 5 + (isTeamDtl ? 1 : 0) + (detail.restriction === "invitation_only" ? 1 : 0);
+                  const isTeamDtl    = isTeamFormatFE(detail.format, detail.format2);
+                  const isKnockoutDtl = detail.format?.startsWith("knockout");
+                  const cols = 5 + (isTeamDtl ? 1 : 0) + (detail.restriction === "invitation_only" ? 1 : 0) + (isKnockoutDtl ? 1 : 0);
                   return (
                     <TabsList className={`w-full grid mb-4 h-10 grid-cols-${cols}`}>
                       <TabsTrigger value="registrations" className="text-xs gap-1">
@@ -1617,6 +1624,11 @@ ${bodyHtml}
                         <TabsTrigger value="invites" className="text-xs gap-1">
                           <Send className="h-3.5 w-3.5" />Invites
                           {invites.length > 0 && <span className="ml-0.5 bg-blue-500 text-white text-[10px] rounded-full px-1 py-0.5 font-bold">{invites.length}</span>}
+                        </TabsTrigger>
+                      )}
+                      {isKnockoutDtl && (
+                        <TabsTrigger value="bracket" className="text-xs gap-1">
+                          <Trophy className="h-3.5 w-3.5" />Bracket
                         </TabsTrigger>
                       )}
                     </TabsList>
@@ -2649,6 +2661,18 @@ ${bodyHtml}
                     </div>
                   </TabsContent>
                 )}
+
+                {/* BRACKET TAB — knockout events only */}
+                {detail.format?.startsWith("knockout") && (
+                  <TabsContent value="bracket" className="pb-8">
+                    <KnockoutBracketTab
+                      eventId={detail.id}
+                      eventName={detail.name}
+                      approvedCount={detail.approved_count}
+                      readOnly={readOnly}
+                    />
+                  </TabsContent>
+                )}
               </Tabs>
             </>
           )}
@@ -2936,6 +2960,10 @@ ${bodyHtml}
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
                               <SelectItem value="american_scramble">American Scramble</SelectItem>
                             </SelectGroup>
+                            <SelectGroup><SelectLabel>Knockout (Match Play Bracket)</SelectLabel>
+                              <SelectItem value="knockout_individual">Knockout — Individual</SelectItem>
+                              <SelectItem value="knockout_team">Knockout — Team</SelectItem>
+                            </SelectGroup>
                             <SelectGroup><SelectLabel>Other</SelectLabel>
                               <SelectItem value="other">Other (specify below)</SelectItem>
                             </SelectGroup>
@@ -2983,6 +3011,10 @@ ${bodyHtml}
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
                               <SelectItem value="american_scramble">American Scramble</SelectItem>
                             </SelectGroup>
+                            <SelectGroup><SelectLabel>Knockout (Match Play Bracket)</SelectLabel>
+                              <SelectItem value="knockout_individual">Knockout — Individual</SelectItem>
+                              <SelectItem value="knockout_team">Knockout — Team</SelectItem>
+                            </SelectGroup>
                             <SelectGroup><SelectLabel>Other</SelectLabel>
                               <SelectItem value="other">Other (specify below)</SelectItem>
                             </SelectGroup>
@@ -3002,6 +3034,37 @@ ${bodyHtml}
                           {isGroupFmt ? "Groups of 2–4 players compete together." : "Players compete in pairs."}{" "}
                           Golfers select a partner when registering. Manage pairings from the Pairings tab after publishing.
                         </p>
+                      </div>
+                    )}
+                    {form.format.startsWith("knockout") && (
+                      <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 p-4 space-y-3">
+                        <div className="flex items-center gap-2">
+                          <span className="text-base">🏆</span>
+                          <p className="text-sm font-semibold text-[#1a5c38]">Knockout Tournament Settings</p>
+                        </div>
+                        <p className="text-xs text-muted-foreground">The bracket is auto-sized from confirmed entries. Generate and publish it from the Bracket tab after players have been approved.</p>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Type</Label>
+                            <Select value={form.knockout_type} onValueChange={v => setForm(f => ({ ...f, knockout_type: v as "individual" | "team" }))}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="individual">Individual</SelectItem>
+                                <SelectItem value="team">Team</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Draw method</Label>
+                            <Select value={form.knockout_draw_method} onValueChange={v => setForm(f => ({ ...f, knockout_draw_method: v as "random" | "seeded" }))}>
+                              <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="random">Random draw</SelectItem>
+                                <SelectItem value="seeded">Seeded by handicap</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                        </div>
                       </div>
                     )}
                     <Card className="bg-muted/30">

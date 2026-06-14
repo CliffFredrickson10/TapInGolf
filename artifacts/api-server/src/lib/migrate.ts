@@ -969,6 +969,10 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_required SMALLINT NOT NULL DEFAULT 1");
+  // Knockout tournament config columns
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_type VARCHAR(20)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_draw_method VARCHAR(20) NOT NULL DEFAULT 'random'");
+
   // Widen restriction check to include whs_players_only
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_restriction_check CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only'))");
@@ -1074,6 +1078,42 @@ async function createSchema(): Promise<void> {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_event ON event_invites (event_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_user  ON event_invites (user_id)");
+
+  // ── Knockout tournament bracket ────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS knockout_rounds (
+      id           SERIAL PRIMARY KEY,
+      event_id     INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round_number INT NOT NULL,
+      label        VARCHAR(100) NOT NULL,
+      deadline     DATE,
+      is_complete  SMALLINT NOT NULL DEFAULT 0,
+      created_at   TIMESTAMP DEFAULT NOW(),
+      UNIQUE (event_id, round_number)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_rounds_event ON knockout_rounds (event_id)");
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS knockout_matches (
+      id                   SERIAL PRIMARY KEY,
+      event_id             INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round_id             INT NOT NULL REFERENCES knockout_rounds(id) ON DELETE CASCADE,
+      match_sequence       INT NOT NULL,
+      slot_position        VARCHAR(10) NOT NULL DEFAULT 'top' CHECK (slot_position IN ('top','bottom')),
+      player1_id           INT REFERENCES users(id) ON DELETE SET NULL,
+      player2_id           INT REFERENCES users(id) ON DELETE SET NULL,
+      winner_id            INT REFERENCES users(id) ON DELETE SET NULL,
+      score                VARCHAR(100),
+      next_match_id        INT REFERENCES knockout_matches(id) ON DELETE SET NULL,
+      status               VARCHAR(20) NOT NULL DEFAULT 'pending'
+                             CHECK (status IN ('pending','in_progress','complete','bye')),
+      notification_sent_at TIMESTAMP,
+      created_at           TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_event ON knockout_matches (event_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_round ON knockout_matches (round_id)");
 
   // ── Club bans ──────────────────────────────────────────────────────────────
   // A club can ban a golfer from booking at their club. The golfer is notified

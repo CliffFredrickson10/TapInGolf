@@ -93,6 +93,10 @@ const FORMAT_LABELS: Record<string, string> = {
   pinehurst_points: "Multiplication Betterball (Pinehurst)",
   // Full-Group Team
   american_scramble: "American Scramble",
+  // Knockout
+  knockout: "Knockout",
+  knockout_individual: "Knockout — Individual",
+  knockout_team: "Knockout — Team",
   other: "Other",
 };
 
@@ -161,10 +165,18 @@ export default function EventDetailScreen() {
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [lbLoaded, setLbLoaded] = useState(false);
 
-  const validTabs = ["info", "draw", "scores", "submit"] as const;
-  const [activeTab, setActiveTab] = useState<"info" | "draw" | "scores" | "submit">(
-    validTabs.includes(tab as any) ? (tab as "info" | "draw" | "scores" | "submit") : "info"
+  const validTabs = ["info", "draw", "scores", "submit", "bracket"] as const;
+  const [activeTab, setActiveTab] = useState<"info" | "draw" | "scores" | "submit" | "bracket">(
+    validTabs.includes(tab as any) ? (tab as "info" | "draw" | "scores" | "submit" | "bracket") : "info"
   );
+
+  // Knockout bracket state
+  type KnockoutRound = { id: number; round_number: number; round_name: string; status: string; deadline: string | null };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_number: number; player1_name: string | null; player2_name: string | null; winner_name: string | null; score: string | null; status: string };
+  type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
+  const [bracketData, setBracketData] = useState<BracketData | null>(null);
+  const [bracketLoaded, setBracketLoaded] = useState(false);
+  const [bracketRound, setBracketRound] = useState(1);
 
   // Registration / payment state
   const [registering, setRegistering]     = useState(false);
@@ -222,6 +234,18 @@ export default function EventDetailScreen() {
     } catch {}
   }, [event]);
 
+  const loadBracket = useCallback(async () => {
+    if (!event || bracketLoaded) return;
+    try {
+      const data = await apiFetch(`/events/${event.id}/knockout/bracket`, user?.token);
+      setBracketData(data);
+      setBracketLoaded(true);
+      if (data?.rounds?.length > 0) setBracketRound(data.rounds[0].round_number);
+    } catch {
+      setBracketLoaded(true);
+    }
+  }, [event, bracketLoaded, user?.token]);
+
   useEffect(() => { loadEvent(); }, [loadEvent]);
 
   useEffect(() => {
@@ -231,6 +255,10 @@ export default function EventDetailScreen() {
   useEffect(() => {
     if (activeTab === "scores") loadLeaderboard();
   }, [activeTab, lbLoaded]);
+
+  useEffect(() => {
+    if (activeTab === "bracket" && !bracketLoaded) loadBracket();
+  }, [activeTab, bracketLoaded, loadBracket]);
 
   useEffect(() => {
     if (activeTab === "submit" && !myScoresLoaded && user && event) {
@@ -438,13 +466,22 @@ export default function EventDetailScreen() {
 
       {/* Tabs */}
       <View style={[styles.tabBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        {(["info","draw","scores","submit"] as const).map(t => (
-          <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
-            <Text style={[styles.tabText, { color: activeTab === t ? colors.primary : colors.mutedForeground }]}>
-              {t === "info" ? "Info" : t === "draw" ? "Draw" : t === "scores" ? "Leaderboard" : "Submit Score"}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row" }}>
+          {(["info","draw","scores","submit"] as const).map(t => (
+            <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
+              <Text style={[styles.tabText, { color: activeTab === t ? colors.primary : colors.mutedForeground }]}>
+                {t === "info" ? "Info" : t === "draw" ? "Draw" : t === "scores" ? "Leaderboard" : "Submit Score"}
+              </Text>
+            </TouchableOpacity>
+          ))}
+          {event.format?.startsWith("knockout") && (
+            <TouchableOpacity style={[styles.tab, activeTab === "bracket" && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab("bracket")}>
+              <Text style={[styles.tabText, { color: activeTab === "bracket" ? colors.primary : colors.mutedForeground }]}>
+                🏆 Bracket
+              </Text>
+            </TouchableOpacity>
+          )}
+        </ScrollView>
       </View>
 
       <ScrollView
@@ -1179,6 +1216,111 @@ export default function EventDetailScreen() {
                     </TouchableOpacity>
                   );
                 })()}
+              </>
+            )}
+          </>
+        )}
+
+        {/* ── BRACKET TAB ────────────────────────────────────────────────────── */}
+        {activeTab === "bracket" && (
+          <>
+            {!bracketLoaded ? (
+              <View style={{ flex: 1, justifyContent: "center", alignItems: "center", paddingTop: 40 }}>
+                <ActivityIndicator color={colors.primary} />
+              </View>
+            ) : !bracketData || bracketData.rounds.length === 0 ? (
+              <View style={[styles.emptyCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                <Text style={{ fontSize: 28, textAlign: "center", marginBottom: 8 }}>🏆</Text>
+                <Text style={[styles.emptyText, { color: colors.foreground, fontWeight: "700", textAlign: "center", marginBottom: 4 }]}>Draw not yet published</Text>
+                <Text style={[styles.emptyText, { color: colors.mutedForeground, textAlign: "center" }]}>The bracket will appear here once the club generates and publishes the knockout draw.</Text>
+              </View>
+            ) : (
+              <>
+                {/* Champion banner */}
+                {bracketData.champion && (
+                  <View style={{ backgroundColor: "#c8a84b18", borderRadius: 14, borderWidth: 1, borderColor: "#c8a84b60", padding: 16, marginBottom: 16, alignItems: "center", gap: 4 }}>
+                    <Text style={{ fontSize: 22 }}>🏆</Text>
+                    <Text style={{ fontSize: 13, color: "#92711a", fontWeight: "700" }}>CHAMPION</Text>
+                    <Text style={{ fontSize: 17, color: "#c8a84b", fontWeight: "800" }}>{bracketData.champion}</Text>
+                  </View>
+                )}
+
+                {/* Round selector */}
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+                  {bracketData.rounds.map(r => (
+                    <TouchableOpacity
+                      key={r.id}
+                      onPress={() => setBracketRound(r.round_number)}
+                      style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5,
+                        borderColor: bracketRound === r.round_number ? colors.primary : colors.border,
+                        backgroundColor: bracketRound === r.round_number ? colors.primary + "18" : colors.card }}
+                    >
+                      <Text style={{ fontSize: 13, fontWeight: "700",
+                        color: bracketRound === r.round_number ? colors.primary : colors.mutedForeground }}>
+                        {r.round_name}
+                      </Text>
+                      {r.deadline && (
+                        <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
+                          By {new Date(r.deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+
+                {/* Match cards for selected round */}
+                {bracketData.matches
+                  .filter(m => m.round_number === bracketRound)
+                  .map(m => {
+                    const done = m.status === "completed";
+                    const bye  = !m.player2_name;
+                    return (
+                      <View key={m.id} style={[styles.metaCard, { backgroundColor: colors.card, borderColor: done ? colors.primary + "40" : colors.border, marginBottom: 10, gap: 0 }]}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>Match {m.match_number}</Text>
+                          {done && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>DONE</Text>
+                          </View>}
+                          {!done && !bye && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, color: "#92711a", fontWeight: "700" }}>UPCOMING</Text>
+                          </View>}
+                          {bye && <View style={{ backgroundColor: "#6366f120", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 10, color: "#6366f1", fontWeight: "700" }}>BYE</Text>
+                          </View>}
+                        </View>
+
+                        {/* Player 1 */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7,
+                          backgroundColor: m.winner_name === m.player1_name && done ? colors.primary + "10" : "transparent",
+                          borderRadius: 8, paddingHorizontal: 8 }}>
+                          {m.winner_name === m.player1_name && done && <Ionicons name="trophy" size={14} color="#c8a84b" />}
+                          <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
+                            color: m.winner_name === m.player1_name && done ? colors.primary : colors.foreground }}>
+                            {m.player1_name ?? "TBD"}
+                          </Text>
+                        </View>
+
+                        <Text style={{ textAlign: "center", fontSize: 11, color: colors.mutedForeground, paddingVertical: 2 }}>vs</Text>
+
+                        {/* Player 2 */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7,
+                          backgroundColor: m.winner_name === m.player2_name && done ? colors.primary + "10" : "transparent",
+                          borderRadius: 8, paddingHorizontal: 8 }}>
+                          {m.winner_name === m.player2_name && done && <Ionicons name="trophy" size={14} color="#c8a84b" />}
+                          <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
+                            color: m.winner_name === m.player2_name && done ? colors.primary : colors.foreground }}>
+                            {bye ? "Bye" : (m.player2_name ?? "TBD")}
+                          </Text>
+                        </View>
+
+                        {m.score && (
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 6 }}>
+                            Result: {m.score}
+                          </Text>
+                        )}
+                      </View>
+                    );
+                  })}
               </>
             )}
           </>

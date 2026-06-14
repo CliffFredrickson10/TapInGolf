@@ -20,6 +20,7 @@ import mapRouter from "./map";
 import hnaVerificationRouter from "./hnaVerification";
 import moderationRouter from "./moderation";
 import bansRouter from "./bans";
+import knockoutRouter from "./knockout";
 
 const router: IRouter = Router();
 
@@ -44,5 +45,6 @@ router.use(mapRouter);
 router.use(hnaVerificationRouter);
 router.use(moderationRouter);
 router.use(bansRouter);
+router.use(knockoutRouter);
 
 export default router;

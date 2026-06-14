@@ -38,6 +38,7 @@ const EMPTY_FORM = {
   end_date: "",
   knockout_type: "" as "" | "individual" | "team",
   draw_method: "random" as "random" | "seeded",
+  pairing_deadline: "",
 };
 
 function fmtDate(d: string | null | undefined) {
@@ -79,8 +80,9 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   const [saving, setSaving] = useState(false);
 
   const save = async () => {
-    if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
     if (!form.knockout_type) { toast({ title: "Format is required", description: "Please select Singles or Betterball.", variant: "destructive" }); return; }
+    if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    if (form.knockout_type === "team" && !form.pairing_deadline) { toast({ title: "Partner deadline is required", description: "Set a date by which all players must have chosen their partner.", variant: "destructive" }); return; }
     setSaving(true);
     try {
       const r = await api<{ id: number }>("/api/portal/knockout", {
@@ -158,15 +160,31 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
               </button>
             </div>
 
-            {/* Betterball partner note */}
+            {/* Betterball partner deadline */}
             {isBetterball && (
-              <div className="rounded-lg border border-[#c8a84b]/40 bg-[#c8a84b]/10 px-3 py-2.5 text-xs text-[#92711a]">
-                <p className="font-semibold mb-1">👥 Partner pairing required</p>
-                <ul className="space-y-0.5 list-disc list-inside text-[#92711a]/80">
-                  <li>After creating the tournament, members pair up in the app</li>
-                  <li>Each player must select their partner before the draw is generated</li>
-                  <li>Unpaired players cannot be included in the bracket</li>
-                </ul>
+              <div className="rounded-lg border border-[#c8a84b]/40 bg-[#c8a84b]/10 px-3 py-3 text-xs text-[#92711a] space-y-3">
+                <div>
+                  <p className="font-semibold mb-1">👥 Partner pairing required</p>
+                  <ul className="space-y-0.5 list-disc list-inside text-[#92711a]/80">
+                    <li>After creating the tournament, members pair up in the app</li>
+                    <li>Each player must select their partner before the draw is generated</li>
+                    <li>Unpaired players cannot be included in the bracket</li>
+                  </ul>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-[#92711a]">
+                    Partner selection deadline <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    type="date"
+                    value={form.pairing_deadline}
+                    onChange={e => setForm(f => ({ ...f, pairing_deadline: e.target.value }))}
+                    className="bg-white border-[#c8a84b]/50 focus-visible:ring-[#c8a84b]"
+                  />
+                  <p className="text-[10px] text-[#92711a]/70">
+                    Players who have not chosen a partner by this date will be excluded from the draw.
+                  </p>
+                </div>
               </div>
             )}
           </div>
@@ -228,7 +246,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
           <Button
             size="sm"
             className="bg-[#1a5c38] hover:bg-[#164d30]"
-            disabled={saving || !form.knockout_type}
+            disabled={saving || !form.knockout_type || (form.knockout_type === "team" && !form.pairing_deadline)}
             onClick={save}
           >
             {saving ? "Creating…" : "Create Tournament"}

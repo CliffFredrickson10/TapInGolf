@@ -5,6 +5,7 @@ export const modules: ModuleMap = {
   "./components/mockups/ads/StaffAds.tsx": () => import("../components/mockups/ads/StaffAds.tsx"),
   "./components/mockups/knockout/BracketView.tsx": () => import("../components/mockups/knockout/BracketView.tsx"),
   "./components/mockups/knockout/FormatSelection.tsx": () => import("../components/mockups/knockout/FormatSelection.tsx"),
+  "./components/mockups/knockout/PublishDraw.tsx": () => import("../components/mockups/knockout/PublishDraw.tsx"),
   "./components/mockups/knockout/ScoreEntry.tsx": () => import("../components/mockups/knockout/ScoreEntry.tsx"),
   "./components/mockups/shotgun/ShotgunCreation.tsx": () => import("../components/mockups/shotgun/ShotgunCreation.tsx"),
   "./components/mockups/shotgun/ShotgunDraw.tsx": () => import("../components/mockups/shotgun/ShotgunDraw.tsx")

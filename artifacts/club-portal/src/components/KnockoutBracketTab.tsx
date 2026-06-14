@@ -348,14 +348,15 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const [showGenerate, setShowGenerate] = useState(false);
   const [publishing, setPublishing]     = useState(false);
   const [showPrintMenu, setShowPrintMenu] = useState(false);
+  const [fitToPage, setFitToPage]         = useState(true);
 
-  // Paper sizes (landscape) — available print width in px at 96dpi with 10mm margins
+  // Paper sizes (landscape) — available print area in px at 96dpi with 10mm margins each side
   const PRINT_SIZES = [
-    { key: "A4", label: "A4",  css: "A4",  pxW: 1047, desc: "210 × 297mm — desktop printer" },
-    { key: "A3", label: "A3",  css: "A3",  pxW: 1512, desc: "297 × 420mm — large desktop / office" },
-    { key: "A2", label: "A2",  css: "A2",  pxW: 2170, desc: "420 × 594mm — print shop" },
-    { key: "A1", label: "A1",  css: "A1",  pxW: 3103, desc: "594 × 841mm — poster" },
-    { key: "A0", label: "A0",  css: "A0",  pxW: 4419, desc: "841 × 1189mm — noticeboard banner" },
+    { key: "A4", label: "A4", css: "A4", pxW: 1047, pxH: 718,  desc: "210 × 297mm — desktop printer" },
+    { key: "A3", label: "A3", css: "A3", pxW: 1512, pxH: 1047, desc: "297 × 420mm — large desktop / office" },
+    { key: "A2", label: "A2", css: "A2", pxW: 2170, pxH: 1512, desc: "420 × 594mm — print shop" },
+    { key: "A1", label: "A1", css: "A1", pxW: 3103, pxH: 2170, desc: "594 × 841mm — poster" },
+    { key: "A0", label: "A0", css: "A0", pxW: 4419, pxH: 3103, desc: "841 × 1189mm — noticeboard banner" },
   ] as const;
 
   const load = useCallback(async () => {
@@ -393,8 +394,12 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
     const cW      = nRounds * (CARD_W + COL_GAP) + 130;
     const today   = new Date().toLocaleDateString("en-ZA", { day: "2-digit", month: "long", year: "numeric" });
 
-    // Scale bracket to fit chosen paper size
-    const scale   = Math.min(1, size.pxW / cW);
+    // Total content height: page header (~60px) + legend (~28px) + round headers + bracket
+    const totalContentH = 60 + 28 + HEADER_H + 8 + cH;
+    // Scale to fit chosen paper — width-only or both dimensions (fit to 1 page)
+    const scaleW  = size.pxW / cW;
+    const scaleH  = size.pxH / totalContentH;
+    const scale   = fitToPage ? Math.min(scaleW, scaleH) : Math.min(1, scaleW);
 
     // ── SVG connector lines ───────────────────────────────────────────────────
     let svgLines = "";
@@ -633,8 +638,17 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
           </button>
           {showPrintMenu && (
             <div style={{ position: "absolute", top: "calc(100% + 4px)", right: 0, zIndex: 50, background: "#fff", border: "1px solid #e5e7eb", borderRadius: 10, boxShadow: "0 4px 16px rgba(0,0,0,.12)", minWidth: 240, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px 6px", fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".5px", borderBottom: "1px solid #f3f4f6" }}>
-                Paper size (landscape)
+                <div style={{ padding: "8px 12px", borderBottom: "1px solid #f3f4f6", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <span style={{ fontSize: 10, fontWeight: 700, color: "#9ca3af", textTransform: "uppercase", letterSpacing: ".5px" }}>Paper size (landscape)</span>
+                <label style={{ display: "flex", alignItems: "center", gap: 5, cursor: "pointer", fontSize: 10, fontWeight: 600, color: fitToPage ? GREEN : "#6b7280", whiteSpace: "nowrap" }}>
+                  <input
+                    type="checkbox"
+                    checked={fitToPage}
+                    onChange={e => setFitToPage(e.target.checked)}
+                    style={{ accentColor: GREEN, width: 13, height: 13, cursor: "pointer" }}
+                  />
+                  Fit to 1 page
+                </label>
               </div>
               {PRINT_SIZES.map(sz => (
                 <button

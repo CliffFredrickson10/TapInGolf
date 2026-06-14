@@ -70638,6 +70638,32 @@ router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res)
     }
     prevRoundMatchIds = thisIds;
   }
+  if (byes > 0) {
+    const byeMatches = await query(
+      "SELECT * FROM knockout_matches WHERE event_id = ? AND status = 'bye'",
+      [evId]
+    );
+    for (const bm of byeMatches) {
+      await run(
+        "UPDATE knockout_matches SET winner_id = player1_id, status = 'complete' WHERE id = ?",
+        [bm.id]
+      );
+      if (bm.next_match_id && bm.player1_id) {
+        const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [bm.next_match_id]);
+        if (nxt) {
+          const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+          await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [bm.player1_id, bm.next_match_id]);
+        }
+      }
+    }
+    const r1Matches = await query(
+      "SELECT status FROM knockout_matches WHERE round_id = ?",
+      [r1RoundId]
+    );
+    if (r1Matches.every((m) => m.status === "complete" || m.status === "bye")) {
+      await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [r1RoundId]);
+    }
+  }
   res.json({
     ok: true,
     bracket_size: size,

@@ -184,6 +184,39 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
     prevRoundMatchIds = thisIds;
   }
 
+  // ── Auto-advance bye matches ───────────────────────────────────────────────
+  // Bye players have no opponent — mark them complete immediately and
+  // populate their winner into the Round 2 match so the draw is fully visible.
+  if (byes > 0) {
+    const byeMatches = await query<any>(
+      "SELECT * FROM knockout_matches WHERE event_id = ? AND status = 'bye'",
+      [evId]
+    );
+    for (const bm of byeMatches) {
+      // Complete the bye match with player1 as automatic winner
+      await run(
+        "UPDATE knockout_matches SET winner_id = player1_id, status = 'complete' WHERE id = ?",
+        [bm.id]
+      );
+      // Advance winner into the next match (p1 slot if empty, else p2)
+      if (bm.next_match_id && bm.player1_id) {
+        const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [bm.next_match_id]);
+        if (nxt) {
+          const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+          await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [bm.player1_id, bm.next_match_id]);
+        }
+      }
+    }
+    // Mark Round 1 as complete (all bye + real matches will be complete or pending)
+    const r1Matches = await query<any>(
+      "SELECT status FROM knockout_matches WHERE round_id = ?",
+      [r1RoundId]
+    );
+    if (r1Matches.every((m: any) => m.status === "complete" || m.status === "bye")) {
+      await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [r1RoundId]);
+    }
+  }
+
   res.json({
     ok: true,
     bracket_size: size,

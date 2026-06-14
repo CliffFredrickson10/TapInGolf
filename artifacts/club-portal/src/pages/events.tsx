@@ -16,10 +16,11 @@ import { Switch } from "@/components/ui/switch";
 import {
   Plus, Pencil, Trash2, Calendar, Users, Trophy, ChevronRight, Check,
   CheckCircle, XCircle, Clock, CreditCard, ListOrdered, BarChart2, Send, ImageIcon, X,
-  AlertTriangle, BookmarkPlus, Loader2, Shuffle, UserPlus, Printer,
+  AlertTriangle, BookmarkPlus, Loader2, Shuffle, UserPlus, Printer, Swords,
 } from "lucide-react";
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
+import KnockoutPage from "@/pages/knockout";
 
 // ─── Official DQ Rules ─────────────────────────────────────────────────────
 
@@ -280,6 +281,7 @@ export default function Events() {
 
   const [events, setEvents]     = useState<GolfEvent[]>([]);
   const [loading, setLoading]   = useState(true);
+  const [pageTab, setPageTab] = useState<"tournaments" | "knockout">("tournaments");
   const [eventsTab, setEventsTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
 
   // Detail sheet
@@ -1438,7 +1440,28 @@ ${bodyHtml}
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8 space-y-6">
+    <div>
+      {/* Page-level tab switcher */}
+      <div className="px-8 pt-6 flex gap-1 border-b">
+        {(["tournaments", "knockout"] as const).map(tab => (
+          <button
+            key={tab}
+            onClick={() => setPageTab(tab)}
+            className={`px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 ${pageTab === tab ? "border-[#1a5c38] text-[#1a5c38]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {tab === "tournaments" ? (
+              <><Calendar className="h-3.5 w-3.5" />Tournaments</>
+            ) : (
+              <><Swords className="h-3.5 w-3.5" />Knockout</>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {pageTab === "knockout" ? (
+        <KnockoutPage />
+      ) : (
+      <div className="p-8 space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div>
@@ -4092,6 +4115,8 @@ ${bodyHtml}
           </div>
         </DialogContent>
       </Dialog>
+      </div>
+      )}
     </div>
   );
 }

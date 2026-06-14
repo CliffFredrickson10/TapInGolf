@@ -191,7 +191,7 @@ function DeadlineDialog({ round, eventId, onClose, onSaved }: { round: KnockoutR
   const save = async () => {
     setSaving(true);
     try {
-      await api(`/portal/knockout/${eventId}/rounds/${round.id}`, { method: "PUT", body: JSON.stringify({ deadline: deadline || null }) });
+      await api(`/api/portal/knockout/${eventId}/rounds/${round.id}`, { method: "PUT", body: JSON.stringify({ deadline: deadline || null }) });
       toast({ title: "Deadline saved" });
       onSaved();
     } catch (e: any) {
@@ -228,7 +228,7 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
     if (!winnerId) { toast({ title: "Select a winner", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      await api(`/portal/knockout/${eventId}/matches/${match.id}`, {
+      await api(`/api/portal/knockout/${eventId}/matches/${match.id}`, {
         method: "PUT",
         body: JSON.stringify({ winner_id: Number(winnerId), score: score.trim() || null }),
       });
@@ -283,7 +283,7 @@ function GenerateDialog({ eventId, approvedCount, onClose, onGenerated }: { even
   const generate = async () => {
     setGenerating(true);
     try {
-      await api(`/portal/knockout/${eventId}/generate`, {
+      await api(`/api/portal/knockout/${eventId}/generate`, {
         method: "POST",
         body: JSON.stringify({ draw_method: drawMethod, knockout_type: knockoutType }),
       });
@@ -351,7 +351,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await api(`/portal/knockout/${eventId}/bracket`);
+      const d = await api(`/api/portal/knockout/${eventId}/bracket`);
       setData(d);
     } catch {
       setData(null);
@@ -363,7 +363,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const publish = async () => {
     setPublishing(true);
     try {
-      const r = await api(`/portal/knockout/${eventId}/publish`, { method: "POST" });
+      const r = await api(`/api/portal/knockout/${eventId}/publish`, { method: "POST" });
       toast({ title: "Draw published", description: `Notified ${r.notified} players.` });
       load();
     } catch (e: any) {

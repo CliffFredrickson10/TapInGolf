@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router23;
+    module.exports = Router24;
     module.exports.Route = Route;
-    function Router23(options) {
-      if (!(this instanceof Router23)) {
-        return new Router23(options);
+    function Router24(options) {
+      if (!(this instanceof Router24)) {
+        return new Router24(options);
       }
       const opts = options || {};
-      function router23(req, res, next) {
-        router23.handle(req, res, next);
+      function router24(req, res, next) {
+        router24.handle(req, res, next);
       }
-      Object.setPrototypeOf(router23, this);
-      router23.caseSensitive = opts.caseSensitive;
-      router23.mergeParams = opts.mergeParams;
-      router23.params = {};
-      router23.strict = opts.strict;
-      router23.stack = [];
-      return router23;
+      Object.setPrototypeOf(router24, this);
+      router24.caseSensitive = opts.caseSensitive;
+      router24.mergeParams = opts.mergeParams;
+      router24.params = {};
+      router24.strict = opts.strict;
+      router24.stack = [];
+      return router24;
     }
-    Router23.prototype = function() {
+    Router24.prototype = function() {
     };
-    Router23.prototype.param = function param(name, fn) {
+    Router24.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router23.prototype.handle = function handle(req, res, callback) {
+    Router24.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router23.prototype.use = function use(handler) {
+    Router24.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router23.prototype.route = function route(path4) {
+    Router24.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router23.prototype[method] = function(path4) {
+      Router24.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router23 = require_router();
+    var Router24 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router23 = null;
+      var router24 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router23 === null) {
-            router23 = new Router23({
+          if (router24 === null) {
+            router24 = new Router24({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router23;
+          return router24;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router23 = this.router;
+      var router24 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router23.use(path4, fn2);
+          return router24.use(path4, fn2);
         }
         debug(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router23.use(path4, function mounted_app(req, res, next) {
+        router24.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router23 = require_router();
+    var Router24 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router23.Route;
-    exports.Router = Router23;
+    exports.Route = Router24.Route;
+    exports.Router = Router24;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -53329,7 +53329,7 @@ var init_autoTeeGen = __esm({
 });
 
 // src/app.ts
-var import_express23 = __toESM(require_express2(), 1);
+var import_express24 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
@@ -53337,7 +53337,7 @@ import fs from "fs";
 import { fileURLToPath } from "url";
 
 // src/routes/index.ts
-var import_express22 = __toESM(require_express2(), 1);
+var import_express23 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -70460,35 +70460,389 @@ router21.post("/bans/:id/appeal", async (req, res) => {
 });
 var bans_default = router21;
 
-// src/routes/index.ts
+// src/routes/knockout.ts
+var import_express22 = __toESM(require_express2(), 1);
+init_pg();
+init_logger();
 var router22 = (0, import_express22.Router)();
-router22.use(health_default);
-router22.use(auth_default);
-router22.use(geofencing_default);
-router22.use(clubs_default);
-router22.use(bookings_default);
-router22.use(friends_default);
-router22.use(ads_default);
-router22.use(messages_default);
-router22.use(vouchers_default);
-router22.use(cancellationVouchers_default);
-router22.use(admin_default);
-router22.use(notifications_default);
-router22.use(events_default);
-router22.use(portal_default);
-router22.use(storage_default);
-router22.use(payments_default);
-router22.use(settings_default);
-router22.use(map_default);
-router22.use(hnaVerification_default);
-router22.use(moderation_default);
-router22.use(bans_default);
-var routes_default = router22;
+function getRoundLabels(totalRounds) {
+  const labels = [];
+  for (let r = 1; r <= totalRounds; r++) {
+    const matchesInRound = Math.pow(2, totalRounds - r);
+    if (matchesInRound === 1) labels.push("Final");
+    else if (matchesInRound === 2) labels.push("Semi-Finals");
+    else if (matchesInRound === 4) labels.push("Quarter-Finals");
+    else labels.push(`Round of ${matchesInRound * 2}`);
+  }
+  return labels;
+}
+router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const events = await query(
+    `SELECT ge.*,
+            (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
+            (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
+            (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
+             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label
+     FROM golf_events ge
+     WHERE ge.club_id = ? AND (ge.format = 'knockout_individual' OR ge.format = 'knockout_team')
+     ORDER BY ge.event_date DESC NULLS LAST, ge.created_at DESC`,
+    [club.id]
+  );
+  res.json({ events });
+});
+router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description } = req.body ?? {};
+  if (!name?.trim()) {
+    res.status(400).json({ message: "Name is required" });
+    return;
+  }
+  const format = knockout_type === "team" ? "knockout_team" : "knockout_individual";
+  const id = await exec(
+    `INSERT INTO golf_events
+       (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
+        status, scoring_enabled, entries_required, payment_required)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0)`,
+    [
+      club.id,
+      name.trim(),
+      description?.trim() ?? null,
+      event_date || null,
+      end_date || null,
+      format,
+      knockout_type,
+      draw_method
+    ]
+  );
+  res.json({ id });
+});
+router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT id FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  await run("DELETE FROM golf_events WHERE id = ?", [evId]);
+  res.json({ ok: true });
+});
+router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT * FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const { draw_method = ev.knockout_draw_method ?? "random", round_deadlines = [] } = req.body ?? {};
+  const members = await query(
+    `SELECT u.id as user_id, u.name, u.handicap_index
+     FROM club_members cm
+     JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active'
+     ORDER BY cm.created_at ASC`,
+    [club.id]
+  );
+  if (members.length < 2) {
+    res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
+    return;
+  }
+  const bracketSize = Math.pow(2, Math.ceil(Math.log2(Math.max(members.length, 2))));
+  const totalRounds = Math.log2(bracketSize);
+  const byeCount = bracketSize - members.length;
+  let players = [...members];
+  if (draw_method === "seeded") {
+    players.sort((a, b) => (a.handicap_index ?? 99) - (b.handicap_index ?? 99));
+    const seeded = [];
+    let lo = 0, hi = players.length - 1;
+    while (lo <= hi) {
+      seeded.push(players[lo++]);
+      if (lo <= hi) seeded.push(players[hi--]);
+    }
+    players = seeded;
+  } else {
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+  }
+  const slots = [...players, ...Array(byeCount).fill(null)];
+  await run("DELETE FROM knockout_rounds WHERE event_id = ?", [evId]);
+  await run("UPDATE golf_events SET knockout_draw_method = ? WHERE id = ?", [draw_method, evId]);
+  const roundLabels = getRoundLabels(totalRounds);
+  const roundIds = [];
+  for (let r = 0; r < totalRounds; r++) {
+    const deadline = round_deadlines[r] ?? null;
+    const roundId = await exec(
+      "INSERT INTO knockout_rounds (event_id, round_number, label, deadline) VALUES (?, ?, ?, ?)",
+      [evId, r + 1, roundLabels[r], deadline]
+    );
+    roundIds.push(roundId);
+  }
+  const r1MatchIds = [];
+  const matchCount = bracketSize / 2;
+  for (let m = 0; m < matchCount; m++) {
+    const p1 = slots[m * 2] ?? null;
+    const p2 = slots[m * 2 + 1] ?? null;
+    const isBye = !p1 || !p2;
+    const status = isBye ? "bye" : "pending";
+    const winner = isBye ? p1?.user_id ?? p2?.user_id ?? null : null;
+    const mid = await exec(
+      `INSERT INTO knockout_matches (event_id, round_id, match_sequence, player1_id, player2_id, winner_id, status, slot_position)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      [evId, roundIds[0], m, p1?.user_id ?? null, p2?.user_id ?? null, winner, status, m % 2 === 0 ? "top" : "bottom"]
+    );
+    r1MatchIds.push(mid);
+  }
+  let prevRoundMatchIds = r1MatchIds;
+  for (let r = 1; r < totalRounds; r++) {
+    const count = bracketSize / Math.pow(2, r + 1);
+    const thisIds = [];
+    for (let m = 0; m < count; m++) {
+      const mid = await exec(
+        `INSERT INTO knockout_matches (event_id, round_id, match_sequence, status, slot_position)
+         VALUES (?, ?, ?, 'pending', ?)`,
+        [evId, roundIds[r], m, m % 2 === 0 ? "top" : "bottom"]
+      );
+      thisIds.push(mid);
+      const f1 = prevRoundMatchIds[m * 2];
+      const f2 = prevRoundMatchIds[m * 2 + 1];
+      if (f1 != null) await run("UPDATE knockout_matches SET next_match_id = ? WHERE id = ?", [mid, f1]);
+      if (f2 != null) await run("UPDATE knockout_matches SET next_match_id = ? WHERE id = ?", [mid, f2]);
+    }
+    prevRoundMatchIds = thisIds;
+  }
+  const byeMatches = await query(
+    "SELECT * FROM knockout_matches WHERE event_id = ? AND status = 'bye' AND winner_id IS NOT NULL AND next_match_id IS NOT NULL",
+    [evId]
+  );
+  for (const bm of byeMatches) {
+    const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [bm.next_match_id]);
+    if (nxt) {
+      const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+      await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [bm.winner_id, bm.next_match_id]);
+    }
+  }
+  res.json({ ok: true, bracket_size: bracketSize, total_rounds: totalRounds, bye_count: byeCount, member_count: members.length });
+});
+router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT * FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
+  const matches = await query(
+    `SELECT km.*,
+            p1.name as player1_name, p1.handicap_index as player1_handicap,
+            p2.name as player2_name, p2.handicap_index as player2_handicap,
+            w.name as winner_name
+     FROM knockout_matches km
+     LEFT JOIN users p1 ON p1.id = km.player1_id
+     LEFT JOIN users p2 ON p2.id = km.player2_id
+     LEFT JOIN users w  ON w.id  = km.winner_id
+     WHERE km.event_id = ?
+     ORDER BY km.round_id ASC, km.match_sequence ASC`,
+    [evId]
+  );
+  const finalMatch = matches[matches.length - 1];
+  const champion = finalMatch?.status === "complete" ? finalMatch.winner_name ?? null : null;
+  res.json({
+    event: {
+      id: ev.id,
+      name: ev.name,
+      format: ev.format,
+      knockout_type: ev.knockout_type,
+      knockout_draw_method: ev.knockout_draw_method
+    },
+    rounds: rounds.map((r) => ({
+      ...r,
+      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null,
+      matches: matches.filter((m) => m.round_id === r.id)
+    })),
+    champion
+  });
+});
+router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const matchId = Number(req.params.matchId);
+  const ev = await row(
+    "SELECT id FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const match = await row("SELECT * FROM knockout_matches WHERE id = ? AND event_id = ?", [matchId, evId]);
+  if (!match) {
+    res.status(404).json({ message: "Match not found" });
+    return;
+  }
+  const { winner_id, score } = req.body ?? {};
+  await run(
+    "UPDATE knockout_matches SET winner_id = ?, score = ?, status = 'complete' WHERE id = ?",
+    [winner_id ?? null, score ?? null, matchId]
+  );
+  if (winner_id && match.next_match_id) {
+    const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+    if (nxt) {
+      const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+      await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winner_id, match.next_match_id]);
+    }
+  }
+  const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+  if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
+    await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+  }
+  res.json({ ok: true });
+});
+router22.put("/portal/knockout/:id/rounds/:roundId", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const roundId = Number(req.params.roundId);
+  const ev = await row(
+    "SELECT id FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const { deadline } = req.body ?? {};
+  await run("UPDATE knockout_rounds SET deadline = ? WHERE id = ? AND event_id = ?", [deadline ?? null, roundId, evId]);
+  res.json({ ok: true });
+});
+router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT * FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const round1 = await row("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1", [evId]);
+  if (!round1) {
+    res.status(400).json({ message: "Bracket not generated yet" });
+    return;
+  }
+  const matches = await query(
+    `SELECT km.*,
+            p1.name as player1_name, p1.push_token as player1_push,
+            p2.name as player2_name, p2.push_token as player2_push
+     FROM knockout_matches km
+     LEFT JOIN users p1 ON p1.id = km.player1_id
+     LEFT JOIN users p2 ON p2.id = km.player2_id
+     WHERE km.round_id = ? AND km.status != 'bye'`,
+    [round1.id]
+  );
+  let notified = 0;
+  const deadline = round1.deadline ? ` by ${String(round1.deadline).slice(0, 10)}` : "";
+  for (const m of matches) {
+    const pairs = [
+      [m.player1_push, m.player2_name ?? "TBD"],
+      [m.player2_push, m.player1_name ?? "TBD"]
+    ];
+    for (const [token, opponent] of pairs) {
+      if (token) {
+        try {
+          await fetch("https://exp.host/--/api/v2/push/send", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              to: token,
+              title: `${ev.name} \u2014 Draw Published`,
+              body: `You play ${opponent} in Round 1${deadline}. Tap to view your bracket.`,
+              data: { eventId: evId, tab: "bracket" }
+            })
+          });
+          notified++;
+        } catch (e) {
+          logger.warn({ err: e }, "Knockout push notification failed");
+        }
+      }
+    }
+    await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [m.id]);
+  }
+  res.json({ ok: true, notified });
+});
+router22.get("/events/:id/knockout/bracket", async (req, res) => {
+  const evId = Number(req.params.id);
+  const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
+  const matches = await query(
+    `SELECT km.id, km.round_id, km.match_sequence, km.slot_position, km.status, km.score,
+            km.player1_id, p1.name as player1_name,
+            km.player2_id, p2.name as player2_name,
+            km.winner_id, w.name as winner_name,
+            km.next_match_id, km.notification_sent_at
+     FROM knockout_matches km
+     LEFT JOIN users p1 ON p1.id = km.player1_id
+     LEFT JOIN users p2 ON p2.id = km.player2_id
+     LEFT JOIN users w  ON w.id  = km.winner_id
+     WHERE km.event_id = ?
+     ORDER BY km.round_id ASC, km.match_sequence ASC`,
+    [evId]
+  );
+  const finalMatch = matches[matches.length - 1];
+  const champion = finalMatch?.status === "complete" ? finalMatch.winner_name ?? null : null;
+  res.json({
+    rounds: rounds.map((r) => ({
+      ...r,
+      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null
+    })),
+    matches,
+    champion
+  });
+});
+var knockout_default = router22;
+
+// src/routes/index.ts
+var router23 = (0, import_express23.Router)();
+router23.use(health_default);
+router23.use(auth_default);
+router23.use(geofencing_default);
+router23.use(clubs_default);
+router23.use(bookings_default);
+router23.use(friends_default);
+router23.use(ads_default);
+router23.use(messages_default);
+router23.use(vouchers_default);
+router23.use(cancellationVouchers_default);
+router23.use(admin_default);
+router23.use(notifications_default);
+router23.use(events_default);
+router23.use(portal_default);
+router23.use(storage_default);
+router23.use(payments_default);
+router23.use(settings_default);
+router23.use(map_default);
+router23.use(hnaVerification_default);
+router23.use(moderation_default);
+router23.use(bans_default);
+router23.use(knockout_default);
+var routes_default = router23;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path3.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express23.default)();
+var app = (0, import_express24.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -70509,11 +70863,11 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express23.default.raw({ type: "*/*" }));
-app.use(import_express23.default.json());
-app.use(import_express23.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express24.default.raw({ type: "*/*" }));
+app.use(import_express24.default.json());
+app.use(import_express24.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express23.default.static(logosDir));
+app.use("/api/logos", import_express24.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
@@ -70528,7 +70882,7 @@ app.get("/api/presentation", servePresentation);
 app.use("/api", routes_default);
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express23.default.static(clientDir));
+  app.use(import_express24.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path3.join(clientDir, "index.html"));
   });
@@ -71395,6 +71749,8 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS allow_voucher SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS image_url VARCHAR(500)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS entries_required SMALLINT NOT NULL DEFAULT 1");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_type VARCHAR(20)");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_draw_method VARCHAR(20) NOT NULL DEFAULT 'random'");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_restriction_check CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only'))");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");
@@ -71480,6 +71836,39 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_event ON event_invites (event_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_event_invites_user  ON event_invites (user_id)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS knockout_rounds (
+      id           SERIAL PRIMARY KEY,
+      event_id     INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round_number INT NOT NULL,
+      label        VARCHAR(100) NOT NULL,
+      deadline     DATE,
+      is_complete  SMALLINT NOT NULL DEFAULT 0,
+      created_at   TIMESTAMP DEFAULT NOW(),
+      UNIQUE (event_id, round_number)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_rounds_event ON knockout_rounds (event_id)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS knockout_matches (
+      id                   SERIAL PRIMARY KEY,
+      event_id             INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      round_id             INT NOT NULL REFERENCES knockout_rounds(id) ON DELETE CASCADE,
+      match_sequence       INT NOT NULL,
+      slot_position        VARCHAR(10) NOT NULL DEFAULT 'top' CHECK (slot_position IN ('top','bottom')),
+      player1_id           INT REFERENCES users(id) ON DELETE SET NULL,
+      player2_id           INT REFERENCES users(id) ON DELETE SET NULL,
+      winner_id            INT REFERENCES users(id) ON DELETE SET NULL,
+      score                VARCHAR(100),
+      next_match_id        INT REFERENCES knockout_matches(id) ON DELETE SET NULL,
+      status               VARCHAR(20) NOT NULL DEFAULT 'pending'
+                             CHECK (status IN ('pending','in_progress','complete','bye')),
+      notification_sent_at TIMESTAMP,
+      created_at           TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_event ON knockout_matches (event_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_round ON knockout_matches (round_id)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_bans (
       id               SERIAL PRIMARY KEY,

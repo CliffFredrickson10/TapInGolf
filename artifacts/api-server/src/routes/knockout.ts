@@ -1,7 +1,6 @@
 import { Router, type Request, type Response } from "express";
 import { query, row, exec, run } from "../lib/pg";
 import { requireClubAuth, getClub } from "../lib/portalAuth";
-import { requireAuth } from "../lib/auth";
 import { logger } from "../lib/logger";
 
 const router = Router();
@@ -340,7 +339,7 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
 });
 
 // ── Public bracket (mobile) ───────────────────────────────────────────────────
-router.get("/events/:id/knockout/bracket", requireAuth, async (req: Request, res: Response): Promise<void> => {
+router.get("/events/:id/knockout/bracket", async (req: Request, res: Response): Promise<void> => {
   const evId = Number(req.params.id);
 
   const rounds  = await query<any>("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);

@@ -194,7 +194,7 @@ function DetailSheet({ ev, onClose, onDeleted, readOnly }: {
   const del = async () => {
     setDeleting(true);
     try {
-      await api(`/portal/knockout/${ev.id}`, { method: "DELETE" });
+      await api(`/api/portal/knockout/${ev.id}`, { method: "DELETE" });
       toast({ title: "Tournament deleted" });
       onDeleted();
     } catch (e: any) {

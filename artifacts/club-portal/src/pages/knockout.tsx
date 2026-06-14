@@ -82,7 +82,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
     if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
     setSaving(true);
     try {
-      const r = await api<{ id: number }>("/portal/knockout", {
+      const r = await api<{ id: number }>("/api/portal/knockout", {
         method: "POST",
         body: JSON.stringify(form),
       });
@@ -282,7 +282,7 @@ export default function KnockoutPage() {
 
   const load = useCallback(async () => {
     try {
-      const r = await api<{ events: KnockoutEvent[] }>("/portal/knockout");
+      const r = await api<{ events: KnockoutEvent[] }>("/api/portal/knockout");
       setEvents(r.events ?? []);
     } catch (e: any) {
       toast({ title: "Error loading tournaments", description: e.message, variant: "destructive" });

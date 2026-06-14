@@ -70647,8 +70647,8 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
   const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
   const matches = await query(
     `SELECT km.*,
-            p1.name as player1_name, p1.handicap_index as player1_handicap,
-            p2.name as player2_name, p2.handicap_index as player2_handicap,
+            p1.name as player1_name, p1.handicap as player1_handicap,
+            p2.name as player2_name, p2.handicap as player2_handicap,
             w.name as winner_name
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id

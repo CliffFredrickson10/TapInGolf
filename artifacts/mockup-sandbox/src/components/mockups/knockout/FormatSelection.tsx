@@ -160,7 +160,7 @@ export function FormatSelection() {
                 <span className="text-sm">⛳</span>
                 <div>
                   <div className="text-xs font-semibold text-gray-800">18 Holes per Match</div>
-                  <div className="text-[10px] text-gray-400">All knockout matches are played over 18 holes. Sudden death on the 19th if tied.</div>
+                  <div className="text-[10px] text-gray-400">All knockout matches are played over 18 holes. Sudden death on the 18th if tied.</div>
                 </div>
                 <div className="ml-auto">
                   <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: "#e8f5ee", color: GREEN }}>Fixed</span>

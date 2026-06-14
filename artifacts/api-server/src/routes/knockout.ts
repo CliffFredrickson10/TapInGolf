@@ -101,20 +101,23 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
 
   if (members.length < 2) { res.status(400).json({ message: "Need at least 2 active members to generate a bracket" }); return; }
 
-  // ── Standard bye-based bracket sizing ────────────────────────────────────
-  // Round up to the next power of 2; fill the gap with bye slots in R1.
-  // e.g. 66 players → bracket size 128, 62 byes in R1.
+  // ── Bracket sizing ────────────────────────────────────────────────────────
+  // Use the largest power-of-2 ≤ N as the main bracket (e.g. 64 for N=66).
+  // The `extra` overflow players compete in a short Qualifying round first;
+  // their winners fill the remaining slots in the main bracket.
+  // e.g. 66 players → base=64, extra=2 → 2 qualifying matches (4 players),
+  //   62 players advance directly (they are the "byes"), Round of 64 = 32 matches.
   const N = members.length;
-  const k = Math.ceil(Math.log2(Math.max(N, 2)));
-  const size = Math.pow(2, k);          // next power of 2 ≥ N
-  const byes = size - N;                // how many bye slots in R1
-  const totalRounds = k;
+  const k = Math.floor(Math.log2(Math.max(N, 2)));
+  const base = Math.pow(2, k);          // e.g. 64 for N=66
+  const extra = N - base;               // qualifying matches needed (e.g. 2)
+  const mainRounds = k;
+  const hasQualifying = extra > 0;
+  const totalRounds = hasQualifying ? mainRounds + 1 : mainRounds;
 
   // ── Order players ─────────────────────────────────────────────────────────
   let players = [...members];
   if (draw_method === "seeded") {
-    // Sort ascending by handicap (lowest = best), then serpentine-interleave
-    // so the strongest players end up on opposite halves of the bracket.
     players.sort((a, b) => (a.handicap ?? 99) - (b.handicap ?? 99));
     const seeded: typeof players = [];
     let lo = 0, hi = players.length - 1;
@@ -127,52 +130,95 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
     }
   }
 
+  // Seeded: best players go direct; highest-handicap players go to qualifying.
+  // Random: last `2*extra` players go to qualifying (arbitrary).
+  const directPlayers  = players.slice(0, base - extra);  // 62 for N=66
+  const qualPlayers    = players.slice(base - extra);      // 4 for N=66
+
   await run("DELETE FROM knockout_rounds WHERE event_id = ?", [evId]);
   await run("UPDATE golf_events SET knockout_draw_method = ? WHERE id = ?", [draw_method, evId]);
 
   // ── Create rounds ─────────────────────────────────────────────────────────
-  const labels = getRoundLabels(totalRounds);
   const roundIds: number[] = [];
-  for (let r = 0; r < totalRounds; r++) {
+  let roundNum = 1;
+
+  if (hasQualifying) {
     const id = await exec(
-      "INSERT INTO knockout_rounds (event_id, round_number, label, deadline) VALUES (?, ?, ?, ?)",
-      [evId, r + 1, labels[r], round_deadlines[r] ?? null]
+      "INSERT INTO knockout_rounds (event_id, round_number, label, deadline) VALUES (?, ?, 'Qualifying', ?)",
+      [evId, roundNum++, round_deadlines[0] ?? null]
     );
     roundIds.push(id);
   }
 
-  // ── Create Round 1 matches ────────────────────────────────────────────────
-  // Spread byes evenly: the first `byes` R1 matches are single-player byes
-  // (player1 set, player2 null, status='bye'). Seeded draw puts top seeds
-  // into the bye slots so they advance automatically.
-  const r1RoundId = roundIds[0]!;
-  const r1MatchCount = size / 2;
+  const mainLabels = getRoundLabels(mainRounds);
+  for (let r = 0; r < mainRounds; r++) {
+    const dlIdx = hasQualifying ? r + 1 : r;
+    const id = await exec(
+      "INSERT INTO knockout_rounds (event_id, round_number, label, deadline) VALUES (?, ?, ?, ?)",
+      [evId, roundNum++, mainLabels[r], round_deadlines[dlIdx] ?? null]
+    );
+    roundIds.push(id);
+  }
+
+  // ── Create Qualifying matches ──────────────────────────────────────────────
+  const qualMatchIds: number[] = [];
+  if (hasQualifying) {
+    for (let m = 0; m < extra; m++) {
+      const p1 = qualPlayers[m * 2];
+      const p2 = qualPlayers[m * 2 + 1];
+      const mid = await exec(
+        `INSERT INTO knockout_matches (event_id, round_id, match_sequence, player1_id, player2_id, status, slot_position)
+         VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+        [evId, roundIds[0], m, p1?.user_id ?? null, p2?.user_id ?? null, m % 2 === 0 ? "top" : "bottom"]
+      );
+      qualMatchIds.push(mid);
+    }
+  }
+
+  // ── Create Round of 64 (main bracket R1) ──────────────────────────────────
+  // First `extra` slots are TBD (filled by qualifying winners).
+  // Remaining slots pair direct players.
+  const r1RoundId = roundIds[hasQualifying ? 1 : 0]!;
+  const r1MatchCount = base / 2;
   const r1MatchIds: number[] = [];
-  let playerIdx = 0;
 
   for (let m = 0; m < r1MatchCount; m++) {
-    const isBye = m < byes;
-    const p1UserId = players[playerIdx++]?.user_id ?? null;
-    const p2UserId = isBye ? null : (players[playerIdx++]?.user_id ?? null);
+    let p1UserId: number | null = null;
+    let p2UserId: number | null = null;
+
+    if (m < extra) {
+      p1UserId = directPlayers[m]?.user_id ?? null;
+      p2UserId = null; // filled by qualifying winner
+    } else {
+      const idx = extra + (m - extra) * 2;
+      p1UserId = directPlayers[idx]?.user_id ?? null;
+      p2UserId = directPlayers[idx + 1]?.user_id ?? null;
+    }
 
     const mid = await exec(
       `INSERT INTO knockout_matches (event_id, round_id, match_sequence, player1_id, player2_id, status, slot_position)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [evId, r1RoundId, m, p1UserId, p2UserId, isBye ? "bye" : "pending", m % 2 === 0 ? "top" : "bottom"]
+       VALUES (?, ?, ?, ?, ?, 'pending', ?)`,
+      [evId, r1RoundId, m, p1UserId, p2UserId, m % 2 === 0 ? "top" : "bottom"]
     );
     r1MatchIds.push(mid);
+
+    // Link qualifying match → this R1 slot (winner becomes p2)
+    if (m < extra && qualMatchIds[m] != null) {
+      await run("UPDATE knockout_matches SET next_match_id = ? WHERE id = ?", [r1MatchIds[m], qualMatchIds[m]]);
+    }
   }
 
-  // ── Create subsequent rounds ──────────────────────────────────────────────
+  // ── Create subsequent main rounds ─────────────────────────────────────────
   let prevRoundMatchIds = r1MatchIds;
-  for (let r = 1; r < totalRounds; r++) {
-    const count = size / Math.pow(2, r + 1);
+  for (let r = 1; r < mainRounds; r++) {
+    const count = base / Math.pow(2, r + 1);
     const thisIds: number[] = [];
+    const rIdx = hasQualifying ? r + 1 : r;
     for (let m = 0; m < count; m++) {
       const mid = await exec(
         `INSERT INTO knockout_matches (event_id, round_id, match_sequence, status, slot_position)
          VALUES (?, ?, ?, 'pending', ?)`,
-        [evId, roundIds[r], m, m % 2 === 0 ? "top" : "bottom"]
+        [evId, roundIds[rIdx], m, m % 2 === 0 ? "top" : "bottom"]
       );
       thisIds.push(mid);
       const f1 = prevRoundMatchIds[m * 2];
@@ -185,10 +231,11 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
 
   res.json({
     ok: true,
-    bracket_size: size,
-    bye_count: byes,
+    bracket_size: base,
+    qualifying_matches: extra,
     total_rounds: totalRounds,
     member_count: N,
+    direct_entries: base - extra,
   });
 });
 

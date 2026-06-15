@@ -2,6 +2,8 @@ import { Router, type Request, type Response } from "express";
 import { query, row, exec, run } from "../lib/pg";
 import { requireClubAuth, getClub } from "../lib/portalAuth";
 import { logger } from "../lib/logger";
+import { sendPushNotifications } from "../lib/notifications";
+import { saveUserNotification } from "../lib/userNotifications";
 
 const router = Router();
 
@@ -341,47 +343,69 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
   const round1 = await row<any>("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1", [evId]);
   if (!round1) { res.status(400).json({ message: "Bracket not generated yet" }); return; }
 
-  const matches = await query<any>(
-    `SELECT km.*,
-            p1.name as player1_name, p1.push_token as player1_push,
-            p2.name as player2_name, p2.push_token as player2_push
-     FROM knockout_matches km
+  // ── Fetch all approved entrants with their Round 1 opponent ─────────────────
+  const entrants = await query<any>(
+    `SELECT u.id, u.name, u.push_token,
+            -- find their Round 1 match (they may be p1 or p2)
+            km.id          as match_id,
+            km.status      as match_status,
+            p1.name        as p1_name,
+            p2.name        as p2_name,
+            km.player1_id,
+            km.player2_id
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     LEFT JOIN knockout_matches km
+       ON km.round_id = ? AND km.status != 'bye'
+       AND (km.player1_id = u.id OR km.player2_id = u.id)
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
-     WHERE km.round_id = ? AND km.status != 'bye'`,
-    [round1.id]
+     WHERE er.event_id = ? AND er.status = 'approved'`,
+    [round1.id, evId]
   );
 
-  let notified = 0;
-  const deadline = round1.deadline ? ` by ${String(round1.deadline).slice(0, 10)}` : "";
-  for (const m of matches) {
-    const pairs: [string | null, string][] = [
-      [m.player1_push, m.player2_name ?? "TBD"],
-      [m.player2_push, m.player1_name ?? "TBD"],
-    ];
-    for (const [token, opponent] of pairs) {
-      if (token) {
-        try {
-          await fetch("https://exp.host/--/api/v2/push/send", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              to: token,
-              title: `${ev.name} — Draw Published`,
-              body: `You play ${opponent} in Round 1${deadline}. Tap to view your bracket.`,
-              data: { eventId: evId, tab: "bracket" },
-            }),
-          });
-          notified++;
-        } catch (e) {
-          logger.warn({ err: e }, "Knockout push notification failed");
-        }
-      }
+  const deadline  = round1.deadline ? ` by ${String(round1.deadline).slice(0, 10)}` : "";
+  const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
+  let   notified  = 0;
+  const notifiedMatchIds = new Set<number>();
+
+  for (const e of entrants) {
+    // Determine opponent name for personalised message
+    let opponentName = "TBD";
+    if (e.match_id) {
+      opponentName = e.player1_id === e.id
+        ? (e.p2_name ?? "TBD")
+        : (e.p1_name ?? "TBD");
     }
-    await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [m.id]);
+
+    const title = `${ev.name} — Draw Published`;
+    const body  = e.match_id
+      ? `You play ${opponentName} in Round 1${deadline}. Tap to view the bracket.`
+      : `The draw has been published${deadline ? ` (Round 1 deadline${deadline})` : ""}. Tap to view the bracket.`;
+    const data  = { type: "knockout_draw", eventId: evId };
+
+    // In-app inbox notification (works for everyone, no push token needed)
+    await saveUserNotification(e.id, "knockout_draw", title, body, data);
+
+    // Expo push notification (for those with the app installed)
+    if (e.push_token?.startsWith("ExponentPushToken[")) {
+      pushMsgs.push({ to: e.push_token, sound: "default", title, body, data });
+      notified++;
+    }
+
+    // Mark match as notified (once per match)
+    if (e.match_id && !notifiedMatchIds.has(e.match_id)) {
+      notifiedMatchIds.add(e.match_id);
+      await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [e.match_id]);
+    }
   }
 
-  res.json({ ok: true, notified });
+  // Send push notifications in batches of 100 (Expo limit)
+  for (let i = 0; i < pushMsgs.length; i += 100) {
+    sendPushNotifications(pushMsgs.slice(i, i + 100));
+  }
+
+  res.json({ ok: true, notified, inbox_count: entrants.length });
 });
 
 // ── Public bracket (mobile) ───────────────────────────────────────────────────

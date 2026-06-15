@@ -375,7 +375,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
     setPublishing(true);
     try {
       const r = await api(`/api/portal/knockout/${eventId}/publish`, { method: "POST" });
-      toast({ title: "Draw published", description: `Notified ${r.notified} players.` });
+      const pushLine  = r.notified > 0 ? `${r.notified} push notification${r.notified !== 1 ? "s" : ""} sent. ` : "";
+      const inboxLine = `In-app inbox updated for ${r.inbox_count} player${r.inbox_count !== 1 ? "s" : ""}.`;
+      toast({ title: "Draw published", description: pushLine + inboxLine });
       load();
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });

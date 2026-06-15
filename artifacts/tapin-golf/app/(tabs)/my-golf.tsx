@@ -50,6 +50,11 @@ const TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const FORMAT_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  knockout_individual: { label: "Knockout", bg: "#7c3aed18", text: "#7c3aed" },
+  knockout_team:       { label: "Knockout Team", bg: "#7c3aed18", text: "#7c3aed" },
+};
+
 const RESTRICT_LABEL: Record<string, string> = {
   members_only:     "Members",
   invitation_only:  "Invite Only",
@@ -104,22 +109,31 @@ function EventCard({ ev, colors }: { ev: TournamentEvent; colors: ReturnType<typ
           {ev.club_name} · {fmtDate(ev.event_date, ev.end_date)}
         </Text>
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, { backgroundColor: colors.primary + "12" }]}>
-            <Text style={[styles.badgeText, { color: colors.primary }]}>{TYPE_LABELS[ev.event_type] ?? ev.event_type}</Text>
-          </View>
+          {!(ev.event_type === "other" && FORMAT_BADGE[ev.format]) && (
+            <View style={[styles.badge, { backgroundColor: colors.primary + "12" }]}>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>{TYPE_LABELS[ev.event_type] ?? ev.event_type}</Text>
+            </View>
+          )}
+          {FORMAT_BADGE[ev.format] && (
+            <View style={[styles.badge, { backgroundColor: FORMAT_BADGE[ev.format].bg }]}>
+              <Text style={[styles.badgeText, { color: FORMAT_BADGE[ev.format].text }]}>{FORMAT_BADGE[ev.format].label}</Text>
+            </View>
+          )}
           {restrict && restrictColors && (
             <View style={[styles.badge, { backgroundColor: restrictColors.bg }]}>
               <Text style={[styles.badgeText, { color: restrictColors.text }]}>{restrict}</Text>
             </View>
           )}
-          {ev.payment_required ? (
-            <View style={[styles.badge, { backgroundColor: "#c8a84b18" }]}>
-              <Text style={[styles.badgeText, { color: "#b8971f" }]}>{ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Fee Applies"}</Text>
-            </View>
-          ) : (
-            <View style={[styles.badge, { backgroundColor: "#16a34a18" }]}>
-              <Text style={[styles.badgeText, { color: "#16a34a" }]}>Free</Text>
-            </View>
+          {!FORMAT_BADGE[ev.format] && (
+            ev.payment_required ? (
+              <View style={[styles.badge, { backgroundColor: "#c8a84b18" }]}>
+                <Text style={[styles.badgeText, { color: "#b8971f" }]}>{ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Fee Applies"}</Text>
+              </View>
+            ) : (
+              <View style={[styles.badge, { backgroundColor: "#16a34a18" }]}>
+                <Text style={[styles.badgeText, { color: "#16a34a" }]}>Free</Text>
+              </View>
+            )
           )}
         </View>
       </View>

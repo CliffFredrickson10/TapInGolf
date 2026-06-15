@@ -7,6 +7,7 @@ import { startAutoTeeGenWorker } from "./worker/autoTeeGen";
 import { startEntryPaymentReminderWorker } from "./worker/entryPaymentReminder";
 import { startMonthlyCounterInvoiceWorker } from "./worker/monthlyCounterInvoice";
 import { startMonthlyAdBillingWorker } from "./worker/monthlyAdBilling";
+import { startKnockoutResultReminderWorker } from "./worker/knockoutResultReminder";
 
 const rawPort = process.env["PORT"];
 
@@ -39,6 +40,7 @@ migrate()
     startEntryPaymentReminderWorker();
     startMonthlyCounterInvoiceWorker();
     startMonthlyAdBillingWorker();
+    startKnockoutResultReminderWorker();
   })
   .catch((err) => {
     logger.warn({ err }, "Migration failed — check DB credentials/firewall. App will serve requests but DB queries may fail.");
@@ -47,4 +49,5 @@ migrate()
     startEntryPaymentReminderWorker();
     startMonthlyCounterInvoiceWorker();
     startMonthlyAdBillingWorker();
+    startKnockoutResultReminderWorker();
   });

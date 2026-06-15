@@ -52,6 +52,16 @@ type FriendUser = {
 
 type PickerTab = "friends" | "search" | "guest";
 
+type KnockoutMatchLink = {
+  id: number;
+  event_name: string;
+  round_label: string;
+  round_number: number;
+  opponent_name: string;
+  deadline: string | null;
+  player_position: 1 | 2;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 function initials(name: string) {
   return name.split(" ").map((w) => w[0] ?? "").join("").slice(0, 2).toUpperCase();
@@ -208,6 +218,12 @@ export default function NewBookingScreen() {
   const [guestName, setGuestName]       = useState("");
   const searchDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // ── Knockout match link state ────────────────────────────────────────────────
+  const [isKnockoutMatch, setIsKnockoutMatch]           = useState(false);
+  const [selectedKnockoutMatch, setSelectedKnockoutMatch] = useState<KnockoutMatchLink | null>(null);
+  const [knockoutMatches, setKnockoutMatches]           = useState<KnockoutMatchLink[]>([]);
+  const [knockoutMatchesLoading, setKnockoutMatchesLoading] = useState(false);
+
   // ── Voucher state ───────────────────────────────────────────────────────────
   const [availableVouchers, setAvailableVouchers] = useState<AvailableVoucher[]>([]);
   const [vouchersLoading, setVouchersLoading]     = useState(false);
@@ -281,6 +297,16 @@ export default function NewBookingScreen() {
       .then((d) => { if (d.price != null) setOrganizerTierPrice(parseFloat(d.price)); })
       .catch(() => {});
   }, [isTierPriced, user, params.club_id, holes]);
+
+  // ── Load user's active knockout matches at this club ─────────────────────────
+  useEffect(() => {
+    if (!user || !params.club_id) return;
+    setKnockoutMatchesLoading(true);
+    apiFetch(`/knockout/my-active-matches?club_id=${params.club_id}`, user.token)
+      .then((d) => setKnockoutMatches(d?.matches ?? []))
+      .catch(() => {})
+      .finally(() => setKnockoutMatchesLoading(false));
+  }, [user, params.club_id]);
 
   // Effective prices: take the lowest of the server-computed tier price and the
   // HNA affiliated rate — whichever is cheaper for the user wins.
@@ -502,6 +528,10 @@ export default function NewBookingScreen() {
   // ── Book ────────────────────────────────────────────────────────────────────
   const handleBook = async () => {
     if (!user) { router.push("/(auth)/login"); return; }
+    if (isKnockoutMatch && !selectedKnockoutMatch) {
+      setBookError("Please select your knockout match to link to this booking.");
+      return;
+    }
     setSubmitting(true);
     const players_data = addedPlayers
       .slice(0, numPlayers - 1)
@@ -529,6 +559,7 @@ export default function NewBookingScreen() {
           holes:                holes,
           hna_number:     hnaNumber.trim() || null,
           event_id:       params.event_id ? parseInt(params.event_id) : undefined,
+          knockout_match_id: isKnockoutMatch && selectedKnockoutMatch ? selectedKnockoutMatch.id : undefined,
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -848,6 +879,96 @@ export default function NewBookingScreen() {
                 />
               </View>
             </View>
+          )}
+
+          {/* Knockout match link */}
+          {(knockoutMatches.length > 0 || knockoutMatchesLoading) && (
+            <>
+              <Text style={[styles.sectionTitle, { color: colors.foreground, marginTop: 8 }]}>Knockout Match</Text>
+              {knockoutMatchesLoading ? (
+                <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border, alignItems: "center", paddingVertical: 16 }]}>
+                  <ActivityIndicator size="small" color={colors.primary} />
+                </View>
+              ) : (
+                <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <View style={styles.cartRow}>
+                    <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
+                      <Ionicons name="trophy-outline" size={20} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.cartTitle, { color: colors.foreground }]}>Link Knockout Match</Text>
+                      <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                        Is this booking for a knockout tournament round?
+                      </Text>
+                    </View>
+                    <Switch
+                      value={isKnockoutMatch}
+                      onValueChange={(v) => {
+                        Haptics.selectionAsync();
+                        setIsKnockoutMatch(v);
+                        if (!v) setSelectedKnockoutMatch(null);
+                      }}
+                      trackColor={{ true: colors.primary, false: colors.muted }}
+                      thumbColor="#fff"
+                    />
+                  </View>
+                  {isKnockoutMatch && (
+                    <View style={{ marginTop: 12, gap: 8 }}>
+                      {knockoutMatches.map((m) => {
+                        const sel = selectedKnockoutMatch?.id === m.id;
+                        return (
+                          <TouchableOpacity
+                            key={m.id}
+                            onPress={() => { Haptics.selectionAsync(); setSelectedKnockoutMatch(sel ? null : m); }}
+                            style={{
+                              borderRadius: 10,
+                              borderWidth: 1.5,
+                              borderColor: sel ? colors.primary : colors.border,
+                              backgroundColor: sel ? colors.primary + "12" : colors.background,
+                              padding: 12,
+                              flexDirection: "row",
+                              alignItems: "center",
+                              gap: 10,
+                            }}
+                            activeOpacity={0.75}
+                          >
+                            <Ionicons
+                              name={sel ? "checkmark-circle" : "ellipse-outline"}
+                              size={20}
+                              color={sel ? colors.primary : colors.mutedForeground}
+                            />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 14, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>
+                                {m.event_name} · {m.round_label}
+                              </Text>
+                              <Text style={{ fontSize: 12, color: colors.mutedForeground, marginTop: 2 }}>
+                                vs {m.opponent_name}{m.deadline ? `  ·  Deadline ${m.deadline}` : ""}
+                              </Text>
+                            </View>
+                          </TouchableOpacity>
+                        );
+                      })}
+                      {!selectedKnockoutMatch && (
+                        <Text style={{ fontSize: 12, color: "#e53e3e", marginTop: 2 }}>
+                          Select a match to link to this booking.
+                        </Text>
+                      )}
+                      {selectedKnockoutMatch && (
+                        <View style={{
+                          flexDirection: "row", alignItems: "flex-start", gap: 6,
+                          marginTop: 4, paddingTop: 10, borderTopWidth: 1, borderTopColor: colors.border,
+                        }}>
+                          <Ionicons name="information-circle-outline" size={14} color={colors.primary} style={{ marginTop: 1 }} />
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }}>
+                            You will be required to submit your match result within 6 hours of your tee time.
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </View>
+              )}
+            </>
           )}
 
           {/* Payment method */}

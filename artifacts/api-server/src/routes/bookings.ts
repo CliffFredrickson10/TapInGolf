@@ -381,6 +381,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     holes = 18,             // 9 or 18
     hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
     event_id: bodyEventId,  // optional: event being booked into (used for pay_at_club rounds calc)
+    knockout_match_id = null, // optional: link booking to a knockout tournament match
   } = req.body ?? {};
 
   // Normalise to players_data: prefer explicit players_data, fall back to friend_ids
@@ -854,12 +855,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const insertResult = await clientQuery(client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees, knockout_match_id)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [user.id, parseInt(tee_time_id),
        numPlayers, split_bill ? 1 : 0, totalAmount, chargeAmount,
        ref, effectivePaymentMethod, appliedVoucher, discountAmount, cartFee, platformFee, clubAmount, numHoles,
-       rangeBallsFee, clubHireFee, bookingTierType, bookingEventEntryFee, bookingEventAdditionalFees]
+       rangeBallsFee, clubHireFee, bookingTierType, bookingEventEntryFee, bookingEventAdditionalFees,
+       knockout_match_id ? parseInt(knockout_match_id) : null]
     );
     bookingId = insertResult.rows[0].id;
 

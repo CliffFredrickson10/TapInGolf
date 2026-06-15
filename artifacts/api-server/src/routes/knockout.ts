@@ -268,7 +268,7 @@ router.get("/portal/knockout/:id/bracket", requireClubAuth, async (req: Request,
     },
     rounds: rounds.map((r: any) => ({
       ...r,
-      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null,
+      deadline: r.deadline ? (r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10)) : null,
       matches: matches.filter((m: any) => m.round_id === r.id),
     })),
     champion,
@@ -321,7 +321,7 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
       if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
         const ev2 = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
         const deadline = nxtFresh.round_deadline
-          ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}`
+          ? ` by ${nxtFresh.round_deadline instanceof Date ? nxtFresh.round_deadline.toISOString().slice(0, 10) : String(nxtFresh.round_deadline).slice(0, 10)}`
           : "";
         const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
 
@@ -408,7 +408,7 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
     [round1.id, evId]
   );
 
-  const deadline  = round1.deadline ? ` by ${String(round1.deadline).slice(0, 10)}` : "";
+  const deadline  = round1.deadline ? ` by ${round1.deadline instanceof Date ? round1.deadline.toISOString().slice(0, 10) : String(round1.deadline).slice(0, 10)}` : "";
   const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
   let   notified  = 0;
   const notifiedMatchIds = new Set<number>();
@@ -541,7 +541,7 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
           [match.next_match_id]
         );
         if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
-          const deadline = nxtFresh.round_deadline ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}` : "";
+          const deadline = nxtFresh.round_deadline ? ` by ${nxtFresh.round_deadline instanceof Date ? nxtFresh.round_deadline.toISOString().slice(0, 10) : String(nxtFresh.round_deadline).slice(0, 10)}` : "";
           const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
           for (const [pid, opp, tok] of [
             [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
@@ -611,11 +611,64 @@ router.get("/events/:id/knockout/bracket", async (req: Request, res: Response): 
   res.json({
     rounds: rounds.map((r: any) => ({
       ...r,
-      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null,
+      deadline: r.deadline ? (r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10)) : null,
     })),
     matches,
     champion,
   });
+});
+
+// ── User's active knockout matches at a club (for linking to a booking) ───────
+router.get("/knockout/my-active-matches", async (req: Request, res: Response): Promise<void> => {
+  const user = getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const clubId = parseInt(String(req.query["club_id"] ?? "0"));
+  if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }
+
+  const matches = await query<any>(
+    `SELECT
+       km.id          AS match_id,
+       km.round_id,
+       kr.round_number,
+       kr.label       AS round_label,
+       kr.deadline,
+       ge.id          AS event_id,
+       ge.name        AS event_name,
+       km.player1_id,
+       km.player2_id,
+       u1.name        AS player1_name,
+       u2.name        AS player2_name,
+       km.status
+     FROM knockout_matches km
+     JOIN knockout_rounds kr ON kr.id = km.round_id
+     JOIN golf_events ge     ON ge.id = kr.event_id
+     LEFT JOIN users u1 ON u1.id = km.player1_id
+     LEFT JOIN users u2 ON u2.id = km.player2_id
+     WHERE ge.club_id = ?
+       AND km.status IN ('pending', 'in_progress')
+       AND (km.player1_id = ? OR km.player2_id = ?)
+       AND ge.status IN ('active', 'published')
+     ORDER BY kr.round_number ASC, km.id ASC`,
+    [clubId, user.id, user.id]
+  );
+
+  const formatted = matches.map((m: any) => {
+    const isP1 = m.player1_id === user.id;
+    const opponent_name = isP1 ? (m.player2_name ?? "TBD") : (m.player1_name ?? "TBD");
+    const dl = m.deadline;
+    const deadline = dl ? (dl instanceof Date ? dl.toISOString().slice(0, 10) : String(dl).slice(0, 10)) : null;
+    return {
+      id:              m.match_id,
+      event_name:      m.event_name,
+      round_label:     m.round_label ?? `Round ${m.round_number}`,
+      round_number:    m.round_number,
+      opponent_name,
+      deadline,
+      player_position: isP1 ? 1 : 2,
+    };
+  });
+
+  res.json({ matches: formatted });
 });
 
 export default router;

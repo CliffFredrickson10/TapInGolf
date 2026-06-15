@@ -59923,8 +59923,10 @@ router4.post("/bookings", async (req, res) => {
     // 9 or 18
     hna_number = null,
     // HNA membership number — upgrades non-members to affiliated_visitor tier
-    event_id: bodyEventId
+    event_id: bodyEventId,
     // optional: event being booked into (used for pay_at_club rounds calc)
+    knockout_match_id = null
+    // optional: link booking to a knockout tournament match
   } = req.body ?? {};
   const rawPlayers = Array.isArray(players_data) ? players_data : friend_ids.map((id) => ({ user_id: id }));
   const numPlayers = Math.min(Math.max(parseInt(players), 1), 4);
@@ -60324,8 +60326,8 @@ router4.post("/bookings", async (req, res) => {
       client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
-        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees)
-       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
+        driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees, knockout_match_id)
+       VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
       [
         user.id,
         parseInt(tee_time_id),
@@ -60345,7 +60347,8 @@ router4.post("/bookings", async (req, res) => {
         clubHireFee,
         bookingTierType,
         bookingEventEntryFee,
-        bookingEventAdditionalFees
+        bookingEventAdditionalFees,
+        knockout_match_id ? parseInt(knockout_match_id) : null
       ]
     );
     bookingId = insertResult.rows[0].id;
@@ -70715,7 +70718,7 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
     },
     rounds: rounds.map((r) => ({
       ...r,
-      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null,
+      deadline: r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null,
       matches: matches.filter((m) => m.round_id === r.id)
     })),
     champion
@@ -70762,7 +70765,7 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
       );
       if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
         const ev2 = await row("SELECT name FROM golf_events WHERE id = ?", [evId]);
-        const deadline = nxtFresh.round_deadline ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}` : "";
+        const deadline = nxtFresh.round_deadline ? ` by ${nxtFresh.round_deadline instanceof Date ? nxtFresh.round_deadline.toISOString().slice(0, 10) : String(nxtFresh.round_deadline).slice(0, 10)}` : "";
         const pushMsgs = [];
         for (const [playerId, opponentName, pushToken] of [
           [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
@@ -70839,7 +70842,7 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
      WHERE er.event_id = ? AND er.status = 'approved'`,
     [round1.id, evId]
   );
-  const deadline = round1.deadline ? ` by ${String(round1.deadline).slice(0, 10)}` : "";
+  const deadline = round1.deadline ? ` by ${round1.deadline instanceof Date ? round1.deadline.toISOString().slice(0, 10) : String(round1.deadline).slice(0, 10)}` : "";
   const pushMsgs = [];
   let notified = 0;
   const notifiedMatchIds = /* @__PURE__ */ new Set();
@@ -70950,7 +70953,7 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
           [match.next_match_id]
         );
         if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
-          const deadline = nxtFresh.round_deadline ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}` : "";
+          const deadline = nxtFresh.round_deadline ? ` by ${nxtFresh.round_deadline instanceof Date ? nxtFresh.round_deadline.toISOString().slice(0, 10) : String(nxtFresh.round_deadline).slice(0, 10)}` : "";
           const pushMsgs = [];
           for (const [pid, opp, tok] of [
             [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
@@ -71010,11 +71013,65 @@ router22.get("/events/:id/knockout/bracket", async (req, res) => {
   res.json({
     rounds: rounds.map((r) => ({
       ...r,
-      deadline: r.deadline ? String(r.deadline).slice(0, 10) : null
+      deadline: r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null
     })),
     matches,
     champion
   });
+});
+router22.get("/knockout/my-active-matches", async (req, res) => {
+  const user = getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const clubId = parseInt(String(req.query["club_id"] ?? "0"));
+  if (!clubId) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const matches = await query(
+    `SELECT
+       km.id          AS match_id,
+       km.round_id,
+       kr.round_number,
+       kr.label       AS round_label,
+       kr.deadline,
+       ge.id          AS event_id,
+       ge.name        AS event_name,
+       km.player1_id,
+       km.player2_id,
+       u1.name        AS player1_name,
+       u2.name        AS player2_name,
+       km.status
+     FROM knockout_matches km
+     JOIN knockout_rounds kr ON kr.id = km.round_id
+     JOIN golf_events ge     ON ge.id = kr.event_id
+     LEFT JOIN users u1 ON u1.id = km.player1_id
+     LEFT JOIN users u2 ON u2.id = km.player2_id
+     WHERE ge.club_id = ?
+       AND km.status IN ('pending', 'in_progress')
+       AND (km.player1_id = ? OR km.player2_id = ?)
+       AND ge.status IN ('active', 'published')
+     ORDER BY kr.round_number ASC, km.id ASC`,
+    [clubId, user.id, user.id]
+  );
+  const formatted = matches.map((m) => {
+    const isP1 = m.player1_id === user.id;
+    const opponent_name = isP1 ? m.player2_name ?? "TBD" : m.player1_name ?? "TBD";
+    const dl = m.deadline;
+    const deadline = dl ? dl instanceof Date ? dl.toISOString().slice(0, 10) : String(dl).slice(0, 10) : null;
+    return {
+      id: m.match_id,
+      event_name: m.event_name,
+      round_label: m.round_label ?? `Round ${m.round_number}`,
+      round_number: m.round_number,
+      opponent_name,
+      deadline,
+      player_position: isP1 ? 1 : 2
+    };
+  });
+  res.json({ matches: formatted });
 });
 var knockout_default = router22;
 
@@ -72464,6 +72521,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS range_balls_options TEXT");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_enabled SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
   await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);
@@ -73091,6 +73150,81 @@ function startMonthlyAdBillingWorker() {
   }, POLL_INTERVAL_MS5);
 }
 
+// src/worker/knockoutResultReminder.ts
+init_pg();
+init_notifications();
+init_logger();
+var POLL_INTERVAL_MS6 = 60 * 60 * 1e3;
+async function runCycle() {
+  const due = await query(
+    `SELECT
+       b.id                AS booking_id,
+       b.user_id,
+       b.knockout_match_id,
+       u.name              AS user_name,
+       u.push_token,
+       ge.name             AS event_name,
+       kr.label            AS round_label,
+       km.player1_id,
+       km.player2_id,
+       km.player1_result,
+       km.player2_result,
+       km.status           AS match_status
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN users u ON u.id = b.user_id
+     JOIN knockout_matches km ON km.id = b.knockout_match_id
+     JOIN knockout_rounds kr ON kr.id = km.round_id
+     JOIN golf_events ge ON ge.id = kr.event_id
+     WHERE b.knockout_match_id IS NOT NULL
+       AND b.knockout_reminder_sent = 0
+       AND b.status IN ('confirmed', 'pending')
+       AND km.status NOT IN ('complete')
+       AND (pts.date + pts.tee_time::time + INTERVAL '6 hours') < NOW()`,
+    []
+  );
+  if (!due.length) return;
+  logger.info({ count: due.length }, "Knockout result reminder: sending notifications");
+  for (const r of due) {
+    const isP1 = r.player1_id === r.user_id;
+    const hasResult = isP1 ? !!r.player1_result : !!r.player2_result;
+    if (hasResult || r.match_status === "complete") {
+      await run("UPDATE bookings SET knockout_reminder_sent = 1 WHERE id = ?", [r.booking_id]);
+      continue;
+    }
+    try {
+      const roundStr = r.round_label ?? "match";
+      if (r.push_token) {
+        await sendPushNotifications([{
+          token: r.push_token,
+          title: "\u26F3 Submit your knockout result",
+          body: `Your ${roundStr} in ${r.event_name} has ended. Tap to submit your result.`,
+          data: { type: "knockout_result", match_id: String(r.knockout_match_id) }
+        }]);
+      }
+      await saveUserNotification(
+        r.user_id,
+        "knockout_result",
+        "Submit your knockout result",
+        `Your ${roundStr} in ${r.event_name} has ended. Please submit your match result now.`,
+        { match_id: r.knockout_match_id }
+      );
+      await run("UPDATE bookings SET knockout_reminder_sent = 1 WHERE id = ?", [r.booking_id]);
+      logger.info({ booking_id: r.booking_id, user_id: r.user_id }, "Knockout result reminder sent");
+    } catch (err) {
+      logger.error({ err, booking_id: r.booking_id }, "Knockout result reminder: failed to notify");
+    }
+  }
+}
+function startKnockoutResultReminderWorker() {
+  logger.info("Knockout result reminder worker started");
+  runCycle().catch((err) => logger.error({ err }, "Knockout result reminder: startup cycle failed"));
+  setInterval(
+    () => runCycle().catch((err) => logger.error({ err }, "Knockout result reminder: cycle failed")),
+    POLL_INTERVAL_MS6
+  );
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"];
 if (!rawPort) {
@@ -73116,6 +73250,7 @@ migrate().then(() => {
   startEntryPaymentReminderWorker();
   startMonthlyCounterInvoiceWorker();
   startMonthlyAdBillingWorker();
+  startKnockoutResultReminderWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
@@ -73123,6 +73258,7 @@ migrate().then(() => {
   startEntryPaymentReminderWorker();
   startMonthlyCounterInvoiceWorker();
   startMonthlyAdBillingWorker();
+  startKnockoutResultReminderWorker();
 });
 /*! Bundled license information:
 

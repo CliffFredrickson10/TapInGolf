@@ -695,10 +695,22 @@ router.get("/knockout/my-active-matches", async (req: Request, res: Response): P
      LEFT JOIN users u2 ON u2.id = km.player2_id
      WHERE ge.club_id = ?
        AND km.status IN ('pending', 'in_progress')
-       AND (km.player1_id = ? OR km.player2_id = ?)
+       AND (
+         km.player1_id = ? OR km.player2_id = ?
+         OR km.player1_id IN (
+           SELECT er_cap.user_id FROM event_registrations er_cap
+           JOIN event_registrations er_me ON er_me.team_id = er_cap.team_id AND er_me.user_id = ? AND er_me.event_id = er_cap.event_id
+           WHERE er_cap.event_id = ge.id
+         )
+         OR km.player2_id IN (
+           SELECT er_cap.user_id FROM event_registrations er_cap
+           JOIN event_registrations er_me ON er_me.team_id = er_cap.team_id AND er_me.user_id = ? AND er_me.event_id = er_cap.event_id
+           WHERE er_cap.event_id = ge.id
+         )
+       )
        AND ge.status IN ('active', 'published')
      ORDER BY kr.round_number ASC, km.id ASC`,
-    [clubId, user.id, user.id]
+    [clubId, user.id, user.id, user.id, user.id]
   );
 
   const formatted = matches.map((m: any) => {

@@ -206,13 +206,17 @@ export default function EventDetailScreen() {
     try {
       const data = await apiFetch(`/events/${id}`, user?.token);
       setEvent(data);
+      // Auto-open the Bracket tab for knockout events when no tab was specified
+      if (!tab && data?.format?.startsWith("knockout")) {
+        setActiveTab("bracket");
+      }
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [id, user?.token]);
+  }, [id, user?.token, tab]);
 
   const loadDraw = useCallback(async () => {
     if (!event || drawLoaded) return;
@@ -567,26 +571,30 @@ export default function EventDetailScreen() {
               </View>
             ) : null}
 
-            {/* Divisions */}
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Divisions</Text>
-            <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
-              Division is auto-assigned from your HNA Handicap Index at time of registration.
-            </Text>
-            {event.divisions.map(d => (
-              <View key={d.key} style={[styles.divisionCard, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: d.key === "A" ? colors.primary : d.key === "B" ? colors.accent : "#546e7a" }]}>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.divLabel, { color: colors.foreground }]}>{d.label}</Text>
-                  <Text style={[styles.divSub, { color: colors.mutedForeground }]}>
-                    HCP {d.min_hcp} – {d.max_hcp} · {FORMAT_LABELS[d.format] ?? d.format} · {d.tees} tees
-                  </Text>
-                </View>
-                {division === d.key && (
-                  <View style={[styles.yourDivBadge, { backgroundColor: colors.primary + "18" }]}>
-                    <Text style={[styles.yourDivText, { color: colors.primary }]}>Your division</Text>
+            {/* Divisions — hidden for knockout formats which don't use divisions */}
+            {!event.format?.startsWith("knockout") && (event.divisions ?? []).length > 0 && (
+              <>
+                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Divisions</Text>
+                <Text style={[styles.sectionSub, { color: colors.mutedForeground }]}>
+                  Division is auto-assigned from your HNA Handicap Index at time of registration.
+                </Text>
+                {(event.divisions ?? []).map(d => (
+                  <View key={d.key} style={[styles.divisionCard, { backgroundColor: colors.card, borderColor: colors.border, borderLeftColor: d.key === "A" ? colors.primary : d.key === "B" ? colors.accent : "#546e7a" }]}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.divLabel, { color: colors.foreground }]}>{d.label}</Text>
+                      <Text style={[styles.divSub, { color: colors.mutedForeground }]}>
+                        HCP {d.min_hcp} – {d.max_hcp} · {FORMAT_LABELS[d.format] ?? d.format} · {d.tees} tees
+                      </Text>
+                    </View>
+                    {division === d.key && (
+                      <View style={[styles.yourDivBadge, { backgroundColor: colors.primary + "18" }]}>
+                        <Text style={[styles.yourDivText, { color: colors.primary }]}>Your division</Text>
+                      </View>
+                    )}
                   </View>
-                )}
-              </View>
-            ))}
+                ))}
+              </>
+            )}
 
             {/* Registration status / CTA */}
             <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>

@@ -671,11 +671,8 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
           <span style={{ fontSize: 16 }}>✅</span>
           <div style={{ flex: 1 }}>
             <span style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>Draw published</span>
-            <span style={{ fontSize: 11, color: "#4b7a5e", marginLeft: 8 }}>Players have been notified of their Round 1 matches.</span>
+            <span style={{ fontSize: 11, color: "#4b7a5e", marginLeft: 8 }}>Players are notified of their Round 1 matches. When you enter a result and both players of a next-round match are known, they are automatically notified.</span>
           </div>
-          {!readOnly && (
-            <span style={{ fontSize: 10, color: "#6b7280" }}>Use "Publish Draw" again after entering scores to notify players of subsequent rounds.</span>
-          )}
         </div>
       )}
 

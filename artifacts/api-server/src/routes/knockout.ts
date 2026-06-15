@@ -301,6 +301,46 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
     if (nxt) {
       const field = nxt.player1_id == null ? "player1_id" : "player2_id";
       await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winner_id, match.next_match_id]);
+
+      // ── Auto-notify when the next match is now fully paired ──────────────────
+      // Re-fetch to get the freshly populated next match
+      const nxtFresh = await row<any>(
+        `SELECT km.*,
+                p1.name as player1_name, p1.push_token as p1_token,
+                p2.name as player2_name, p2.push_token as p2_token,
+                kr.label as round_label, kr.deadline as round_deadline
+         FROM knockout_matches km
+         LEFT JOIN users p1 ON p1.id = km.player1_id
+         LEFT JOIN users p2 ON p2.id = km.player2_id
+         JOIN knockout_rounds kr ON kr.id = km.round_id
+         WHERE km.id = ?`,
+        [match.next_match_id]
+      );
+
+      if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
+        const ev2 = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
+        const deadline = nxtFresh.round_deadline
+          ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}`
+          : "";
+        const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
+
+        for (const [playerId, opponentName, pushToken] of [
+          [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
+          [nxtFresh.player2_id, nxtFresh.player1_name, nxtFresh.p2_token],
+        ] as [number, string, string | null][]) {
+          const title = `${ev2?.name ?? "Knockout"} — Your next match is ready`;
+          const body  = `You play ${opponentName} in the ${nxtFresh.round_label}${deadline}. Tap to view the bracket.`;
+          const data  = { type: "knockout_next_match", eventId: evId, matchId: match.next_match_id };
+
+          await saveUserNotification(playerId, "knockout_next_match", title, body, data);
+          if (pushToken?.startsWith("ExponentPushToken[")) {
+            pushMsgs.push({ to: pushToken, sound: "default", title, body, data });
+          }
+        }
+
+        if (pushMsgs.length) sendPushNotifications(pushMsgs);
+        await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.next_match_id]);
+      }
     }
   }
 

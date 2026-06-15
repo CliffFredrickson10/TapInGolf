@@ -4,6 +4,7 @@ import {
   ActivityIndicator, Alert, RefreshControl, TextInput, Image, Modal,
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
+import * as Haptics from "expo-haptics";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
@@ -178,6 +179,7 @@ export default function EventDetailScreen() {
   const [bracketLoaded, setBracketLoaded] = useState(false);
   const [bracketRound, setBracketRound] = useState(1);
   const [submittingResult, setSubmittingResult] = useState<number | null>(null);
+  const [openingChat, setOpeningChat]           = useState(false);
 
   // Registration / payment state
   const [registering, setRegistering]     = useState(false);
@@ -207,10 +209,6 @@ export default function EventDetailScreen() {
     try {
       const data = await apiFetch(`/events/${id}`, user?.token);
       setEvent(data);
-      // Auto-open the Bracket tab for knockout events when no tab was specified
-      if (!tab && data?.format?.startsWith("knockout")) {
-        setActiveTab("bracket");
-      }
     } catch (e: any) {
       Alert.alert("Error", e.message);
     } finally {
@@ -433,6 +431,23 @@ export default function EventDetailScreen() {
     );
   }
 
+  const openOpponentChat = async (opponentId: number, opponentName: string) => {
+    if (!user || openingChat || user.chat_disabled) return;
+    setOpeningChat(true);
+    Haptics.selectionAsync();
+    try {
+      const data = await apiFetch("/conversations", user.token, {
+        method: "POST",
+        body: JSON.stringify({ member_ids: [opponentId], is_group: false }),
+      });
+      router.push({ pathname: "/chat/[id]", params: { id: data.conversation_id, name: opponentName } });
+    } catch {
+      // ignore — conversation may already exist, server returns it either way
+    } finally {
+      setOpeningChat(false);
+    }
+  };
+
   const reg      = event.user_registration;
   const division = reg?.division ?? event.user_division_preview;
 
@@ -648,7 +663,8 @@ export default function EventDetailScreen() {
                 ? bracketData.rounds.find(r => r.id === myMatch.round_id)
                 : null;
               if (myMatch) {
-                const opponent = myMatch.player1_id === user?.id ? myMatch.player2_name : myMatch.player1_name;
+                const opponent   = myMatch.player1_id === user?.id ? myMatch.player2_name : myMatch.player1_name;
+                const opponentId = myMatch.player1_id === user?.id ? myMatch.player2_id   : myMatch.player1_id;
                 return (
                   <View style={[styles.ctaCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
                     <View style={styles.statusRow}>
@@ -665,10 +681,18 @@ export default function EventDetailScreen() {
                         )}
                       </View>
                     </View>
-                    <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
-                      <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
-                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Full Bracket</Text>
-                    </TouchableOpacity>
+                    {opponentId && (
+                      <TouchableOpacity
+                        style={[styles.outlineBtn, { borderColor: colors.primary, opacity: openingChat ? 0.6 : 1 }]}
+                        onPress={() => openOpponentChat(opponentId, opponent ?? "Opponent")}
+                        disabled={openingChat || !!user?.chat_disabled}
+                      >
+                        <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primary} />
+                        <Text style={[styles.outlineBtnText, { color: colors.primary }]}>
+                          {openingChat ? "Opening…" : `Chat with ${opponent ?? "Opponent"}`}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 );
               }
@@ -682,10 +706,6 @@ export default function EventDetailScreen() {
                         {won ? "You won that match! 🎉" : "Eliminated — better luck next year"}
                       </Text>
                     </View>
-                    <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
-                      <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
-                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Full Bracket</Text>
-                    </TouchableOpacity>
                   </View>
                 );
               }
@@ -695,10 +715,6 @@ export default function EventDetailScreen() {
                   <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>
                     The club will place you in the draw once entries are reviewed. Check back for your match details.
                   </Text>
-                  <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
-                    <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
-                    <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Bracket</Text>
-                  </TouchableOpacity>
                 </View>
               );
             })()}

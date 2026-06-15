@@ -171,8 +171,8 @@ export default function EventDetailScreen() {
   );
 
   // Knockout bracket state
-  type KnockoutRound = { id: number; round_number: number; round_name: string; status: string; deadline: string | null };
-  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_number: number; player1_name: string | null; player2_name: string | null; winner_name: string | null; score: string | null; status: string };
+  type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string };
   type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [bracketLoaded, setBracketLoaded] = useState(false);
@@ -242,7 +242,17 @@ export default function EventDetailScreen() {
     if (!event || bracketLoaded) return;
     try {
       const data = await apiFetch(`/events/${event.id}/knockout/bracket`, user?.token);
-      setBracketData(data);
+      // Enrich each match with its round_number so we can filter by round
+      const roundNumMap: Record<number, number> = {};
+      for (const r of data.rounds ?? []) roundNumMap[r.id] = r.round_number;
+      const enriched: BracketData = {
+        ...data,
+        matches: (data.matches ?? []).map((m: any) => ({
+          ...m,
+          round_number: roundNumMap[m.round_id] ?? 1,
+        })),
+      };
+      setBracketData(enriched);
       setBracketLoaded(true);
       if (data?.rounds?.length > 0) setBracketRound(data.rounds[0].round_number);
     } catch {
@@ -251,6 +261,11 @@ export default function EventDetailScreen() {
   }, [event, bracketLoaded, user?.token]);
 
   useEffect(() => { loadEvent(); }, [loadEvent]);
+
+  // Eagerly load bracket for knockout events (don't wait for tab switch)
+  useEffect(() => {
+    if (event?.format?.startsWith("knockout") && !bracketLoaded) loadBracket();
+  }, [event, bracketLoaded, loadBracket]);
 
   useEffect(() => {
     if (activeTab === "draw" && !drawLoaded) loadDraw();
@@ -403,6 +418,8 @@ export default function EventDetailScreen() {
   const reg      = event.user_registration;
   const division = reg?.division ?? event.user_division_preview;
 
+  const isKnockout = !!event.format?.startsWith("knockout");
+
   // team_format is always returned by the API now; local fallback guards against
   // stale caches or a first load that races before the auth token is attached
   const teamFormat: "pair" | "group" | "individual" =
@@ -470,22 +487,27 @@ export default function EventDetailScreen() {
 
       {/* Tabs */}
       <View style={[styles.tabBar, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row" }}>
-          {(["info","draw","scores","submit"] as const).map(t => (
+        {isKnockout ? (
+          // Knockout: just 2 tabs, no overflow
+          (["info", "bracket"] as const).map(t => (
             <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
               <Text style={[styles.tabText, { color: activeTab === t ? colors.primary : colors.mutedForeground }]}>
-                {t === "info" ? "Info" : t === "draw" ? "Draw" : t === "scores" ? "Leaderboard" : "Submit Score"}
+                {t === "info" ? "Info" : "🏆 Bracket"}
               </Text>
             </TouchableOpacity>
-          ))}
-          {event.format?.startsWith("knockout") && (
-            <TouchableOpacity style={[styles.tab, activeTab === "bracket" && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab("bracket")}>
-              <Text style={[styles.tabText, { color: activeTab === "bracket" ? colors.primary : colors.mutedForeground }]}>
-                🏆 Bracket
-              </Text>
-            </TouchableOpacity>
-          )}
-        </ScrollView>
+          ))
+        ) : (
+          // Regular event: scrollable tabs
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row" }}>
+            {(["info","draw","scores","submit"] as const).map(t => (
+              <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
+                <Text style={[styles.tabText, { color: activeTab === t ? colors.primary : colors.mutedForeground }]}>
+                  {t === "info" ? "Info" : t === "draw" ? "Draw" : t === "scores" ? "Leaderboard" : "Submit Score"}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </ScrollView>
+        )}
       </View>
 
       <ScrollView
@@ -596,7 +618,75 @@ export default function EventDetailScreen() {
               </>
             )}
 
-            {/* Registration status / CTA */}
+            {/* Knockout: next match card */}
+            {isKnockout && bracketLoaded && bracketData && (() => {
+              const myMatch = bracketData.matches.find(m =>
+                (m.player1_id === user?.id || m.player2_id === user?.id) && m.status !== "complete" && m.status !== "bye"
+              );
+              const myDoneMatch = !myMatch && bracketData.matches.find(m =>
+                (m.player1_id === user?.id || m.player2_id === user?.id) && m.status === "complete"
+              );
+              const myRound = myMatch
+                ? bracketData.rounds.find(r => r.id === myMatch.round_id)
+                : null;
+              if (myMatch) {
+                const opponent = myMatch.player1_id === user?.id ? myMatch.player2_name : myMatch.player1_name;
+                return (
+                  <View style={[styles.ctaCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+                    <View style={styles.statusRow}>
+                      <Ionicons name="trophy-outline" size={20} color={colors.primary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.ctaTitle, { color: colors.primary }]}>Your next match — {myRound?.label ?? "upcoming"}</Text>
+                        <Text style={[styles.ctaNote, { color: colors.foreground, marginTop: 2 }]}>
+                          vs <Text style={{ fontWeight: "700" }}>{opponent ?? "TBD"}</Text>
+                        </Text>
+                        {myRound?.deadline && (
+                          <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginTop: 2 }]}>
+                            Complete by {new Date(myRound.deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                          </Text>
+                        )}
+                      </View>
+                    </View>
+                    <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
+                      <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
+                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Full Bracket</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+              if (myDoneMatch) {
+                const won = myDoneMatch.winner_id === user?.id;
+                return (
+                  <View style={[styles.ctaCard, { backgroundColor: won ? colors.primary + "10" : "#f8f9fa", borderColor: won ? colors.primary + "40" : colors.border }]}>
+                    <View style={styles.statusRow}>
+                      <Ionicons name={won ? "trophy" : "close-circle-outline"} size={20} color={won ? "#c8a84b" : colors.mutedForeground} />
+                      <Text style={[styles.ctaTitle, { color: won ? colors.primary : colors.foreground }]}>
+                        {won ? "You won that match! 🎉" : "Eliminated — better luck next year"}
+                      </Text>
+                    </View>
+                    <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
+                      <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
+                      <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Full Bracket</Text>
+                    </TouchableOpacity>
+                  </View>
+                );
+              }
+              // Not in draw yet
+              return (
+                <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>
+                    The club will place you in the draw once entries are reviewed. Check back for your match details.
+                  </Text>
+                  <TouchableOpacity style={[styles.outlineBtn, { borderColor: colors.primary }]} onPress={() => setActiveTab("bracket")}>
+                    <Ionicons name="git-branch-outline" size={16} color={colors.primary} />
+                    <Text style={[styles.outlineBtnText, { color: colors.primary }]}>View Bracket</Text>
+                  </TouchableOpacity>
+                </View>
+              );
+            })()}
+
+            {/* Registration status / CTA — hidden for knockout (handled above) */}
+            {!isKnockout && (
             <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
               {ctaState === "open_all" && (
                 <>
@@ -865,6 +955,7 @@ export default function EventDetailScreen() {
                 <Text style={[styles.ctaNote, { color: colors.mutedForeground }]}>This event is no longer accepting entries.</Text>
               )}
             </View>
+            )}
           </>
         )}
 
@@ -1265,7 +1356,7 @@ export default function EventDetailScreen() {
                     >
                       <Text style={{ fontSize: 13, fontWeight: "700",
                         color: bracketRound === r.round_number ? colors.primary : colors.mutedForeground }}>
-                        {r.round_name}
+                        {r.label}
                       </Text>
                       {r.deadline && (
                         <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
@@ -1280,45 +1371,62 @@ export default function EventDetailScreen() {
                 {bracketData.matches
                   .filter(m => m.round_number === bracketRound)
                   .map(m => {
-                    const done = m.status === "completed";
-                    const bye  = !m.player2_name;
+                    const done    = m.status === "complete";
+                    const bye     = m.status === "bye";
+                    const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id);
+                    const p1win   = done && m.winner_id === m.player1_id;
+                    const p2win   = done && m.winner_id === m.player2_id;
                     return (
-                      <View key={m.id} style={[styles.metaCard, { backgroundColor: colors.card, borderColor: done ? colors.primary + "40" : colors.border, marginBottom: 10, gap: 0 }]}>
+                      <View key={m.id} style={[styles.metaCard, {
+                        backgroundColor: colors.card,
+                        borderColor: isMyMatch ? colors.primary : done ? colors.primary + "40" : colors.border,
+                        borderWidth: isMyMatch ? 2 : 1,
+                        marginBottom: 10, gap: 0,
+                      }]}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>Match {m.match_number}</Text>
-                          {done && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>DONE</Text>
-                          </View>}
-                          {!done && !bye && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, color: "#92711a", fontWeight: "700" }}>UPCOMING</Text>
-                          </View>}
-                          {bye && <View style={{ backgroundColor: "#6366f120", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
-                            <Text style={{ fontSize: 10, color: "#6366f1", fontWeight: "700" }}>BYE</Text>
-                          </View>}
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>Match {m.match_sequence}</Text>
+                          <View style={{ flexDirection: "row", gap: 6 }}>
+                            {isMyMatch && !done && !bye && (
+                              <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                                <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOUR MATCH</Text>
+                              </View>
+                            )}
+                            {done && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>DONE</Text>
+                            </View>}
+                            {!done && !bye && !isMyMatch && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, color: "#92711a", fontWeight: "700" }}>UPCOMING</Text>
+                            </View>}
+                            {bye && <View style={{ backgroundColor: "#6366f120", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, color: "#6366f1", fontWeight: "700" }}>BYE</Text>
+                            </View>}
+                          </View>
                         </View>
 
                         {/* Player 1 */}
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7,
-                          backgroundColor: m.winner_name === m.player1_name && done ? colors.primary + "10" : "transparent",
+                          backgroundColor: p1win ? colors.primary + "10" : "transparent",
                           borderRadius: 8, paddingHorizontal: 8 }}>
-                          {m.winner_name === m.player1_name && done && <Ionicons name="trophy" size={14} color="#c8a84b" />}
+                          {p1win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
                           <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: m.winner_name === m.player1_name && done ? colors.primary : colors.foreground }}>
+                            color: p1win ? colors.primary : colors.foreground }}>
                             {m.player1_name ?? "TBD"}
                           </Text>
+                          {m.player1_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                         </View>
 
                         <Text style={{ textAlign: "center", fontSize: 11, color: colors.mutedForeground, paddingVertical: 2 }}>vs</Text>
 
                         {/* Player 2 */}
                         <View style={{ flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 7,
-                          backgroundColor: m.winner_name === m.player2_name && done ? colors.primary + "10" : "transparent",
+                          backgroundColor: p2win ? colors.primary + "10" : "transparent",
                           borderRadius: 8, paddingHorizontal: 8 }}>
-                          {m.winner_name === m.player2_name && done && <Ionicons name="trophy" size={14} color="#c8a84b" />}
+                          {p2win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
                           <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: m.winner_name === m.player2_name && done ? colors.primary : colors.foreground }}>
+                            color: p2win ? colors.primary : colors.foreground }}>
                             {bye ? "Bye" : (m.player2_name ?? "TBD")}
                           </Text>
+                          {m.player2_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                         </View>
 
                         {m.score && (

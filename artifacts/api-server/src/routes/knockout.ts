@@ -300,7 +300,7 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
   if (winner_id && match.next_match_id) {
     const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
     if (nxt) {
-      const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+      const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
       await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winner_id, match.next_match_id]);
 
       // ── Auto-notify when the next match is now fully paired ──────────────────
@@ -526,7 +526,7 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
     if (match.next_match_id) {
       const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
       if (nxt) {
-        const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+        const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
         await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
 
         const nxtFresh = await row<any>(

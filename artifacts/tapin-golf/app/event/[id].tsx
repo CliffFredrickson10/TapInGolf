@@ -693,6 +693,49 @@ export default function EventDetailScreen() {
                         </Text>
                       </TouchableOpacity>
                     )}
+                    {/* ── Submit Result ───────────────────────────────────── */}
+                    {(() => {
+                      const isP1 = myMatch.player1_id === user?.id;
+                      const myResult = isP1 ? myMatch.player1_result : myMatch.player2_result;
+                      const opponentResult = isP1 ? myMatch.player2_result : myMatch.player1_result;
+                      const matchDone = myMatch.status === "complete";
+                      const matchBye  = myMatch.status === "bye";
+                      const matchWo   = matchDone && !myMatch.winner_id;
+                      const canSubmit = !matchDone && !matchBye && !matchWo && !myResult;
+                      const waiting   = !matchDone && !matchBye && !matchWo && !!myResult && !opponentResult && !myMatch.dispute;
+                      if (canSubmit) return (
+                        <View style={{ borderTopWidth: 1, borderTopColor: colors.primary + "30", marginTop: 10, paddingTop: 10 }}>
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8, textAlign: "center" }}>
+                            Submit your match result
+                          </Text>
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            <TouchableOpacity
+                              style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#dcfce7", borderWidth: 1.5, borderColor: "#16a34a", opacity: submittingResult === myMatch.id ? 0.6 : 1 }}
+                              disabled={submittingResult === myMatch.id}
+                              onPress={() => submitMatchResult(myMatch.id, "won")}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d" }}>🏌️ I Won</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#fee2e2", borderWidth: 1.5, borderColor: "#ef4444", opacity: submittingResult === myMatch.id ? 0.6 : 1 }}
+                              disabled={submittingResult === myMatch.id}
+                              onPress={() => submitMatchResult(myMatch.id, "lost")}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: "#dc2626" }}>😔 I Lost</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                      if (waiting) return (
+                        <View style={{ borderTopWidth: 1, borderTopColor: colors.primary + "30", marginTop: 10, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                          <ActivityIndicator size="small" color={colors.mutedForeground} />
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }}>
+                            Result submitted — waiting for {opponent ?? "your opponent"} to confirm.
+                          </Text>
+                        </View>
+                      );
+                      return null;
+                    })()}
                   </View>
                 );
               }
@@ -1428,11 +1471,6 @@ export default function EventDetailScreen() {
                     const isVoidFeeder  = (f?: KnockoutMatch) => !!f && f.status === "complete" && !f.winner_id;
                     const p1IsDNP = !m.player1_id && isVoidFeeder(sortedFeeders[0]);
                     const p2IsDNP = !m.player2_id && isVoidFeeder(sortedFeeders[1]);
-                    const myResult  = isP1 ? m.player1_result : m.player2_result;
-                    const opponentResult = isP1 ? m.player2_result : m.player1_result;
-                    const opponentName   = isP1 ? m.player2_name : m.player1_name;
-                    const canSubmit = !!isMyMatch && !done && !bye && !walkover && !myResult;
-                    const waiting   = !!isMyMatch && !done && !bye && !walkover && !!myResult && !opponentResult && !m.dispute;
                     const disputed  = m.dispute;
                     return (
                       <View key={m.id} style={[styles.metaCard, {
@@ -1527,40 +1565,6 @@ export default function EventDetailScreen() {
                           </View>
                         )}
 
-                        {/* ── Submit Result UI ─────────────────────────────── */}
-                        {canSubmit && (
-                          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 10, paddingTop: 10 }}>
-                            <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8, textAlign: "center" }}>
-                              Submit your result for this match
-                            </Text>
-                            <View style={{ flexDirection: "row", gap: 8 }}>
-                              <TouchableOpacity
-                                style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#dcfce7", borderWidth: 1.5, borderColor: "#16a34a", opacity: submittingResult === m.id ? 0.6 : 1 }}
-                                disabled={submittingResult === m.id}
-                                onPress={() => submitMatchResult(m.id, "won")}
-                              >
-                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d" }}>🏌️ I Won</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#fee2e2", borderWidth: 1.5, borderColor: "#ef4444", opacity: submittingResult === m.id ? 0.6 : 1 }}
-                                disabled={submittingResult === m.id}
-                                onPress={() => submitMatchResult(m.id, "lost")}
-                              >
-                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#dc2626" }}>😔 I Lost</Text>
-                              </TouchableOpacity>
-                            </View>
-                          </View>
-                        )}
-
-                        {/* ── Waiting for opponent ─────────────────────────── */}
-                        {waiting && (
-                          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 10, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
-                            <ActivityIndicator size="small" color={colors.mutedForeground} />
-                            <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }}>
-                              Result submitted — waiting for {opponentName ?? "your opponent"} to report theirs.
-                            </Text>
-                          </View>
-                        )}
                       </View>
                     );
                   })

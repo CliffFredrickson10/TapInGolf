@@ -58776,6 +58776,10 @@ router3.get("/events/feed", async (req, res) => {
     ge.max_participants,
     c.id AS club_id, c.name AS club_name, c.logo_url AS club_logo_url
   `;
+  const dateFilter = `(
+    ge.event_date >= CURRENT_DATE
+    OR (ge.format IN ('knockout_individual','knockout_team') AND COALESCE(ge.end_date, ge.event_date) >= CURRENT_DATE)
+  )`;
   let homeClubEvents = [];
   if (userId) {
     homeClubEvents = await query(
@@ -58783,7 +58787,7 @@ router3.get("/events/feed", async (req, res) => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.club_id IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
          AND (
            ge.restriction IN ('open', 'members_only', 'whs_players_only')
@@ -58803,7 +58807,7 @@ router3.get("/events/feed", async (req, res) => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.restriction = 'open'
          AND ge.club_id NOT IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
        ORDER BY ge.event_date ASC
@@ -58816,7 +58820,7 @@ router3.get("/events/feed", async (req, res) => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.restriction = 'open'
        ORDER BY ge.event_date ASC
        LIMIT 20`,
@@ -70784,6 +70788,7 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
     res.status(400).json({ message: "Bracket not generated yet" });
     return;
   }
+  await run("UPDATE golf_events SET status = 'active' WHERE id = ? AND status != 'active'", [evId]);
   const entrants = await query(
     `SELECT u.id, u.name, u.push_token,
             -- find their Round 1 match (they may be p1 or p2)

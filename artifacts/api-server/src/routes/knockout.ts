@@ -343,6 +343,9 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
   const round1 = await row<any>("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1", [evId]);
   if (!round1) { res.status(400).json({ message: "Bracket not generated yet" }); return; }
 
+  // Ensure the event is active so it appears in the member-facing tournament feed
+  await run("UPDATE golf_events SET status = 'active' WHERE id = ? AND status != 'active'", [evId]);
+
   // ── Fetch all approved entrants with their Round 1 opponent ─────────────────
   const entrants = await query<any>(
     `SELECT u.id, u.name, u.push_token,

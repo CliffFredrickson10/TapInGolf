@@ -49,6 +49,11 @@ const TYPE_LABELS: Record<string, string> = {
   other: "Other",
 };
 
+const FORMAT_BADGE: Record<string, { label: string; bg: string; text: string }> = {
+  knockout_individual: { label: "Knockout", bg: "#7c3aed18", text: "#7c3aed" },
+  knockout_team:       { label: "Knockout Team", bg: "#7c3aed18", text: "#7c3aed" },
+};
+
 const RESTRICT_LABEL: Record<string, string> = {
   members_only:    "Members",
   invitation_only: "Invite Only",
@@ -128,6 +133,14 @@ function EventCard({ ev, colors }: { ev: TournamentEvent; colors: ReturnType<typ
               {TYPE_LABELS[ev.event_type] ?? ev.event_type}
             </Text>
           </View>
+
+          {FORMAT_BADGE[ev.format] && (
+            <View style={[styles.badge, { backgroundColor: FORMAT_BADGE[ev.format].bg }]}>
+              <Text style={[styles.badgeText, { color: FORMAT_BADGE[ev.format].text }]}>
+                {FORMAT_BADGE[ev.format].label}
+              </Text>
+            </View>
+          )}
 
           {restrict && restrictColors && (
             <View style={[styles.badge, { backgroundColor: restrictColors.bg }]}>

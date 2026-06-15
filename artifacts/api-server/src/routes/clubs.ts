@@ -666,6 +666,13 @@ router.get("/events/feed", async (req, res): Promise<void> => {
     c.id AS club_id, c.name AS club_name, c.logo_url AS club_logo_url
   `;
 
+  // Date filter: regular events use event_date; knockout tournaments (which span weeks/months)
+  // stay visible until their end_date passes.
+  const dateFilter = `(
+    ge.event_date >= CURRENT_DATE
+    OR (ge.format IN ('knockout_individual','knockout_team') AND COALESCE(ge.end_date, ge.event_date) >= CURRENT_DATE)
+  )`;
+
   // Home-club events: clubs the user is an active member of, for eligible restrictions
   let homeClubEvents: any[] = [];
   if (userId) {
@@ -674,7 +681,7 @@ router.get("/events/feed", async (req, res): Promise<void> => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.club_id IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
          AND (
            ge.restriction IN ('open', 'members_only', 'whs_players_only')
@@ -696,7 +703,7 @@ router.get("/events/feed", async (req, res): Promise<void> => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.restriction = 'open'
          AND ge.club_id NOT IN (SELECT club_id FROM club_members WHERE user_id = ? AND status = 'active')
        ORDER BY ge.event_date ASC
@@ -709,7 +716,7 @@ router.get("/events/feed", async (req, res): Promise<void> => {
        FROM golf_events ge
        JOIN clubs c ON c.id = ge.club_id
        WHERE ge.status = 'active'
-         AND ge.event_date >= CURRENT_DATE
+         AND ${dateFilter}
          AND ge.restriction = 'open'
        ORDER BY ge.event_date ASC
        LIMIT 20`,

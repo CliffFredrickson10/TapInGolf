@@ -59,7 +59,7 @@ interface KnockoutRound {
 }
 
 interface BracketData {
-  event: { id: number; name: string; format: string; knockout_type: string | null; knockout_draw_method: string | null };
+  event: { id: number; name: string; format: string; knockout_type: string | null; knockout_draw_method: string | null; club_name: string | null };
   rounds: KnockoutRound[];
 }
 
@@ -524,6 +524,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
 <body>
   <div class="page-header">
     <div>
+      ${event.club_name ? `<div style="font-size:12px;font-weight:600;color:#c8a84b;text-transform:uppercase;letter-spacing:.8px;margin-bottom:3px">${event.club_name}</div>` : ""}
       <div class="tournament-name">${event.name}</div>
       <div class="tournament-sub">
         ${event.knockout_type === "team" ? "Team" : "Individual"} ·

@@ -261,6 +261,7 @@ router.get("/portal/knockout/:id/bracket", requireClubAuth, async (req: Request,
     event: {
       id: ev.id, name: ev.name, format: ev.format,
       knockout_type: ev.knockout_type, knockout_draw_method: ev.knockout_draw_method,
+      club_name: club.name,
     },
     rounds: rounds.map((r: any) => ({
       ...r,

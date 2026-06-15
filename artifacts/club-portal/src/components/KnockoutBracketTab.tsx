@@ -147,11 +147,22 @@ function Connectors({ r, positions }: { r: number; positions: { centerY: number;
   return <>{lines}</>;
 }
 
+function deadlineBadge(deadline: string | null): { label: string; bg: string; color: string } | null {
+  if (!deadline) return null;
+  const d = new Date(deadline);
+  if (isNaN(d.getTime())) return null;
+  const daysLeft = Math.ceil((d.getTime() - Date.now()) / 86400000);
+  if (daysLeft < 0)  return { label: "Overdue",      bg: "#fee2e2", color: RED };
+  if (daysLeft === 0) return { label: "Due today",    bg: "#fef3c7", color: "#b45309" };
+  if (daysLeft === 1) return { label: "Due tomorrow", bg: "#fef3c7", color: "#b45309" };
+  if (daysLeft <= 7)  return { label: `${daysLeft} days left`, bg: "#fef3c7", color: "#b45309" };
+  return { label: `${daysLeft} days`, bg: "#f3f4f6", color: "#6b7280" };
+}
+
 function RoundHeader({ round, onEditDeadline }: { round: KnockoutRound; onEditDeadline: () => void }) {
   const done  = round.matches.filter(m => m.status === "complete").length;
   const total = round.matches.filter(m => m.status !== "bye").length;
-  const daysLeft = round.deadline ? Math.ceil((new Date(round.deadline).getTime() - Date.now()) / 86400000) : null;
-  const urgent = daysLeft != null && daysLeft <= 7;
+  const badge = deadlineBadge(round.deadline);
   return (
     <div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 2 }}>
@@ -163,10 +174,10 @@ function RoundHeader({ round, onEditDeadline }: { round: KnockoutRound; onEditDe
       </div>
       {round.deadline && (
         <div style={{ display: "flex", alignItems: "center", gap: 4, marginBottom: 3 }}>
-          <span style={{ fontSize: 9, color: urgent ? RED : "#6b7280" }}>⏰ {round.deadline}</span>
-          {daysLeft != null && (
-            <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: urgent ? "#fee2e2" : "#f3f4f6", color: urgent ? RED : "#9ca3af" }}>
-              {daysLeft}d
+          <span style={{ fontSize: 9, color: badge?.color ?? "#6b7280" }}>⏰ {round.deadline}</span>
+          {badge && (
+            <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 5px", borderRadius: 4, background: badge.bg, color: badge.color }}>
+              {badge.label}
             </span>
           )}
         </div>
@@ -272,11 +283,12 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
   );
 }
 
-function GenerateDialog({ eventId, approvedCount, onClose, onGenerated }: { eventId: number; approvedCount: number; onClose: () => void; onGenerated: () => void }) {
+function GenerateDialog({ eventId, approvedCount, isPublished, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; onClose: () => void; onGenerated: () => void }) {
   const { toast } = useToast();
   const [drawMethod, setDrawMethod] = useState("random");
   const [knockoutType, setKnockoutType] = useState("individual");
   const [generating, setGenerating] = useState(false);
+  const [understood, setUnderstood] = useState(false);
   const bracketSize = approvedCount < 2 ? 2 : Math.pow(2, Math.ceil(Math.log2(Math.max(approvedCount, 2))));
   const byeCount = bracketSize - approvedCount;
 
@@ -297,8 +309,29 @@ function GenerateDialog({ eventId, approvedCount, onClose, onGenerated }: { even
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-sm">
-        <DialogHeader><DialogTitle>Generate Knockout Bracket</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{isPublished ? "⚠️ Regenerate Draw?" : "Generate Knockout Bracket"}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-4 py-2">
+          {isPublished && (
+            <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: RED, marginBottom: 4 }}>Draw already published</p>
+              <p style={{ fontSize: 12, color: "#7f1d1d", lineHeight: 1.5 }}>
+                This draw has already been sent to players. Re-generating will <strong>erase all current matchups and scores</strong>. Players will <strong>not</strong> be automatically re-notified — you will need to publish again manually.
+              </p>
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, cursor: "pointer" }}>
+                <input
+                  type="checkbox"
+                  checked={understood}
+                  onChange={e => setUnderstood(e.target.checked)}
+                  style={{ marginTop: 2, accentColor: RED, width: 14, height: 14, flexShrink: 0 }}
+                />
+                <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>
+                  I understand — erase the current draw and start fresh
+                </span>
+              </label>
+            </div>
+          )}
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
             <p><span className="font-semibold">{approvedCount}</span> approved players</p>
             <p>Bracket size: <span className="font-semibold">{bracketSize}</span> {byeCount > 0 ? `(${byeCount} bye${byeCount > 1 ? "s" : ""})` : ""}</p>
@@ -327,8 +360,13 @@ function GenerateDialog({ eventId, approvedCount, onClose, onGenerated }: { even
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" disabled={generating || approvedCount < 2} onClick={generate}>
-            {generating ? "Generating…" : "Generate Bracket"}
+          <Button
+            size="sm"
+            disabled={generating || approvedCount < 2 || (isPublished && !understood)}
+            style={isPublished ? { background: RED } : undefined}
+            onClick={generate}
+          >
+            {generating ? "Generating…" : isPublished ? "Regenerate Bracket" : "Generate Bracket"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -582,6 +620,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
           <GenerateDialog
             eventId={eventId}
             approvedCount={approvedCount}
+            isPublished={false}
             onClose={() => setShowGenerate(false)}
             onGenerated={() => { setShowGenerate(false); load(); }}
           />
@@ -612,6 +651,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const numRounds    = positions.length;
   const canvasH      = numR1 * (CARD_H + SLOT_GAP) - SLOT_GAP;
   const canvasW      = numRounds * (CARD_W + COL_GAP) + 130;
+  const isPublished  = rounds.some(r => r.matches.some(m => m.notification_sent_at != null));
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif" }}>
@@ -622,7 +662,21 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         <ScoreDialog match={editScore} eventId={eventId} onClose={() => setEditScore(null)} onSaved={() => { setEditScore(null); load(); }} />
       )}
       {showGenerate && (
-        <GenerateDialog eventId={eventId} approvedCount={approvedCount} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
+        <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
+      )}
+
+      {/* Published banner */}
+      {isPublished && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 12px", borderRadius: 8, background: "#f0faf4", border: "1px solid #b7dfc8", marginBottom: 10 }}>
+          <span style={{ fontSize: 16 }}>✅</span>
+          <div style={{ flex: 1 }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: GREEN }}>Draw published</span>
+            <span style={{ fontSize: 11, color: "#4b7a5e", marginLeft: 8 }}>Players have been notified of their Round 1 matches.</span>
+          </div>
+          {!readOnly && (
+            <span style={{ fontSize: 10, color: "#6b7280" }}>Use "Publish Draw" again after entering scores to notify players of subsequent rounds.</span>
+          )}
+        </div>
       )}
 
       {/* Toolbar */}
@@ -671,10 +725,16 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         {!readOnly && (
           <>
             <button
-              style={{ padding: "5px 10px", fontSize: 11, fontWeight: 600, border: "1px solid #e5e7eb", borderRadius: 8, background: "#fff", cursor: "pointer" }}
+              title={isPublished ? "Draw already published — re-generating will erase matchups" : "Re-generate bracket"}
+              style={{
+                padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, cursor: "pointer",
+                border: isPublished ? `1px solid #fca5a5` : "1px solid #e5e7eb",
+                background: isPublished ? "#fef2f2" : "#fff",
+                color: isPublished ? RED : "#374151",
+              }}
               onClick={() => setShowGenerate(true)}
             >
-              🔄 Regenerate
+              🔄 {isPublished ? "Regenerate ⚠️" : "Regenerate"}
             </button>
             <button
               style={{ padding: "5px 12px", fontSize: 11, fontWeight: 700, borderRadius: 8, background: GREEN, color: "#fff", border: "none", cursor: "pointer" }}

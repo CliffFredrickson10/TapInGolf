@@ -494,12 +494,16 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
 
   const myResultField   = isP1 ? "player1_result" : "player2_result";
   const myCurrentResult = isP1 ? match.player1_result : match.player2_result;
-  if (myCurrentResult) {
+  // Block re-submission unless there's an active dispute (player may correct their result)
+  if (myCurrentResult && !match.dispute) {
     res.status(400).json({ message: "You have already submitted a result for this match" }); return;
   }
 
-  // Save this player's result; bump to in_progress
-  await run(`UPDATE knockout_matches SET ${myResultField} = ?, status = 'in_progress' WHERE id = ?`, [result, matchId]);
+  // Save this player's result; bump to in_progress; clear any existing dispute flag
+  await run(
+    `UPDATE knockout_matches SET ${myResultField} = ?, dispute = FALSE, status = 'in_progress' WHERE id = ?`,
+    [result, matchId]
+  );
 
   const opponentResult = isP1 ? match.player2_result : match.player1_result;
 

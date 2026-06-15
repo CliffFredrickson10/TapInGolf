@@ -734,6 +734,35 @@ export default function EventDetailScreen() {
                           </Text>
                         </View>
                       );
+                      if (myMatch.dispute) return (
+                        <View style={{ borderTopWidth: 1, borderTopColor: "#fed7aa", marginTop: 10, paddingTop: 10 }}>
+                          <View style={{ backgroundColor: "#fff7ed", borderRadius: 8, borderWidth: 1, borderColor: "#fed7aa", padding: 12, marginBottom: 12 }}>
+                            <Text style={{ fontSize: 13, fontWeight: "700", color: "#9a3412", marginBottom: 4 }}>⚠️ Result disputed</Text>
+                            <Text style={{ fontSize: 12, color: "#9a3412", lineHeight: 17 }}>
+                              Both players submitted conflicting results. The club will review and set the official winner — or you can correct your result below.
+                            </Text>
+                          </View>
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8, textAlign: "center" }}>
+                            Correct your result:
+                          </Text>
+                          <View style={{ flexDirection: "row", gap: 8 }}>
+                            <TouchableOpacity
+                              style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#dcfce7", borderWidth: 1.5, borderColor: "#16a34a", opacity: submittingResult === myMatch.id ? 0.6 : 1 }}
+                              disabled={submittingResult === myMatch.id}
+                              onPress={() => submitMatchResult(myMatch.id, "won")}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d" }}>🏌️ I Won</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                              style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#fee2e2", borderWidth: 1.5, borderColor: "#ef4444", opacity: submittingResult === myMatch.id ? 0.6 : 1 }}
+                              disabled={submittingResult === myMatch.id}
+                              onPress={() => submitMatchResult(myMatch.id, "lost")}
+                            >
+                              <Text style={{ fontSize: 14, fontWeight: "700", color: "#dc2626" }}>😔 I Lost</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
                       return null;
                     })()}
                   </View>

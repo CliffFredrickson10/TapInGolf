@@ -173,7 +173,7 @@ export default function EventDetailScreen() {
 
   // Knockout bracket state
   type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
-  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
   type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [bracketLoaded, setBracketLoaded] = useState(false);
@@ -1402,17 +1402,32 @@ export default function EventDetailScreen() {
                 </ScrollView>
 
                 {/* Match cards for selected round */}
-                {bracketData.matches
+                {(() => {
+                  // Build reverse feeder map: next_match_id → [feeder matches]
+                  const feedersOf: Record<number, KnockoutMatch[]> = {};
+                  bracketData.matches.forEach(fm => {
+                    if (fm.next_match_id != null) {
+                      if (!feedersOf[fm.next_match_id]) feedersOf[fm.next_match_id] = [];
+                      feedersOf[fm.next_match_id].push(fm);
+                    }
+                  });
+                  return bracketData.matches
                   .filter(m => m.round_number === bracketRound)
                   .map(m => {
                     const done      = m.status === "complete";
                     const bye       = m.status === "bye";
-                    // walkover: deadline expired, both players eliminated, no winner
-                    const walkover  = done && !m.winner_id && !!(m.player1_id || m.player2_id);
+                    // walkover: deadline expired — no winner (covers both players-present and no-player/void cases)
+                    const walkover  = done && !m.winner_id;
                     const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id);
                     const isP1      = user && m.player1_id === user.id;
-                    const p1win     = done && !walkover && m.winner_id === m.player1_id;
-                    const p2win     = done && !walkover && m.winner_id === m.player2_id;
+                    // Guard null === null — only mark a real winner
+                    const p1win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player1_id;
+                    const p2win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player2_id;
+                    // "Did not play": empty slot fed by a voided/walkover match
+                    const sortedFeeders = (feedersOf[m.id] ?? []).slice().sort((a, b) => a.match_sequence - b.match_sequence);
+                    const isVoidFeeder  = (f?: KnockoutMatch) => !!f && f.status === "complete" && !f.winner_id;
+                    const p1IsDNP = !m.player1_id && isVoidFeeder(sortedFeeders[0]);
+                    const p2IsDNP = !m.player2_id && isVoidFeeder(sortedFeeders[1]);
                     const myResult  = isP1 ? m.player1_result : m.player2_result;
                     const opponentResult = isP1 ? m.player2_result : m.player1_result;
                     const opponentName   = isP1 ? m.player2_name : m.player1_name;
@@ -1460,8 +1475,9 @@ export default function EventDetailScreen() {
                           borderRadius: 8, paddingHorizontal: 8 }}>
                           {p1win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
                           <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: p1win ? colors.primary : colors.foreground }}>
-                            {m.player1_name ?? "TBD"}
+                            color: p1win ? colors.primary : p1IsDNP ? "#f97316" : colors.foreground,
+                            fontStyle: p1IsDNP ? "italic" : "normal" }}>
+                            {m.player1_name ?? (p1IsDNP ? "Did not play" : "TBD")}
                           </Text>
                           {m.player1_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                           {m.player1_result && !done && (
@@ -1481,8 +1497,9 @@ export default function EventDetailScreen() {
                           borderRadius: 8, paddingHorizontal: 8 }}>
                           {p2win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
                           <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: p2win ? colors.primary : colors.foreground }}>
-                            {bye ? "Bye" : (m.player2_name ?? "TBD")}
+                            color: p2win ? colors.primary : p2IsDNP ? "#f97316" : colors.foreground,
+                            fontStyle: p2IsDNP ? "italic" : "normal" }}>
+                            {bye ? "Bye" : (m.player2_name ?? (p2IsDNP ? "Did not play" : "TBD"))}
                           </Text>
                           {m.player2_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                           {m.player2_result && !done && (
@@ -1546,7 +1563,8 @@ export default function EventDetailScreen() {
                         )}
                       </View>
                     );
-                  })}
+                  })
+                })()}
               </>
             )}
           </>

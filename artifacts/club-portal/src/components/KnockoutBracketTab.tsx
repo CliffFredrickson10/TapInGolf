@@ -96,15 +96,21 @@ function ResultBadge({ result }: { result: string | null }) {
   );
 }
 
-function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; y: number; onScore: (m: KnockoutMatch) => void }) {
+function MatchCard({ match, x, y, onScore, feeders = [] }: { match: KnockoutMatch; x: number; y: number; onScore: (m: KnockoutMatch) => void; feeders?: KnockoutMatch[] }) {
   const done       = match.status === "complete";
   const live       = match.status === "in_progress";
   const bye        = match.status === "bye";
   const disputed   = !!match.dispute;
-  // walkover: completed by deadline expiry — both players lose, no winner
-  const walkover   = done && !match.winner_id && !!(match.player1_id || match.player2_id);
-  const p1win      = done && !walkover && match.winner_id === match.player1_id;
-  const p2win      = done && !walkover && match.winner_id === match.player2_id;
+  // walkover: deadline expired — no winner regardless of whether players were set
+  const walkover   = done && !match.winner_id;
+  // Guard against null === null — only highlight a real winner
+  const p1win      = done && !walkover && match.winner_id !== null && match.winner_id === match.player1_id;
+  const p2win      = done && !walkover && match.winner_id !== null && match.winner_id === match.player2_id;
+  // "Did not play": slot is empty because its feeder match expired with no winner
+  const sortedFeeders = [...feeders].sort((a, b) => a.match_sequence - b.match_sequence);
+  const isVoid = (f?: KnockoutMatch) => !!f && f.status === "complete" && !f.winner_id;
+  const p1IsDNP = !match.player1_id && isVoid(sortedFeeders[0]);
+  const p2IsDNP = !match.player2_id && isVoid(sortedFeeders[1]);
   const dotColor   = disputed ? RED : walkover ? "#f97316" : done ? "#16a34a" : live ? GOLD : bye ? "#e5e7eb" : LGRAY;
   const borderCol  = disputed ? RED : walkover ? "#fed7aa" : done ? "#b7dfc8" : live ? GOLD : "#e5e7eb";
   const barBg      = disputed ? "#fee2e2" : walkover ? "#fff7ed" : done ? "#f0faf4" : live ? `${GOLD}18` : "#f9fafb";
@@ -130,20 +136,28 @@ function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; 
         {match.score && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN }}>{match.score}</span>}
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p1win ? "#f0faf4" : "#fff" }}>
-        <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
-          {match.player1_name ?? <span style={{ color: "#d1d5db", fontStyle: "italic" }}>TBD</span>}
-        </span>
+        {match.player1_name ? (
+          <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
+            {match.player1_name}
+          </span>
+        ) : (
+          <span style={{ fontSize: 10, flex: 1, fontStyle: "italic", color: p1IsDNP ? "#f97316" : "#d1d5db" }}>
+            {p1IsDNP ? "Did not play" : "TBD"}
+          </span>
+        )}
         {match.player1_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player1_handicap}</span>}
         {p1win && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700 }}>✓</span>}
         {!done && <ResultBadge result={match.player1_result} />}
       </div>
       <div style={{ fontSize: 9, textAlign: "center", color: "#d1d5db", fontWeight: 700, lineHeight: "10px" }}>vs</div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p2win ? "#f0faf4" : "#fff" }}>
-        {(bye && !match.player2_name) ? (
-          <span style={{ fontSize: 10, color: "#d1d5db", fontStyle: "italic", flex: 1 }}>TBD</span>
-        ) : (
+        {match.player2_name ? (
           <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#374151" }}>
-            {match.player2_name ?? <span style={{ color: "#d1d5db", fontStyle: "italic" }}>TBD</span>}
+            {match.player2_name}
+          </span>
+        ) : (
+          <span style={{ fontSize: 10, flex: 1, fontStyle: "italic", color: p2IsDNP ? "#f97316" : "#d1d5db" }}>
+            {bye ? "Bye" : p2IsDNP ? "Did not play" : "TBD"}
           </span>
         )}
         {match.player2_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player2_handicap}</span>}
@@ -877,21 +891,33 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             })()}
           </svg>
 
-          {positions.map((roundPositions, r) =>
-            roundPositions.map((pos, i) => {
-              const match = rounds[r]?.matches[i];
-              if (!match) return null;
-              return (
-                <MatchCard
-                  key={`${r}-${i}`}
-                  match={match}
-                  x={colX(r)}
-                  y={pos.topY}
-                  onScore={m => !readOnly && setEditScore(m)}
-                />
-              );
-            })
-          )}
+          {(() => {
+            // Build reverse feeder map: next_match_id → [feeder matches]
+            const allMatches = rounds.flatMap(r => r.matches);
+            const feedersOf: Record<number, KnockoutMatch[]> = {};
+            allMatches.forEach(m => {
+              if (m.next_match_id != null) {
+                if (!feedersOf[m.next_match_id]) feedersOf[m.next_match_id] = [];
+                feedersOf[m.next_match_id].push(m);
+              }
+            });
+            return positions.map((roundPositions, r) =>
+              roundPositions.map((pos, i) => {
+                const match = rounds[r]?.matches[i];
+                if (!match) return null;
+                return (
+                  <MatchCard
+                    key={`${r}-${i}`}
+                    match={match}
+                    x={colX(r)}
+                    y={pos.topY}
+                    onScore={m => !readOnly && setEditScore(m)}
+                    feeders={feedersOf[match.id] ?? []}
+                  />
+                );
+              })
+            );
+          })()}
 
           {/* Champion box */}
           {(() => {

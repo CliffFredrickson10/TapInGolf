@@ -1498,132 +1498,197 @@ export default function EventDetailScreen() {
                       feedersOf[fm.next_match_id].push(fm);
                     }
                   });
-                  const roundMatches = bracketData.matches.filter(m => m.round_number === bracketRound);
-                  const matchPairs: KnockoutMatch[][] = [];
-                  for (let i = 0; i < roundMatches.length; i += 2) matchPairs.push(roundMatches.slice(i, i + 2));
-                  return matchPairs.map((pair, pairIdx) => (
-                    <View key={pairIdx} style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
-                      {pair.map(m => {
-                        const done      = m.status === "complete";
-                        const bye       = m.status === "bye";
-                        const walkover  = done && !m.winner_id;
-                        const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id || m.player1_partner_id === user.id || m.player2_partner_id === user.id);
-                        const p1win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player1_id;
-                        const p2win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player2_id;
-                        const sortedFeeders = (feedersOf[m.id] ?? []).slice().sort((a, b) => a.match_sequence - b.match_sequence);
-                        const isVoidFeeder  = (f?: KnockoutMatch) => !!f && f.status === "complete" && !f.winner_id;
-                        const p1IsDNP = !m.player1_id && isVoidFeeder(sortedFeeders[0]);
-                        const p2IsDNP = !m.player2_id && isVoidFeeder(sortedFeeders[1]);
-                        const disputed  = m.dispute;
-                        return (
-                          <View key={m.id} style={[styles.metaCard, {
-                            flex: 1,
-                            backgroundColor: colors.card,
-                            borderColor: disputed ? "#ef4444" : isMyMatch ? colors.primary : done ? colors.primary + "40" : colors.border,
-                            borderWidth: isMyMatch || disputed ? 2 : 1,
-                            marginBottom: 0, gap: 0, padding: 10,
-                          }]}>
-                            <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontWeight: "600" }}>M{m.match_sequence}</Text>
-                              <View style={{ flexDirection: "row", gap: 4 }}>
-                                {disputed && (
-                                  <View style={{ backgroundColor: "#fee2e2", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                    <Text style={{ fontSize: 8, color: "#ef4444", fontWeight: "700" }}>⚠️</Text>
-                                  </View>
-                                )}
-                                {isMyMatch && !done && !bye && !disputed && (
-                                  <View style={{ backgroundColor: colors.primary + "18", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                    <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOURS</Text>
-                                  </View>
-                                )}
-                                {done && !walkover && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                  <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>DONE</Text>
-                                </View>}
-                                {walkover && <View style={{ backgroundColor: "#fff7ed", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                  <Text style={{ fontSize: 8, color: "#f97316", fontWeight: "700" }}>W/O</Text>
-                                </View>}
-                                {!done && !bye && !isMyMatch && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                  <Text style={{ fontSize: 8, color: "#92711a", fontWeight: "700" }}>UP</Text>
-                                </View>}
-                                {bye && <View style={{ backgroundColor: "#6366f120", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
-                                  <Text style={{ fontSize: 8, color: "#6366f1", fontWeight: "700" }}>BYE</Text>
-                                </View>}
-                              </View>
-                            </View>
 
-                            {/* Player 1 */}
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 5,
-                              backgroundColor: p1win ? colors.primary + "10" : "transparent",
-                              borderRadius: 7, paddingHorizontal: 6 }}>
-                              {p1win && <Ionicons name="trophy" size={11} color="#c8a84b" />}
-                              <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700",
-                                  color: p1win ? colors.primary : p1IsDNP ? "#f97316" : colors.foreground,
-                                  fontStyle: p1IsDNP ? "italic" : "normal" }}>
-                                  {m.player1_name ?? (p1IsDNP ? "DNP" : "TBD")}
-                                </Text>
-                                {event?.format === "knockout_team" && m.player1_partner_name && (
-                                  <Text numberOfLines={1} style={{ fontSize: 10, color: colors.mutedForeground }}>
-                                    & {m.player1_partner_name}
-                                  </Text>
-                                )}
-                              </View>
-                              {(m.player1_id === user?.id || m.player1_partner_id === user?.id) && <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
-                              {m.player1_result && !done && (
-                                <View style={{ backgroundColor: m.player1_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
-                                  <Text style={{ fontSize: 8, fontWeight: "700", color: m.player1_result === "won" ? "#166534" : "#991b1b" }}>
-                                    {m.player1_result === "won" ? "W" : "L"}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-
-                            <Text style={{ textAlign: "center", fontSize: 10, color: colors.mutedForeground, paddingVertical: 1 }}>vs</Text>
-
-                            {/* Player 2 */}
-                            <View style={{ flexDirection: "row", alignItems: "center", gap: 6, paddingVertical: 5,
-                              backgroundColor: p2win ? colors.primary + "10" : "transparent",
-                              borderRadius: 7, paddingHorizontal: 6 }}>
-                              {p2win && <Ionicons name="trophy" size={11} color="#c8a84b" />}
-                              <View style={{ flex: 1, minWidth: 0 }}>
-                                <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700",
-                                  color: p2win ? colors.primary : p2IsDNP ? "#f97316" : colors.foreground,
-                                  fontStyle: p2IsDNP ? "italic" : "normal" }}>
-                                  {bye ? "Bye" : (m.player2_name ?? (p2IsDNP ? "DNP" : "TBD"))}
-                                </Text>
-                                {event?.format === "knockout_team" && !bye && m.player2_partner_name && (
-                                  <Text numberOfLines={1} style={{ fontSize: 10, color: colors.mutedForeground }}>
-                                    & {m.player2_partner_name}
-                                  </Text>
-                                )}
-                              </View>
-                              {(m.player2_id === user?.id || m.player2_partner_id === user?.id) && <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
-                              {m.player2_result && !done && (
-                                <View style={{ backgroundColor: m.player2_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
-                                  <Text style={{ fontSize: 8, fontWeight: "700", color: m.player2_result === "won" ? "#166534" : "#991b1b" }}>
-                                    {m.player2_result === "won" ? "W" : "L"}
-                                  </Text>
-                                </View>
-                              )}
-                            </View>
-
-                            {m.score && (
-                              <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>
-                                {m.score}
-                              </Text>
-                            )}
-
-                            {disputed && (
-                              <View style={{ backgroundColor: "#fff7ed", borderRadius: 6, borderWidth: 1, borderColor: "#fed7aa", padding: 6, marginTop: 6 }}>
-                                <Text style={{ fontSize: 10, color: "#9a3412", fontWeight: "700" }}>⚠️ Disputed</Text>
-                              </View>
-                            )}
-
+                  // Compact feeder card shown in the left column
+                  const renderFeederCard = (f: KnockoutMatch) => {
+                    const fdone  = f.status === "complete";
+                    const fbye   = f.status === "bye";
+                    const fwalk  = fdone && !f.winner_id;
+                    const fp1win = fdone && !fwalk && f.winner_id !== null && f.winner_id === f.player1_id;
+                    const fp2win = fdone && !fwalk && f.winner_id !== null && f.winner_id === f.player2_id;
+                    const sBg    = fdone ? (fwalk ? "#fff7ed" : colors.primary + "14") : colors.muted + "60";
+                    const sClr   = fdone ? (fwalk ? "#f97316" : colors.primary) : colors.mutedForeground;
+                    const sTxt   = fdone ? (fwalk ? "W/O" : "COMPLETE") : fbye ? "BYE" : "PENDING";
+                    return (
+                      <View key={f.id} style={[styles.metaCard, {
+                        flex: 1, backgroundColor: colors.card,
+                        borderColor: fdone ? colors.primary + "40" : colors.border,
+                        padding: 8, marginBottom: 0, gap: 0,
+                      }]}>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 5 }}>
+                          <View style={{ backgroundColor: sBg, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 }}>
+                            <Text style={{ fontSize: 8, fontWeight: "700", color: sClr }}>{sTxt}</Text>
                           </View>
-                        );
-                      })}
-                    </View>
-                  ));
+                          <Text style={{ fontSize: 9, color: colors.mutedForeground }}>M{f.match_sequence}</Text>
+                        </View>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3,
+                          backgroundColor: fp1win ? colors.primary + "12" : "transparent",
+                          borderRadius: 5, paddingHorizontal: 4 }}>
+                          {fp1win && <Ionicons name="trophy" size={9} color="#c8a84b" />}
+                          <Text numberOfLines={1} style={{ flex: 1, fontSize: 11,
+                            fontWeight: fp1win ? "700" : "500",
+                            color: fp1win ? colors.primary : colors.foreground }}>
+                            {f.player1_name ?? "TBD"}
+                          </Text>
+                        </View>
+                        <Text style={{ textAlign: "center", fontSize: 9, color: colors.mutedForeground, paddingVertical: 1 }}>vs</Text>
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingVertical: 3,
+                          backgroundColor: fp2win ? colors.primary + "12" : "transparent",
+                          borderRadius: 5, paddingHorizontal: 4 }}>
+                          {fp2win && <Ionicons name="trophy" size={9} color="#c8a84b" />}
+                          <Text numberOfLines={1} style={{ flex: 1, fontSize: 11,
+                            fontWeight: fp2win ? "700" : "500",
+                            color: fp2win ? colors.primary : colors.foreground }}>
+                            {fbye ? "Bye" : (f.player2_name ?? "TBD")}
+                          </Text>
+                        </View>
+                      </View>
+                    );
+                  };
+
+                  // Main match card (right column, or R1 pair)
+                  const renderMainCard = (m: KnockoutMatch, mFeeders: KnockoutMatch[]) => {
+                    const done      = m.status === "complete";
+                    const bye       = m.status === "bye";
+                    const walkover  = done && !m.winner_id;
+                    const isMyMatch = !!(user && (m.player1_id === user.id || m.player2_id === user.id || m.player1_partner_id === user.id || m.player2_partner_id === user.id));
+                    const p1win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player1_id;
+                    const p2win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player2_id;
+                    const srtd      = mFeeders.slice().sort((a, b) => a.match_sequence - b.match_sequence);
+                    const isVoid    = (f?: KnockoutMatch) => !!f && f.status === "complete" && !f.winner_id;
+                    const p1IsDNP   = !m.player1_id && isVoid(srtd[0]);
+                    const p2IsDNP   = !m.player2_id && isVoid(srtd[1]);
+                    const disputed  = m.dispute;
+                    return (
+                      <View key={m.id} style={[styles.metaCard, {
+                        flex: 1, backgroundColor: colors.card,
+                        borderColor: disputed ? "#ef4444" : isMyMatch ? colors.primary : done ? colors.primary + "40" : colors.border,
+                        borderWidth: isMyMatch || disputed ? 2 : 1,
+                        marginBottom: 0, gap: 0, padding: 10,
+                      }]}>
+                        <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+                          <Text style={{ fontSize: 10, color: colors.mutedForeground, fontWeight: "600" }}>M{m.match_sequence}</Text>
+                          <View style={{ flexDirection: "row", gap: 4 }}>
+                            {disputed && <View style={{ backgroundColor: "#fee2e2", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#ef4444", fontWeight: "700" }}>⚠️</Text>
+                            </View>}
+                            {isMyMatch && !done && !bye && !disputed && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOURS</Text>
+                            </View>}
+                            {done && !walkover && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>DONE</Text>
+                            </View>}
+                            {walkover && <View style={{ backgroundColor: "#fff7ed", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#f97316", fontWeight: "700" }}>W/O</Text>
+                            </View>}
+                            {!done && !bye && !isMyMatch && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#92711a", fontWeight: "700" }}>PENDING</Text>
+                            </View>}
+                            {bye && <View style={{ backgroundColor: "#6366f120", borderRadius: 5, paddingHorizontal: 5, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, color: "#6366f1", fontWeight: "700" }}>BYE</Text>
+                            </View>}
+                          </View>
+                        </View>
+                        {/* Player 1 */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 5,
+                          backgroundColor: p1win ? colors.primary + "10" : "transparent",
+                          borderRadius: 7, paddingHorizontal: 6 }}>
+                          {p1win && <Ionicons name="trophy" size={11} color="#c8a84b" />}
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700",
+                              color: p1win ? colors.primary : p1IsDNP ? "#f97316" : colors.foreground,
+                              fontStyle: p1IsDNP ? "italic" : "normal" }}>
+                              {m.player1_name ?? (p1IsDNP ? "DNP" : "TBD")}
+                            </Text>
+                            {event?.format === "knockout_team" && m.player1_partner_name && (
+                              <Text numberOfLines={1} style={{ fontSize: 9, color: colors.mutedForeground }}>& {m.player1_partner_name}</Text>
+                            )}
+                          </View>
+                          {(m.player1_id === user?.id || m.player1_partner_id === user?.id) && <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          {m.player1_result && !done && (
+                            <View style={{ backgroundColor: m.player1_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 8, fontWeight: "700", color: m.player1_result === "won" ? "#166534" : "#991b1b" }}>
+                                {m.player1_result === "won" ? "W" : "L"}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        <Text style={{ textAlign: "center", fontSize: 10, color: colors.mutedForeground, paddingVertical: 1 }}>vs</Text>
+                        {/* Player 2 */}
+                        <View style={{ flexDirection: "row", alignItems: "center", gap: 5, paddingVertical: 5,
+                          backgroundColor: p2win ? colors.primary + "10" : "transparent",
+                          borderRadius: 7, paddingHorizontal: 6 }}>
+                          {p2win && <Ionicons name="trophy" size={11} color="#c8a84b" />}
+                          <View style={{ flex: 1, minWidth: 0 }}>
+                            <Text numberOfLines={1} style={{ fontSize: 12, fontWeight: "700",
+                              color: p2win ? colors.primary : p2IsDNP ? "#f97316" : colors.foreground,
+                              fontStyle: p2IsDNP ? "italic" : "normal" }}>
+                              {bye ? "Bye" : (m.player2_name ?? (p2IsDNP ? "DNP" : "TBD"))}
+                            </Text>
+                            {event?.format === "knockout_team" && !bye && m.player2_partner_name && (
+                              <Text numberOfLines={1} style={{ fontSize: 9, color: colors.mutedForeground }}>& {m.player2_partner_name}</Text>
+                            )}
+                          </View>
+                          {(m.player2_id === user?.id || m.player2_partner_id === user?.id) && <Text style={{ fontSize: 8, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          {m.player2_result && !done && (
+                            <View style={{ backgroundColor: m.player2_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 3, paddingHorizontal: 4, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 8, fontWeight: "700", color: m.player2_result === "won" ? "#166534" : "#991b1b" }}>
+                                {m.player2_result === "won" ? "W" : "L"}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {m.score && <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center", marginTop: 4 }}>{m.score}</Text>}
+                        {disputed && (
+                          <View style={{ backgroundColor: "#fff7ed", borderRadius: 6, borderWidth: 1, borderColor: "#fed7aa", padding: 6, marginTop: 6 }}>
+                            <Text style={{ fontSize: 10, color: "#9a3412", fontWeight: "700" }}>⚠️ Disputed</Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  };
+
+                  const roundMatches = bracketData.matches.filter(m => m.round_number === bracketRound);
+
+                  // Round 1 — no feeders, show 2-per-row pairs
+                  if (bracketRound === 1) {
+                    const pairs: KnockoutMatch[][] = [];
+                    for (let i = 0; i < roundMatches.length; i += 2) pairs.push(roundMatches.slice(i, i + 2));
+                    return pairs.map((pair, idx) => (
+                      <View key={idx} style={{ flexDirection: "row", gap: 8, marginBottom: 10 }}>
+                        {pair.map(m => renderMainCard(m, []))}
+                      </View>
+                    ));
+                  }
+
+                  // Round > 1 — feeder bracket context: [feeder1, feeder2] → [this match]
+                  return roundMatches.map(m => {
+                    const feeders = (feedersOf[m.id] ?? []).slice().sort((a, b) => a.match_sequence - b.match_sequence);
+                    return (
+                      <View key={m.id} style={{ flexDirection: "row", gap: 6, marginBottom: 14, alignItems: "stretch" }}>
+                        {/* Left column: feeder matches stacked */}
+                        <View style={{ flex: 1, gap: 6 }}>
+                          {feeders.length > 0 ? feeders.map(f => renderFeederCard(f)) : (
+                            <View style={[styles.metaCard, {
+                              flex: 1, backgroundColor: colors.muted + "40",
+                              borderColor: colors.border, padding: 9, marginBottom: 0,
+                              justifyContent: "center", alignItems: "center",
+                            }]}>
+                              <Text style={{ fontSize: 10, color: colors.mutedForeground, fontStyle: "italic" }}>No feeder</Text>
+                            </View>
+                          )}
+                        </View>
+                        {/* Arrow connector */}
+                        <View style={{ width: 14, justifyContent: "center", alignItems: "center" }}>
+                          <Ionicons name="chevron-forward" size={13} color={colors.mutedForeground} />
+                        </View>
+                        {/* Right column: this round's match */}
+                        <View style={{ flex: 1 }}>
+                          {renderMainCard(m, feeders)}
+                        </View>
+                      </View>
+                    );
+                  });
                 })()}
               </>
             )}

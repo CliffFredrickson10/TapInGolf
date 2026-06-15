@@ -50,6 +50,7 @@ interface KnockoutMatch {
   winner_id: number | null; winner_name: string | null;
   score: string | null; status: string;
   next_match_id: number | null; notification_sent_at: string | null;
+  player1_result: string | null; player2_result: string | null; dispute: boolean;
 }
 
 interface KnockoutRound {
@@ -84,15 +85,27 @@ function PlayerRow({ name, hcp, isWinner, isBye }: { name: string | null; hcp?: 
   );
 }
 
+function ResultBadge({ result }: { result: string | null }) {
+  if (!result) return null;
+  const won = result === "won";
+  return (
+    <span style={{ fontSize: 8, fontWeight: 700, padding: "1px 4px", borderRadius: 3,
+      background: won ? "#dcfce7" : "#fee2e2", color: won ? "#15803d" : "#dc2626", flexShrink: 0 }}>
+      {won ? "W" : "L"}
+    </span>
+  );
+}
+
 function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; y: number; onScore: (m: KnockoutMatch) => void }) {
   const done       = match.status === "complete";
   const live       = match.status === "in_progress";
   const bye        = match.status === "bye";
+  const disputed   = !!match.dispute;
   const p1win      = done && match.winner_id === match.player1_id;
   const p2win      = done && match.winner_id === match.player2_id;
-  const dotColor   = done ? "#16a34a" : live ? GOLD : bye ? "#e5e7eb" : LGRAY;
-  const borderCol  = done ? "#b7dfc8" : live ? GOLD : "#e5e7eb";
-  const barBg      = done ? "#f0faf4" : live ? `${GOLD}18` : "#f9fafb";
+  const dotColor   = disputed ? RED : done ? "#16a34a" : live ? GOLD : bye ? "#e5e7eb" : LGRAY;
+  const borderCol  = disputed ? RED : done ? "#b7dfc8" : live ? GOLD : "#e5e7eb";
+  const barBg      = disputed ? "#fee2e2" : done ? "#f0faf4" : live ? `${GOLD}18` : "#f9fafb";
   const notified   = !!match.notification_sent_at;
 
   return (
@@ -100,22 +113,41 @@ function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; 
       style={{
         position: "absolute", left: x, top: y, width: CARD_W, height: CARD_H,
         border: `1.5px solid ${borderCol}`, borderRadius: 8, overflow: "hidden",
-        background: "#fff", boxShadow: live ? `0 0 0 2px ${GOLD}44` : "0 1px 3px rgba(0,0,0,.06)",
+        background: "#fff", boxShadow: disputed ? `0 0 0 2px ${RED}44` : live ? `0 0 0 2px ${GOLD}44` : "0 1px 3px rgba(0,0,0,.06)",
         display: "flex", flexDirection: "column", cursor: !bye ? "pointer" : "default",
       }}
       onClick={() => !bye && onScore(match)}
-      title={!bye ? "Click to enter score" : "Bye"}
+      title={disputed ? "⚠️ Disputed — click to resolve" : !bye ? "Click to enter score" : "Bye"}
     >
       <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 7px", background: barBg, borderBottom: `1px solid ${borderCol}40` }}>
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
-        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.4, color: done ? GREEN : live ? GOLD : bye ? "#9ca3af" : "#9ca3af", flex: 1 }}>
-          {bye ? "Bye" : done ? "Complete" : live ? "Live" : "Pending"}
+        <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.4,
+          color: disputed ? RED : done ? GREEN : live ? GOLD : "#9ca3af", flex: 1 }}>
+          {disputed ? "⚠️ Disputed" : bye ? "Bye" : done ? "Complete" : live ? "Live" : "Pending"}
         </span>
         {match.score && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN }}>{match.score}</span>}
       </div>
-      <PlayerRow name={match.player1_name} hcp={match.player1_handicap} isWinner={p1win} />
+      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p1win ? "#f0faf4" : "#fff" }}>
+        <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
+          {match.player1_name ?? <span style={{ color: "#d1d5db", fontStyle: "italic" }}>TBD</span>}
+        </span>
+        {match.player1_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player1_handicap}</span>}
+        {p1win && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700 }}>✓</span>}
+        {!done && <ResultBadge result={match.player1_result} />}
+      </div>
       <div style={{ fontSize: 9, textAlign: "center", color: "#d1d5db", fontWeight: 700, lineHeight: "10px" }}>vs</div>
-      <PlayerRow name={match.player2_name} hcp={match.player2_handicap} isWinner={p2win} isBye={bye && !match.player2_name} />
+      <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p2win ? "#f0faf4" : "#fff" }}>
+        {(bye && !match.player2_name) ? (
+          <span style={{ fontSize: 10, color: "#d1d5db", fontStyle: "italic", flex: 1 }}>TBD</span>
+        ) : (
+          <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#374151" }}>
+            {match.player2_name ?? <span style={{ color: "#d1d5db", fontStyle: "italic" }}>TBD</span>}
+          </span>
+        )}
+        {match.player2_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player2_handicap}</span>}
+        {p2win && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700 }}>✓</span>}
+        {!done && <ResultBadge result={match.player2_result} />}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "2px 7px", marginTop: "auto", borderTop: "1px solid #f3f4f6" }}>
         {notified ? <span style={{ fontSize: 8, fontWeight: 600, color: "#2563eb" }}>✉ Sent</span>
                   : <span style={{ fontSize: 8, color: "#d1d5db" }}>✉ pending</span>}
@@ -255,11 +287,31 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
     match.player2_id && match.player2_name ? { id: match.player2_id, name: match.player2_name } : null,
   ].filter(Boolean) as { id: number; name: string }[];
 
+  const hasDispute = !!match.dispute;
+
   return (
     <Dialog open onOpenChange={() => onClose()}>
       <DialogContent className="max-w-xs">
-        <DialogHeader><DialogTitle>Enter Match Result</DialogTitle></DialogHeader>
+        <DialogHeader>
+          <DialogTitle>{hasDispute ? "⚠️ Resolve Disputed Result" : "Enter Match Result"}</DialogTitle>
+        </DialogHeader>
         <div className="space-y-3 py-2">
+          {hasDispute && (
+            <div style={{ background: "#fff7ed", border: "1px solid #fed7aa", borderRadius: 8, padding: "10px 12px" }}>
+              <p style={{ fontSize: 12, fontWeight: 700, color: "#9a3412", marginBottom: 6 }}>Players reported conflicting results</p>
+              {match.player1_name && match.player1_result && (
+                <p style={{ fontSize: 12, color: "#7c3f1e", lineHeight: 1.5 }}>
+                  <strong>{match.player1_name}</strong> reported: <strong style={{ color: match.player1_result === "won" ? "#15803d" : "#dc2626" }}>{match.player1_result}</strong>
+                </p>
+              )}
+              {match.player2_name && match.player2_result && (
+                <p style={{ fontSize: 12, color: "#7c3f1e", lineHeight: 1.5, marginTop: 2 }}>
+                  <strong>{match.player2_name}</strong> reported: <strong style={{ color: match.player2_result === "won" ? "#15803d" : "#dc2626" }}>{match.player2_result}</strong>
+                </p>
+              )}
+              <p style={{ fontSize: 11, color: "#9a3412", marginTop: 6, fontStyle: "italic" }}>Select the correct winner below to resolve.</p>
+            </div>
+          )}
           <div className="space-y-1.5">
             <Label>Winner</Label>
             <Select value={winnerId} onValueChange={setWinnerId}>
@@ -276,7 +328,9 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
         </div>
         <DialogFooter>
           <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
-          <Button size="sm" disabled={saving} onClick={save}>{saving ? "Saving…" : "Save Result"}</Button>
+          <Button size="sm" disabled={saving} onClick={save} style={hasDispute ? { background: "#dc2626" } : {}}>
+            {saving ? "Saving…" : hasDispute ? "Resolve Dispute" : "Save Result"}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -675,6 +729,46 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
           </div>
         </div>
       )}
+
+      {/* Disputes banner */}
+      {(() => {
+        const disputed = rounds.flatMap(r => r.matches.filter(m => m.dispute));
+        if (disputed.length === 0) return null;
+        return (
+          <div style={{ background: "#fff7ed", border: "1.5px solid #fb923c", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <span style={{ fontSize: 15 }}>⚠️</span>
+              <span style={{ fontSize: 12, fontWeight: 700, color: "#9a3412" }}>
+                {disputed.length} disputed {disputed.length === 1 ? "match" : "matches"} — click the red card to resolve
+              </span>
+            </div>
+            {disputed.map(m => {
+              const round = rounds.find(r => r.matches.some(x => x.id === m.id));
+              return (
+                <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: "1px solid #fed7aa" }}>
+                  <span style={{ fontSize: 11, color: "#9a3412", fontWeight: 600, minWidth: 70 }}>{round?.label ?? "Round"}</span>
+                  <span style={{ fontSize: 11, color: "#7c3f1e", flex: 1 }}>
+                    {m.player1_name ?? "TBD"} vs {m.player2_name ?? "TBD"}
+                    {m.player1_result && m.player2_result && (
+                      <span style={{ color: "#ef4444", marginLeft: 8 }}>
+                        ({m.player1_name}: {m.player1_result} · {m.player2_name}: {m.player2_result})
+                      </span>
+                    )}
+                  </span>
+                  {!readOnly && (
+                    <button
+                      onClick={() => setEditScore(m)}
+                      style={{ fontSize: 10, fontWeight: 700, padding: "3px 8px", borderRadius: 5, border: "1px solid #ef4444", background: "#fef2f2", color: "#dc2626", cursor: "pointer" }}
+                    >
+                      Resolve
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        );
+      })()}
 
       {/* Toolbar */}
       <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10, flexWrap: "wrap" }}>

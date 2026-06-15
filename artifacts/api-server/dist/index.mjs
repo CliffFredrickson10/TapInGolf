@@ -70740,7 +70740,7 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
   }
   const { winner_id, score } = req.body ?? {};
   await run(
-    "UPDATE knockout_matches SET winner_id = ?, score = ?, status = 'complete' WHERE id = ?",
+    "UPDATE knockout_matches SET winner_id = ?, score = ?, status = 'complete', dispute = FALSE, player1_result = NULL, player2_result = NULL WHERE id = ?",
     [winner_id ?? null, score ?? null, matchId]
   );
   if (winner_id && match.next_match_id) {
@@ -70748,6 +70748,37 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
     if (nxt) {
       const field = nxt.player1_id == null ? "player1_id" : "player2_id";
       await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winner_id, match.next_match_id]);
+      const nxtFresh = await row(
+        `SELECT km.*,
+                p1.name as player1_name, p1.push_token as p1_token,
+                p2.name as player2_name, p2.push_token as p2_token,
+                kr.label as round_label, kr.deadline as round_deadline
+         FROM knockout_matches km
+         LEFT JOIN users p1 ON p1.id = km.player1_id
+         LEFT JOIN users p2 ON p2.id = km.player2_id
+         JOIN knockout_rounds kr ON kr.id = km.round_id
+         WHERE km.id = ?`,
+        [match.next_match_id]
+      );
+      if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
+        const ev2 = await row("SELECT name FROM golf_events WHERE id = ?", [evId]);
+        const deadline = nxtFresh.round_deadline ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}` : "";
+        const pushMsgs = [];
+        for (const [playerId, opponentName, pushToken] of [
+          [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
+          [nxtFresh.player2_id, nxtFresh.player1_name, nxtFresh.p2_token]
+        ]) {
+          const title = `${ev2?.name ?? "Knockout"} \u2014 Your next match is ready`;
+          const body = `You play ${opponentName} in the ${nxtFresh.round_label}${deadline}. Tap to view the bracket.`;
+          const data = { type: "knockout_next_match", eventId: evId, matchId: match.next_match_id };
+          await saveUserNotification(playerId, "knockout_next_match", title, body, data);
+          if (pushToken?.startsWith("ExponentPushToken[")) {
+            pushMsgs.push({ to: pushToken, sound: "default", title, body, data });
+          }
+        }
+        if (pushMsgs.length) sendPushNotifications(pushMsgs);
+        await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.next_match_id]);
+      }
     }
   }
   const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
@@ -70835,6 +70866,127 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
   }
   res.json({ ok: true, notified, inbox_count: entrants.length });
 });
+router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Sign in to submit a result" });
+    return;
+  }
+  const evId = Number(req.params.id);
+  const matchId = Number(req.params.matchId);
+  const { result } = req.body ?? {};
+  if (result !== "won" && result !== "lost") {
+    res.status(400).json({ message: "result must be 'won' or 'lost'" });
+    return;
+  }
+  const ev = await row(
+    "SELECT * FROM golf_events WHERE id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const match = await row(
+    `SELECT km.*,
+            p1.name as player1_name, p1.push_token as p1_token,
+            p2.name as player2_name, p2.push_token as p2_token,
+            kr.label as round_label, kr.deadline as round_deadline
+     FROM knockout_matches km
+     LEFT JOIN users p1 ON p1.id = km.player1_id
+     LEFT JOIN users p2 ON p2.id = km.player2_id
+     JOIN knockout_rounds kr ON kr.id = km.round_id
+     WHERE km.id = ? AND km.event_id = ?`,
+    [matchId, evId]
+  );
+  if (!match) {
+    res.status(404).json({ message: "Match not found" });
+    return;
+  }
+  const isP1 = match.player1_id === user.id;
+  const isP2 = match.player2_id === user.id;
+  if (!isP1 && !isP2) {
+    res.status(403).json({ message: "You are not a player in this match" });
+    return;
+  }
+  if (match.status === "complete" || match.status === "bye") {
+    res.status(400).json({ message: "This match is already settled" });
+    return;
+  }
+  const myResultField = isP1 ? "player1_result" : "player2_result";
+  const myCurrentResult = isP1 ? match.player1_result : match.player2_result;
+  if (myCurrentResult) {
+    res.status(400).json({ message: "You have already submitted a result for this match" });
+    return;
+  }
+  await run(`UPDATE knockout_matches SET ${myResultField} = ?, status = 'in_progress' WHERE id = ?`, [result, matchId]);
+  const opponentResult = isP1 ? match.player2_result : match.player1_result;
+  if (!opponentResult) {
+    res.json({ ok: true, status: "awaiting_opponent" });
+    return;
+  }
+  const myWon = result === "won";
+  const opponentWon = opponentResult === "won";
+  if (myWon !== opponentWon) {
+    const winnerId = myWon ? user.id : isP1 ? match.player2_id : match.player1_id;
+    await run(
+      "UPDATE knockout_matches SET winner_id = ?, status = 'complete', dispute = FALSE WHERE id = ?",
+      [winnerId, matchId]
+    );
+    if (match.next_match_id) {
+      const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+      if (nxt) {
+        const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+        await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+        const nxtFresh = await row(
+          `SELECT km.*, p1.name as player1_name, p1.push_token as p1_token,
+                  p2.name as player2_name, p2.push_token as p2_token,
+                  kr.label as round_label, kr.deadline as round_deadline
+           FROM knockout_matches km
+           LEFT JOIN users p1 ON p1.id = km.player1_id
+           LEFT JOIN users p2 ON p2.id = km.player2_id
+           JOIN knockout_rounds kr ON kr.id = km.round_id
+           WHERE km.id = ?`,
+          [match.next_match_id]
+        );
+        if (nxtFresh?.player1_id && nxtFresh?.player2_id && !nxtFresh.notification_sent_at) {
+          const deadline = nxtFresh.round_deadline ? ` by ${String(nxtFresh.round_deadline).slice(0, 10)}` : "";
+          const pushMsgs = [];
+          for (const [pid, opp, tok] of [
+            [nxtFresh.player1_id, nxtFresh.player2_name, nxtFresh.p1_token],
+            [nxtFresh.player2_id, nxtFresh.player1_name, nxtFresh.p2_token]
+          ]) {
+            const title = `${ev.name} \u2014 Your next match is ready`;
+            const body = `You play ${opp} in the ${nxtFresh.round_label}${deadline}. Tap to view the bracket.`;
+            const data = { type: "knockout_next_match", eventId: evId, matchId: match.next_match_id };
+            await saveUserNotification(pid, "knockout_next_match", title, body, data);
+            if (tok?.startsWith("ExponentPushToken[")) pushMsgs.push({ to: tok, sound: "default", title, body, data });
+          }
+          if (pushMsgs.length) sendPushNotifications(pushMsgs);
+          await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.next_match_id]);
+        }
+      }
+    }
+    const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+    if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
+      await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+    }
+    res.json({ ok: true, status: "complete", winner_id: winnerId });
+    return;
+  }
+  await run("UPDATE knockout_matches SET dispute = TRUE WHERE id = ?", [matchId]);
+  await exec(
+    `INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, ?, ?, ?, ?)`,
+    [
+      ev.club_id,
+      "knockout_dispute",
+      `${ev.name} \u2014 Result dispute`,
+      `${match.player1_name ?? "Player 1"} and ${match.player2_name ?? "Player 2"} both reported "${result}". Please review and set the correct result.`,
+      JSON.stringify({ eventId: evId, matchId })
+    ]
+  );
+  res.json({ ok: true, status: "dispute" });
+});
 router22.get("/events/:id/knockout/bracket", async (req, res) => {
   const evId = Number(req.params.id);
   const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
@@ -70843,7 +70995,8 @@ router22.get("/events/:id/knockout/bracket", async (req, res) => {
             km.player1_id, p1.name as player1_name,
             km.player2_id, p2.name as player2_name,
             km.winner_id, w.name as winner_name,
-            km.next_match_id, km.notification_sent_at
+            km.next_match_id, km.notification_sent_at,
+            km.player1_result, km.player2_result, km.dispute
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
@@ -71922,6 +72075,9 @@ async function createSchema() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_event ON knockout_matches (event_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_round ON knockout_matches (round_id)");
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS player1_result VARCHAR(10) CHECK (player1_result IN ('won','lost'))");
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS player2_result VARCHAR(10) CHECK (player2_result IN ('won','lost'))");
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS dispute BOOLEAN NOT NULL DEFAULT FALSE");
   await ddl(`
     CREATE TABLE IF NOT EXISTS club_bans (
       id               SERIAL PRIMARY KEY,

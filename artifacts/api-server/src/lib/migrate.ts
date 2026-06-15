@@ -1115,6 +1115,10 @@ async function createSchema(): Promise<void> {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_event ON knockout_matches (event_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_knockout_matches_round ON knockout_matches (round_id)");
+  // Player-submitted results + dispute flag (added after initial launch)
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS player1_result VARCHAR(10) CHECK (player1_result IN ('won','lost'))");
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS player2_result VARCHAR(10) CHECK (player2_result IN ('won','lost'))");
+  await ddl("ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS dispute BOOLEAN NOT NULL DEFAULT FALSE");
 
   // ── Club bans ──────────────────────────────────────────────────────────────
   // A club can ban a golfer from booking at their club. The golfer is notified

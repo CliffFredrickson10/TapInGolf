@@ -172,11 +172,12 @@ export default function EventDetailScreen() {
 
   // Knockout bracket state
   type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
-  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
   type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [bracketLoaded, setBracketLoaded] = useState(false);
   const [bracketRound, setBracketRound] = useState(1);
+  const [submittingResult, setSubmittingResult] = useState<number | null>(null);
 
   // Registration / payment state
   const [registering, setRegistering]     = useState(false);
@@ -351,6 +352,23 @@ export default function EventDetailScreen() {
     } catch (e: any) {
       setPayError(e.message ?? "Payment failed. Please try again.");
     } finally { setPaying(false); }
+  };
+
+  const submitMatchResult = async (matchId: number, result: "won" | "lost") => {
+    if (!user || !event) return;
+    setSubmittingResult(matchId);
+    try {
+      await apiFetch(`/events/${event.id}/knockout/matches/${matchId}/result`, user.token, {
+        method: "POST",
+        body: JSON.stringify({ result }),
+      });
+      // Refresh bracket data
+      setBracketLoaded(false);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to submit result");
+    } finally {
+      setSubmittingResult(null);
+    }
   };
 
   const setRoundField = (round: number, field: "gross" | "net" | "points", value: string) => {
@@ -1371,22 +1389,34 @@ export default function EventDetailScreen() {
                 {bracketData.matches
                   .filter(m => m.round_number === bracketRound)
                   .map(m => {
-                    const done    = m.status === "complete";
-                    const bye     = m.status === "bye";
+                    const done      = m.status === "complete";
+                    const bye       = m.status === "bye";
                     const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id);
-                    const p1win   = done && m.winner_id === m.player1_id;
-                    const p2win   = done && m.winner_id === m.player2_id;
+                    const isP1      = user && m.player1_id === user.id;
+                    const p1win     = done && m.winner_id === m.player1_id;
+                    const p2win     = done && m.winner_id === m.player2_id;
+                    const myResult  = isP1 ? m.player1_result : m.player2_result;
+                    const opponentResult = isP1 ? m.player2_result : m.player1_result;
+                    const opponentName   = isP1 ? m.player2_name : m.player1_name;
+                    const canSubmit = !!isMyMatch && !done && !bye && !myResult;
+                    const waiting   = !!isMyMatch && !done && !bye && !!myResult && !opponentResult && !m.dispute;
+                    const disputed  = m.dispute;
                     return (
                       <View key={m.id} style={[styles.metaCard, {
                         backgroundColor: colors.card,
-                        borderColor: isMyMatch ? colors.primary : done ? colors.primary + "40" : colors.border,
-                        borderWidth: isMyMatch ? 2 : 1,
+                        borderColor: disputed ? "#ef4444" : isMyMatch ? colors.primary : done ? colors.primary + "40" : colors.border,
+                        borderWidth: isMyMatch || disputed ? 2 : 1,
                         marginBottom: 10, gap: 0,
                       }]}>
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                           <Text style={{ fontSize: 11, color: colors.mutedForeground, fontWeight: "600" }}>Match {m.match_sequence}</Text>
                           <View style={{ flexDirection: "row", gap: 6 }}>
-                            {isMyMatch && !done && !bye && (
+                            {disputed && (
+                              <View style={{ backgroundColor: "#fee2e2", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                                <Text style={{ fontSize: 10, color: "#ef4444", fontWeight: "700" }}>⚠️ DISPUTED</Text>
+                              </View>
+                            )}
+                            {isMyMatch && !done && !bye && !disputed && (
                               <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
                                 <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOUR MATCH</Text>
                               </View>
@@ -1413,6 +1443,13 @@ export default function EventDetailScreen() {
                             {m.player1_name ?? "TBD"}
                           </Text>
                           {m.player1_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          {m.player1_result && !done && (
+                            <View style={{ backgroundColor: m.player1_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 9, fontWeight: "700", color: m.player1_result === "won" ? "#166534" : "#991b1b" }}>
+                                {m.player1_result === "won" ? "WON" : "LOST"}
+                              </Text>
+                            </View>
+                          )}
                         </View>
 
                         <Text style={{ textAlign: "center", fontSize: 11, color: colors.mutedForeground, paddingVertical: 2 }}>vs</Text>
@@ -1427,12 +1464,64 @@ export default function EventDetailScreen() {
                             {bye ? "Bye" : (m.player2_name ?? "TBD")}
                           </Text>
                           {m.player2_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          {m.player2_result && !done && (
+                            <View style={{ backgroundColor: m.player2_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                              <Text style={{ fontSize: 9, fontWeight: "700", color: m.player2_result === "won" ? "#166534" : "#991b1b" }}>
+                                {m.player2_result === "won" ? "WON" : "LOST"}
+                              </Text>
+                            </View>
+                          )}
                         </View>
 
                         {m.score && (
                           <Text style={{ fontSize: 11, color: colors.mutedForeground, textAlign: "center", marginTop: 6 }}>
                             Result: {m.score}
                           </Text>
+                        )}
+
+                        {/* ── Dispute notice ────────────────────────────────── */}
+                        {disputed && (
+                          <View style={{ backgroundColor: "#fff7ed", borderRadius: 8, borderWidth: 1, borderColor: "#fed7aa", padding: 10, marginTop: 8 }}>
+                            <Text style={{ fontSize: 12, color: "#9a3412", fontWeight: "700", marginBottom: 2 }}>⚠️ Result disputed</Text>
+                            <Text style={{ fontSize: 12, color: "#9a3412", lineHeight: 17 }}>
+                              Both players reported conflicting results. The club will review and set the official winner.
+                            </Text>
+                          </View>
+                        )}
+
+                        {/* ── Submit Result UI ─────────────────────────────── */}
+                        {canSubmit && (
+                          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 10, paddingTop: 10 }}>
+                            <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8, textAlign: "center" }}>
+                              Submit your result for this match
+                            </Text>
+                            <View style={{ flexDirection: "row", gap: 8 }}>
+                              <TouchableOpacity
+                                style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#dcfce7", borderWidth: 1.5, borderColor: "#16a34a", opacity: submittingResult === m.id ? 0.6 : 1 }}
+                                disabled={submittingResult === m.id}
+                                onPress={() => submitMatchResult(m.id, "won")}
+                              >
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#15803d" }}>🏌️ I Won</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={{ flex: 1, borderRadius: 10, paddingVertical: 11, alignItems: "center", backgroundColor: "#fee2e2", borderWidth: 1.5, borderColor: "#ef4444", opacity: submittingResult === m.id ? 0.6 : 1 }}
+                                disabled={submittingResult === m.id}
+                                onPress={() => submitMatchResult(m.id, "lost")}
+                              >
+                                <Text style={{ fontSize: 14, fontWeight: "700", color: "#dc2626" }}>😔 I Lost</Text>
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
+
+                        {/* ── Waiting for opponent ─────────────────────────── */}
+                        {waiting && (
+                          <View style={{ borderTopWidth: 1, borderTopColor: colors.border, marginTop: 10, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
+                            <ActivityIndicator size="small" color={colors.mutedForeground} />
+                            <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }}>
+                              Result submitted — waiting for {opponentName ?? "your opponent"} to report theirs.
+                            </Text>
+                          </View>
                         )}
                       </View>
                     );

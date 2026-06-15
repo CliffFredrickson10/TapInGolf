@@ -101,11 +101,13 @@ function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; 
   const live       = match.status === "in_progress";
   const bye        = match.status === "bye";
   const disputed   = !!match.dispute;
-  const p1win      = done && match.winner_id === match.player1_id;
-  const p2win      = done && match.winner_id === match.player2_id;
-  const dotColor   = disputed ? RED : done ? "#16a34a" : live ? GOLD : bye ? "#e5e7eb" : LGRAY;
-  const borderCol  = disputed ? RED : done ? "#b7dfc8" : live ? GOLD : "#e5e7eb";
-  const barBg      = disputed ? "#fee2e2" : done ? "#f0faf4" : live ? `${GOLD}18` : "#f9fafb";
+  // walkover: completed by deadline expiry — both players lose, no winner
+  const walkover   = done && !match.winner_id && !!(match.player1_id || match.player2_id);
+  const p1win      = done && !walkover && match.winner_id === match.player1_id;
+  const p2win      = done && !walkover && match.winner_id === match.player2_id;
+  const dotColor   = disputed ? RED : walkover ? "#f97316" : done ? "#16a34a" : live ? GOLD : bye ? "#e5e7eb" : LGRAY;
+  const borderCol  = disputed ? RED : walkover ? "#fed7aa" : done ? "#b7dfc8" : live ? GOLD : "#e5e7eb";
+  const barBg      = disputed ? "#fee2e2" : walkover ? "#fff7ed" : done ? "#f0faf4" : live ? `${GOLD}18` : "#f9fafb";
   const notified   = !!match.notification_sent_at;
 
   return (
@@ -122,8 +124,8 @@ function MatchCard({ match, x, y, onScore }: { match: KnockoutMatch; x: number; 
       <div style={{ display: "flex", alignItems: "center", gap: 5, padding: "3px 7px", background: barBg, borderBottom: `1px solid ${borderCol}40` }}>
         <span style={{ width: 7, height: 7, borderRadius: "50%", background: dotColor, flexShrink: 0 }} />
         <span style={{ fontSize: 9, fontWeight: 700, textTransform: "uppercase" as const, letterSpacing: 0.4,
-          color: disputed ? RED : done ? GREEN : live ? GOLD : "#9ca3af", flex: 1 }}>
-          {disputed ? "⚠️ Disputed" : bye ? "Bye" : done ? "Complete" : live ? "Live" : "Pending"}
+          color: disputed ? RED : walkover ? "#f97316" : done ? GREEN : live ? GOLD : "#9ca3af", flex: 1 }}>
+          {disputed ? "⚠️ Disputed" : walkover ? "⏱ Walkover" : bye ? "Bye" : done ? "Complete" : live ? "Live" : "Pending"}
         </span>
         {match.score && <span style={{ fontSize: 9, fontWeight: 700, color: GREEN }}>{match.score}</span>}
       </div>

@@ -1391,15 +1391,17 @@ export default function EventDetailScreen() {
                   .map(m => {
                     const done      = m.status === "complete";
                     const bye       = m.status === "bye";
+                    // walkover: deadline expired, both players eliminated, no winner
+                    const walkover  = done && !m.winner_id && !!(m.player1_id || m.player2_id);
                     const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id);
                     const isP1      = user && m.player1_id === user.id;
-                    const p1win     = done && m.winner_id === m.player1_id;
-                    const p2win     = done && m.winner_id === m.player2_id;
+                    const p1win     = done && !walkover && m.winner_id === m.player1_id;
+                    const p2win     = done && !walkover && m.winner_id === m.player2_id;
                     const myResult  = isP1 ? m.player1_result : m.player2_result;
                     const opponentResult = isP1 ? m.player2_result : m.player1_result;
                     const opponentName   = isP1 ? m.player2_name : m.player1_name;
-                    const canSubmit = !!isMyMatch && !done && !bye && !myResult;
-                    const waiting   = !!isMyMatch && !done && !bye && !!myResult && !opponentResult && !m.dispute;
+                    const canSubmit = !!isMyMatch && !done && !bye && !walkover && !myResult;
+                    const waiting   = !!isMyMatch && !done && !bye && !walkover && !!myResult && !opponentResult && !m.dispute;
                     const disputed  = m.dispute;
                     return (
                       <View key={m.id} style={[styles.metaCard, {
@@ -1421,8 +1423,11 @@ export default function EventDetailScreen() {
                                 <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOUR MATCH</Text>
                               </View>
                             )}
-                            {done && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                            {done && !walkover && <View style={{ backgroundColor: colors.primary + "18", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
                               <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>DONE</Text>
+                            </View>}
+                            {walkover && <View style={{ backgroundColor: "#fff7ed", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 10, color: "#f97316", fontWeight: "700" }}>⏱ WALKOVER</Text>
                             </View>}
                             {!done && !bye && !isMyMatch && <View style={{ backgroundColor: colors.accent + "28", borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
                               <Text style={{ fontSize: 10, color: "#92711a", fontWeight: "700" }}>UPCOMING</Text>

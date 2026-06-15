@@ -128,11 +128,14 @@ function EventCard({ ev, colors }: { ev: TournamentEvent; colors: ReturnType<typ
 
         {/* Badges row */}
         <View style={styles.badgeRow}>
-          <View style={[styles.badge, { backgroundColor: colors.primary + "12" }]}>
-            <Text style={[styles.badgeText, { color: colors.primary }]}>
-              {TYPE_LABELS[ev.event_type] ?? ev.event_type}
-            </Text>
-          </View>
+          {/* Hide "Other" event-type when a format badge already identifies the event */}
+          {!(ev.event_type === "other" && FORMAT_BADGE[ev.format]) && (
+            <View style={[styles.badge, { backgroundColor: colors.primary + "12" }]}>
+              <Text style={[styles.badgeText, { color: colors.primary }]}>
+                {TYPE_LABELS[ev.event_type] ?? ev.event_type}
+              </Text>
+            </View>
+          )}
 
           {FORMAT_BADGE[ev.format] && (
             <View style={[styles.badge, { backgroundColor: FORMAT_BADGE[ev.format].bg }]}>
@@ -148,16 +151,19 @@ function EventCard({ ev, colors }: { ev: TournamentEvent; colors: ReturnType<typ
             </View>
           )}
 
-          {ev.payment_required ? (
-            <View style={[styles.badge, { backgroundColor: "#c8a84b18" }]}>
-              <Text style={[styles.badgeText, { color: "#b8971f" }]}>
-                {ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Fee Applies"}
-              </Text>
-            </View>
-          ) : (
-            <View style={[styles.badge, { backgroundColor: "#16a34a18" }]}>
-              <Text style={[styles.badgeText, { color: "#16a34a" }]}>Free</Text>
-            </View>
+          {/* Skip payment badge for knockout formats — entry is managed through the draw */}
+          {!FORMAT_BADGE[ev.format] && (
+            ev.payment_required ? (
+              <View style={[styles.badge, { backgroundColor: "#c8a84b18" }]}>
+                <Text style={[styles.badgeText, { color: "#b8971f" }]}>
+                  {ev.entry_fee != null ? `R${ev.entry_fee.toFixed(0)}` : "Fee Applies"}
+                </Text>
+              </View>
+            ) : (
+              <View style={[styles.badge, { backgroundColor: "#16a34a18" }]}>
+                <Text style={[styles.badgeText, { color: "#16a34a" }]}>Free</Text>
+              </View>
+            )
           )}
         </View>
       </View>

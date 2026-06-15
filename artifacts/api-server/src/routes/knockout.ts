@@ -21,6 +21,49 @@ function getRoundLabels(totalRounds: number): string[] {
   return labels;
 }
 
+// ── Auto-advance a match that has exactly one player and all feeders are done ──
+// Called after any match completes (walkover or normal). Recurses up the bracket.
+async function autoAdvanceIfUnopposed(evId: number, matchId: number): Promise<void> {
+  const match = await row<any>("SELECT * FROM knockout_matches WHERE id = ? AND event_id = ?", [matchId, evId]);
+  if (!match || match.status === "complete" || match.status === "bye") return;
+
+  const hasP1 = !!match.player1_id;
+  const hasP2 = !!match.player2_id;
+  if ((hasP1 && hasP2) || (!hasP1 && !hasP2)) return; // normal match or no players yet
+
+  // Check that every feeder match for this slot is already complete (so player2/1 will never arrive)
+  const feeders = await query<any>(
+    "SELECT status FROM knockout_matches WHERE next_match_id = ? AND event_id = ?",
+    [matchId, evId]
+  );
+  if (!feeders.every((f: any) => f.status === "complete" || f.status === "bye")) return;
+
+  // Lone player — walk them through as automatic winner
+  const lonePlayerId = hasP1 ? match.player1_id : match.player2_id;
+
+  await run(
+    "UPDATE knockout_matches SET winner_id = ?, status = 'complete', player1_result = NULL, player2_result = NULL WHERE id = ?",
+    [lonePlayerId, matchId]
+  );
+
+  // Advance into the next match
+  if (match.next_match_id) {
+    const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+    if (nxt) {
+      const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+      await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [lonePlayerId, match.next_match_id]);
+      // Recurse — the next match may also now be unopposed
+      await autoAdvanceIfUnopposed(evId, match.next_match_id);
+    }
+  }
+
+  // Mark round complete if all matches in this round are now done
+  const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+  if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
+    await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+  }
+}
+
 // ── List knockout tournaments ─────────────────────────────────────────────────
 router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
@@ -268,8 +311,46 @@ router.get("/portal/knockout/:id/bracket", requireClubAuth, async (req: Request,
     [evId]
   );
 
+  // ── Retroactive sweep: fix any match that became unopposed mid-tournament ────
+  // (e.g. a walkover voided the opposing feeder, leaving one player with no opponent)
+  const pendingUnopposed = matches.filter((m: any) =>
+    m.status !== "complete" && m.status !== "bye" &&
+    ((m.player1_id && !m.player2_id) || (!m.player1_id && m.player2_id))
+  );
+  for (const m of pendingUnopposed) {
+    await autoAdvanceIfUnopposed(evId, m.id);
+  }
+  // Re-fetch matches if any were auto-advanced
+  const finalMatches = pendingUnopposed.length > 0
+    ? await query<any>(
+        `SELECT km.*,
+                p1.name as player1_name, p1.handicap as player1_handicap,
+                p2.name as player2_name, p2.handicap as player2_handicap,
+                w.name as winner_name,
+                p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+                p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+                p1t.name       as player1_team_name,
+                p2t.name       as player2_team_name
+         FROM knockout_matches km
+         LEFT JOIN users p1 ON p1.id = km.player1_id
+         LEFT JOIN users p2 ON p2.id = km.player2_id
+         LEFT JOIN users w  ON w.id  = km.winner_id
+         LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+         LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+         LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+         LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+         LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+         LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+         LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+         LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
+         WHERE km.event_id = ?
+         ORDER BY km.round_id ASC, km.match_sequence ASC`,
+        [evId]
+      )
+    : matches;
+
   // Find champion: winner of the final match
-  const finalMatch = matches[matches.length - 1];
+  const finalMatch = finalMatches[finalMatches.length - 1];
   const champion = finalMatch?.status === "complete" ? (finalMatch.winner_name ?? null) : null;
 
   res.json({
@@ -281,7 +362,7 @@ router.get("/portal/knockout/:id/bracket", requireClubAuth, async (req: Request,
     rounds: rounds.map((r: any) => ({
       ...r,
       deadline: r.deadline ? (r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10)) : null,
-      matches: matches.filter((m: any) => m.round_id === r.id),
+      matches: finalMatches.filter((m: any) => m.round_id === r.id),
     })),
     champion,
   });
@@ -360,6 +441,11 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
   const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
   if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
     await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+  }
+
+  // Auto-advance the next match if the walkover (no winner) left it with only one player
+  if (match.next_match_id) {
+    await autoAdvanceIfUnopposed(evId, match.next_match_id);
   }
 
   res.json({ ok: true });
@@ -599,6 +685,11 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
     const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
     if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
       await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+    }
+
+    // Auto-advance next match if winner is now unopposed (no opponent will ever arrive)
+    if (match.next_match_id) {
+      await autoAdvanceIfUnopposed(evId, match.next_match_id);
     }
 
     res.json({ ok: true, status: "complete", winner_id: winnerId }); return;

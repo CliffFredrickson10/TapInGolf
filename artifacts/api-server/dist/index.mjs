@@ -70484,6 +70484,35 @@ function getRoundLabels(totalRounds) {
   }
   return labels;
 }
+async function autoAdvanceIfUnopposed(evId, matchId) {
+  const match = await row("SELECT * FROM knockout_matches WHERE id = ? AND event_id = ?", [matchId, evId]);
+  if (!match || match.status === "complete" || match.status === "bye") return;
+  const hasP1 = !!match.player1_id;
+  const hasP2 = !!match.player2_id;
+  if (hasP1 && hasP2 || !hasP1 && !hasP2) return;
+  const feeders = await query(
+    "SELECT status FROM knockout_matches WHERE next_match_id = ? AND event_id = ?",
+    [matchId, evId]
+  );
+  if (!feeders.every((f) => f.status === "complete" || f.status === "bye")) return;
+  const lonePlayerId = hasP1 ? match.player1_id : match.player2_id;
+  await run(
+    "UPDATE knockout_matches SET winner_id = ?, status = 'complete', player1_result = NULL, player2_result = NULL WHERE id = ?",
+    [lonePlayerId, matchId]
+  );
+  if (match.next_match_id) {
+    const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+    if (nxt) {
+      const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+      await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [lonePlayerId, match.next_match_id]);
+      await autoAdvanceIfUnopposed(evId, match.next_match_id);
+    }
+  }
+  const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+  if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
+    await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+  }
+}
 router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const events = await query(
@@ -70696,16 +70725,59 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
     `SELECT km.*,
             p1.name as player1_name, p1.handicap as player1_handicap,
             p2.name as player2_name, p2.handicap as player2_handicap,
-            w.name as winner_name
+            w.name as winner_name,
+            p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+            p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+            p1t.name       as player1_team_name,
+            p2t.name       as player2_team_name
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
      LEFT JOIN users w  ON w.id  = km.winner_id
+     LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+     LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+     LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
      ORDER BY km.round_id ASC, km.match_sequence ASC`,
     [evId]
   );
-  const finalMatch = matches[matches.length - 1];
+  const pendingUnopposed = matches.filter(
+    (m) => m.status !== "complete" && m.status !== "bye" && (m.player1_id && !m.player2_id || !m.player1_id && m.player2_id)
+  );
+  for (const m of pendingUnopposed) {
+    await autoAdvanceIfUnopposed(evId, m.id);
+  }
+  const finalMatches = pendingUnopposed.length > 0 ? await query(
+    `SELECT km.*,
+                p1.name as player1_name, p1.handicap as player1_handicap,
+                p2.name as player2_name, p2.handicap as player2_handicap,
+                w.name as winner_name,
+                p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+                p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+                p1t.name       as player1_team_name,
+                p2t.name       as player2_team_name
+         FROM knockout_matches km
+         LEFT JOIN users p1 ON p1.id = km.player1_id
+         LEFT JOIN users p2 ON p2.id = km.player2_id
+         LEFT JOIN users w  ON w.id  = km.winner_id
+         LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+         LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+         LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+         LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+         LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+         LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+         LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+         LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
+         WHERE km.event_id = ?
+         ORDER BY km.round_id ASC, km.match_sequence ASC`,
+    [evId]
+  ) : matches;
+  const finalMatch = finalMatches[finalMatches.length - 1];
   const champion = finalMatch?.status === "complete" ? finalMatch.winner_name ?? null : null;
   res.json({
     event: {
@@ -70719,7 +70791,7 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
     rounds: rounds.map((r) => ({
       ...r,
       deadline: r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null,
-      matches: matches.filter((m) => m.round_id === r.id)
+      matches: finalMatches.filter((m) => m.round_id === r.id)
     })),
     champion
   });
@@ -70749,7 +70821,7 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
   if (winner_id && match.next_match_id) {
     const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
     if (nxt) {
-      const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+      const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
       await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winner_id, match.next_match_id]);
       const nxtFresh = await row(
         `SELECT km.*,
@@ -70787,6 +70859,9 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
   const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
   if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
     await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+  }
+  if (match.next_match_id) {
+    await autoAdvanceIfUnopposed(evId, match.next_match_id);
   }
   res.json({ ok: true });
 });
@@ -70906,8 +70981,28 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
     res.status(404).json({ message: "Match not found" });
     return;
   }
-  const isP1 = match.player1_id === user.id;
-  const isP2 = match.player2_id === user.id;
+  let isP1 = match.player1_id === user.id;
+  let isP2 = match.player2_id === user.id;
+  if (!isP1 && !isP2) {
+    if (match.player1_id) {
+      const p1pr = await row(
+        `SELECT er2.user_id FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.user_id != er1.user_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er1.event_id = ?`,
+        [match.player1_id, evId]
+      );
+      if (p1pr && p1pr.user_id === user.id) isP1 = true;
+    }
+    if (!isP1 && match.player2_id) {
+      const p2pr = await row(
+        `SELECT er2.user_id FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.user_id != er1.user_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er1.event_id = ?`,
+        [match.player2_id, evId]
+      );
+      if (p2pr && p2pr.user_id === user.id) isP2 = true;
+    }
+  }
   if (!isP1 && !isP2) {
     res.status(403).json({ message: "You are not a player in this match" });
     return;
@@ -70918,11 +71013,14 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
   }
   const myResultField = isP1 ? "player1_result" : "player2_result";
   const myCurrentResult = isP1 ? match.player1_result : match.player2_result;
-  if (myCurrentResult) {
+  if (myCurrentResult && !match.dispute) {
     res.status(400).json({ message: "You have already submitted a result for this match" });
     return;
   }
-  await run(`UPDATE knockout_matches SET ${myResultField} = ?, status = 'in_progress' WHERE id = ?`, [result, matchId]);
+  await run(
+    `UPDATE knockout_matches SET ${myResultField} = ?, dispute = FALSE, status = 'in_progress' WHERE id = ?`,
+    [result, matchId]
+  );
   const opponentResult = isP1 ? match.player2_result : match.player1_result;
   if (!opponentResult) {
     res.json({ ok: true, status: "awaiting_opponent" });
@@ -70939,7 +71037,7 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
     if (match.next_match_id) {
       const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
       if (nxt) {
-        const field = nxt.player1_id == null ? "player1_id" : "player2_id";
+        const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
         await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
         const nxtFresh = await row(
           `SELECT km.*, p1.name as player1_name, p1.push_token as p1_token,
@@ -70974,6 +71072,9 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
     if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
       await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
     }
+    if (match.next_match_id) {
+      await autoAdvanceIfUnopposed(evId, match.next_match_id);
+    }
     res.json({ ok: true, status: "complete", winner_id: winnerId });
     return;
   }
@@ -70999,11 +71100,23 @@ router22.get("/events/:id/knockout/bracket", async (req, res) => {
             km.player2_id, p2.name as player2_name,
             km.winner_id, w.name as winner_name,
             km.next_match_id, km.notification_sent_at,
-            km.player1_result, km.player2_result, km.dispute
+            km.player1_result, km.player2_result, km.dispute,
+            p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+            p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+            p1t.name       as player1_team_name,
+            p2t.name       as player2_team_name
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
      LEFT JOIN users w  ON w.id  = km.winner_id
+     LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+     LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+     LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
      ORDER BY km.round_id ASC, km.match_sequence ASC`,
     [evId]
@@ -71051,10 +71164,22 @@ router22.get("/knockout/my-active-matches", async (req, res) => {
      LEFT JOIN users u2 ON u2.id = km.player2_id
      WHERE ge.club_id = ?
        AND km.status IN ('pending', 'in_progress')
-       AND (km.player1_id = ? OR km.player2_id = ?)
+       AND (
+         km.player1_id = ? OR km.player2_id = ?
+         OR km.player1_id IN (
+           SELECT er_cap.user_id FROM event_registrations er_cap
+           JOIN event_registrations er_me ON er_me.team_id = er_cap.team_id AND er_me.user_id = ? AND er_me.event_id = er_cap.event_id
+           WHERE er_cap.event_id = ge.id
+         )
+         OR km.player2_id IN (
+           SELECT er_cap.user_id FROM event_registrations er_cap
+           JOIN event_registrations er_me ON er_me.team_id = er_cap.team_id AND er_me.user_id = ? AND er_me.event_id = er_cap.event_id
+           WHERE er_cap.event_id = ge.id
+         )
+       )
        AND ge.status IN ('active', 'published')
      ORDER BY kr.round_number ASC, km.id ASC`,
-    [clubId, user.id, user.id]
+    [clubId, user.id, user.id, user.id, user.id]
   );
   const formatted = matches.map((m) => {
     const isP1 = m.player1_id === user.id;

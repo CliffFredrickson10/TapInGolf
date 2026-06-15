@@ -71133,7 +71133,7 @@ router22.get("/events/:id/knockout/bracket", async (req, res) => {
   });
 });
 router22.get("/knockout/my-active-matches", async (req, res) => {
-  const user = getUser(req);
+  const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });
     return;

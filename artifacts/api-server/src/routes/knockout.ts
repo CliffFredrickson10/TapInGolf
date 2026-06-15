@@ -760,7 +760,7 @@ router.get("/events/:id/knockout/bracket", async (req: Request, res: Response): 
 
 // ── User's active knockout matches at a club (for linking to a booking) ───────
 router.get("/knockout/my-active-matches", async (req: Request, res: Response): Promise<void> => {
-  const user = getUser(req);
+  const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
   const clubId = parseInt(String(req.query["club_id"] ?? "0"));
   if (!clubId) { res.status(400).json({ message: "club_id required" }); return; }

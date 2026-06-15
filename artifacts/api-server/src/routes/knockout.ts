@@ -246,11 +246,23 @@ router.get("/portal/knockout/:id/bracket", requireClubAuth, async (req: Request,
     `SELECT km.*,
             p1.name as player1_name, p1.handicap as player1_handicap,
             p2.name as player2_name, p2.handicap as player2_handicap,
-            w.name as winner_name
+            w.name as winner_name,
+            p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+            p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+            p1t.name       as player1_team_name,
+            p2t.name       as player2_team_name
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
      LEFT JOIN users w  ON w.id  = km.winner_id
+     LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+     LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+     LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
      ORDER BY km.round_id ASC, km.match_sequence ASC`,
     [evId]
@@ -485,8 +497,29 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
   );
   if (!match) { res.status(404).json({ message: "Match not found" }); return; }
 
-  const isP1 = match.player1_id === user.id;
-  const isP2 = match.player2_id === user.id;
+  let isP1 = match.player1_id === user.id;
+  let isP2 = match.player2_id === user.id;
+  if (!isP1 && !isP2) {
+    // Check if user is a team partner of either side
+    if (match.player1_id) {
+      const p1pr = await row<any>(
+        `SELECT er2.user_id FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.user_id != er1.user_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er1.event_id = ?`,
+        [match.player1_id, evId]
+      );
+      if (p1pr && p1pr.user_id === user.id) isP1 = true;
+    }
+    if (!isP1 && match.player2_id) {
+      const p2pr = await row<any>(
+        `SELECT er2.user_id FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.user_id != er1.user_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er1.event_id = ?`,
+        [match.player2_id, evId]
+      );
+      if (p2pr && p2pr.user_id === user.id) isP2 = true;
+    }
+  }
   if (!isP1 && !isP2) { res.status(403).json({ message: "You are not a player in this match" }); return; }
   if (match.status === "complete" || match.status === "bye") {
     res.status(400).json({ message: "This match is already settled" }); return;
@@ -599,11 +632,23 @@ router.get("/events/:id/knockout/bracket", async (req: Request, res: Response): 
             km.player2_id, p2.name as player2_name,
             km.winner_id, w.name as winner_name,
             km.next_match_id, km.notification_sent_at,
-            km.player1_result, km.player2_result, km.dispute
+            km.player1_result, km.player2_result, km.dispute,
+            p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
+            p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
+            p1t.name       as player1_team_name,
+            p2t.name       as player2_team_name
      FROM knockout_matches km
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
      LEFT JOIN users w  ON w.id  = km.winner_id
+     LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
+     LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
+     LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
      ORDER BY km.round_id ASC, km.match_sequence ASC`,
     [evId]

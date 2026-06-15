@@ -173,7 +173,7 @@ export default function EventDetailScreen() {
 
   // Knockout bracket state
   type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
-  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; player1_id: number | null; player1_name: string | null; player2_id: number | null; player2_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; player1_id: number | null; player1_name: string | null; player1_partner_id: number | null; player1_partner_name: string | null; player1_team_name: string | null; player2_id: number | null; player2_name: string | null; player2_partner_id: number | null; player2_partner_name: string | null; player2_team_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
   type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [bracketLoaded, setBracketLoaded] = useState(false);
@@ -653,26 +653,41 @@ export default function EventDetailScreen() {
 
             {/* Knockout: next match card */}
             {isKnockout && bracketLoaded && bracketData && (() => {
+              const isTeam = event?.format === "knockout_team";
               const myMatch = bracketData.matches.find(m =>
-                (m.player1_id === user?.id || m.player2_id === user?.id) && m.status !== "complete" && m.status !== "bye"
+                (m.player1_id === user?.id || m.player2_id === user?.id ||
+                 m.player1_partner_id === user?.id || m.player2_partner_id === user?.id) &&
+                m.status !== "complete" && m.status !== "bye"
               );
               const myDoneMatch = !myMatch && bracketData.matches.find(m =>
-                (m.player1_id === user?.id || m.player2_id === user?.id) && m.status === "complete"
+                (m.player1_id === user?.id || m.player2_id === user?.id ||
+                 m.player1_partner_id === user?.id || m.player2_partner_id === user?.id) &&
+                m.status === "complete"
               );
               const myRound = myMatch
                 ? bracketData.rounds.find(r => r.id === myMatch.round_id)
                 : null;
               if (myMatch) {
-                const opponent   = myMatch.player1_id === user?.id ? myMatch.player2_name : myMatch.player1_name;
-                const opponentId = myMatch.player1_id === user?.id ? myMatch.player2_id   : myMatch.player1_id;
+                const isMySideP1 = myMatch.player1_id === user?.id || myMatch.player1_partner_id === user?.id;
+                const myPartner     = isMySideP1 ? myMatch.player1_partner_name : myMatch.player2_partner_name;
+                const opponentName  = isMySideP1
+                  ? (isTeam && myMatch.player2_team_name ? myMatch.player2_team_name : myMatch.player2_name)
+                  : (isTeam && myMatch.player1_team_name ? myMatch.player1_team_name : myMatch.player1_name);
+                const opponentId    = isMySideP1 ? myMatch.player2_id : myMatch.player1_id;
+                const opponentChatName = isMySideP1 ? myMatch.player2_name : myMatch.player1_name;
                 return (
                   <View style={[styles.ctaCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
                     <View style={styles.statusRow}>
                       <Ionicons name="trophy-outline" size={20} color={colors.primary} />
                       <View style={{ flex: 1 }}>
                         <Text style={[styles.ctaTitle, { color: colors.primary }]}>Your next match — {myRound?.label ?? "upcoming"}</Text>
+                        {isTeam && myPartner && (
+                          <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginTop: 1 }]}>
+                            Partner: <Text style={{ fontWeight: "700", color: colors.foreground }}>{myPartner}</Text>
+                          </Text>
+                        )}
                         <Text style={[styles.ctaNote, { color: colors.foreground, marginTop: 2 }]}>
-                          vs <Text style={{ fontWeight: "700" }}>{opponent ?? "TBD"}</Text>
+                          vs <Text style={{ fontWeight: "700" }}>{opponentName ?? "TBD"}</Text>
                         </Text>
                         {myRound?.deadline && (
                           <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginTop: 2 }]}>
@@ -684,18 +699,18 @@ export default function EventDetailScreen() {
                     {opponentId && (
                       <TouchableOpacity
                         style={[styles.outlineBtn, { borderColor: colors.primary, opacity: openingChat ? 0.6 : 1 }]}
-                        onPress={() => openOpponentChat(opponentId, opponent ?? "Opponent")}
+                        onPress={() => openOpponentChat(opponentId, opponentChatName ?? "Opponent")}
                         disabled={openingChat || !!user?.chat_disabled}
                       >
                         <Ionicons name="chatbubble-ellipses-outline" size={16} color={colors.primary} />
                         <Text style={[styles.outlineBtnText, { color: colors.primary }]}>
-                          {openingChat ? "Opening…" : `Chat with ${opponent ?? "Opponent"}`}
+                          {openingChat ? "Opening…" : `Chat with ${opponentChatName ?? "Opponent"}`}
                         </Text>
                       </TouchableOpacity>
                     )}
                     {/* ── Submit Result ───────────────────────────────────── */}
                     {(() => {
-                      const isP1 = myMatch.player1_id === user?.id;
+                      const isP1 = myMatch.player1_id === user?.id || myMatch.player1_partner_id === user?.id;
                       const myResult = isP1 ? myMatch.player1_result : myMatch.player2_result;
                       const opponentResult = isP1 ? myMatch.player2_result : myMatch.player1_result;
                       const matchDone = myMatch.status === "complete";
@@ -1490,8 +1505,8 @@ export default function EventDetailScreen() {
                     const bye       = m.status === "bye";
                     // walkover: deadline expired — no winner (covers both players-present and no-player/void cases)
                     const walkover  = done && !m.winner_id;
-                    const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id);
-                    const isP1      = user && m.player1_id === user.id;
+                    const isMyMatch = user && (m.player1_id === user.id || m.player2_id === user.id || m.player1_partner_id === user.id || m.player2_partner_id === user.id);
+                    const isP1      = user && (m.player1_id === user.id || m.player1_partner_id === user.id);
                     // Guard null === null — only mark a real winner
                     const p1win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player1_id;
                     const p2win     = done && !walkover && m.winner_id !== null && m.winner_id === m.player2_id;
@@ -1541,12 +1556,19 @@ export default function EventDetailScreen() {
                           backgroundColor: p1win ? colors.primary + "10" : "transparent",
                           borderRadius: 8, paddingHorizontal: 8 }}>
                           {p1win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
-                          <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: p1win ? colors.primary : p1IsDNP ? "#f97316" : colors.foreground,
-                            fontStyle: p1IsDNP ? "italic" : "normal" }}>
-                            {m.player1_name ?? (p1IsDNP ? "Did not play" : "TBD")}
-                          </Text>
-                          {m.player1_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "700",
+                              color: p1win ? colors.primary : p1IsDNP ? "#f97316" : colors.foreground,
+                              fontStyle: p1IsDNP ? "italic" : "normal" }}>
+                              {m.player1_name ?? (p1IsDNP ? "Did not play" : "TBD")}
+                            </Text>
+                            {event?.format === "knockout_team" && m.player1_partner_name && (
+                              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+                                & {m.player1_partner_name}
+                              </Text>
+                            )}
+                          </View>
+                          {(m.player1_id === user?.id || m.player1_partner_id === user?.id) && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                           {m.player1_result && !done && (
                             <View style={{ backgroundColor: m.player1_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                               <Text style={{ fontSize: 9, fontWeight: "700", color: m.player1_result === "won" ? "#166534" : "#991b1b" }}>
@@ -1563,12 +1585,19 @@ export default function EventDetailScreen() {
                           backgroundColor: p2win ? colors.primary + "10" : "transparent",
                           borderRadius: 8, paddingHorizontal: 8 }}>
                           {p2win && <Ionicons name="trophy" size={14} color="#c8a84b" />}
-                          <Text style={{ flex: 1, fontSize: 14, fontWeight: "700",
-                            color: p2win ? colors.primary : p2IsDNP ? "#f97316" : colors.foreground,
-                            fontStyle: p2IsDNP ? "italic" : "normal" }}>
-                            {bye ? "Bye" : (m.player2_name ?? (p2IsDNP ? "Did not play" : "TBD"))}
-                          </Text>
-                          {m.player2_id === user?.id && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
+                          <View style={{ flex: 1 }}>
+                            <Text style={{ fontSize: 14, fontWeight: "700",
+                              color: p2win ? colors.primary : p2IsDNP ? "#f97316" : colors.foreground,
+                              fontStyle: p2IsDNP ? "italic" : "normal" }}>
+                              {bye ? "Bye" : (m.player2_name ?? (p2IsDNP ? "Did not play" : "TBD"))}
+                            </Text>
+                            {event?.format === "knockout_team" && !bye && m.player2_partner_name && (
+                              <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 1 }}>
+                                & {m.player2_partner_name}
+                              </Text>
+                            )}
+                          </View>
+                          {(m.player2_id === user?.id || m.player2_partner_id === user?.id) && <Text style={{ fontSize: 10, color: colors.primary, fontWeight: "700" }}>YOU</Text>}
                           {m.player2_result && !done && (
                             <View style={{ backgroundColor: m.player2_result === "won" ? "#dcfce7" : "#fee2e2", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
                               <Text style={{ fontSize: 9, fontWeight: "700", color: m.player2_result === "won" ? "#166534" : "#991b1b" }}>

@@ -46,7 +46,9 @@ const colX = (r: number) => r * (CARD_W + COL_GAP);
 interface KnockoutMatch {
   id: number; round_id: number; match_sequence: number;
   player1_id: number | null; player1_name: string | null; player1_handicap: number | null;
+  player1_partner_id: number | null; player1_partner_name: string | null; player1_team_name: string | null;
   player2_id: number | null; player2_name: string | null; player2_handicap: number | null;
+  player2_partner_id: number | null; player2_partner_name: string | null; player2_team_name: string | null;
   winner_id: number | null; winner_name: string | null;
   score: string | null; status: string;
   next_match_id: number | null; notification_sent_at: string | null;
@@ -137,30 +139,44 @@ function MatchCard({ match, x, y, onScore, feeders = [] }: { match: KnockoutMatc
       </div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p1win ? "#f0faf4" : "#fff" }}>
         {match.player1_name ? (
-          <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
-            {match.player1_name}
-          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
+              {match.player1_name}
+            </span>
+            {match.player1_partner_name && (
+              <span style={{ fontSize: 9, color: "#9ca3af", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                &amp; {match.player1_partner_name}
+              </span>
+            )}
+          </div>
         ) : (
           <span style={{ fontSize: 10, flex: 1, fontStyle: "italic", color: p1IsDNP ? "#f97316" : "#d1d5db" }}>
             {p1IsDNP ? "Did not play" : "TBD"}
           </span>
         )}
-        {match.player1_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player1_handicap}</span>}
+        {match.player1_handicap != null && !match.player1_partner_name && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player1_handicap}</span>}
         {p1win && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700 }}>✓</span>}
         {!done && <ResultBadge result={match.player1_result} />}
       </div>
       <div style={{ fontSize: 9, textAlign: "center", color: "#d1d5db", fontWeight: 700, lineHeight: "10px" }}>vs</div>
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p2win ? "#f0faf4" : "#fff" }}>
         {match.player2_name ? (
-          <span style={{ fontSize: 10, fontWeight: 600, flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#374151" }}>
-            {match.player2_name}
-          </span>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#374151" }}>
+              {match.player2_name}
+            </span>
+            {match.player2_partner_name && (
+              <span style={{ fontSize: 9, color: "#9ca3af", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                &amp; {match.player2_partner_name}
+              </span>
+            )}
+          </div>
         ) : (
           <span style={{ fontSize: 10, flex: 1, fontStyle: "italic", color: p2IsDNP ? "#f97316" : "#d1d5db" }}>
             {bye ? "Bye" : p2IsDNP ? "Did not play" : "TBD"}
           </span>
         )}
-        {match.player2_handicap != null && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player2_handicap}</span>}
+        {match.player2_handicap != null && !match.player2_partner_name && <span style={{ fontSize: 9, color: "#9ca3af", flexShrink: 0 }}>+{match.player2_handicap}</span>}
         {p2win && <span style={{ fontSize: 9, color: GREEN, fontWeight: 700 }}>✓</span>}
         {!done && <ResultBadge result={match.player2_result} />}
       </div>

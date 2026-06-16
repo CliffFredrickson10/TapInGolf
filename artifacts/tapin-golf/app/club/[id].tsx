@@ -12,6 +12,7 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from "react-native";
 import GolfBallLoader from "@/components/GolfBallLoader";
@@ -153,7 +154,9 @@ function ScorecardSection({
   onToggle: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const LABEL_W = 64; const HOLE_W = 38; const SUB_W = 44; const ROW_H = 30;
+  const { width: screenW } = useWindowDimensions();
+  const LABEL_W = 56; const SUB_W = 36; const ROW_H = 28;
+  const HOLE_W = Math.floor((screenW - 158) / 9);
   const enabledTees = scorecard.tee_colors.filter(t => t.enabled);
   const front = scorecard.holes.slice(0, 9);
   const back  = scorecard.holes.slice(9, 18);
@@ -171,7 +174,7 @@ function ScorecardSection({
   ];
 
   const renderTable = (holes: HoleRow[], subtotalLabel: string) => (
-    <ScrollView horizontal showsHorizontalScrollIndicator style={{ marginTop: 6 }}>
+    <View style={{ marginTop: 6 }}>
       <View style={[scStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {rows.map((row, ri) => {
           const isHole   = row.key === "number";
@@ -216,7 +219,7 @@ function ScorecardSection({
           );
         })}
       </View>
-    </ScrollView>
+    </View>
   );
 
   return (
@@ -259,7 +262,7 @@ const scStyles = StyleSheet.create({
   labelCell: { justifyContent: "center", paddingHorizontal: 8, borderRightWidth: 1 },
   teeDot:    { width: 9, height: 9, borderRadius: 5, borderWidth: 1, borderColor: "rgba(0,0,0,0.18)" },
   label:     { fontSize: 11, fontFamily: "Inter_600SemiBold" },
-  cell:      { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 2 },
+  cell:      { fontSize: 11, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 1 },
   bold:      { fontFamily: "Inter_700Bold" },
 });
 

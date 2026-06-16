@@ -128,49 +128,49 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
 
         <tbody>
           {/* PAR */}
-          <tr className="bg-[#f0f7f4]">
-            <td className="border border-gray-200 px-2 py-1 font-semibold text-[#1a5c38]">PAR</td>
+          <tr className="h-8 bg-[#f0f7f4]">
+            <td className="border border-gray-200 px-2 py-1.5 font-semibold text-[#1a5c38]">PAR</td>
             {front.map((h, i) => (
-              <td key={h.number} className="border border-gray-200 p-0.5">
+              <td key={h.number} className="border border-gray-200 p-0">
                 <input type="number" min={3} max={6} value={h.par ?? ""} disabled={readOnly}
                   onChange={e => setCell(i, "par", e.target.value)} className={cellCls} />
               </td>
             ))}
-            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
+            <td className="border border-gray-200 px-2 py-1.5 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
               {sumField(holes, "par", 0, 9) ?? "—"}
             </td>
             {back.map((h, i) => (
-              <td key={h.number} className="border border-gray-200 p-0.5">
+              <td key={h.number} className="border border-gray-200 p-0">
                 <input type="number" min={3} max={6} value={h.par ?? ""} disabled={readOnly}
                   onChange={e => setCell(9 + i, "par", e.target.value)} className={cellCls} />
               </td>
             ))}
-            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
+            <td className="border border-gray-200 px-2 py-1.5 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
               {sumField(holes, "par", 9, 18) ?? "—"}
             </td>
-            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-white bg-[#1a5c38]">
+            <td className="border border-gray-200 px-2 py-1.5 text-center font-bold text-white bg-[#1a5c38]">
               {sumField(holes, "par", 0, 18) ?? "—"}
             </td>
           </tr>
 
           {/* STROKE INDEX */}
-          <tr>
-            <td className="border border-gray-200 px-2 py-1 font-semibold text-gray-600">STROKE</td>
+          <tr className="h-8">
+            <td className="border border-gray-200 px-2 py-1.5 font-semibold text-gray-600">STROKE</td>
             {front.map((h, i) => (
-              <td key={h.number} className="border border-gray-200 p-0.5">
+              <td key={h.number} className="border border-gray-200 p-0">
                 <input type="number" min={1} max={18} value={h.stroke_index ?? ""} disabled={readOnly}
                   onChange={e => setCell(i, "stroke_index", e.target.value)} className={cellCls} />
               </td>
             ))}
-            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
+            <td className="border border-gray-200 px-2 py-1.5 text-center text-gray-400 bg-gray-50">—</td>
             {back.map((h, i) => (
-              <td key={h.number} className="border border-gray-200 p-0.5">
+              <td key={h.number} className="border border-gray-200 p-0">
                 <input type="number" min={1} max={18} value={h.stroke_index ?? ""} disabled={readOnly}
                   onChange={e => setCell(9 + i, "stroke_index", e.target.value)} className={cellCls} />
               </td>
             ))}
-            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
-            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-100">—</td>
+            <td className="border border-gray-200 px-2 py-1.5 text-center text-gray-400 bg-gray-50">—</td>
+            <td className="border border-gray-200 px-2 py-1.5 text-center text-gray-400 bg-gray-100">—</td>
           </tr>
 
           {/* TEE COLOR DISTANCES */}
@@ -179,32 +179,32 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
             const textColor = light ? "#1f2937" : "#ffffff";
             const f = tee.key as keyof Hole;
             return (
-              <tr key={tee.key} style={{ backgroundColor: tee.color + "18" }}>
-                <td className="border border-gray-200 px-2 py-1 font-semibold uppercase text-xs"
+              <tr key={tee.key} className="h-8" style={{ backgroundColor: tee.color + "18" }}>
+                <td className="border border-gray-200 px-2 py-1.5 font-semibold uppercase text-xs"
                   style={{ backgroundColor: tee.color, color: textColor }}>
                   {tee.name}
                 </td>
                 {front.map((h, i) => (
-                  <td key={h.number} className="border border-gray-200 p-0.5" style={{ backgroundColor: tee.color + "14" }}>
+                  <td key={h.number} className="border border-gray-200 p-0" style={{ backgroundColor: tee.color + "14" }}>
                     <input type="number" min={0} max={999} value={(h[f] as number | null) ?? ""} disabled={readOnly}
                       onChange={e => setCell(i, f, e.target.value)} className={cellCls} />
                   </td>
                 ))}
-                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                <td className="border border-gray-200 px-2 py-1.5 text-center font-bold"
                   style={{ backgroundColor: tee.color + "40", color: light ? "#1f2937" : tee.color }}>
                   {sumField(holes, f, 0, 9) ?? "—"}
                 </td>
                 {back.map((h, i) => (
-                  <td key={h.number} className="border border-gray-200 p-0.5" style={{ backgroundColor: tee.color + "14" }}>
+                  <td key={h.number} className="border border-gray-200 p-0" style={{ backgroundColor: tee.color + "14" }}>
                     <input type="number" min={0} max={999} value={(h[f] as number | null) ?? ""} disabled={readOnly}
                       onChange={e => setCell(9 + i, f, e.target.value)} className={cellCls} />
                   </td>
                 ))}
-                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                <td className="border border-gray-200 px-2 py-1.5 text-center font-bold"
                   style={{ backgroundColor: tee.color + "40", color: light ? "#1f2937" : tee.color }}>
                   {sumField(holes, f, 9, 18) ?? "—"}
                 </td>
-                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                <td className="border border-gray-200 px-2 py-1.5 text-center font-bold"
                   style={{ backgroundColor: tee.color, color: textColor }}>
                   {sumField(holes, f, 0, 18) ?? "—"}
                 </td>

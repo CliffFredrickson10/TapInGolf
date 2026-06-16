@@ -103,10 +103,25 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
   const cellCls =
     "w-full h-8 text-center text-xs border-0 bg-transparent p-0 focus:ring-1 focus:ring-[#1a5c38] focus:outline-none rounded disabled:opacity-100";
 
-  const renderHalfTable = (halfHoles: Hole[], startIdx: number, label: string) => {
-    const outLabel = label === "OUT" ? "OUT" : "IN";
-    const sumStart = label === "OUT" ? 0 : 9;
-    const sumEnd   = label === "OUT" ? 9 : 18;
+  const isLight = (color: string) =>
+    ["#ffffff", "#f5c518", "#d4a800", "#fbbf24"].includes(color);
+
+  const renderHalfTable = (halfHoles: Hole[], startIdx: number, label: "OUT" | "IN") => {
+    const isBack  = label === "IN";
+    const sumStart = isBack ? 9 : 0;
+    const sumEnd   = isBack ? 18 : 9;
+
+    const subtotalCell = (field: keyof Hole, bg: string, fgClass: string) => (
+      <td className={`border border-gray-200 px-2 py-1 text-center font-bold ${fgClass}`} style={{ backgroundColor: bg }}>
+        {sumField(holes, field, sumStart, sumEnd) ?? "—"}
+      </td>
+    );
+
+    const totalCell = (field: keyof Hole, bg: string, fgClass: string) => (
+      <td className={`border border-gray-200 px-2 py-1 text-center font-bold ${fgClass}`} style={{ backgroundColor: bg }}>
+        {sumField(holes, field, 0, 18) ?? "—"}
+      </td>
+    );
 
     return (
       <div className="overflow-x-auto">
@@ -117,7 +132,8 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
               {halfHoles.map(h => (
                 <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
               ))}
-              <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">{outLabel}</th>
+              <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#154d30]">{label}</th>
+              {isBack && <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-16 bg-[#0d3320]">TOTAL</th>}
             </tr>
           </thead>
           <tbody>
@@ -135,9 +151,8 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
                   />
                 </td>
               ))}
-              <td className="border border-gray-200 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
-                {sumField(holes, "par", sumStart, sumEnd) ?? "—"}
-              </td>
+              {subtotalCell("par", "#e8f4ed", "text-[#1a5c38]")}
+              {isBack && totalCell("par", "#1a5c38", "text-white")}
             </tr>
 
             {/* STROKE INDEX */}
@@ -155,12 +170,13 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
                 </td>
               ))}
               <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
+              {isBack && <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-100">—</td>}
             </tr>
 
             {/* TEE COLOR DISTANCES */}
             {activeTees.map(tee => {
-              const isLight = tee.color === "#ffffff" || tee.color === "#f5c518" || tee.color === "#d4a800" || tee.color === "#fbbf24";
-              const textColor = isLight ? "#1f2937" : "#ffffff";
+              const light = isLight(tee.color);
+              const textColor = light ? "#1f2937" : "#ffffff";
               return (
                 <tr key={tee.key} style={{ backgroundColor: tee.color + "22" }}>
                   <td
@@ -180,9 +196,14 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
                       />
                     </td>
                   ))}
-                  <td className="border border-gray-200 px-2 py-1 text-center font-bold" style={{ backgroundColor: tee.color + "30" }}>
+                  <td className="border border-gray-200 px-2 py-1 text-center font-bold" style={{ backgroundColor: tee.color + "40" }}>
                     {sumField(holes, tee.key as keyof Hole, sumStart, sumEnd) ?? "—"}
                   </td>
+                  {isBack && (
+                    <td className="border border-gray-200 px-2 py-1 text-center font-bold" style={{ backgroundColor: tee.color, color: textColor }}>
+                      {sumField(holes, tee.key as keyof Hole, 0, 18) ?? "—"}
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -203,27 +224,6 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
         {renderHalfTable(back, 9, "IN")}
       </div>
 
-      {/* TOTALS ROW */}
-      <div className="overflow-x-auto">
-        <table className="border-collapse text-xs">
-          <tbody>
-            <tr className="bg-[#1a5c38] text-white">
-              <td className="border border-[#154d30] px-3 py-2 font-bold w-20">TOTAL</td>
-              <td className="border border-[#154d30] px-4 py-2 font-bold">
-                PAR: <span className="ml-1">{sumField(holes, "par", 0, 18) ?? "—"}</span>
-              </td>
-              {teeColors.filter(t => t.enabled).map(tee => {
-                const isLight = tee.color === "#ffffff" || tee.color === "#f5c518" || tee.color === "#d4a800" || tee.color === "#fbbf24";
-                return (
-                  <td key={tee.key} className="border border-[#154d30] px-4 py-2 font-bold" style={{ backgroundColor: tee.color, color: isLight ? "#1f2937" : "#fff" }}>
-                    {tee.name}: {sumField(holes, tee.key as keyof Hole, 0, 18) ?? "—"}m
-                  </td>
-                );
-              })}
-            </tr>
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

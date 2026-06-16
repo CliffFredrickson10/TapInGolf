@@ -109,7 +109,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
   // Single unified table: LABEL | 1-9 | OUT | 10-18 | IN | TOTAL
   return (
     <div className="overflow-x-auto">
-      <table className="border-collapse text-xs w-full">
+      <table className="border-collapse text-xs w-full table-fixed">
         {/* ── Header ── */}
         <thead>
           <tr className="bg-[#1a5c38] text-white">
@@ -631,15 +631,23 @@ export default function Scorecard() {
                 {/* Column structure mirrors ScorecardTable exactly:
                     w-20 label | w-10×9 front | w-12 OUT | w-10×9 back | w-12 IN | w-14 TOTAL */}
                 {/*
-                  Label column is split into 2 sub-cols (letter w-6 + label w-14 = w-20 total)
-                  matching the Hole Data table's single w-20 first column.
-                  rowSpan=2 on the player letter cell makes it span SCORE + RESULT rows.
-                  All summary rows (HOLE, PAR, A/B, C/D, ALLIANCE) use colSpan=2.
+                  table-fixed + explicit colgroup keeps this table pixel-aligned with ScorecardTable.
+                  Both tables declare 952px total (80+9×40+48+9×40+48+56).
+                  Letter col (24px) + Label col (56px) = 80px = ScorecardTable's HOLE col.
                 */}
-                <table className="border-collapse text-xs w-full">
+                <table className="border-collapse text-xs w-full table-fixed">
                   <colgroup>
-                    <col style={{ width: "1.5rem" }} /> {/* player letter ~w-6 */}
-                    <col />                              {/* SCORE/RESULT label, absorbs rest of ~w-20 */}
+                    <col style={{ width: "24px" }} />   {/* player letter */}
+                    <col style={{ width: "56px" }} />   {/* SCORE/RESULT label — together = 80px (w-20) */}
+                    {Array.from({length: 9}).map((_,i) => (
+                      <col key={`f${i}`} style={{ width: "40px" }} />
+                    ))}
+                    <col style={{ width: "48px" }} />   {/* OUT */}
+                    {Array.from({length: 9}).map((_,i) => (
+                      <col key={`b${i}`} style={{ width: "40px" }} />
+                    ))}
+                    <col style={{ width: "48px" }} />   {/* IN */}
+                    <col style={{ width: "56px" }} />   {/* TOTAL */}
                   </colgroup>
                   <thead>
                     <tr className="bg-[#1a5c38] text-white">

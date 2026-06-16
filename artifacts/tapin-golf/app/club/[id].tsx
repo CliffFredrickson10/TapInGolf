@@ -249,11 +249,11 @@ function ScorecardSection({
 }
 
 const scStyles = StyleSheet.create({
-  dropdown:  { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
-  toggle:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
-  body:      { borderTopWidth: 1, paddingHorizontal: 12, paddingBottom: 14, paddingTop: 10 },
+  dropdown:  { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  toggle:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, paddingVertical: 10 },
+  body:      { borderTopWidth: 1, paddingHorizontal: 12, paddingBottom: 12, paddingTop: 8 },
   halfLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
-  title:     { fontSize: 16, fontFamily: "Inter_700Bold" },
+  title:     { fontSize: 14, fontFamily: "Inter_700Bold" },
   wrap:      { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
   row:       { flexDirection: "row", alignItems: "center" },
   labelCell: { justifyContent: "center", paddingHorizontal: 8, borderRightWidth: 1 },
@@ -463,6 +463,9 @@ export default function ClubDetailScreen() {
           ))}
         </ScrollView>
 
+        {/* Info dropdowns — About / Scorecard / Local Rules */}
+        <View style={{ gap: 6 }}>
+
         {/* About — collapsible */}
         {club.description ? (
           <View style={[scStyles.dropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
@@ -552,6 +555,8 @@ export default function ClubDetailScreen() {
             ) : null}
           </View>
         )}
+
+        </View>{/* end info dropdowns */}
 
         {/* Photo Gallery */}
         {photos.length > 0 && (

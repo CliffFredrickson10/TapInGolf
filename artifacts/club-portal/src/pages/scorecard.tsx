@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
 import {
   Save, Plus, Trash2, GripVertical, ClipboardList, BookOpen,
-  ChevronDown, ChevronUp, Settings2,
+  ChevronDown, ChevronUp, Settings2, Users,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -485,6 +485,80 @@ export default function Scorecard() {
             )}
           </Card>
 
+          {/* Competition & Signatures header */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <ClipboardList className="h-4 w-4 text-[#1a5c38]" />
+                Competition Header
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Appears at the top of the printed scorecard.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="flex gap-6 flex-wrap">
+
+                {/* Left: Competition + players */}
+                <div className="overflow-x-auto flex-1 min-w-[280px]">
+                  <table className="border-collapse text-xs w-full">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800 w-32">COMPETITION:</th>
+                        <th className="border border-gray-400 px-2 py-1.5 bg-white" colSpan={3}></th>
+                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">CP</th>
+                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">CH</th>
+                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">HA</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["A","B","C","D"] as const).map(p => (
+                        <tr key={p}>
+                          <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER {p}:</td>
+                          <td className="border border-gray-400 px-2 py-2.5 bg-white" colSpan={3}></td>
+                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
+                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
+                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Right: Date / Signatures / Two Club */}
+                <div className="overflow-x-auto flex-1 min-w-[280px]">
+                  <table className="border-collapse text-xs w-full">
+                    <thead>
+                      <tr>
+                        <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800" colSpan={5}>
+                          DATE: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TIME: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TEE: &nbsp; 1<sup>st</sup> &nbsp; 10<sup>th</sup>
+                        </th>
+                        <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800">RESULTS</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr>
+                        <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
+                        <td className="border border-gray-400 px-2 py-2.5 bg-white" rowSpan={2}></td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>
+                      </tr>
+                      <tr>
+                        <td className="border border-gray-400 px-2 py-1.5 text-center font-bold text-gray-800 bg-gray-100" colSpan={2}>TWO CLUB</td>
+                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">A</td>
+                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">B</td>
+                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">C</td>
+                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">D</td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Scorecard table */}
           <Card>
             <CardHeader className="pb-3">
@@ -503,6 +577,128 @@ export default function Scorecard() {
                 readOnly={readOnly}
                 onChange={setHoles}
               />
+            </CardContent>
+          </Card>
+
+          {/* Player Scores */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Users className="h-4 w-4 text-[#1a5c38]" />
+                Player Scores
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Score entry grid for up to 4 players — printed at the bottom of the scorecard.
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="overflow-x-auto">
+                <table className="border-collapse text-xs">
+                  <thead>
+                    {/* Hole numbers header */}
+                    <tr className="bg-[#1a5c38] text-white">
+                      <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-6" colSpan={2}>HOLE</th>
+                      {holes.slice(0,9).map(h => (
+                        <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
+                      ))}
+                      <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">OUT</th>
+                      {holes.slice(9,18).map(h => (
+                        <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
+                      ))}
+                      <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">IN</th>
+                      <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#0d3320]">TOTAL</th>
+                    </tr>
+                    {/* PAR reference row */}
+                    <tr className="bg-[#f0f7f4]">
+                      <td className="border border-gray-300 px-2 py-1 font-semibold text-[#1a5c38]" colSpan={2}>PAR</td>
+                      {holes.slice(0,9).map(h => (
+                        <td key={h.number} className="border border-gray-300 px-1 py-1 text-center text-gray-600">{h.par ?? "—"}</td>
+                      ))}
+                      <td className="border border-gray-300 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">{sumField(holes,"par",0,9) ?? "—"}</td>
+                      {holes.slice(9,18).map(h => (
+                        <td key={h.number} className="border border-gray-300 px-1 py-1 text-center text-gray-600">{h.par ?? "—"}</td>
+                      ))}
+                      <td className="border border-gray-300 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">{sumField(holes,"par",9,18) ?? "—"}</td>
+                      <td className="border border-gray-300 px-2 py-1 text-center font-bold text-white bg-[#1a5c38]">{sumField(holes,"par",0,18) ?? "—"}</td>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(["A","B","C","D"] as const).map((player, pi) => (
+                      <React.Fragment key={player}>
+                        {/* SCORE row */}
+                        <tr className={pi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="border border-gray-300 px-1.5 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed] w-5" rowSpan={2}>{player}</td>
+                          <td className="border border-gray-300 px-1.5 py-1 text-xs font-medium text-gray-500 w-12">SCORE</td>
+                          {Array.from({length: 9}).map((_,i) => (
+                            <td key={i} className="border border-gray-300 w-10 h-7"></td>
+                          ))}
+                          <td className="border border-gray-300 bg-[#e8f4ed] w-12 h-7"></td>
+                          {Array.from({length: 9}).map((_,i) => (
+                            <td key={i} className="border border-gray-300 w-10 h-7"></td>
+                          ))}
+                          <td className="border border-gray-300 bg-[#e8f4ed] w-12 h-7"></td>
+                          <td className="border border-gray-300 bg-[#1a5c38]/10 w-14 h-7"></td>
+                        </tr>
+                        {/* RESULT row */}
+                        <tr className={pi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                          <td className="border border-gray-300 px-1.5 py-1 text-xs font-medium text-gray-400">RESULT</td>
+                          {Array.from({length: 9}).map((_,i) => (
+                            <td key={i} className="border border-gray-300 w-10 h-6 bg-gray-50/60"></td>
+                          ))}
+                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-6"></td>
+                          {Array.from({length: 9}).map((_,i) => (
+                            <td key={i} className="border border-gray-300 w-10 h-6 bg-gray-50/60"></td>
+                          ))}
+                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-6"></td>
+                          <td className="border border-gray-300 bg-[#1a5c38]/10 w-14 h-6"></td>
+                        </tr>
+                        {/* A/B RESULT after B, C/D RESULT after D */}
+                        {player === "B" && (
+                          <tr className="bg-[#1a5c38]/5">
+                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>A/B RESULT</td>
+                            {Array.from({length: 9}).map((_,i) => (
+                              <td key={i} className="border border-gray-300 h-7"></td>
+                            ))}
+                            <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                            {Array.from({length: 9}).map((_,i) => (
+                              <td key={i} className="border border-gray-300 h-7"></td>
+                            ))}
+                            <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                            <td className="border border-gray-300 bg-[#1a5c38]/10 h-7"></td>
+                          </tr>
+                        )}
+                        {player === "D" && (
+                          <tr className="bg-[#1a5c38]/5">
+                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>C/D RESULT</td>
+                            {Array.from({length: 9}).map((_,i) => (
+                              <td key={i} className="border border-gray-300 h-7"></td>
+                            ))}
+                            <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                            {Array.from({length: 9}).map((_,i) => (
+                              <td key={i} className="border border-gray-300 h-7"></td>
+                            ))}
+                            <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                            <td className="border border-gray-300 bg-[#1a5c38]/10 h-7"></td>
+                          </tr>
+                        )}
+                      </React.Fragment>
+                    ))}
+                    {/* ALLIANCE row */}
+                    <tr className="bg-[#1a5c38]/10">
+                      <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>ALLIANCE</td>
+                      {Array.from({length: 9}).map((_,i) => (
+                        <td key={i} className="border border-gray-300 h-7"></td>
+                      ))}
+                      <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                      {Array.from({length: 9}).map((_,i) => (
+                        <td key={i} className="border border-gray-300 h-7"></td>
+                      ))}
+                      <td className="border border-gray-300 bg-[#e8f4ed] h-7"></td>
+                      <td className="border border-gray-300 bg-[#1a5c38]/20 h-7 font-bold"></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -686,16 +686,16 @@ export default function Scorecard() {
                         </tr>
                         {/* RESULT row — no player letter cell (consumed by rowSpan above) */}
                         <tr className={pi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="border border-gray-300 border-t-dashed px-1.5 py-1 text-[10px] font-medium text-gray-400 bg-[#e8f4ed]/40" style={{ borderTopStyle: "dashed" }}>RESULT</td>
+                          <td className="border border-gray-300 px-1.5 py-1 text-[10px] font-medium text-gray-400 bg-[#e8f4ed]/40" style={{ borderTopStyle: "dashed" }}>RESULT</td>
                           {Array.from({length: 9}).map((_,i) => (
-                            <td key={i} className="border border-gray-300 w-10 h-6 bg-gray-50/60"></td>
+                            <td key={i} className="border border-gray-300 w-10 h-7 bg-gray-50/60"></td>
                           ))}
-                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-6"></td>
+                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-7"></td>
                           {Array.from({length: 9}).map((_,i) => (
-                            <td key={i} className="border border-gray-300 w-10 h-6 bg-gray-50/60"></td>
+                            <td key={i} className="border border-gray-300 w-10 h-7 bg-gray-50/60"></td>
                           ))}
-                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-6"></td>
-                          <td className="border border-gray-300 bg-[#1a5c38]/10 w-14 h-6"></td>
+                          <td className="border border-gray-300 bg-[#e8f4ed]/60 w-12 h-7"></td>
+                          <td className="border border-gray-300 bg-[#1a5c38]/10 w-14 h-7"></td>
                         </tr>
                         {player === "B" && (
                           <tr className="bg-[#1a5c38]/5">

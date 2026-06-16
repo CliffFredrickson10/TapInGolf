@@ -510,8 +510,8 @@ export default function Scorecard() {
                 <div className="flex-1 min-w-0 overflow-x-auto">
                   <table className="w-full table-fixed border-collapse text-xs">
                     <colgroup>
-                      <col style={{ width: "28%" }} />
-                      <col style={{ width: "52%" }} />
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "58%" }} />
                       <col style={{ width: "7%" }} />
                       <col style={{ width: "7%" }} />
                       <col style={{ width: "6%" }} />

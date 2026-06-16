@@ -190,7 +190,7 @@ function ScorecardSection({
                 {isTee ? (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
                     <View style={[scStyles.teeDot, { backgroundColor: row.color }]} />
-                    <Text style={[scStyles.label, { color: row.color }]}>{row.label}</Text>
+                    <Text style={[scStyles.label, { color: colors.foreground }]}>{row.label}</Text>
                   </View>
                 ) : (
                   <Text style={[scStyles.label, row.bold && scStyles.bold, { color: row.color }]}>{row.label}</Text>
@@ -300,6 +300,8 @@ export default function ClubDetailScreen() {
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const [localRules, setLocalRules] = useState<LocalRules | null>(null);
   const [scorecardExpanded, setScorecardExpanded] = useState(false);
+  const [aboutExpanded, setAboutExpanded] = useState(false);
+  const [localRulesExpanded, setLocalRulesExpanded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -461,11 +463,25 @@ export default function ClubDetailScreen() {
           ))}
         </ScrollView>
 
-        {/* Description */}
+        {/* About — collapsible */}
         {club.description ? (
-          <View style={[styles.descriptionCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>About</Text>
-            <Text style={[styles.descriptionText, { color: colors.mutedForeground }]}>{club.description}</Text>
+          <View style={[scStyles.dropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              style={scStyles.toggle}
+              onPress={() => { Haptics.selectionAsync(); setAboutExpanded(e => !e); }}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="information-circle-outline" size={18} color={colors.primary} />
+                <Text style={[scStyles.title, { color: colors.foreground }]}>About</Text>
+              </View>
+              <Ionicons name={aboutExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            {aboutExpanded ? (
+              <View style={[scStyles.body, { borderTopColor: colors.border }]}>
+                <Text style={[styles.descriptionText, { color: colors.mutedForeground }]}>{club.description}</Text>
+              </View>
+            ) : null}
           </View>
         ) : null}
 
@@ -479,49 +495,60 @@ export default function ClubDetailScreen() {
           />
         )}
 
-        {/* Local Rules */}
+        {/* Local Rules — collapsible */}
         {localRules && (
-          <View style={[styles.localRulesCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-            <View style={styles.localRulesHeaderRow}>
-              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
-              <Text style={[styles.sectionTitle, { color: colors.foreground, marginLeft: 8 }]}>Local Rules</Text>
-            </View>
-            {localRules.rules.map((rule, idx) => (
-              <View key={rule.id ?? idx} style={[styles.localRuleItem, idx > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
-                {rule.title ? (
-                  <Text style={[styles.localRuleTitle, { color: colors.foreground }]}>{rule.title}</Text>
-                ) : null}
-                {rule.body ? (
-                  <Text style={[styles.localRuleBody, { color: colors.mutedForeground }]}>{rule.body}</Text>
-                ) : null}
+          <View style={[scStyles.dropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+            <TouchableOpacity
+              style={scStyles.toggle}
+              onPress={() => { Haptics.selectionAsync(); setLocalRulesExpanded(e => !e); }}
+              activeOpacity={0.7}
+            >
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+                <Text style={[scStyles.title, { color: colors.foreground }]}>Local Rules</Text>
               </View>
-            ))}
-            {localRules.course_ratings.length > 0 && (
-              <View style={[styles.courseRatingsWrap, { borderTopColor: colors.border }]}>
-                <Text style={[styles.courseRatingsTitle, { color: colors.foreground }]}>Course Ratings</Text>
-                <View style={[styles.crHeader, { backgroundColor: colors.primary + "18" }]}>
-                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 2 }]}>Tee</Text>
-                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Rating</Text>
-                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Slope</Text>
-                </View>
-                {localRules.course_ratings.map((cr, idx) => (
-                  <View key={cr.id ?? idx} style={[styles.crRow, idx % 2 === 1 && { backgroundColor: colors.primary + "06" }]}>
-                    <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
-                      {cr.color ? (
-                        <View style={[styles.crColorDot, { backgroundColor: cr.color }]} />
-                      ) : null}
-                      <Text style={[styles.crCell, { color: colors.foreground }]}>{cr.tee}</Text>
-                    </View>
-                    <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.course_rating ?? "—"}</Text>
-                    <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.slope_rating ?? "—"}</Text>
+              <Ionicons name={localRulesExpanded ? "chevron-up" : "chevron-down"} size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            {localRulesExpanded ? (
+              <View style={[scStyles.body, { borderTopColor: colors.border }]}>
+                {localRules.rules.map((rule, idx) => (
+                  <View key={rule.id ?? idx} style={[styles.localRuleItem, idx > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
+                    {rule.title ? (
+                      <Text style={[styles.localRuleTitle, { color: colors.foreground }]}>{rule.title}</Text>
+                    ) : null}
+                    {rule.body ? (
+                      <Text style={[styles.localRuleBody, { color: colors.mutedForeground }]}>{rule.body}</Text>
+                    ) : null}
                   </View>
                 ))}
+                {localRules.course_ratings.length > 0 && (
+                  <View style={[styles.courseRatingsWrap, { borderTopColor: colors.border }]}>
+                    <Text style={[styles.courseRatingsTitle, { color: colors.foreground }]}>Course Ratings</Text>
+                    <View style={[styles.crHeader, { backgroundColor: colors.primary + "18" }]}>
+                      <Text style={[styles.crHdrCell, { color: colors.primary, flex: 2 }]}>Tee</Text>
+                      <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Rating</Text>
+                      <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Slope</Text>
+                    </View>
+                    {localRules.course_ratings.map((cr, idx) => (
+                      <View key={cr.id ?? idx} style={[styles.crRow, idx % 2 === 1 && { backgroundColor: colors.primary + "06" }]}>
+                        <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                          {cr.color ? (
+                            <View style={[styles.crColorDot, { backgroundColor: cr.color, borderWidth: 1, borderColor: "rgba(0,0,0,0.18)" }]} />
+                          ) : null}
+                          <Text style={[styles.crCell, { color: colors.foreground }]}>{cr.tee}</Text>
+                        </View>
+                        <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.course_rating ?? "—"}</Text>
+                        <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.slope_rating ?? "—"}</Text>
+                      </View>
+                    ))}
+                  </View>
+                )}
+                {localRules.footer_notes ? (
+                  <Text style={[styles.localRulesFooter, { color: colors.mutedForeground, borderTopColor: colors.border }]}>
+                    {localRules.footer_notes}
+                  </Text>
+                ) : null}
               </View>
-            )}
-            {localRules.footer_notes ? (
-              <Text style={[styles.localRulesFooter, { color: colors.mutedForeground, borderTopColor: colors.border }]}>
-                {localRules.footer_notes}
-              </Text>
             ) : null}
           </View>
         )}

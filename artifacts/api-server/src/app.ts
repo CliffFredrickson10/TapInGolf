@@ -3,6 +3,7 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
+import http from "http";
 import { fileURLToPath } from "url";
 import router from "./routes";
 import { logger } from "./lib/logger";
@@ -59,8 +60,38 @@ app.get("/api/presentation", servePresentation);
 
 app.use("/api", router);
 
+// In development, proxy the club-portal Vite dev server so users can access
+// it from the default preview port (80) without switching ports.
+if (process.env.NODE_ENV !== "production") {
+  const PORTAL_PORT = 19606;
+  const portalPrefixes = ["/club-portal", "/@vite", "/@fs", "/@id", "/@replit", "/node_modules/.vite"];
+
+  const proxyToPortal = (req: express.Request, res: express.Response) => {
+    const options: http.RequestOptions = {
+      hostname: "localhost",
+      port: PORTAL_PORT,
+      path: req.url,
+      method: req.method,
+      headers: { ...req.headers, host: `localhost:${PORTAL_PORT}` },
+    };
+    const proxy = http.request(options, (upstream) => {
+      res.writeHead(upstream.statusCode ?? 200, upstream.headers);
+      upstream.pipe(res, { end: true });
+    });
+    proxy.on("error", () => res.status(502).send("Club portal dev server unavailable"));
+    req.pipe(proxy, { end: true });
+  };
+
+  for (const prefix of portalPrefixes) {
+    app.use(prefix, (req, res) => {
+      req.url = prefix + req.url;
+      proxyToPortal(req, res);
+    });
+  }
+}
+
 // In production, serve the built club-portal SPA from the same origin so
-// its relative /api calls work. Dev is unaffected (workflows run separately).
+// its relative /api calls work.
 if (process.env.NODE_ENV === "production") {
   const clientDir = path.resolve(__dirname, "../../club-portal/dist/public");
   app.use(express.static(clientDir));

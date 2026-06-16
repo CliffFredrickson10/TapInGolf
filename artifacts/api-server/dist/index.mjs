@@ -21007,7 +21007,7 @@ var require_application = __commonJS({
     var finalhandler = require_finalhandler();
     var debug = require_src()("express:application");
     var View = require_view();
-    var http = __require("node:http");
+    var http2 = __require("node:http");
     var methods = require_utils3().methods;
     var compileETag = require_utils3().compileETag;
     var compileQueryParser = require_utils3().compileQueryParser;
@@ -21240,7 +21240,7 @@ var require_application = __commonJS({
       tryRender(view, renderOptions, done);
     };
     app2.listen = function listen() {
-      var server = http.createServer(this);
+      var server = http2.createServer(this);
       var args = slice.call(arguments);
       if (typeof args[args.length - 1] === "function") {
         var done = args[args.length - 1] = once(args[args.length - 1]);
@@ -22015,12 +22015,12 @@ var require_request = __commonJS({
     var accepts = require_accepts();
     var isIP = __require("node:net").isIP;
     var typeis = require_type_is();
-    var http = __require("node:http");
+    var http2 = __require("node:http");
     var fresh = require_fresh();
     var parseRange = require_range_parser();
     var parse = require_parseurl();
     var proxyaddr = require_proxy_addr();
-    var req = Object.create(http.IncomingMessage.prototype);
+    var req = Object.create(http2.IncomingMessage.prototype);
     module.exports = req;
     req.get = req.header = function header(name) {
       if (!name) {
@@ -23114,7 +23114,7 @@ var require_response = __commonJS({
     var deprecate = require_depd()("express");
     var encodeUrl = require_encodeurl();
     var escapeHtml = require_escape_html();
-    var http = __require("node:http");
+    var http2 = __require("node:http");
     var onFinished = require_on_finished();
     var mime = require_mime_types();
     var path4 = __require("node:path");
@@ -23130,7 +23130,7 @@ var require_response = __commonJS({
     var resolve = path4.resolve;
     var vary = require_vary();
     var { Buffer: Buffer2 } = __require("node:buffer");
-    var res = Object.create(http.ServerResponse.prototype);
+    var res = Object.create(http2.ServerResponse.prototype);
     module.exports = res;
     res.status = function status(code) {
       if (!Number.isInteger(code)) {
@@ -53334,6 +53334,7 @@ var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
 import fs from "fs";
+import http from "http";
 import { fileURLToPath } from "url";
 
 // src/routes/index.ts
@@ -71333,6 +71334,31 @@ var servePresentation = (_req, res) => {
 app.get("/presentation", servePresentation);
 app.get("/api/presentation", servePresentation);
 app.use("/api", routes_default);
+if (process.env.NODE_ENV !== "production") {
+  const PORTAL_PORT = 19606;
+  const portalPrefixes = ["/club-portal", "/@vite", "/@fs", "/@id", "/@replit", "/node_modules/.vite"];
+  const proxyToPortal = (req, res) => {
+    const options = {
+      hostname: "localhost",
+      port: PORTAL_PORT,
+      path: req.url,
+      method: req.method,
+      headers: { ...req.headers, host: `localhost:${PORTAL_PORT}` }
+    };
+    const proxy = http.request(options, (upstream) => {
+      res.writeHead(upstream.statusCode ?? 200, upstream.headers);
+      upstream.pipe(res, { end: true });
+    });
+    proxy.on("error", () => res.status(502).send("Club portal dev server unavailable"));
+    req.pipe(proxy, { end: true });
+  };
+  for (const prefix of portalPrefixes) {
+    app.use(prefix, (req, res) => {
+      req.url = prefix + req.url;
+      proxyToPortal(req, res);
+    });
+  }
+}
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
   app.use(import_express24.default.static(clientDir));

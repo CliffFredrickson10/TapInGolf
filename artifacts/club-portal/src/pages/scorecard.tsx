@@ -569,7 +569,11 @@ export default function Scorecard() {
                     <tbody>
                       <tr style={{ height: "80px" }}>
                         <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
-                        <td className="border border-gray-400 bg-white" colSpan={4}></td>
+                        <td className="border border-gray-400 bg-white relative" colSpan={4}>
+                          <svg className="absolute inset-0 w-full h-full" preserveAspectRatio="none">
+                            <line x1="0" y1="100%" x2="100%" y2="0" stroke="#888" strokeWidth="1.2"/>
+                          </svg>
+                        </td>
                       </tr>
                       <tr style={{ height: "80px" }}>
                         <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>

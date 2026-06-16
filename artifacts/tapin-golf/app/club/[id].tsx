@@ -456,7 +456,7 @@ export default function ClubDetailScreen() {
 
         {/* Features */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
-          {[`${club.holes ?? 18} holes`, ...(club.facilities ?? [])].map((f) => (
+          {[...(club.cart_available ? ["Golf carts"] : []), `${club.holes ?? 18} holes`, ...(club.facilities ?? [])].map((f) => (
             <View key={f} style={[styles.feature, { backgroundColor: colors.primaryLight }]}>
               <Text style={[styles.featureText, { color: colors.primary }]}>{f}</Text>
             </View>
@@ -587,25 +587,6 @@ export default function ClubDetailScreen() {
           </View>
         )}
 
-        {/* Cart availability */}
-        <View style={[styles.cartRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          <Ionicons
-            name="car-sport"
-            size={18}
-            color={club.cart_available ? colors.primary : colors.mutedForeground}
-          />
-          {club.cart_available ? (
-            <Text style={[styles.cartText, { color: colors.foreground }]}>
-              Golf carts available
-              {club.cart_compulsory ? " (compulsory)" : " (optional)"}
-              {" · "}R{(club.cart_price ?? 0).toFixed(2)}/cart
-            </Text>
-          ) : (
-            <Text style={[styles.cartText, { color: colors.mutedForeground }]}>
-              No golf carts available at this club
-            </Text>
-          )}
-        </View>
 
 
         {/* Upcoming Events */}

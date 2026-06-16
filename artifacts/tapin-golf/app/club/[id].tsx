@@ -145,6 +145,124 @@ function StarRow({ rating, size = 14, onPress }: { rating: number; size?: number
   );
 }
 
+function ScorecardSection({
+  scorecard, expanded, onToggle, colors,
+}: {
+  scorecard: Scorecard;
+  expanded: boolean;
+  onToggle: () => void;
+  colors: ReturnType<typeof useColors>;
+}) {
+  const LABEL_W = 64; const HOLE_W = 38; const SUB_W = 44; const ROW_H = 30;
+  const enabledTees = scorecard.tee_colors.filter(t => t.enabled);
+  const front = scorecard.holes.slice(0, 9);
+  const back  = scorecard.holes.slice(9, 18);
+
+  const sumHoles = (holes: HoleRow[], key: string): number | null =>
+    holes.some(h => h[key] != null)
+      ? holes.reduce((s, h) => s + (Number(h[key]) || 0), 0)
+      : null;
+
+  const rows: { label: string; color: string; key: string; bold?: boolean }[] = [
+    { label: "Hole", color: colors.primary,          key: "number",       bold: true },
+    { label: "Par",  color: colors.mutedForeground,  key: "par" },
+    { label: "SI",   color: colors.mutedForeground,  key: "stroke_index" },
+    ...enabledTees.map(t => ({ label: t.name, color: t.color, key: t.key })),
+  ];
+
+  const renderTable = (holes: HoleRow[], subtotalLabel: string) => (
+    <ScrollView horizontal showsHorizontalScrollIndicator style={{ marginTop: 6 }}>
+      <View style={[scStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+        {rows.map((row, ri) => {
+          const isHole   = row.key === "number";
+          const isTee    = enabledTees.some(t => t.key === row.key);
+          const subtotal = (isTee || row.key === "par") ? sumHoles(holes, row.key) : null;
+          return (
+            <View
+              key={row.key}
+              style={[
+                scStyles.row,
+                { height: ROW_H, borderBottomWidth: ri < rows.length - 1 ? 1 : 0, borderBottomColor: colors.border + "60" },
+                isHole && { backgroundColor: colors.primary + "18" },
+              ]}
+            >
+              <View style={[scStyles.labelCell, { width: LABEL_W, borderRightColor: colors.border }]}>
+                {isTee ? (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                    <View style={[scStyles.teeDot, { backgroundColor: row.color }]} />
+                    <Text style={[scStyles.label, { color: row.color }]}>{row.label}</Text>
+                  </View>
+                ) : (
+                  <Text style={[scStyles.label, row.bold && scStyles.bold, { color: row.color }]}>{row.label}</Text>
+                )}
+              </View>
+              {holes.map((h, hi) => (
+                <Text
+                  key={h.number}
+                  style={[
+                    scStyles.cell,
+                    { width: HOLE_W, color: isHole ? colors.primary : isTee ? colors.foreground : colors.mutedForeground },
+                    (isHole || row.bold) && scStyles.bold,
+                    hi % 2 === 1 && { backgroundColor: colors.primary + "06" },
+                  ]}
+                >
+                  {h[row.key] != null ? String(h[row.key]) : "—"}
+                </Text>
+              ))}
+              <Text style={[scStyles.cell, scStyles.bold, { width: SUB_W, color: colors.primary, borderLeftWidth: 1, borderLeftColor: colors.border }]}>
+                {isHole ? subtotalLabel : subtotal != null ? String(subtotal) : "—"}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+
+  return (
+    <View style={[scStyles.dropdown, { borderColor: colors.border, backgroundColor: colors.card }]}>
+      <TouchableOpacity style={scStyles.toggle} onPress={onToggle} activeOpacity={0.7}>
+        <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+          <Ionicons name="golf-outline" size={18} color={colors.primary} />
+          <Text style={[scStyles.title, { color: colors.foreground }]}>Scorecard</Text>
+        </View>
+        <Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={20} color={colors.mutedForeground} />
+      </TouchableOpacity>
+      {expanded ? (
+        <View style={[scStyles.body, { borderTopColor: colors.border }]}>
+          {front.length > 0 && (
+            <View>
+              <Text style={[scStyles.halfLabel, { color: colors.mutedForeground }]}>Front Nine</Text>
+              {renderTable(front, "Out")}
+            </View>
+          )}
+          {back.length > 0 && (
+            <View style={{ marginTop: 16 }}>
+              <Text style={[scStyles.halfLabel, { color: colors.mutedForeground }]}>Back Nine</Text>
+              {renderTable(back, "In")}
+            </View>
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+const scStyles = StyleSheet.create({
+  dropdown:  { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  toggle:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
+  body:      { borderTopWidth: 1, paddingHorizontal: 12, paddingBottom: 14, paddingTop: 10 },
+  halfLabel: { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
+  title:     { fontSize: 16, fontFamily: "Inter_700Bold" },
+  wrap:      { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
+  row:       { flexDirection: "row", alignItems: "center" },
+  labelCell: { justifyContent: "center", paddingHorizontal: 8, borderRightWidth: 1 },
+  teeDot:    { width: 9, height: 9, borderRadius: 5 },
+  label:     { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  cell:      { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 2 },
+  bold:      { fontFamily: "Inter_700Bold" },
+});
+
 export default function ClubDetailScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
@@ -181,6 +299,7 @@ export default function ClubDetailScreen() {
   const [expandedReviews, setExpandedReviews] = useState<Record<number, boolean>>({});
   const [scorecard, setScorecard] = useState<Scorecard | null>(null);
   const [localRules, setLocalRules] = useState<LocalRules | null>(null);
+  const [scorecardExpanded, setScorecardExpanded] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -350,87 +469,15 @@ export default function ClubDetailScreen() {
           </View>
         ) : null}
 
-        {/* Scorecard */}
-        {scorecard && scorecard.holes.length > 0 && (() => {
-          const enabledTees = scorecard.tee_colors.filter(t => t.enabled);
-          const front = scorecard.holes.slice(0, 9);
-          const back  = scorecard.holes.slice(9, 18);
-          const sumF = (key: string) => front.reduce((s, h) => s + (Number(h[key]) || 0), 0);
-          const sumB = (key: string) => back.reduce((s,  h) => s + (Number(h[key]) || 0), 0);
-          const sumT = (key: string) => scorecard.holes.reduce((s, h) => s + (Number(h[key]) || 0), 0);
-          const frontHasTee = (key: string) => front.some(h => h[key] != null);
-          const backHasTee  = (key: string) => back.some( h => h[key] != null);
-          const COL_HOLE = 36; const COL_PAR = 36; const COL_SI = 36; const COL_TEE = 52;
-          const headerH = 28; const rowH = 30;
-          return (
-            <View>
-              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Scorecard</Text>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
-                <View style={[styles.scorecardWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                  {/* Header row */}
-                  <View style={[styles.scRow, { backgroundColor: colors.primary + "18", height: headerH }]}>
-                    <Text style={[styles.scHdr, { width: COL_HOLE, color: colors.primary }]}>Hole</Text>
-                    <Text style={[styles.scHdr, { width: COL_PAR,  color: colors.primary }]}>Par</Text>
-                    <Text style={[styles.scHdr, { width: COL_SI,   color: colors.primary }]}>SI</Text>
-                    {enabledTees.map(t => (
-                      <Text key={t.key} style={[styles.scHdr, { width: COL_TEE, color: t.color }]}>{t.name}</Text>
-                    ))}
-                  </View>
-                  {/* Data rows */}
-                  {scorecard.holes.map((h, idx) => (
-                    <View key={h.number} style={[styles.scRow, { height: rowH, backgroundColor: idx % 2 === 0 ? "transparent" : colors.primary + "08" }]}>
-                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.foreground }]}>{h.number}</Text>
-                      <Text style={[styles.scCell, { width: COL_PAR, color: colors.mutedForeground }]}>{h.par ?? "—"}</Text>
-                      <Text style={[styles.scCell, { width: COL_SI,  color: colors.mutedForeground }]}>{h.stroke_index ?? "—"}</Text>
-                      {enabledTees.map(t => (
-                        <Text key={t.key} style={[styles.scCell, { width: COL_TEE, color: colors.foreground }]}>
-                          {h[t.key] != null ? String(h[t.key]) : "—"}
-                        </Text>
-                      ))}
-                    </View>
-                  ))}
-                  {/* Front 9 subtotal */}
-                  {front.length === 9 && (
-                    <View style={[styles.scRow, styles.scSubtotal, { height: rowH, borderTopColor: colors.border }]}>
-                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>Out</Text>
-                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumF("par")}</Text>
-                      <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
-                      {enabledTees.map(t => (
-                        <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
-                          {frontHasTee(t.key) ? sumF(t.key) : "—"}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                  {/* Back 9 subtotal */}
-                  {back.length === 9 && (
-                    <View style={[styles.scRow, styles.scSubtotal, { height: rowH, borderTopColor: colors.border }]}>
-                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>In</Text>
-                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumB("par")}</Text>
-                      <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
-                      {enabledTees.map(t => (
-                        <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
-                          {backHasTee(t.key) ? sumB(t.key) : "—"}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                  {/* Total */}
-                  <View style={[styles.scRow, styles.scTotal, { height: rowH + 2, borderTopColor: colors.primary }]}>
-                    <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>Tot</Text>
-                    <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumT("par")}</Text>
-                    <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
-                    {enabledTees.map(t => (
-                      <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
-                        {scorecard.holes.some(h => h[t.key] != null) ? sumT(t.key) : "—"}
-                      </Text>
-                    ))}
-                  </View>
-                </View>
-              </ScrollView>
-            </View>
-          );
-        })()}
+        {/* Scorecard — collapsible */}
+        {scorecard && scorecard.holes.length > 0 && (
+          <ScorecardSection
+            scorecard={scorecard}
+            expanded={scorecardExpanded}
+            onToggle={() => { Haptics.selectionAsync(); setScorecardExpanded(e => !e); }}
+            colors={colors}
+          />
+        )}
 
         {/* Photo Gallery */}
         {photos.length > 0 && (
@@ -1053,13 +1100,20 @@ const styles = StyleSheet.create({
   lightboxCaptionText: { color: "#fff", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", opacity: 0.9 },
 
   // Scorecard
-  scorecardWrap:  { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
-  scRow:          { flexDirection: "row", alignItems: "center" },
-  scHdr:          { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center", paddingHorizontal: 4 },
-  scCell:         { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 4 },
-  scCellBold:     { fontFamily: "Inter_700Bold" },
-  scSubtotal:     { borderTopWidth: 1 },
-  scTotal:        { borderTopWidth: 2 },
+  scorecardDropdown: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  scorecardToggle:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 16, paddingVertical: 14 },
+  scorecardBody:     { borderTopWidth: 1, paddingHorizontal: 12, paddingBottom: 14, paddingTop: 10 },
+  scHalfLabel:       { fontSize: 11, fontFamily: "Inter_600SemiBold", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 2 },
+  scorecardWrap:     { borderRadius: 10, borderWidth: 1, overflow: "hidden" },
+  scRow:             { flexDirection: "row", alignItems: "center" },
+  scLabelCell:       { justifyContent: "center", paddingHorizontal: 8, borderRightWidth: 1 },
+  scTeeDot:          { width: 9, height: 9, borderRadius: 5 },
+  scLabel:           { fontSize: 11, fontFamily: "Inter_600SemiBold" },
+  scHdr:             { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center", paddingHorizontal: 4 },
+  scCell:            { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 2 },
+  scCellBold:        { fontFamily: "Inter_700Bold" },
+  scSubtotal:        { borderTopWidth: 1 },
+  scTotal:           { borderTopWidth: 2 },
 
   // Local Rules
   localRulesCard:       { borderRadius: 14, borderWidth: 1, padding: 16, gap: 0 },

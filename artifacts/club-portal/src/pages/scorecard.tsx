@@ -733,6 +733,11 @@ export default function Scorecard() {
                     </tr>
                   </tbody>
                 </table>
+                <p className="mt-2 text-[11px] text-gray-600">
+                  <strong>CP:</strong> Course Played (Y/W/B/R)&nbsp;&nbsp;
+                  <strong>CH:</strong> Course Handicap&nbsp;&nbsp;
+                  <strong>HA:</strong> Handicap Allowance
+                </p>
               </div>
             </CardContent>
           </Card>

@@ -630,7 +630,7 @@ export default function Scorecard() {
               <div className="overflow-x-auto">
                 {/* Column structure mirrors ScorecardTable exactly:
                     w-20 label | w-10×9 front | w-12 OUT | w-10×9 back | w-12 IN | w-14 TOTAL */}
-                <table className="border-collapse text-xs">
+                <table className="border-collapse text-xs w-full">
                   <thead>
                     <tr className="bg-[#1a5c38] text-white">
                       <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]">HOLE</th>

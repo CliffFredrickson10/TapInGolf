@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
 import {
   Save, Plus, Trash2, GripVertical, ClipboardList, BookOpen,
-  ChevronDown, ChevronUp, Settings2, Users, Printer,
+  ChevronDown, ChevronUp, Settings2, Users,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -685,14 +685,6 @@ export default function Scorecard() {
           <p className="text-sm text-muted-foreground mt-1">Configure your course scorecard and local rules.</p>
         </div>
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={handlePrint}
-            className="gap-2 border-[#1a5c38] text-[#1a5c38] hover:bg-[#1a5c38]/5"
-          >
-            <Printer className="h-4 w-4" />
-            Print Scorecard
-          </Button>
           {activeTab === "scorecard" ? (
             <Button
               onClick={saveScorecard}

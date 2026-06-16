@@ -106,124 +106,113 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
   const isLight = (color: string) =>
     ["#ffffff", "#f5c518", "#d4a800", "#fbbf24"].includes(color);
 
-  const renderHalfTable = (halfHoles: Hole[], startIdx: number, label: "OUT" | "IN") => {
-    const isBack  = label === "IN";
-    const sumStart = isBack ? 9 : 0;
-    const sumEnd   = isBack ? 18 : 9;
-
-    const subtotalCell = (field: keyof Hole, bg: string, fgClass: string) => (
-      <td className={`border border-gray-200 px-2 py-1 text-center font-bold ${fgClass}`} style={{ backgroundColor: bg }}>
-        {sumField(holes, field, sumStart, sumEnd) ?? "—"}
-      </td>
-    );
-
-    const totalCell = (field: keyof Hole, bg: string, fgClass: string) => (
-      <td className={`border border-gray-200 px-2 py-1 text-center font-bold ${fgClass}`} style={{ backgroundColor: bg }}>
-        {sumField(holes, field, 0, 18) ?? "—"}
-      </td>
-    );
-
-    return (
-      <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-xs min-w-[520px]">
-          <thead>
-            <tr className="bg-[#1a5c38] text-white">
-              <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[80px]">HOLE</th>
-              {halfHoles.map(h => (
-                <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
-              ))}
-              <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#154d30]">{label}</th>
-              {isBack && <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-16 bg-[#0d3320]">TOTAL</th>}
-            </tr>
-          </thead>
-          <tbody>
-            {/* PAR */}
-            <tr className="bg-[#f0f7f4]">
-              <td className="border border-gray-200 px-2 py-1 font-semibold text-[#1a5c38]">PAR</td>
-              {halfHoles.map((h, i) => (
-                <td key={h.number} className="border border-gray-200 p-0.5">
-                  <input
-                    type="number" min={3} max={6}
-                    value={h.par ?? ""}
-                    onChange={e => setCell(startIdx + i, "par", e.target.value)}
-                    disabled={readOnly}
-                    className={cellCls}
-                  />
-                </td>
-              ))}
-              {subtotalCell("par", "#e8f4ed", "text-[#1a5c38]")}
-              {isBack && totalCell("par", "#1a5c38", "text-white")}
-            </tr>
-
-            {/* STROKE INDEX */}
-            <tr>
-              <td className="border border-gray-200 px-2 py-1 font-semibold text-gray-600">STROKE</td>
-              {halfHoles.map((h, i) => (
-                <td key={h.number} className="border border-gray-200 p-0.5">
-                  <input
-                    type="number" min={1} max={18}
-                    value={h.stroke_index ?? ""}
-                    onChange={e => setCell(startIdx + i, "stroke_index", e.target.value)}
-                    disabled={readOnly}
-                    className={cellCls}
-                  />
-                </td>
-              ))}
-              <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
-              {isBack && <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-100">—</td>}
-            </tr>
-
-            {/* TEE COLOR DISTANCES */}
-            {activeTees.map(tee => {
-              const light = isLight(tee.color);
-              const textColor = light ? "#1f2937" : "#ffffff";
-              return (
-                <tr key={tee.key} style={{ backgroundColor: tee.color + "22" }}>
-                  <td
-                    className="border border-gray-200 px-2 py-1 font-semibold uppercase text-xs"
-                    style={{ backgroundColor: tee.color, color: textColor }}
-                  >
-                    {tee.name}
-                  </td>
-                  {halfHoles.map((h, i) => (
-                    <td key={h.number} className="border border-gray-200 p-0.5" style={{ backgroundColor: tee.color + "18" }}>
-                      <input
-                        type="number" min={0} max={999}
-                        value={(h[tee.key as keyof Hole] as number | null) ?? ""}
-                        onChange={e => setCell(startIdx + i, tee.key as keyof Hole, e.target.value)}
-                        disabled={readOnly}
-                        className={cellCls}
-                      />
-                    </td>
-                  ))}
-                  <td className="border border-gray-200 px-2 py-1 text-center font-bold" style={{ backgroundColor: tee.color + "40" }}>
-                    {sumField(holes, tee.key as keyof Hole, sumStart, sumEnd) ?? "—"}
-                  </td>
-                  {isBack && (
-                    <td className="border border-gray-200 px-2 py-1 text-center font-bold" style={{ backgroundColor: tee.color, color: textColor }}>
-                      {sumField(holes, tee.key as keyof Hole, 0, 18) ?? "—"}
-                    </td>
-                  )}
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    );
-  };
-
+  // Single unified table: LABEL | 1-9 | OUT | 10-18 | IN | TOTAL
   return (
-    <div className="space-y-6">
-      <div>
-        <p className="text-xs text-muted-foreground mb-2 font-medium">Front 9</p>
-        {renderHalfTable(front, 0, "OUT")}
-      </div>
-      <div>
-        <p className="text-xs text-muted-foreground mb-2 font-medium">Back 9</p>
-        {renderHalfTable(back, 9, "IN")}
-      </div>
+    <div className="overflow-x-auto">
+      <table className="border-collapse text-xs w-full">
+        {/* ── Header ── */}
+        <thead>
+          <tr className="bg-[#1a5c38] text-white">
+            <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]">HOLE</th>
+            {front.map(h => (
+              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-9">{h.number}</th>
+            ))}
+            <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">OUT</th>
+            {back.map(h => (
+              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-9">{h.number}</th>
+            ))}
+            <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">IN</th>
+            <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#0d3320]">TOTAL</th>
+          </tr>
+        </thead>
 
+        <tbody>
+          {/* PAR */}
+          <tr className="bg-[#f0f7f4]">
+            <td className="border border-gray-200 px-2 py-1 font-semibold text-[#1a5c38]">PAR</td>
+            {front.map((h, i) => (
+              <td key={h.number} className="border border-gray-200 p-0.5">
+                <input type="number" min={3} max={6} value={h.par ?? ""} disabled={readOnly}
+                  onChange={e => setCell(i, "par", e.target.value)} className={cellCls} />
+              </td>
+            ))}
+            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
+              {sumField(holes, "par", 0, 9) ?? "—"}
+            </td>
+            {back.map((h, i) => (
+              <td key={h.number} className="border border-gray-200 p-0.5">
+                <input type="number" min={3} max={6} value={h.par ?? ""} disabled={readOnly}
+                  onChange={e => setCell(9 + i, "par", e.target.value)} className={cellCls} />
+              </td>
+            ))}
+            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-[#1a5c38] bg-[#e8f4ed]">
+              {sumField(holes, "par", 9, 18) ?? "—"}
+            </td>
+            <td className="border border-gray-200 px-2 py-1 text-center font-bold text-white bg-[#1a5c38]">
+              {sumField(holes, "par", 0, 18) ?? "—"}
+            </td>
+          </tr>
+
+          {/* STROKE INDEX */}
+          <tr>
+            <td className="border border-gray-200 px-2 py-1 font-semibold text-gray-600">STROKE</td>
+            {front.map((h, i) => (
+              <td key={h.number} className="border border-gray-200 p-0.5">
+                <input type="number" min={1} max={18} value={h.stroke_index ?? ""} disabled={readOnly}
+                  onChange={e => setCell(i, "stroke_index", e.target.value)} className={cellCls} />
+              </td>
+            ))}
+            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
+            {back.map((h, i) => (
+              <td key={h.number} className="border border-gray-200 p-0.5">
+                <input type="number" min={1} max={18} value={h.stroke_index ?? ""} disabled={readOnly}
+                  onChange={e => setCell(9 + i, "stroke_index", e.target.value)} className={cellCls} />
+              </td>
+            ))}
+            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-50">—</td>
+            <td className="border border-gray-200 px-2 py-1 text-center text-gray-400 bg-gray-100">—</td>
+          </tr>
+
+          {/* TEE COLOR DISTANCES */}
+          {activeTees.map(tee => {
+            const light = isLight(tee.color);
+            const textColor = light ? "#1f2937" : "#ffffff";
+            const f = tee.key as keyof Hole;
+            return (
+              <tr key={tee.key} style={{ backgroundColor: tee.color + "18" }}>
+                <td className="border border-gray-200 px-2 py-1 font-semibold uppercase text-xs"
+                  style={{ backgroundColor: tee.color, color: textColor }}>
+                  {tee.name}
+                </td>
+                {front.map((h, i) => (
+                  <td key={h.number} className="border border-gray-200 p-0.5" style={{ backgroundColor: tee.color + "14" }}>
+                    <input type="number" min={0} max={999} value={(h[f] as number | null) ?? ""} disabled={readOnly}
+                      onChange={e => setCell(i, f, e.target.value)} className={cellCls} />
+                  </td>
+                ))}
+                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                  style={{ backgroundColor: tee.color + "40", color: light ? "#1f2937" : tee.color }}>
+                  {sumField(holes, f, 0, 9) ?? "—"}
+                </td>
+                {back.map((h, i) => (
+                  <td key={h.number} className="border border-gray-200 p-0.5" style={{ backgroundColor: tee.color + "14" }}>
+                    <input type="number" min={0} max={999} value={(h[f] as number | null) ?? ""} disabled={readOnly}
+                      onChange={e => setCell(9 + i, f, e.target.value)} className={cellCls} />
+                  </td>
+                ))}
+                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                  style={{ backgroundColor: tee.color + "40", color: light ? "#1f2937" : tee.color }}>
+                  {sumField(holes, f, 9, 18) ?? "—"}
+                </td>
+                <td className="border border-gray-200 px-2 py-1 text-center font-bold"
+                  style={{ backgroundColor: tee.color, color: textColor }}>
+                  {sumField(holes, f, 0, 18) ?? "—"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
     </div>
   );
 }

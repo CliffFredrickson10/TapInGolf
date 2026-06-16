@@ -573,19 +573,15 @@ export default function Scorecard() {
                       </tr>
                       <tr style={{ height: "80px" }}>
                         <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>
-                        <td className="border border-gray-400 p-0" colSpan={4}>
-                          <table className="w-full h-full border-collapse">
-                            <tbody>
-                              <tr>
-                                <td className="border-b border-gray-400 px-2 py-1 text-center font-bold text-gray-800 bg-gray-50" colSpan={4}>TWO CLUB</td>
-                              </tr>
-                              <tr>
-                                {(["A","B","C","D"] as const).map((l, i) => (
-                                  <td key={l} className={`px-2 py-1 text-center font-semibold text-gray-700${i < 3 ? " border-r border-gray-400" : ""}`}>{l}</td>
-                                ))}
-                              </tr>
-                            </tbody>
-                          </table>
+                        <td className="border border-gray-400 p-0 align-top" colSpan={4}>
+                          <div className="flex flex-col h-full">
+                            <div className="border-b border-gray-400 px-2 py-1 text-center font-bold text-gray-800 bg-gray-50">TWO CLUB</div>
+                            <div className="flex flex-1">
+                              {(["A","B","C","D"] as const).map((l, i) => (
+                                <div key={l} className={`flex-1 text-center font-semibold text-gray-700 py-1${i < 3 ? " border-r border-gray-400" : ""}`}>{l}</div>
+                              ))}
+                            </div>
+                          </div>
                         </td>
                       </tr>
                     </tbody>

@@ -101,7 +101,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
   }
 
   const cellCls =
-    "w-full h-8 text-center text-xs border-0 bg-transparent p-0 focus:ring-1 focus:ring-[#1a5c38] focus:outline-none rounded disabled:opacity-100";
+    "w-full h-8 text-center text-xs border-0 bg-transparent p-0 focus:ring-1 focus:ring-[#1a5c38] focus:outline-none rounded disabled:opacity-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
   const isLight = (color: string) =>
     ["#ffffff", "#f5c518", "#d4a800", "#fbbf24"].includes(color);

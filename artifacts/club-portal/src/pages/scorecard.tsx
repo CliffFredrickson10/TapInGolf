@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
 import {
   Save, Plus, Trash2, GripVertical, ClipboardList, BookOpen,
-  ChevronDown, ChevronUp, Settings2, Users,
+  ChevronDown, ChevronUp, Settings2, Users, Printer,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -347,6 +347,323 @@ export default function Scorecard() {
     setRatings(prev => prev.filter(r => r.id !== id));
   }
 
+  // ── Print ──────────────────────────────────────────────────────────────────
+
+  function handlePrint() {
+    const front = holes.slice(0, 9);
+    const back  = holes.slice(9, 18);
+    const activeTees = teeColors.filter(t => t.enabled);
+
+    function s(from: number, to: number, field: keyof Hole): string {
+      const vals = holes.slice(from, to).map(h => h[field] as number | null);
+      if (vals.every(v => v == null)) return "—";
+      return String(vals.reduce<number>((a, v) => a + (v ?? 0), 0));
+    }
+
+    function isLight(color: string) {
+      return ["#ffffff", "#f5c518", "#d4a800", "#fbbf24", "#FFFFFF"].some(
+        c => c.toLowerCase() === color.toLowerCase()
+      );
+    }
+
+    function cell(val: number | null): string {
+      return val == null ? "" : String(val);
+    }
+
+    const G = "#1a5c38";
+    const GD = "#154d30";
+    const GDK = "#0d3320";
+    const GL = "#e8f4ed";
+
+    const td = (style: string, content: string) =>
+      `<td style="${style}">${content}</td>`;
+    const th = (style: string, content: string) =>
+      `<th style="${style}">${content}</th>`;
+
+    const base = "border:1px solid #999;padding:2px 4px;font-size:8px;";
+    const hdr  = `${base}background:${G};color:#fff;font-weight:700;text-align:center;`;
+    const hdrD = `${base}background:${GD};color:#fff;font-weight:700;text-align:center;`;
+    const hdrDK= `${base}background:${GDK};color:#fff;font-weight:700;text-align:center;`;
+    const sum  = `${base}background:${GL};color:${G};font-weight:700;text-align:center;`;
+    const sumG = `${base}background:${G};color:#fff;font-weight:700;text-align:center;`;
+    const ctr  = `${base}text-align:center;`;
+
+    // ── Hole numbers header row ──
+    const holeHeaderRow = `<tr style="height:20px">
+      ${th(`${hdr}text-align:left;width:64px;`, "HOLE")}
+      ${front.map(h => th(hdr, String(h.number))).join("")}
+      ${th(hdrD, "OUT")}
+      ${back.map(h => th(hdr, String(h.number))).join("")}
+      ${th(hdrD, "IN")}
+      ${th(hdrDK, "TOTAL")}
+    </tr>`;
+
+    // ── PAR row ──
+    const parRow = `<tr style="height:20px;background:#f0f7f4;">
+      ${td(`${base}font-weight:700;color:${G};`, "PAR")}
+      ${front.map(h => td(ctr, cell(h.par))).join("")}
+      ${td(sum, s(0,9,"par"))}
+      ${back.map(h => td(ctr, cell(h.par))).join("")}
+      ${td(sum, s(9,18,"par"))}
+      ${td(sumG, s(0,18,"par"))}
+    </tr>`;
+
+    // ── STROKE row ──
+    const strokeRow = `<tr style="height:20px;">
+      ${td(`${base}font-weight:600;color:#555;`, "STROKE")}
+      ${front.map(h => td(ctr, cell(h.stroke_index))).join("")}
+      ${td(`${ctr}background:#f8f8f8;color:#999;`, "—")}
+      ${back.map(h => td(ctr, cell(h.stroke_index))).join("")}
+      ${td(`${ctr}background:#f8f8f8;color:#999;`, "—")}
+      ${td(`${ctr}background:#f0f0f0;color:#999;`, "—")}
+    </tr>`;
+
+    // ── Tee distance rows ──
+    const teeRows = activeTees.map(tee => {
+      const light = isLight(tee.color);
+      const tc = light ? "#1f2937" : "#ffffff";
+      const f = tee.key as keyof Hole;
+      return `<tr style="height:20px;">
+        ${td(`${base}font-weight:700;text-transform:uppercase;background:${tee.color};color:${tc};`, tee.name)}
+        ${front.map(h => td(`${ctr}background:${tee.color}22;`, cell(h[f] as number | null))).join("")}
+        ${td(`${base}text-align:center;font-weight:700;background:${tee.color}55;color:${light?"#1f2937":tee.color};`, s(0,9,f))}
+        ${back.map(h => td(`${ctr}background:${tee.color}22;`, cell(h[f] as number | null))).join("")}
+        ${td(`${base}text-align:center;font-weight:700;background:${tee.color}55;color:${light?"#1f2937":tee.color};`, s(9,18,f))}
+        ${td(`${base}text-align:center;font-weight:700;background:${tee.color};color:${tc};`, s(0,18,f))}
+      </tr>`;
+    }).join("");
+
+    // ── Player score rows ──
+    const playerRows = (["A","B","C","D"] as const).map(player => {
+      const scoreRow = `<tr style="height:20px;">
+        <td rowspan="2" style="${base}text-align:center;font-weight:700;font-size:13px;color:${G};background:${GL};vertical-align:middle;">${player}</td>
+        ${td(`${base}font-size:7px;color:#555;background:${GL}99;`, "SCORE")}
+        ${Array.from({length:9}).map(() => td(ctr, "")).join("")}
+        ${td(sum.replace(GL,"#d4edda"), "")}
+        ${Array.from({length:9}).map(() => td(ctr, "")).join("")}
+        ${td(sum.replace(GL,"#d4edda"), "")}
+        ${td(`${ctr}background:${G}1a;`, "")}
+      </tr>`;
+      const resultRow = `<tr style="height:20px;">
+        ${td(`${base}font-size:7px;color:#aaa;background:${GL}55;border-top:1px dashed #ccc;`, "RESULT")}
+        ${Array.from({length:9}).map(() => td(`${ctr}background:#f9f9f9;`, "")).join("")}
+        ${td(`${sum.replace(GL,"#d4edda")}opacity:0.6;`, "")}
+        ${Array.from({length:9}).map(() => td(`${ctr}background:#f9f9f9;`, "")).join("")}
+        ${td(`${sum.replace(GL,"#d4edda")}opacity:0.6;`, "")}
+        ${td(`${ctr}background:${G}1a;`, "")}
+      </tr>`;
+      const abRow = player === "B" ? `<tr style="height:20px;background:${G}0d;">
+        <td colspan="2" style="${base}font-weight:700;color:${G};">A/B RESULT</td>
+        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+        ${td(sum.replace(GL,"#d4edda"),"")}
+        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+        ${td(sum.replace(GL,"#d4edda"),"")}
+        ${td(`${ctr}background:${G}1a;`,"")}
+      </tr>` : "";
+      const cdRow = player === "D" ? `<tr style="height:20px;background:${G}0d;">
+        <td colspan="2" style="${base}font-weight:700;color:${G};">C/D RESULT</td>
+        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+        ${td(sum.replace(GL,"#d4edda"),"")}
+        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+        ${td(sum.replace(GL,"#d4edda"),"")}
+        ${td(`${ctr}background:${G}1a;`,"")}
+      </tr>` : "";
+      return scoreRow + resultRow + abRow + cdRow;
+    }).join("");
+
+    const allianceRow = `<tr style="height:20px;background:${G}1a;">
+      <td colspan="2" style="${base}font-weight:700;color:${G};">ALLIANCE</td>
+      ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+      ${td(sum.replace(GL,"#d4edda"),"")}
+      ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
+      ${td(sum.replace(GL,"#d4edda"),"")}
+      ${td(`${ctr}background:${G}33;font-weight:700;`,"")}
+    </tr>`;
+
+    const sigStyle = `${base}height:52px;vertical-align:bottom;padding-bottom:4px;`;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Scorecard</title>
+  <style>
+    @page { size: A4 landscape; margin: 6mm; }
+    * { box-sizing: border-box; }
+    body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #1a1a1a; margin: 0; padding: 0; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    td, th { border: 1px solid #999; padding: 2px 4px; font-size: 8px; overflow: hidden; }
+    .section { margin-bottom: 6px; }
+    .section-title { font-size: 9px; font-weight: 700; color: ${G}; margin-bottom: 3px; letter-spacing: 0.03em; }
+    .flex { display: flex; gap: 8px; }
+    .flex > div { flex: 1; min-width: 0; }
+    .legend { font-size: 7.5px; color: #555; margin-top: 4px; }
+    .legend strong { color: #333; }
+    @media print { button { display: none; } }
+  </style>
+</head>
+<body>
+
+  <!-- COMPETITION HEADER -->
+  <div class="section">
+    <div class="flex">
+      <!-- Left: Competition + Players -->
+      <div>
+        <table>
+          <colgroup>
+            <col style="width:21%">
+            <col style="width:58%">
+            <col style="width:7%">
+            <col style="width:7%">
+            <col style="width:7%">
+          </colgroup>
+          <thead>
+            <tr style="height:20px;">
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "COMPETITION:")}
+              ${th(`${base}background:#fff;`, "")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "CP")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "CH")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "HA")}
+            </tr>
+          </thead>
+          <tbody>
+            ${["A","B","C","D"].map(p => `<tr style="height:28px;">
+              ${td(`${base}font-weight:600;color:#444;`, `PLAYER ${p}:`)}
+              ${td(`${base}background:#fff;`, "")}
+              ${td(`${base}background:#fff;`, "")}
+              ${td(`${base}background:#fff;`, "")}
+              ${td(`${base}background:#fff;`, "")}
+            </tr>`).join("")}
+          </tbody>
+        </table>
+      </div>
+      <!-- Right: Date / Signatures / Results -->
+      <div>
+        <table>
+          <colgroup>
+            <col style="width:29%">
+            <col style="width:25%">
+            <col style="width:8%">
+            <col style="width:7%">
+            <col style="width:7%">
+            <col style="width:6%">
+            <col style="width:6%">
+            <col style="width:6%">
+            <col style="width:6%">
+          </colgroup>
+          <thead>
+            <tr style="height:20px;">
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "DATE:")}
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "TIME:")}
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "TEE:")}
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "1st")}
+              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "10th")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "A")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "B")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "C")}
+              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "D")}
+            </tr>
+          </thead>
+          <tbody>
+            <!-- MARKER'S SIGNATURE row -->
+            <tr>
+              ${td(`${base}font-weight:600;color:#444;vertical-align:bottom;padding-bottom:4px;`, "MARKER'S<br>SIGNATURE:")}
+              ${td(`${base}background:#fff;`, "")}
+              <!-- TWO CLUB cell with A/B/C/D sub-rows -->
+              <td style="${base}padding:0;vertical-align:top;" rowspan="1">
+                <div style="height:80px;display:flex;flex-direction:column;">
+                  <div style="height:20px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:7px;border-bottom:1px solid #999;">TWO CLUB</div>
+                  ${["A","B","C","D"].map(p=>`<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:7px;border-bottom:1px solid #eee;">${p}</div>`).join("")}
+                </div>
+              </td>
+              ${td(`${sigStyle}`, "")}
+              ${td(`${sigStyle}`, "")}
+              <!-- RESULTS cell with diagonal -->
+              <td colspan="4" style="${base}height:80px;position:relative;padding:0;">
+                <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" preserveAspectRatio="none">
+                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#bbb" stroke-width="1" stroke-dasharray="5 4"/>
+                </svg>
+                <div style="position:absolute;top:3px;right:4px;font-weight:700;font-size:7px;color:#666;">RESULTS</div>
+              </td>
+            </tr>
+            <!-- PLAYER'S SIGNATURE row -->
+            <tr>
+              ${td(`${sigStyle}font-weight:600;color:#444;`, "PLAYER'S SIGNATURE:")}
+              <td colspan="4" style="${sigStyle}background:#fff;"></td>
+              <td colspan="4" style="${sigStyle}position:relative;background:#fff;">
+                <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" preserveAspectRatio="none">
+                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#bbb" stroke-width="1" stroke-dasharray="5 4"/>
+                </svg>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOLE DATA -->
+  <div class="section">
+    <table>
+      <thead>${holeHeaderRow}${parRow}${strokeRow}</thead>
+      <tbody>${teeRows}</tbody>
+    </table>
+  </div>
+
+  <!-- PLAYER SCORES -->
+  <div class="section">
+    <table>
+      <colgroup>
+        <col style="width:20px">
+        <col style="width:44px">
+        ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+        <col style="width:38px">
+        ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+        <col style="width:38px">
+        <col style="width:44px">
+      </colgroup>
+      <thead>
+        <tr style="height:20px;">
+          ${th(`${hdr}text-align:left;`, "HOLE", ).replace(">HOLE<","colspan='2'>HOLE<")}
+          ${holes.slice(0,9).map(h=>th(hdr,String(h.number))).join("")}
+          ${th(hdrD,"OUT")}
+          ${holes.slice(9,18).map(h=>th(hdr,String(h.number))).join("")}
+          ${th(hdrD,"IN")}
+          ${th(hdrDK,"TOTAL")}
+        </tr>
+        <tr style="height:20px;background:#f0f7f4;">
+          ${td(`${base}font-weight:700;color:${G};`,"PAR")} 
+          <td style="${base}display:none;"></td>
+          ${holes.slice(0,9).map(h=>td(ctr,cell(h.par))).join("")}
+          ${td(sum,s(0,9,"par"))}
+          ${holes.slice(9,18).map(h=>td(ctr,cell(h.par))).join("")}
+          ${td(sum,s(9,18,"par"))}
+          ${td(sumG,s(0,18,"par"))}
+        </tr>
+      </thead>
+      <tbody>
+        ${playerRows}
+        ${allianceRow}
+      </tbody>
+    </table>
+    <div class="legend">
+      <strong>CP:</strong> Course Played (Y/W/B/R)&nbsp;&nbsp;
+      <strong>CH:</strong> Course Handicap&nbsp;&nbsp;
+      <strong>HA:</strong> Handicap Allowance
+    </div>
+  </div>
+
+  <script>window.focus(); window.print();</script>
+</body>
+</html>`;
+
+    const w = window.open("", "_blank", "width=1000,height=700");
+    if (!w) { alert("Please allow pop-ups to print the scorecard."); return; }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+  }
+
   // ── Render ─────────────────────────────────────────────────────────────────
 
   const loading = scLoading || lrLoading;
@@ -364,6 +681,14 @@ export default function Scorecard() {
           <p className="text-sm text-muted-foreground mt-1">Configure your course scorecard and local rules.</p>
         </div>
         <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handlePrint}
+            className="gap-2 border-[#1a5c38] text-[#1a5c38] hover:bg-[#1a5c38]/5"
+          >
+            <Printer className="h-4 w-4" />
+            Print Scorecard
+          </Button>
           {activeTab === "scorecard" ? (
             <Button
               onClick={saveScorecard}
@@ -637,17 +962,17 @@ export default function Scorecard() {
                 */}
                 <table className="border-collapse text-xs w-full table-fixed">
                   <colgroup>
-                    <col style={{ width: "24px" }} />   {/* player letter */}
-                    <col style={{ width: "56px" }} />   {/* SCORE/RESULT label — together = 80px (w-20) */}
+                    <col style={{ width: "24px" }} />
+                    <col style={{ width: "56px" }} />
                     {Array.from({length: 9}).map((_,i) => (
                       <col key={`f${i}`} style={{ width: "40px" }} />
                     ))}
-                    <col style={{ width: "48px" }} />   {/* OUT */}
+                    <col style={{ width: "48px" }} />
                     {Array.from({length: 9}).map((_,i) => (
                       <col key={`b${i}`} style={{ width: "40px" }} />
                     ))}
-                    <col style={{ width: "48px" }} />   {/* IN */}
-                    <col style={{ width: "56px" }} />   {/* TOTAL */}
+                    <col style={{ width: "48px" }} />
+                    <col style={{ width: "56px" }} />
                   </colgroup>
                   <thead>
                     <tr className="bg-[#1a5c38] text-white">

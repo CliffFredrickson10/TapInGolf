@@ -511,10 +511,10 @@ export default function Scorecard() {
                   <table className="w-full table-fixed border-collapse text-xs">
                     <colgroup>
                       <col style={{ width: "28%" }} />
-                      <col style={{ width: "36%" }} />
-                      <col style={{ width: "12%" }} />
-                      <col style={{ width: "12%" }} />
-                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "52%" }} />
+                      <col style={{ width: "7%" }} />
+                      <col style={{ width: "7%" }} />
+                      <col style={{ width: "6%" }} />
                     </colgroup>
                     <thead>
                       <tr className="h-8">

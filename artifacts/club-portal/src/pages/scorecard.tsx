@@ -497,64 +497,89 @@ export default function Scorecard() {
               </p>
             </CardHeader>
             <CardContent>
-              <div className="flex gap-6 flex-wrap">
-
-                {/* Left: Competition + players */}
-                <div className="overflow-x-auto flex-1 min-w-[280px]">
-                  <table className="border-collapse text-xs w-full">
-                    <thead>
-                      <tr>
-                        <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800 w-32">COMPETITION:</th>
-                        <th className="border border-gray-400 px-2 py-1.5 bg-white" colSpan={3}></th>
-                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">CP</th>
-                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">CH</th>
-                        <th className="border border-gray-400 px-3 py-1.5 text-center font-bold bg-gray-200 text-gray-800 w-10">HA</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(["A","B","C","D"] as const).map(p => (
-                        <tr key={p}>
-                          <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER {p}:</td>
-                          <td className="border border-gray-400 px-2 py-2.5 bg-white" colSpan={3}></td>
-                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
-                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
-                          <td className="border border-gray-400 px-3 py-2.5 bg-white"></td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-
-                {/* Right: Date / Signatures / Two Club */}
-                <div className="overflow-x-auto flex-1 min-w-[280px]">
-                  <table className="border-collapse text-xs w-full">
-                    <thead>
-                      <tr>
-                        <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800" colSpan={5}>
-                          DATE: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TIME: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TEE: &nbsp; 1<sup>st</sup> &nbsp; 10<sup>th</sup>
-                        </th>
-                        <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800">RESULTS</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      <tr>
-                        <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
-                        <td className="border border-gray-400 px-2 py-2.5 bg-white" rowSpan={2}></td>
-                      </tr>
-                      <tr>
-                        <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>
-                      </tr>
-                      <tr>
-                        <td className="border border-gray-400 px-2 py-1.5 text-center font-bold text-gray-800 bg-gray-100" colSpan={2}>TWO CLUB</td>
-                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">A</td>
-                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">B</td>
-                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">C</td>
-                        <td className="border border-gray-400 px-3 py-1.5 text-center font-semibold text-gray-700">D</td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-
+              {/*
+                13 columns:
+                [label][name][CP][CH][HA]  [date/sig][TEE:][1st][10th]  [A][B][C][D]
+                Cols 6-9 = date/sig area     Cols 10-13 = RESULTS area
+              */}
+              <div className="overflow-x-auto">
+                <table className="border-collapse text-xs">
+                  <colgroup>
+                    <col className="w-28" />
+                    <col className="w-36" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-40" />
+                    <col className="w-12" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                    <col className="w-10" />
+                  </colgroup>
+                  <thead>
+                    <tr>
+                      {/* Left header */}
+                      <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800">COMPETITION:</th>
+                      <th className="border border-gray-400 px-2 py-1.5 bg-white"></th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800">CP</th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800">CH</th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800">HA</th>
+                      {/* Right header: date + TEE + RESULTS */}
+                      <th className="border border-gray-400 px-2 py-1.5 text-left font-bold bg-gray-100 text-gray-800">DATE: &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp; TIME:</th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-100 text-gray-800">TEE:</th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-100 text-gray-800">1<sup>st</sup></th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-100 text-gray-800">10<sup>th</sup></th>
+                      <th className="border border-gray-400 px-2 py-1.5 text-center font-bold bg-gray-200 text-gray-800" colSpan={4}>RESULTS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {/* Row 1 — Player A + Player's Signature */}
+                    <tr>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER A:</td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={4}>PLAYER'S SIGNATURE:</td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white" colSpan={4}></td>
+                    </tr>
+                    {/* Row 2 — Player B + Marker's Signature + TWO CLUB */}
+                    <tr>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER B:</td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700" colSpan={4}>MARKER'S SIGNATURE:</td>
+                      <td className="border border-gray-400 px-2 py-1.5 text-center font-bold text-gray-800 bg-gray-100" colSpan={4}>TWO CLUB</td>
+                    </tr>
+                    {/* Row 3 — Player C + A B C D labels */}
+                    <tr>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER C:</td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white" colSpan={4}></td>
+                      <td className="border border-gray-400 px-2 py-1.5 text-center font-semibold text-gray-700">A</td>
+                      <td className="border border-gray-400 px-2 py-1.5 text-center font-semibold text-gray-700">B</td>
+                      <td className="border border-gray-400 px-2 py-1.5 text-center font-semibold text-gray-700">C</td>
+                      <td className="border border-gray-400 px-2 py-1.5 text-center font-semibold text-gray-700">D</td>
+                    </tr>
+                    {/* Row 4 — Player D */}
+                    <tr>
+                      <td className="border border-gray-400 px-2 py-2.5 font-semibold text-gray-700">PLAYER D:</td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white"></td>
+                      <td className="border border-gray-400 px-2 py-2.5 bg-white" colSpan={8}></td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
             </CardContent>
           </Card>

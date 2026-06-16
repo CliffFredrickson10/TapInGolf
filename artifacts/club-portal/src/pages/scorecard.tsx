@@ -568,7 +568,7 @@ export default function Scorecard() {
                     </thead>
                     <tbody>
                       <tr style={{ height: "80px" }}>
-                        <td className="border border-gray-400 px-2 align-middle font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
+                        <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
                         <td className="border border-gray-400 bg-white" colSpan={4}></td>
                       </tr>
                       <tr style={{ height: "80px" }}>

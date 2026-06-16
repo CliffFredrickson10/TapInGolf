@@ -101,7 +101,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
   }
 
   const cellCls =
-    "w-full h-8 text-center text-xs border-0 bg-transparent p-0 focus:ring-1 focus:ring-[#1a5c38] focus:outline-none rounded disabled:opacity-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
+    "w-full h-7 text-center text-xs border-0 bg-transparent p-0 focus:ring-1 focus:ring-[#1a5c38] focus:outline-none rounded disabled:opacity-100 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none";
 
   const isLight = (color: string) =>
     ["#ffffff", "#f5c518", "#d4a800", "#fbbf24"].includes(color);
@@ -112,7 +112,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
       <table className="border-collapse text-xs w-full table-fixed">
         {/* ── Header ── */}
         <thead>
-          <tr className="bg-[#1a5c38] text-white">
+          <tr className="h-7 bg-[#1a5c38] text-white">
             <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]">HOLE</th>
             {front.map(h => (
               <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
@@ -128,7 +128,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
 
         <tbody>
           {/* PAR */}
-          <tr className="h-8 bg-[#f0f7f4]">
+          <tr className="h-7 bg-[#f0f7f4]">
             <td className="border border-gray-200 px-2 py-1.5 font-semibold text-[#1a5c38]">PAR</td>
             {front.map((h, i) => (
               <td key={h.number} className="border border-gray-200 p-0">
@@ -154,7 +154,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
           </tr>
 
           {/* STROKE INDEX */}
-          <tr className="h-8">
+          <tr className="h-7">
             <td className="border border-gray-200 px-2 py-1.5 font-semibold text-gray-600">STROKE</td>
             {front.map((h, i) => (
               <td key={h.number} className="border border-gray-200 p-0">
@@ -179,7 +179,7 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
             const textColor = light ? "#1f2937" : "#ffffff";
             const f = tee.key as keyof Hole;
             return (
-              <tr key={tee.key} className="h-8" style={{ backgroundColor: tee.color + "18" }}>
+              <tr key={tee.key} className="h-7" style={{ backgroundColor: tee.color + "18" }}>
                 <td className="border border-gray-200 px-2 py-1.5 font-semibold uppercase text-xs"
                   style={{ backgroundColor: tee.color, color: textColor }}>
                   {tee.name}

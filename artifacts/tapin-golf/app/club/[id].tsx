@@ -769,6 +769,7 @@ export default function ClubDetailScreen() {
         {/* Ads */}
         {ads.length > 0 && (
           <View style={{ marginTop: 12, gap: 10 }}>
+            <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Advertisements</Text>
             {ads.map((ad) => (
               <AdBanner key={ad.id} ad={ad} />
             ))}

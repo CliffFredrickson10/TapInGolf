@@ -69097,6 +69097,72 @@ router14.get("/staff/guest-leads", async (req, res) => {
   );
   res.json({ leads: rows, total: Number(total?.cnt ?? 0), page: pageNum, pageSize });
 });
+var DEFAULT_HOLES = Array.from({ length: 18 }, (_, i) => ({
+  number: i + 1,
+  par: 4,
+  stroke_index: i + 1,
+  yellow: null,
+  white: null,
+  blue: null,
+  red: null
+}));
+var DEFAULT_TEE_COLORS = [
+  { key: "yellow", name: "Yellow", color: "#f5c518", enabled: true },
+  { key: "white", name: "White", color: "#ffffff", enabled: true },
+  { key: "blue", name: "Blue", color: "#3b82f6", enabled: true },
+  { key: "red", name: "Red", color: "#ef4444", enabled: true }
+];
+router14.get("/portal/scorecard", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const existing = await row("SELECT holes, tee_colors FROM club_scorecards WHERE club_id = $1", [club.id]);
+  if (!existing) {
+    res.json({ holes: DEFAULT_HOLES, tee_colors: DEFAULT_TEE_COLORS });
+    return;
+  }
+  res.json({
+    holes: existing.holes ?? DEFAULT_HOLES,
+    tee_colors: existing.tee_colors ?? DEFAULT_TEE_COLORS
+  });
+});
+router14.put("/portal/scorecard", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { holes, tee_colors } = req.body ?? {};
+  if (!Array.isArray(holes)) {
+    res.status(400).json({ message: "holes array required" });
+    return;
+  }
+  await run(
+    `INSERT INTO club_scorecards (club_id, holes, tee_colors, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (club_id) DO UPDATE SET holes = $2, tee_colors = $3, updated_at = NOW()`,
+    [club.id, JSON.stringify(holes), JSON.stringify(tee_colors ?? DEFAULT_TEE_COLORS)]
+  );
+  res.json({ success: true });
+});
+router14.get("/portal/local-rules", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const existing = await row("SELECT rules, course_ratings, footer_notes FROM club_local_rules WHERE club_id = $1", [club.id]);
+  if (!existing) {
+    res.json({ rules: [], course_ratings: [], footer_notes: "" });
+    return;
+  }
+  res.json({
+    rules: existing.rules ?? [],
+    course_ratings: existing.course_ratings ?? [],
+    footer_notes: existing.footer_notes ?? ""
+  });
+});
+router14.put("/portal/local-rules", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { rules, course_ratings, footer_notes } = req.body ?? {};
+  await run(
+    `INSERT INTO club_local_rules (club_id, rules, course_ratings, footer_notes, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (club_id) DO UPDATE SET rules = $2, course_ratings = $3, footer_notes = $4, updated_at = NOW()`,
+    [club.id, JSON.stringify(rules ?? []), JSON.stringify(course_ratings ?? []), footer_notes ?? null]
+  );
+  res.json({ success: true });
+});
 var portal_default = router14;
 
 // src/routes/storage.ts
@@ -72655,6 +72721,25 @@ async function applyLateAlters() {
   await ddl(`ALTER TABLE portal_tee_slots ADD CONSTRAINT portal_tee_slots_tee_start_type_check
     CHECK (tee_start_type IN ('first_tee','tenth_tee','two_tee'))`);
   await ddl(`ALTER TABLE portal_tee_slots ALTER COLUMN tee_start_type SET DEFAULT 'first_tee'`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_scorecards (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL UNIQUE REFERENCES clubs(id) ON DELETE CASCADE,
+      holes      JSONB NOT NULL DEFAULT '[]',
+      tee_colors JSONB NOT NULL DEFAULT '[]',
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_local_rules (
+      id             SERIAL PRIMARY KEY,
+      club_id        INT NOT NULL UNIQUE REFERENCES clubs(id) ON DELETE CASCADE,
+      rules          JSONB NOT NULL DEFAULT '[]',
+      course_ratings JSONB NOT NULL DEFAULT '[]',
+      footer_notes   TEXT,
+      updated_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

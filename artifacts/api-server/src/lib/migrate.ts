@@ -1578,6 +1578,27 @@ async function applyLateAlters() {
   await ddl(`ALTER TABLE portal_tee_slots ADD CONSTRAINT portal_tee_slots_tee_start_type_check
     CHECK (tee_start_type IN ('first_tee','tenth_tee','two_tee'))`);
   await ddl(`ALTER TABLE portal_tee_slots ALTER COLUMN tee_start_type SET DEFAULT 'first_tee'`);
+
+  // ── Scorecards & Local Rules ──────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_scorecards (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL UNIQUE REFERENCES clubs(id) ON DELETE CASCADE,
+      holes      JSONB NOT NULL DEFAULT '[]',
+      tee_colors JSONB NOT NULL DEFAULT '[]',
+      updated_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_local_rules (
+      id             SERIAL PRIMARY KEY,
+      club_id        INT NOT NULL UNIQUE REFERENCES clubs(id) ON DELETE CASCADE,
+      rules          JSONB NOT NULL DEFAULT '[]',
+      course_ratings JSONB NOT NULL DEFAULT '[]',
+      footer_notes   TEXT,
+      updated_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
 }
 
 async function seedAdOfferings(): Promise<void> {

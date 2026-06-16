@@ -3853,4 +3853,77 @@ router.get("/staff/guest-leads", async (req: Request, res: Response): Promise<vo
   res.json({ leads: rows, total: Number(total?.cnt ?? 0), page: pageNum, pageSize });
 });
 
+// ── SCORECARD ─────────────────────────────────────────────────────────────────
+
+const DEFAULT_HOLES = Array.from({ length: 18 }, (_, i) => ({
+  number: i + 1,
+  par: 4,
+  stroke_index: i + 1,
+  yellow: null,
+  white: null,
+  blue: null,
+  red: null,
+}));
+
+const DEFAULT_TEE_COLORS = [
+  { key: "yellow", name: "Yellow", color: "#f5c518", enabled: true },
+  { key: "white",  name: "White",  color: "#ffffff", enabled: true },
+  { key: "blue",   name: "Blue",   color: "#3b82f6", enabled: true },
+  { key: "red",    name: "Red",    color: "#ef4444", enabled: true },
+];
+
+router.get("/portal/scorecard", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const existing = await row<any>("SELECT holes, tee_colors FROM club_scorecards WHERE club_id = $1", [club.id]);
+  if (!existing) {
+    res.json({ holes: DEFAULT_HOLES, tee_colors: DEFAULT_TEE_COLORS });
+    return;
+  }
+  res.json({
+    holes: existing.holes ?? DEFAULT_HOLES,
+    tee_colors: existing.tee_colors ?? DEFAULT_TEE_COLORS,
+  });
+});
+
+router.put("/portal/scorecard", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { holes, tee_colors } = req.body ?? {};
+  if (!Array.isArray(holes)) { res.status(400).json({ message: "holes array required" }); return; }
+  await run(
+    `INSERT INTO club_scorecards (club_id, holes, tee_colors, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (club_id) DO UPDATE SET holes = $2, tee_colors = $3, updated_at = NOW()`,
+    [club.id, JSON.stringify(holes), JSON.stringify(tee_colors ?? DEFAULT_TEE_COLORS)]
+  );
+  res.json({ success: true });
+});
+
+// ── LOCAL RULES ───────────────────────────────────────────────────────────────
+
+router.get("/portal/local-rules", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const existing = await row<any>("SELECT rules, course_ratings, footer_notes FROM club_local_rules WHERE club_id = $1", [club.id]);
+  if (!existing) {
+    res.json({ rules: [], course_ratings: [], footer_notes: "" });
+    return;
+  }
+  res.json({
+    rules: existing.rules ?? [],
+    course_ratings: existing.course_ratings ?? [],
+    footer_notes: existing.footer_notes ?? "",
+  });
+});
+
+router.put("/portal/local-rules", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { rules, course_ratings, footer_notes } = req.body ?? {};
+  await run(
+    `INSERT INTO club_local_rules (club_id, rules, course_ratings, footer_notes, updated_at)
+     VALUES ($1, $2, $3, $4, NOW())
+     ON CONFLICT (club_id) DO UPDATE SET rules = $2, course_ratings = $3, footer_notes = $4, updated_at = NOW()`,
+    [club.id, JSON.stringify(rules ?? []), JSON.stringify(course_ratings ?? []), footer_notes ?? null]
+  );
+  res.json({ success: true });
+});
+
 export default router;

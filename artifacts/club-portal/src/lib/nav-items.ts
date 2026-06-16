@@ -2,7 +2,7 @@ import {
   LayoutDashboard, Building2, CalendarDays, Star, Megaphone,
   Calendar, Users, Ticket, Bell, CircleDollarSign, CreditCard,
   FileX2, Receipt, ShieldOff, BookOpen, ShieldCheck, Plus,
-  UserPlus, Trophy, Download, Clock, RefreshCw,
+  UserPlus, Trophy, Download, Clock, RefreshCw, ClipboardList,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -28,6 +28,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/pricing",            label: "Pricing Tiers",      icon: CircleDollarSign,section: "pricing" },
   { href: "/vouchers",           label: "Vouchers",           icon: Ticket,          section: "vouchers" },
   { href: "/bans",               label: "Banned Golfers",     icon: ShieldOff,       section: "bans" },
+  { href: "/scorecard",          label: "Scorecard",          icon: ClipboardList,   section: "scorecard" },
   { href: "/cancellation-policy",label: "Cancellation Policy",icon: FileX2,          section: "cancellation_policy" },
   { href: "/notifications",      label: "Notifications",      icon: Bell,            section: "notifications" },
   { href: "/portal-users",       label: "Portal Users",       icon: ShieldCheck,     section: "admin", adminOnly: true },

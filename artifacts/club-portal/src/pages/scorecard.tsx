@@ -115,11 +115,11 @@ function ScorecardTable({ holes, teeColors, readOnly, onChange }: ScorecardTable
           <tr className="bg-[#1a5c38] text-white">
             <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]">HOLE</th>
             {front.map(h => (
-              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-12">{h.number}</th>
+              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
             ))}
-            <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#154d30]">OUT</th>
+            <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">OUT</th>
             {back.map(h => (
-              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-12">{h.number}</th>
+              <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
             ))}
             <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-12 bg-[#154d30]">IN</th>
             <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#0d3320]">TOTAL</th>

@@ -350,137 +350,243 @@ export default function Scorecard() {
   // ── Print ──────────────────────────────────────────────────────────────────
 
   function handlePrint() {
-    const front = holes.slice(0, 9);
-    const back  = holes.slice(9, 18);
+    const front      = holes.slice(0, 9);
+    const back       = holes.slice(9, 18);
     const activeTees = teeColors.filter(t => t.enabled);
 
-    function s(from: number, to: number, field: keyof Hole): string {
+    // ── helpers ────────────────────────────────────────────────────────────
+    function rangeSum(from: number, to: number, field: keyof Hole): string {
       const vals = holes.slice(from, to).map(h => h[field] as number | null);
       if (vals.every(v => v == null)) return "—";
       return String(vals.reduce<number>((a, v) => a + (v ?? 0), 0));
     }
+    const cv = (v: number | null) => (v == null ? "" : String(v));
+    const isLight = (c: string) =>
+      ["#ffffff","#f5f5f5","#fffde7","#f5c518","#d4a800","#fbbf24"].includes(c.toLowerCase());
 
-    function isLight(color: string) {
-      return ["#ffffff", "#f5c518", "#d4a800", "#fbbf24", "#FFFFFF"].some(
-        c => c.toLowerCase() === color.toLowerCase()
-      );
-    }
-
-    function cell(val: number | null): string {
-      return val == null ? "" : String(val);
-    }
-
-    const G = "#1a5c38";
-    const GD = "#154d30";
+    // ── style constants ────────────────────────────────────────────────────
+    const G   = "#1a5c38";
+    const GD  = "#154d30";
     const GDK = "#0d3320";
-    const GL = "#e8f4ed";
+    const GL  = "#e8f4ed";
+    const B   = "border:1px solid #aaa;font-size:8px;font-family:Arial,sans-serif;";
+    const hdr = `${B}background:${G};color:#fff;font-weight:700;text-align:center;padding:2px 3px;`;
+    const hdrD= `${B}background:${GD};color:#fff;font-weight:700;text-align:center;padding:2px 3px;`;
+    const hdrK= `${B}background:${GDK};color:#fff;font-weight:700;text-align:center;padding:2px 3px;`;
+    const out = `${B}background:${GL};color:${G};font-weight:700;text-align:center;padding:2px 3px;`;
+    const tot = `${B}background:${G};color:#fff;font-weight:700;text-align:center;padding:2px 3px;`;
+    const ctr = `${B}text-align:center;padding:2px 3px;`;
 
-    const td = (style: string, content: string) =>
-      `<td style="${style}">${content}</td>`;
-    const th = (style: string, content: string) =>
-      `<th style="${style}">${content}</th>`;
-
-    const base = "border:1px solid #999;padding:2px 4px;font-size:8px;";
-    const hdr  = `${base}background:${G};color:#fff;font-weight:700;text-align:center;`;
-    const hdrD = `${base}background:${GD};color:#fff;font-weight:700;text-align:center;`;
-    const hdrDK= `${base}background:${GDK};color:#fff;font-weight:700;text-align:center;`;
-    const sum  = `${base}background:${GL};color:${G};font-weight:700;text-align:center;`;
-    const sumG = `${base}background:${G};color:#fff;font-weight:700;text-align:center;`;
-    const ctr  = `${base}text-align:center;`;
-
-    // ── Hole numbers header row ──
-    const holeHeaderRow = `<tr style="height:20px">
-      ${th(`${hdr}text-align:left;width:64px;`, "HOLE")}
-      ${front.map(h => th(hdr, String(h.number))).join("")}
-      ${th(hdrD, "OUT")}
-      ${back.map(h => th(hdr, String(h.number))).join("")}
-      ${th(hdrD, "IN")}
-      ${th(hdrDK, "TOTAL")}
+    // ── Hole Data rows ─────────────────────────────────────────────────────
+    const hdHoleRow = `<tr style="height:22px;">
+      <th style="${hdr}text-align:left;padding:2px 6px;">HOLE</th>
+      ${front.map(h => `<th style="${hdr}">${h.number}</th>`).join("")}
+      <th style="${hdrD}">OUT</th>
+      ${back.map(h => `<th style="${hdr}">${h.number}</th>`).join("")}
+      <th style="${hdrD}">IN</th>
+      <th style="${hdrK}">TOTAL</th>
     </tr>`;
 
-    // ── PAR row ──
-    const parRow = `<tr style="height:20px;background:#f0f7f4;">
-      ${td(`${base}font-weight:700;color:${G};`, "PAR")}
-      ${front.map(h => td(ctr, cell(h.par))).join("")}
-      ${td(sum, s(0,9,"par"))}
-      ${back.map(h => td(ctr, cell(h.par))).join("")}
-      ${td(sum, s(9,18,"par"))}
-      ${td(sumG, s(0,18,"par"))}
+    const hdParRow = `<tr style="height:20px;background:#f0f7f4;">
+      <td style="${B}font-weight:700;color:${G};padding:2px 6px;">PAR</td>
+      ${front.map(h => `<td style="${ctr}">${cv(h.par)}</td>`).join("")}
+      <td style="${out}">${rangeSum(0,9,"par")}</td>
+      ${back.map(h => `<td style="${ctr}">${cv(h.par)}</td>`).join("")}
+      <td style="${out}">${rangeSum(9,18,"par")}</td>
+      <td style="${tot}">${rangeSum(0,18,"par")}</td>
     </tr>`;
 
-    // ── STROKE row ──
-    const strokeRow = `<tr style="height:20px;">
-      ${td(`${base}font-weight:600;color:#555;`, "STROKE")}
-      ${front.map(h => td(ctr, cell(h.stroke_index))).join("")}
-      ${td(`${ctr}background:#f8f8f8;color:#999;`, "—")}
-      ${back.map(h => td(ctr, cell(h.stroke_index))).join("")}
-      ${td(`${ctr}background:#f8f8f8;color:#999;`, "—")}
-      ${td(`${ctr}background:#f0f0f0;color:#999;`, "—")}
+    const hdStrokeRow = `<tr style="height:20px;">
+      <td style="${B}font-weight:600;color:#555;padding:2px 6px;">STROKE</td>
+      ${front.map(h => `<td style="${ctr}">${cv(h.stroke_index)}</td>`).join("")}
+      <td style="${ctr}background:#f0f0f0;color:#999;">—</td>
+      ${back.map(h => `<td style="${ctr}">${cv(h.stroke_index)}</td>`).join("")}
+      <td style="${ctr}background:#f0f0f0;color:#999;">—</td>
+      <td style="${ctr}background:#e8e8e8;color:#999;">—</td>
     </tr>`;
 
-    // ── Tee distance rows ──
-    const teeRows = activeTees.map(tee => {
+    const hdTeeRows = activeTees.map(tee => {
       const light = isLight(tee.color);
-      const tc = light ? "#1f2937" : "#ffffff";
-      const f = tee.key as keyof Hole;
+      const tc    = light ? "#1f2937" : "#ffffff";
+      const f     = tee.key as keyof Hole;
       return `<tr style="height:20px;">
-        ${td(`${base}font-weight:700;text-transform:uppercase;background:${tee.color};color:${tc};`, tee.name)}
-        ${front.map(h => td(`${ctr}background:${tee.color}22;`, cell(h[f] as number | null))).join("")}
-        ${td(`${base}text-align:center;font-weight:700;background:${tee.color}55;color:${light?"#1f2937":tee.color};`, s(0,9,f))}
-        ${back.map(h => td(`${ctr}background:${tee.color}22;`, cell(h[f] as number | null))).join("")}
-        ${td(`${base}text-align:center;font-weight:700;background:${tee.color}55;color:${light?"#1f2937":tee.color};`, s(9,18,f))}
-        ${td(`${base}text-align:center;font-weight:700;background:${tee.color};color:${tc};`, s(0,18,f))}
+        <td style="${B}font-weight:700;text-transform:uppercase;background:${tee.color};color:${tc};padding:2px 6px;">${tee.name}</td>
+        ${front.map(h => `<td style="${ctr}background:${tee.color}22;">${cv(h[f] as number|null)}</td>`).join("")}
+        <td style="${B}text-align:center;font-weight:700;background:${tee.color}66;color:${light?"#1f2937":tee.color};padding:2px 3px;">${rangeSum(0,9,f)}</td>
+        ${back.map(h => `<td style="${ctr}background:${tee.color}22;">${cv(h[f] as number|null)}</td>`).join("")}
+        <td style="${B}text-align:center;font-weight:700;background:${tee.color}66;color:${light?"#1f2937":tee.color};padding:2px 3px;">${rangeSum(9,18,f)}</td>
+        <td style="${B}text-align:center;font-weight:700;background:${tee.color};color:${tc};padding:2px 3px;">${rangeSum(0,18,f)}</td>
       </tr>`;
     }).join("");
 
-    // ── Player score rows ──
-    const playerRows = (["A","B","C","D"] as const).map(player => {
+    // ── Player Score rows (23 columns: letter + label + 9F + OUT + 9B + IN + TOTAL) ──
+    const psRow = (label: string, style: string, extraCols: string, outStyle: string) =>
+      `<tr style="height:20px;${style}">
+        ${extraCols}
+        ${front.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${outStyle}"></td>
+        ${back.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${outStyle}"></td>
+        <td style="${ctr}background:${G}1a;"></td>
+      </tr>`;
+
+    const playerRows = (["A","B","C","D"] as const).map(p => {
+      const letterCell = `<td rowspan="2" style="${B}text-align:center;font-weight:700;font-size:14px;color:${G};background:${GL};vertical-align:middle;padding:0;width:20px;">${p}</td>`;
       const scoreRow = `<tr style="height:20px;">
-        <td rowspan="2" style="${base}text-align:center;font-weight:700;font-size:13px;color:${G};background:${GL};vertical-align:middle;">${player}</td>
-        ${td(`${base}font-size:7px;color:#555;background:${GL}99;`, "SCORE")}
-        ${Array.from({length:9}).map(() => td(ctr, "")).join("")}
-        ${td(sum.replace(GL,"#d4edda"), "")}
-        ${Array.from({length:9}).map(() => td(ctr, "")).join("")}
-        ${td(sum.replace(GL,"#d4edda"), "")}
-        ${td(`${ctr}background:${G}1a;`, "")}
+        ${letterCell}
+        <td style="${B}font-size:7px;color:#555;background:${GL}99;padding:1px 3px;">SCORE</td>
+        ${front.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        ${back.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        <td style="${ctr}background:${G}1a;"></td>
       </tr>`;
       const resultRow = `<tr style="height:20px;">
-        ${td(`${base}font-size:7px;color:#aaa;background:${GL}55;border-top:1px dashed #ccc;`, "RESULT")}
-        ${Array.from({length:9}).map(() => td(`${ctr}background:#f9f9f9;`, "")).join("")}
-        ${td(`${sum.replace(GL,"#d4edda")}opacity:0.6;`, "")}
-        ${Array.from({length:9}).map(() => td(`${ctr}background:#f9f9f9;`, "")).join("")}
-        ${td(`${sum.replace(GL,"#d4edda")}opacity:0.6;`, "")}
-        ${td(`${ctr}background:${G}1a;`, "")}
+        <td style="${B}font-size:7px;color:#aaa;background:${GL}55;border-top:1px dashed #ccc;padding:1px 3px;">RESULT</td>
+        ${front.map(() => `<td style="${ctr}background:#f9f9f9;"></td>`).join("")}
+        <td style="${out}background:#d4edda55;color:#155724;"></td>
+        ${back.map(() => `<td style="${ctr}background:#f9f9f9;"></td>`).join("")}
+        <td style="${out}background:#d4edda55;color:#155724;"></td>
+        <td style="${ctr}background:${G}0d;"></td>
       </tr>`;
-      const abRow = player === "B" ? `<tr style="height:20px;background:${G}0d;">
-        <td colspan="2" style="${base}font-weight:700;color:${G};">A/B RESULT</td>
-        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-        ${td(sum.replace(GL,"#d4edda"),"")}
-        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-        ${td(sum.replace(GL,"#d4edda"),"")}
-        ${td(`${ctr}background:${G}1a;`,"")}
+      const abRow = p === "B" ? `<tr style="height:20px;background:${G}0d;">
+        <td colspan="2" style="${B}font-weight:700;color:${G};padding:2px 6px;">A/B RESULT</td>
+        ${front.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        ${back.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        <td style="${ctr}background:${G}1a;"></td>
       </tr>` : "";
-      const cdRow = player === "D" ? `<tr style="height:20px;background:${G}0d;">
-        <td colspan="2" style="${base}font-weight:700;color:${G};">C/D RESULT</td>
-        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-        ${td(sum.replace(GL,"#d4edda"),"")}
-        ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-        ${td(sum.replace(GL,"#d4edda"),"")}
-        ${td(`${ctr}background:${G}1a;`,"")}
+      const cdRow = p === "D" ? `<tr style="height:20px;background:${G}0d;">
+        <td colspan="2" style="${B}font-weight:700;color:${G};padding:2px 6px;">C/D RESULT</td>
+        ${front.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        ${back.map(() => `<td style="${ctr}"></td>`).join("")}
+        <td style="${out}background:#d4edda;color:#155724;"></td>
+        <td style="${ctr}background:${G}1a;"></td>
       </tr>` : "";
       return scoreRow + resultRow + abRow + cdRow;
     }).join("");
 
-    const allianceRow = `<tr style="height:20px;background:${G}1a;">
-      <td colspan="2" style="${base}font-weight:700;color:${G};">ALLIANCE</td>
-      ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-      ${td(sum.replace(GL,"#d4edda"),"")}
-      ${Array.from({length:9}).map(() => td(ctr,"")).join("")}
-      ${td(sum.replace(GL,"#d4edda"),"")}
-      ${td(`${ctr}background:${G}33;font-weight:700;`,"")}
+    const allianceRow = `<tr style="height:20px;background:${GL};">
+      <td colspan="2" style="${B}font-weight:700;color:${G};padding:2px 6px;">ALLIANCE</td>
+      ${front.map(() => `<td style="${ctr}"></td>`).join("")}
+      <td style="${tot}"></td>
+      ${back.map(() => `<td style="${ctr}"></td>`).join("")}
+      <td style="${tot}"></td>
+      <td style="${tot}font-size:10px;"></td>
     </tr>`;
 
-    const sigStyle = `${base}height:52px;vertical-align:bottom;padding-bottom:4px;`;
+    // Colgroup shared by both Hole Data and Player Scores tables
+    // Hole Data: 1 label + 9F + OUT + 9B + IN + TOTAL = 22 cols
+    // Player Scores: 1 letter + 1 label + 9F + OUT + 9B + IN + TOTAL = 23 cols (different colgroup)
+    const hdColgroup = `<colgroup>
+      <col style="width:56px">
+      ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+      <col style="width:40px">
+      ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+      <col style="width:40px">
+      <col style="width:48px">
+    </colgroup>`;
+
+    const psColgroup = `<colgroup>
+      <col style="width:20px">
+      <col style="width:40px">
+      ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+      <col style="width:40px">
+      ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
+      <col style="width:40px">
+      <col style="width:48px">
+    </colgroup>`;
+
+    // ── diagonal CSS gradient helper ───────────────────────────────────────
+    const diagGradient = "background:linear-gradient(to top right,transparent calc(50% - 0.5px),#ccc calc(50% - 0.5px),#ccc calc(50% + 0.5px),transparent calc(50% + 0.5px));";
+
+    // ── Competition header – right table
+    // Row heights: header 20px, each sig row 80px → total 180px
+    // Left table must match: header 20px + 4 rows × 40px = 180px
+    const sigH = "80px";
+    const sigBase = `${B}height:${sigH};vertical-align:bottom;padding:2px 6px;`;
+    const rightTable = `
+      <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        <colgroup>
+          <col style="width:27%">
+          <col style="width:24%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+        </colgroup>
+        <thead>
+          <tr style="height:20px;">
+            <th style="${hdr}text-align:left;padding:2px 6px;">DATE:</th>
+            <th style="${hdr}text-align:left;padding:2px 6px;">TIME:</th>
+            <th style="${hdr}padding:2px 3px;">TEE:</th>
+            <th style="${hdr}padding:2px 3px;">1st</th>
+            <th style="${hdr}padding:2px 3px;">10th</th>
+            <th style="${hdrD}padding:2px 3px;">A</th>
+            <th style="${hdrD}padding:2px 3px;">B</th>
+            <th style="${hdrD}padding:2px 3px;">C</th>
+            <th style="${hdrD}padding:2px 3px;">D</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="${sigBase}font-weight:600;color:#444;">MARKER'S<br>SIGNATURE:</td>
+            <td style="${sigBase}"></td>
+            <td style="${B}padding:0;vertical-align:top;height:${sigH};">
+              <div style="display:table;width:100%;height:100%;border-collapse:collapse;">
+                <div style="display:table-row;">
+                  <div style="display:table-cell;text-align:center;font-weight:700;font-size:7px;vertical-align:middle;height:18px;border-bottom:1px solid #aaa;">TWO CLUB</div>
+                </div>
+                ${["A","B","C","D"].map(p=>`<div style="display:table-row;"><div style="display:table-cell;text-align:center;font-size:7px;vertical-align:middle;height:15px;border-bottom:1px solid #ddd;">${p}</div></div>`).join("")}
+              </div>
+            </td>
+            <td style="${sigBase}"></td>
+            <td style="${sigBase}"></td>
+            <td colspan="4" style="${B}height:${sigH};padding:4px 6px;position:relative;vertical-align:top;${diagGradient}">
+              <span style="font-weight:700;font-size:7px;color:#666;position:relative;z-index:1;">RESULTS</span>
+            </td>
+          </tr>
+          <tr>
+            <td style="${sigBase}font-weight:600;color:#444;">PLAYER'S<br>SIGNATURE:</td>
+            <td colspan="4" style="${sigBase}"></td>
+            <td colspan="4" style="${B}height:${sigH};${diagGradient}"></td>
+          </tr>
+        </tbody>
+      </table>`;
+
+    const leftTable = `
+      <table style="border-collapse:collapse;width:100%;table-layout:fixed;">
+        <colgroup>
+          <col style="width:22%">
+          <col style="width:57%">
+          <col style="width:7%">
+          <col style="width:7%">
+          <col style="width:7%">
+        </colgroup>
+        <thead>
+          <tr style="height:20px;">
+            <th style="${hdr}text-align:left;padding:2px 6px;">COMPETITION:</th>
+            <th style="${B}background:#fff;padding:2px 6px;"></th>
+            <th style="${B}background:#ddd;font-weight:700;text-align:center;padding:2px 3px;">CP</th>
+            <th style="${B}background:#ddd;font-weight:700;text-align:center;padding:2px 3px;">CH</th>
+            <th style="${B}background:#ddd;font-weight:700;text-align:center;padding:2px 3px;">HA</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${["A","B","C","D"].map(p=>`<tr style="height:40px;">
+            <td style="${B}font-weight:600;color:#444;padding:2px 6px;vertical-align:middle;">PLAYER ${p}:</td>
+            <td style="${B}padding:2px 6px;"></td>
+            <td style="${B}padding:2px 3px;"></td>
+            <td style="${B}padding:2px 3px;"></td>
+            <td style="${B}padding:2px 3px;"></td>
+          </tr>`).join("")}
+        </tbody>
+      </table>`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -490,155 +596,53 @@ export default function Scorecard() {
   <style>
     @page { size: A4 landscape; margin: 6mm; }
     * { box-sizing: border-box; }
-    body { font-family: Arial, Helvetica, sans-serif; font-size: 8px; color: #1a1a1a; margin: 0; padding: 0; }
-    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
-    td, th { border: 1px solid #999; padding: 2px 4px; font-size: 8px; overflow: hidden; }
+    body { font-family: Arial,Helvetica,sans-serif; font-size: 8px; color: #1a1a1a; margin: 0; padding: 0; }
+    .row { display: flex; gap: 6px; margin-bottom: 6px; align-items: stretch; }
+    .row > div { min-width: 0; }
+    .left-col { flex: 0 0 38%; }
+    .right-col { flex: 1 1 62%; }
     .section { margin-bottom: 6px; }
-    .section-title { font-size: 9px; font-weight: 700; color: ${G}; margin-bottom: 3px; letter-spacing: 0.03em; }
-    .flex { display: flex; gap: 8px; }
-    .flex > div { flex: 1; min-width: 0; }
+    table { border-collapse: collapse; width: 100%; table-layout: fixed; }
+    td, th { border: 1px solid #aaa; font-size: 8px; font-family: Arial,Helvetica,sans-serif; overflow: hidden; }
     .legend { font-size: 7.5px; color: #555; margin-top: 4px; }
     .legend strong { color: #333; }
-    @media print { button { display: none; } }
   </style>
 </head>
 <body>
 
   <!-- COMPETITION HEADER -->
-  <div class="section">
-    <div class="flex">
-      <!-- Left: Competition + Players -->
-      <div>
-        <table>
-          <colgroup>
-            <col style="width:21%">
-            <col style="width:58%">
-            <col style="width:7%">
-            <col style="width:7%">
-            <col style="width:7%">
-          </colgroup>
-          <thead>
-            <tr style="height:20px;">
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "COMPETITION:")}
-              ${th(`${base}background:#fff;`, "")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "CP")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "CH")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "HA")}
-            </tr>
-          </thead>
-          <tbody>
-            ${["A","B","C","D"].map(p => `<tr style="height:28px;">
-              ${td(`${base}font-weight:600;color:#444;`, `PLAYER ${p}:`)}
-              ${td(`${base}background:#fff;`, "")}
-              ${td(`${base}background:#fff;`, "")}
-              ${td(`${base}background:#fff;`, "")}
-              ${td(`${base}background:#fff;`, "")}
-            </tr>`).join("")}
-          </tbody>
-        </table>
-      </div>
-      <!-- Right: Date / Signatures / Results -->
-      <div>
-        <table>
-          <colgroup>
-            <col style="width:29%">
-            <col style="width:25%">
-            <col style="width:8%">
-            <col style="width:7%">
-            <col style="width:7%">
-            <col style="width:6%">
-            <col style="width:6%">
-            <col style="width:6%">
-            <col style="width:6%">
-          </colgroup>
-          <thead>
-            <tr style="height:20px;">
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "DATE:")}
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:left;`, "TIME:")}
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "TEE:")}
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "1st")}
-              ${th(`${base}background:#e5e5e5;font-weight:700;text-align:center;`, "10th")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "A")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "B")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "C")}
-              ${th(`${base}background:#ddd;font-weight:700;text-align:center;`, "D")}
-            </tr>
-          </thead>
-          <tbody>
-            <!-- MARKER'S SIGNATURE row -->
-            <tr>
-              ${td(`${base}font-weight:600;color:#444;vertical-align:bottom;padding-bottom:4px;`, "MARKER'S<br>SIGNATURE:")}
-              ${td(`${base}background:#fff;`, "")}
-              <!-- TWO CLUB cell with A/B/C/D sub-rows -->
-              <td style="${base}padding:0;vertical-align:top;" rowspan="1">
-                <div style="height:80px;display:flex;flex-direction:column;">
-                  <div style="height:20px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:7px;border-bottom:1px solid #999;">TWO CLUB</div>
-                  ${["A","B","C","D"].map(p=>`<div style="flex:1;display:flex;align-items:center;justify-content:center;font-size:7px;border-bottom:1px solid #eee;">${p}</div>`).join("")}
-                </div>
-              </td>
-              ${td(`${sigStyle}`, "")}
-              ${td(`${sigStyle}`, "")}
-              <!-- RESULTS cell with diagonal -->
-              <td colspan="4" style="${base}height:80px;position:relative;padding:0;">
-                <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" preserveAspectRatio="none">
-                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#bbb" stroke-width="1" stroke-dasharray="5 4"/>
-                </svg>
-                <div style="position:absolute;top:3px;right:4px;font-weight:700;font-size:7px;color:#666;">RESULTS</div>
-              </td>
-            </tr>
-            <!-- PLAYER'S SIGNATURE row -->
-            <tr>
-              ${td(`${sigStyle}font-weight:600;color:#444;`, "PLAYER'S SIGNATURE:")}
-              <td colspan="4" style="${sigStyle}background:#fff;"></td>
-              <td colspan="4" style="${sigStyle}position:relative;background:#fff;">
-                <svg style="position:absolute;top:0;left:0;width:100%;height:100%;" preserveAspectRatio="none">
-                  <line x1="0" y1="100%" x2="100%" y2="0" stroke="#bbb" stroke-width="1" stroke-dasharray="5 4"/>
-                </svg>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+  <div class="row">
+    <div class="left-col">${leftTable}</div>
+    <div class="right-col">${rightTable}</div>
   </div>
 
   <!-- HOLE DATA -->
   <div class="section">
-    <table>
-      <thead>${holeHeaderRow}${parRow}${strokeRow}</thead>
-      <tbody>${teeRows}</tbody>
+    <table>${hdColgroup}
+      <thead>${hdHoleRow}${hdParRow}${hdStrokeRow}</thead>
+      <tbody>${hdTeeRows}</tbody>
     </table>
   </div>
 
   <!-- PLAYER SCORES -->
   <div class="section">
-    <table>
-      <colgroup>
-        <col style="width:20px">
-        <col style="width:44px">
-        ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
-        <col style="width:38px">
-        ${Array.from({length:9}).map(()=>`<col style="width:32px">`).join("")}
-        <col style="width:38px">
-        <col style="width:44px">
-      </colgroup>
+    <table>${psColgroup}
       <thead>
-        <tr style="height:20px;">
-          ${th(`${hdr}text-align:left;`, "HOLE", ).replace(">HOLE<","colspan='2'>HOLE<")}
-          ${holes.slice(0,9).map(h=>th(hdr,String(h.number))).join("")}
-          ${th(hdrD,"OUT")}
-          ${holes.slice(9,18).map(h=>th(hdr,String(h.number))).join("")}
-          ${th(hdrD,"IN")}
-          ${th(hdrDK,"TOTAL")}
+        <tr style="height:22px;">
+          <th colspan="2" style="${hdr}text-align:left;padding:2px 6px;">HOLE</th>
+          ${front.map(h=>`<th style="${hdr}">${h.number}</th>`).join("")}
+          <th style="${hdrD}">OUT</th>
+          ${back.map(h=>`<th style="${hdr}">${h.number}</th>`).join("")}
+          <th style="${hdrD}">IN</th>
+          <th style="${hdrK}">TOTAL</th>
         </tr>
         <tr style="height:20px;background:#f0f7f4;">
-          ${td(`${base}font-weight:700;color:${G};`,"PAR")} 
-          <td style="${base}display:none;"></td>
-          ${holes.slice(0,9).map(h=>td(ctr,cell(h.par))).join("")}
-          ${td(sum,s(0,9,"par"))}
-          ${holes.slice(9,18).map(h=>td(ctr,cell(h.par))).join("")}
-          ${td(sum,s(9,18,"par"))}
-          ${td(sumG,s(0,18,"par"))}
+          <td colspan="2" style="${B}font-weight:700;color:${G};padding:2px 6px;">PAR</td>
+          ${front.map(h=>`<td style="${ctr}">${cv(h.par)}</td>`).join("")}
+          <td style="${out}">${rangeSum(0,9,"par")}</td>
+          ${back.map(h=>`<td style="${ctr}">${cv(h.par)}</td>`).join("")}
+          <td style="${out}">${rangeSum(9,18,"par")}</td>
+          <td style="${tot}">${rangeSum(0,18,"par")}</td>
         </tr>
       </thead>
       <tbody>
@@ -657,7 +661,7 @@ export default function Scorecard() {
 </body>
 </html>`;
 
-    const w = window.open("", "_blank", "width=1000,height=700");
+    const w = window.open("", "_blank", "width=1100,height=750");
     if (!w) { alert("Please allow pop-ups to print the scorecard."); return; }
     w.document.open();
     w.document.write(html);

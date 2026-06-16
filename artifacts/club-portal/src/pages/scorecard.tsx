@@ -497,7 +497,11 @@ export default function Scorecard() {
               </p>
             </CardHeader>
             <CardContent>
-              {/* Two separate tables, fixed row heights so they align side-by-side */}
+              {/*
+                Two separate tables, aligned by matching total body height:
+                Left:  header h-8  +  4 × player rows h-10  =  8 + 40×4 = 168px
+                Right: header h-8  +  2 × sig rows   h-20  =  8 + 80×2 = 168px
+              */}
               <div className="flex gap-6 flex-wrap items-start">
 
                 {/* LEFT — Competition + Players */}
@@ -505,11 +509,11 @@ export default function Scorecard() {
                   <table className="border-collapse text-xs">
                     <thead>
                       <tr className="h-8">
-                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-32">COMPETITION:</th>
-                        <th className="border border-gray-400 px-2 bg-white w-36"></th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-200 text-gray-800 w-10">CP</th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-200 text-gray-800 w-10">CH</th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-200 text-gray-800 w-10">HA</th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-28">COMPETITION:</th>
+                        <th className="border border-gray-400 px-2 bg-white w-40"></th>
+                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">CP</th>
+                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">CH</th>
+                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">HA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -517,49 +521,57 @@ export default function Scorecard() {
                         <tr key={p} className="h-10">
                           <td className="border border-gray-400 px-2 font-semibold text-gray-700">PLAYER {p}:</td>
                           <td className="border border-gray-400 px-2 bg-white"></td>
-                          <td className="border border-gray-400 px-2 bg-white"></td>
-                          <td className="border border-gray-400 px-2 bg-white"></td>
-                          <td className="border border-gray-400 px-2 bg-white"></td>
+                          <td className="border border-gray-400 bg-white"></td>
+                          <td className="border border-gray-400 bg-white"></td>
+                          <td className="border border-gray-400 bg-white"></td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
 
-                {/* RIGHT — Date / Signatures / Results */}
+                {/* RIGHT — Date / Signatures / Results
+                    Columns: [DATE/TIME wide][TEE:][1st][10th][RESULTS ×4 sub-cols]
+                    = 8 columns total
+                */}
                 <div className="overflow-x-auto">
                   <table className="border-collapse text-xs">
                     <thead>
                       <tr className="h-8">
-                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-36">DATE: &nbsp;&nbsp;&nbsp;&nbsp; TIME:</th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-12">TEE:</th>
-                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-100 text-gray-800 w-10">1<sup>st</sup></th>
-                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-100 text-gray-800 w-10">10<sup>th</sup></th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-32">DATE:</th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-28">TIME:</th>
+                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-10">TEE:</th>
+                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-9">1<sup>st</sup></th>
+                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-9">10<sup>th</sup></th>
                         <th className="border border-gray-400 px-2 text-center font-bold bg-gray-200 text-gray-800 w-24" colSpan={4}>RESULTS</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Row 1: Player's Signature */}
-                      <tr className="h-10">
-                        <td className="border border-gray-400 px-2 font-semibold text-gray-700" colSpan={4}>PLAYER'S SIGNATURE:</td>
-                        <td className="border border-gray-400 px-2 bg-white" colSpan={4}></td>
+                      {/* Row 1 — spans same height as Players A + B (h-20 = 2 × h-10) */}
+                      <tr style={{ height: "80px" }}>
+                        <td className="border border-gray-400 px-2 align-middle font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
+                        <td className="border border-gray-400 bg-white" colSpan={4}></td>
                       </tr>
-                      {/* Row 2: Marker's Signature + TWO CLUB */}
-                      <tr className="h-10">
-                        <td className="border border-gray-400 px-2 font-semibold text-gray-700" colSpan={4}>MARKER'S SIGNATURE:</td>
-                        <td className="border border-gray-400 px-2 text-center font-bold text-gray-800 bg-gray-100" colSpan={4}>TWO CLUB</td>
-                      </tr>
-                      {/* Row 3: A B C D */}
-                      <tr className="h-10">
-                        <td className="border border-gray-400 px-2 bg-white" colSpan={4}></td>
-                        <td className="border border-gray-400 px-2 text-center font-semibold text-gray-700">A</td>
-                        <td className="border border-gray-400 px-2 text-center font-semibold text-gray-700">B</td>
-                        <td className="border border-gray-400 px-2 text-center font-semibold text-gray-700">C</td>
-                        <td className="border border-gray-400 px-2 text-center font-semibold text-gray-700">D</td>
-                      </tr>
-                      {/* Row 4: empty to match Player D row */}
-                      <tr className="h-10">
-                        <td className="border border-gray-400 px-2 bg-white" colSpan={8}></td>
+                      {/* Row 2 — spans same height as Players C + D (h-20)
+                          Left: Marker's Signature
+                          Right: TWO CLUB header + A B C D sub-cells (nested table)
+                      */}
+                      <tr style={{ height: "80px" }}>
+                        <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>
+                        <td className="border border-gray-400 p-0" colSpan={4}>
+                          <table className="w-full h-full border-collapse">
+                            <tbody>
+                              <tr>
+                                <td className="border-b border-gray-400 px-2 py-1 text-center font-bold text-gray-800 bg-gray-50" colSpan={4}>TWO CLUB</td>
+                              </tr>
+                              <tr>
+                                {(["A","B","C","D"] as const).map((l, i) => (
+                                  <td key={l} className={`px-2 py-1 text-center font-semibold text-gray-700${i < 3 ? " border-r border-gray-400" : ""}`}>{l}</td>
+                                ))}
+                              </tr>
+                            </tbody>
+                          </table>
+                        </td>
                       </tr>
                     </tbody>
                   </table>

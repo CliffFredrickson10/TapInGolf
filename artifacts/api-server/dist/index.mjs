@@ -62735,6 +62735,46 @@ router3.get("/clubs/:id", async (req, res) => {
   if (club.logo_url) club.logo_url = logoApiUrl(club.id, club.logo_url);
   res.json({ club });
 });
+router3.get("/clubs/:id/scorecard", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const sc = await row(
+    "SELECT holes, tee_colors FROM club_scorecards WHERE club_id = ?",
+    [id]
+  ).catch(() => null);
+  if (!sc) {
+    res.json({ scorecard: null });
+    return;
+  }
+  const holes = typeof sc.holes === "string" ? JSON.parse(sc.holes) : sc.holes ?? [];
+  const teeColors = typeof sc.tee_colors === "string" ? JSON.parse(sc.tee_colors) : sc.tee_colors ?? [];
+  const hasData = holes.some(
+    (h) => h.yellow != null || h.white != null || h.blue != null || h.red != null
+  );
+  if (!hasData) {
+    res.json({ scorecard: null });
+    return;
+  }
+  res.json({ scorecard: { holes, tee_colors: teeColors } });
+});
+router3.get("/clubs/:id/local-rules", async (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  const lr = await row(
+    "SELECT rules, course_ratings, footer_notes FROM club_local_rules WHERE club_id = ?",
+    [id]
+  ).catch(() => null);
+  if (!lr) {
+    res.json({ local_rules: null });
+    return;
+  }
+  const rules = typeof lr.rules === "string" ? JSON.parse(lr.rules) : lr.rules ?? [];
+  const courseRatings = typeof lr.course_ratings === "string" ? JSON.parse(lr.course_ratings) : lr.course_ratings ?? [];
+  const footerNotes = lr.footer_notes ?? "";
+  if (rules.length === 0 && courseRatings.length === 0 && !footerNotes.trim()) {
+    res.json({ local_rules: null });
+    return;
+  }
+  res.json({ local_rules: { rules, course_ratings: courseRatings, footer_notes: footerNotes } });
+});
 router3.get("/clubs/:id/logo", async (req, res) => {
   const id = parseInt(req.params.id, 10);
   const club = await row(

@@ -85,6 +85,49 @@ type Review = {
   responded_at?: string | null;
 };
 
+type HoleRow = {
+  number: number;
+  par: number | null;
+  stroke_index: number | null;
+  yellow: number | null;
+  white: number | null;
+  blue: number | null;
+  red: number | null;
+  [key: string]: number | null | undefined;
+};
+
+type TeeColor = {
+  key: string;
+  name: string;
+  color: string;
+  enabled: boolean;
+};
+
+type Scorecard = {
+  holes: HoleRow[];
+  tee_colors: TeeColor[];
+};
+
+type LocalRule = {
+  id: string;
+  title: string;
+  body: string;
+};
+
+type CourseRating = {
+  id: string;
+  tee: string;
+  color: string;
+  course_rating: string;
+  slope_rating: string;
+};
+
+type LocalRules = {
+  rules: LocalRule[];
+  course_ratings: CourseRating[];
+  footer_notes: string;
+};
+
 function StarRow({ rating, size = 14, onPress }: { rating: number; size?: number; onPress?: (r: number) => void }) {
   const colors = useColors();
   return (
@@ -136,22 +179,28 @@ export default function ClubDetailScreen() {
   const [photos, setPhotos] = useState<{ id: number; url: string; caption: string | null }[]>([]);
   const [lightboxPhoto, setLightboxPhoto] = useState<{ url: string; caption: string | null } | null>(null);
   const [expandedReviews, setExpandedReviews] = useState<Record<number, boolean>>({});
+  const [scorecard, setScorecard] = useState<Scorecard | null>(null);
+  const [localRules, setLocalRules] = useState<LocalRules | null>(null);
 
   useEffect(() => {
     (async () => {
       try {
-        const [clubData, adsData, reviewsData, eventsData, photosData] = await Promise.all([
+        const [clubData, adsData, reviewsData, eventsData, photosData, scorecardData, localRulesData] = await Promise.all([
           apiFetch(`/clubs/${id}`, user?.token),
           apiFetch(`/ads?placement=club&club_id=${id}`, user?.token),
           apiFetch(`/clubs/${id}/reviews`, user?.token),
           apiFetch(`/clubs/${id}/events`, user?.token),
           apiFetch(`/clubs/${id}/images`, user?.token),
+          apiFetch(`/clubs/${id}/scorecard`, user?.token).catch(() => ({ scorecard: null })),
+          apiFetch(`/clubs/${id}/local-rules`, user?.token).catch(() => ({ local_rules: null })),
         ]);
         setClub(clubData.club);
         setAds(adsData.ads ?? []);
         setReviews(reviewsData.reviews ?? []);
         setEvents(eventsData.events ?? []);
         setPhotos(photosData.images ?? []);
+        setScorecard(scorecardData.scorecard ?? null);
+        setLocalRules(localRulesData.local_rules ?? null);
       } catch {}
       setLoading(false);
     })();
@@ -300,6 +349,88 @@ export default function ClubDetailScreen() {
             <Text style={[styles.descriptionText, { color: colors.mutedForeground }]}>{club.description}</Text>
           </View>
         ) : null}
+
+        {/* Scorecard */}
+        {scorecard && scorecard.holes.length > 0 && (() => {
+          const enabledTees = scorecard.tee_colors.filter(t => t.enabled);
+          const front = scorecard.holes.slice(0, 9);
+          const back  = scorecard.holes.slice(9, 18);
+          const sumF = (key: string) => front.reduce((s, h) => s + (Number(h[key]) || 0), 0);
+          const sumB = (key: string) => back.reduce((s,  h) => s + (Number(h[key]) || 0), 0);
+          const sumT = (key: string) => scorecard.holes.reduce((s, h) => s + (Number(h[key]) || 0), 0);
+          const frontHasTee = (key: string) => front.some(h => h[key] != null);
+          const backHasTee  = (key: string) => back.some( h => h[key] != null);
+          const COL_HOLE = 36; const COL_PAR = 36; const COL_SI = 36; const COL_TEE = 52;
+          const headerH = 28; const rowH = 30;
+          return (
+            <View>
+              <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Scorecard</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginTop: 4 }}>
+                <View style={[styles.scorecardWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                  {/* Header row */}
+                  <View style={[styles.scRow, { backgroundColor: colors.primary + "18", height: headerH }]}>
+                    <Text style={[styles.scHdr, { width: COL_HOLE, color: colors.primary }]}>Hole</Text>
+                    <Text style={[styles.scHdr, { width: COL_PAR,  color: colors.primary }]}>Par</Text>
+                    <Text style={[styles.scHdr, { width: COL_SI,   color: colors.primary }]}>SI</Text>
+                    {enabledTees.map(t => (
+                      <Text key={t.key} style={[styles.scHdr, { width: COL_TEE, color: t.color }]}>{t.name}</Text>
+                    ))}
+                  </View>
+                  {/* Data rows */}
+                  {scorecard.holes.map((h, idx) => (
+                    <View key={h.number} style={[styles.scRow, { height: rowH, backgroundColor: idx % 2 === 0 ? "transparent" : colors.primary + "08" }]}>
+                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.foreground }]}>{h.number}</Text>
+                      <Text style={[styles.scCell, { width: COL_PAR, color: colors.mutedForeground }]}>{h.par ?? "—"}</Text>
+                      <Text style={[styles.scCell, { width: COL_SI,  color: colors.mutedForeground }]}>{h.stroke_index ?? "—"}</Text>
+                      {enabledTees.map(t => (
+                        <Text key={t.key} style={[styles.scCell, { width: COL_TEE, color: colors.foreground }]}>
+                          {h[t.key] != null ? String(h[t.key]) : "—"}
+                        </Text>
+                      ))}
+                    </View>
+                  ))}
+                  {/* Front 9 subtotal */}
+                  {front.length === 9 && (
+                    <View style={[styles.scRow, styles.scSubtotal, { height: rowH, borderTopColor: colors.border }]}>
+                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>Out</Text>
+                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumF("par")}</Text>
+                      <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
+                      {enabledTees.map(t => (
+                        <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
+                          {frontHasTee(t.key) ? sumF(t.key) : "—"}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {/* Back 9 subtotal */}
+                  {back.length === 9 && (
+                    <View style={[styles.scRow, styles.scSubtotal, { height: rowH, borderTopColor: colors.border }]}>
+                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>In</Text>
+                      <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumB("par")}</Text>
+                      <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
+                      {enabledTees.map(t => (
+                        <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
+                          {backHasTee(t.key) ? sumB(t.key) : "—"}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                  {/* Total */}
+                  <View style={[styles.scRow, styles.scTotal, { height: rowH + 2, borderTopColor: colors.primary }]}>
+                    <Text style={[styles.scCell, styles.scCellBold, { width: COL_HOLE, color: colors.primary }]}>Tot</Text>
+                    <Text style={[styles.scCell, styles.scCellBold, { width: COL_PAR,  color: colors.primary }]}>{sumT("par")}</Text>
+                    <Text style={[styles.scCell, { width: COL_SI, color: colors.mutedForeground }]}>—</Text>
+                    {enabledTees.map(t => (
+                      <Text key={t.key} style={[styles.scCell, styles.scCellBold, { width: COL_TEE, color: colors.primary }]}>
+                        {scorecard.holes.some(h => h[t.key] != null) ? sumT(t.key) : "—"}
+                      </Text>
+                    ))}
+                  </View>
+                </View>
+              </ScrollView>
+            </View>
+          );
+        })()}
 
         {/* Photo Gallery */}
         {photos.length > 0 && (
@@ -531,6 +662,53 @@ export default function ClubDetailScreen() {
             {ads.map((ad) => (
               <AdBanner key={ad.id} ad={ad} />
             ))}
+          </View>
+        )}
+
+        {/* Local Rules */}
+        {localRules && (
+          <View style={[styles.localRulesCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={styles.localRulesHeaderRow}>
+              <Ionicons name="document-text-outline" size={18} color={colors.primary} />
+              <Text style={[styles.sectionTitle, { color: colors.foreground, marginLeft: 8 }]}>Local Rules</Text>
+            </View>
+            {localRules.rules.map((rule, idx) => (
+              <View key={rule.id ?? idx} style={[styles.localRuleItem, idx > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
+                {rule.title ? (
+                  <Text style={[styles.localRuleTitle, { color: colors.foreground }]}>{rule.title}</Text>
+                ) : null}
+                {rule.body ? (
+                  <Text style={[styles.localRuleBody, { color: colors.mutedForeground }]}>{rule.body}</Text>
+                ) : null}
+              </View>
+            ))}
+            {localRules.course_ratings.length > 0 && (
+              <View style={[styles.courseRatingsWrap, { borderTopColor: colors.border }]}>
+                <Text style={[styles.courseRatingsTitle, { color: colors.foreground }]}>Course Ratings</Text>
+                <View style={[styles.crHeader, { backgroundColor: colors.primary + "18" }]}>
+                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 2 }]}>Tee</Text>
+                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Rating</Text>
+                  <Text style={[styles.crHdrCell, { color: colors.primary, flex: 1 }]}>Slope</Text>
+                </View>
+                {localRules.course_ratings.map((cr, idx) => (
+                  <View key={cr.id ?? idx} style={[styles.crRow, idx % 2 === 1 && { backgroundColor: colors.primary + "06" }]}>
+                    <View style={{ flex: 2, flexDirection: "row", alignItems: "center", gap: 6 }}>
+                      {cr.color ? (
+                        <View style={[styles.crColorDot, { backgroundColor: cr.color }]} />
+                      ) : null}
+                      <Text style={[styles.crCell, { color: colors.foreground }]}>{cr.tee}</Text>
+                    </View>
+                    <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.course_rating ?? "—"}</Text>
+                    <Text style={[styles.crCell, { flex: 1, color: colors.mutedForeground }]}>{cr.slope_rating ?? "—"}</Text>
+                  </View>
+                ))}
+              </View>
+            )}
+            {localRules.footer_notes ? (
+              <Text style={[styles.localRulesFooter, { color: colors.mutedForeground, borderTopColor: colors.border }]}>
+                {localRules.footer_notes}
+              </Text>
+            ) : null}
           </View>
         )}
 
@@ -873,4 +1051,28 @@ const styles = StyleSheet.create({
   lightboxImage: { width: "100%", height: "75%" },
   lightboxCaptionWrap: { position: "absolute", bottom: 60, left: 24, right: 24, alignItems: "center" },
   lightboxCaptionText: { color: "#fff", fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", opacity: 0.9 },
+
+  // Scorecard
+  scorecardWrap:  { borderRadius: 12, borderWidth: 1, overflow: "hidden" },
+  scRow:          { flexDirection: "row", alignItems: "center" },
+  scHdr:          { fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center", paddingHorizontal: 4 },
+  scCell:         { fontSize: 12, fontFamily: "Inter_400Regular", textAlign: "center", paddingHorizontal: 4 },
+  scCellBold:     { fontFamily: "Inter_700Bold" },
+  scSubtotal:     { borderTopWidth: 1 },
+  scTotal:        { borderTopWidth: 2 },
+
+  // Local Rules
+  localRulesCard:       { borderRadius: 14, borderWidth: 1, padding: 16, gap: 0 },
+  localRulesHeaderRow:  { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  localRuleItem:        { paddingVertical: 10, gap: 4 },
+  localRuleTitle:       { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  localRuleBody:        { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 20 },
+  courseRatingsWrap:    { borderTopWidth: 1, marginTop: 10, paddingTop: 10, gap: 0 },
+  courseRatingsTitle:   { fontSize: 13, fontFamily: "Inter_600SemiBold", marginBottom: 8 },
+  crHeader:             { flexDirection: "row", paddingHorizontal: 10, paddingVertical: 6, borderRadius: 6 },
+  crHdrCell:            { fontSize: 11, fontFamily: "Inter_700Bold" },
+  crRow:                { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 7, borderRadius: 4 },
+  crCell:               { fontSize: 12, fontFamily: "Inter_400Regular" },
+  crColorDot:           { width: 10, height: 10, borderRadius: 5 },
+  localRulesFooter:     { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 18, borderTopWidth: 1, marginTop: 10, paddingTop: 10 },
 });

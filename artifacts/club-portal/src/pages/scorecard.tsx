@@ -502,18 +502,27 @@ export default function Scorecard() {
                 Left:  header h-8  +  4 × player rows h-10  =  8 + 40×4 = 168px
                 Right: header h-8  +  2 × sig rows   h-20  =  8 + 80×2 = 168px
               */}
-              <div className="flex gap-6 flex-wrap items-start">
+              {/* Both tables share a flex row — each gets flex-1 so together
+                  they fill the full card width, matching the hole data table below */}
+              <div className="flex gap-4">
 
-                {/* LEFT — Competition + Players */}
-                <div className="overflow-x-auto">
-                  <table className="border-collapse text-xs">
+                {/* LEFT — Competition + Players (flex-1 = half width) */}
+                <div className="flex-1 min-w-0 overflow-x-auto">
+                  <table className="w-full table-fixed border-collapse text-xs">
+                    <colgroup>
+                      <col style={{ width: "28%" }} />
+                      <col style={{ width: "36%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "12%" }} />
+                      <col style={{ width: "12%" }} />
+                    </colgroup>
                     <thead>
                       <tr className="h-8">
-                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-28">COMPETITION:</th>
-                        <th className="border border-gray-400 px-2 bg-white w-40"></th>
-                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">CP</th>
-                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">CH</th>
-                        <th className="border border-gray-400 px-3 text-center font-bold bg-gray-200 text-gray-800 w-10">HA</th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800">COMPETITION:</th>
+                        <th className="border border-gray-400 px-2 bg-white"></th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-200 text-gray-800">CP</th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-200 text-gray-800">CH</th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-200 text-gray-800">HA</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -530,32 +539,38 @@ export default function Scorecard() {
                   </table>
                 </div>
 
-                {/* RIGHT — Date / Signatures / Results
-                    Columns: [DATE/TIME wide][TEE:][1st][10th][RESULTS ×4 sub-cols]
-                    = 8 columns total
+                {/* RIGHT — Date / Signatures / Results (flex-1 = half width)
+                    9 columns: DATE | TIME | TEE: | 1st | 10th | A | B | C | D
+                    RESULTS header colSpan=4 over A-D cols
                 */}
-                <div className="overflow-x-auto">
-                  <table className="border-collapse text-xs">
+                <div className="flex-1 min-w-0 overflow-x-auto">
+                  <table className="w-full table-fixed border-collapse text-xs">
+                    <colgroup>
+                      <col style={{ width: "22%" }} />
+                      <col style={{ width: "18%" }} />
+                      <col style={{ width: "10%" }} />
+                      <col style={{ width: "9%" }} />
+                      <col style={{ width: "9%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "8%" }} />
+                    </colgroup>
                     <thead>
                       <tr className="h-8">
-                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-32">DATE:</th>
-                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800 w-28">TIME:</th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-10">TEE:</th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-9">1<sup>st</sup></th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-100 text-gray-800 w-9">10<sup>th</sup></th>
-                        <th className="border border-gray-400 px-2 text-center font-bold bg-gray-200 text-gray-800 w-24" colSpan={4}>RESULTS</th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800">DATE:</th>
+                        <th className="border border-gray-400 px-2 text-left font-bold bg-gray-100 text-gray-800">TIME:</th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-100 text-gray-800">TEE:</th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-100 text-gray-800">1<sup>st</sup></th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-100 text-gray-800">10<sup>th</sup></th>
+                        <th className="border border-gray-400 px-1 text-center font-bold bg-gray-200 text-gray-800" colSpan={4}>RESULTS</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {/* Row 1 — spans same height as Players A + B (h-20 = 2 × h-10) */}
                       <tr style={{ height: "80px" }}>
                         <td className="border border-gray-400 px-2 align-middle font-semibold text-gray-700" colSpan={5}>PLAYER'S SIGNATURE:</td>
                         <td className="border border-gray-400 bg-white" colSpan={4}></td>
                       </tr>
-                      {/* Row 2 — spans same height as Players C + D (h-20)
-                          Left: Marker's Signature
-                          Right: TWO CLUB header + A B C D sub-cells (nested table)
-                      */}
                       <tr style={{ height: "80px" }}>
                         <td className="border border-gray-400 px-2 align-bottom pb-2 font-semibold text-gray-700" colSpan={5}>MARKER'S SIGNATURE:</td>
                         <td className="border border-gray-400 p-0" colSpan={4}>

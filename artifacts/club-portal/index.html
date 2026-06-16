@@ -19,6 +19,14 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      window.onerror = function(msg, src, line, col, err) {
+        document.body.innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>JS Error (line ' + line + '):</b>\n' + msg + '\n\nSource: ' + src + '\n\n' + (err && err.stack ? err.stack : '') + '</div>';
+      };
+      window.addEventListener('unhandledrejection', function(e) {
+        document.body.innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>Unhandled Promise:</b>\n' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)) + '</div>';
+      });
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

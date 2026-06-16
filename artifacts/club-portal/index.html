@@ -18,13 +18,13 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"><div id="prerender-msg" style="font-family:sans-serif;padding:40px;color:#555">Loading portal…</div></div>
     <script>
       window.onerror = function(msg, src, line, col, err) {
-        document.body.innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>JS Error (line ' + line + '):</b>\n' + msg + '\n\nSource: ' + src + '\n\n' + (err && err.stack ? err.stack : '') + '</div>';
+        document.getElementById('root').innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>JS Error (line ' + line + '):</b>\n' + msg + '\n\nSource: ' + src + '\n\n' + (err && err.stack ? err.stack : '') + '</div>';
       };
       window.addEventListener('unhandledrejection', function(e) {
-        document.body.innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>Unhandled Promise:</b>\n' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)) + '</div>';
+        document.getElementById('root').innerHTML = '<div style="font-family:monospace;padding:24px;color:#c00;background:#fff9f9;border:2px solid #c00;border-radius:8px;margin:24px;white-space:pre-wrap"><b>Unhandled Promise:</b>\n' + (e.reason && e.reason.stack ? e.reason.stack : String(e.reason)) + '</div>';
       });
     </script>
     <script type="module" src="/src/main.tsx"></script>

@@ -3,8 +3,8 @@ import cors from "cors";
 import pinoHttp from "pino-http";
 import path from "path";
 import fs from "fs";
-import http from "http";
 import { fileURLToPath } from "url";
+import { createProxyMiddleware } from "http-proxy-middleware";
 import router from "./routes";
 import { logger } from "./lib/logger";
 
@@ -62,32 +62,24 @@ app.use("/api", router);
 
 // In development, proxy the club-portal Vite dev server so users can access
 // it from the default preview port (80) without switching ports.
+// Uses http-proxy-middleware so WebSocket (HMR) upgrades are forwarded too.
+// NOTE: mounted at app-level (no Express prefix) so paths are NOT stripped
+// before being forwarded to the Vite server.
 if (process.env.NODE_ENV !== "production") {
-  const PORTAL_PORT = 19606;
-  const portalPrefixes = ["/club-portal", "/@vite", "/@fs", "/@id", "/@replit", "/node_modules/.vite"];
-
-  const proxyToPortal = (req: express.Request, res: express.Response) => {
-    const options: http.RequestOptions = {
-      hostname: "localhost",
-      port: PORTAL_PORT,
-      path: req.url,
-      method: req.method,
-      headers: { ...req.headers, host: `localhost:${PORTAL_PORT}` },
-    };
-    const proxy = http.request(options, (upstream) => {
-      res.writeHead(upstream.statusCode ?? 200, upstream.headers);
-      upstream.pipe(res, { end: true });
-    });
-    proxy.on("error", () => res.status(502).send("Club portal dev server unavailable"));
-    req.pipe(proxy, { end: true });
-  };
-
-  for (const prefix of portalPrefixes) {
-    app.use(prefix, (req, res) => {
-      req.url = prefix + req.url;
-      proxyToPortal(req, res);
-    });
-  }
+  const portalProxy = createProxyMiddleware({
+    target: "http://localhost:19606",
+    changeOrigin: true,
+    ws: true,
+    logger: console,
+    pathFilter: (pathname: string) =>
+      pathname.startsWith("/club-portal") ||
+      pathname.startsWith("/@vite") ||
+      pathname.startsWith("/@fs") ||
+      pathname.startsWith("/@id") ||
+      pathname.startsWith("/@replit") ||
+      pathname.startsWith("/node_modules/.vite"),
+  });
+  app.use(portalProxy);
 }
 
 // In production, serve the built club-portal SPA from the same origin so

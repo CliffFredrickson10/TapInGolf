@@ -630,10 +630,20 @@ export default function Scorecard() {
               <div className="overflow-x-auto">
                 {/* Column structure mirrors ScorecardTable exactly:
                     w-20 label | w-10×9 front | w-12 OUT | w-10×9 back | w-12 IN | w-14 TOTAL */}
+                {/*
+                  Label column is split into 2 sub-cols (letter w-6 + label w-14 = w-20 total)
+                  matching the Hole Data table's single w-20 first column.
+                  rowSpan=2 on the player letter cell makes it span SCORE + RESULT rows.
+                  All summary rows (HOLE, PAR, A/B, C/D, ALLIANCE) use colSpan=2.
+                */}
                 <table className="border-collapse text-xs w-full">
+                  <colgroup>
+                    <col style={{ width: "1.5rem" }} /> {/* player letter ~w-6 */}
+                    <col />                              {/* SCORE/RESULT label, absorbs rest of ~w-20 */}
+                  </colgroup>
                   <thead>
                     <tr className="bg-[#1a5c38] text-white">
-                      <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]">HOLE</th>
+                      <th className="border border-[#154d30] px-2 py-1.5 text-left font-semibold w-20 min-w-[72px]" colSpan={2}>HOLE</th>
                       {holes.slice(0,9).map(h => (
                         <th key={h.number} className="border border-[#154d30] px-1 py-1.5 text-center font-semibold w-10">{h.number}</th>
                       ))}
@@ -645,7 +655,7 @@ export default function Scorecard() {
                       <th className="border border-[#154d30] px-2 py-1.5 text-center font-semibold w-14 bg-[#0d3320]">TOTAL</th>
                     </tr>
                     <tr className="bg-[#f0f7f4]">
-                      <td className="border border-gray-300 px-2 py-1 font-semibold text-[#1a5c38]">PAR</td>
+                      <td className="border border-gray-300 px-2 py-1 font-semibold text-[#1a5c38]" colSpan={2}>PAR</td>
                       {holes.slice(0,9).map(h => (
                         <td key={h.number} className="border border-gray-300 px-1 py-1 text-center text-gray-600">{h.par ?? "—"}</td>
                       ))}
@@ -660,12 +670,10 @@ export default function Scorecard() {
                   <tbody>
                     {(["A","B","C","D"] as const).map((player, pi) => (
                       <React.Fragment key={player}>
-                        {/* SCORE row — single label cell: player letter + SCORE */}
+                        {/* SCORE row — player letter spans SCORE + RESULT via rowSpan=2 */}
                         <tr className={pi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="border border-gray-300 px-2 py-1 bg-[#e8f4ed]">
-                            <span className="font-bold text-[#1a5c38]">{player}</span>
-                            <span className="text-gray-500 ml-1 text-[10px]">SCORE</span>
-                          </td>
+                          <td className="border border-gray-300 px-1 text-center font-bold text-lg text-[#1a5c38] bg-[#e8f4ed] align-middle" rowSpan={2}>{player}</td>
+                          <td className="border border-gray-300 px-1.5 py-1 text-[10px] font-semibold text-gray-600 tracking-wide">SCORE</td>
                           {Array.from({length: 9}).map((_,i) => (
                             <td key={i} className="border border-gray-300 w-10 h-7"></td>
                           ))}
@@ -676,9 +684,9 @@ export default function Scorecard() {
                           <td className="border border-gray-300 bg-[#e8f4ed] w-12 h-7"></td>
                           <td className="border border-gray-300 bg-[#1a5c38]/10 w-14 h-7"></td>
                         </tr>
-                        {/* RESULT row */}
+                        {/* RESULT row — no player letter cell (consumed by rowSpan above) */}
                         <tr className={pi % 2 === 0 ? "bg-white" : "bg-gray-50"}>
-                          <td className="border border-gray-300 px-2 py-1 text-[10px] font-medium text-gray-400 bg-[#e8f4ed]/50">RESULT</td>
+                          <td className="border border-gray-300 border-t-dashed px-1.5 py-1 text-[10px] font-medium text-gray-400 bg-[#e8f4ed]/40" style={{ borderTopStyle: "dashed" }}>RESULT</td>
                           {Array.from({length: 9}).map((_,i) => (
                             <td key={i} className="border border-gray-300 w-10 h-6 bg-gray-50/60"></td>
                           ))}
@@ -691,7 +699,7 @@ export default function Scorecard() {
                         </tr>
                         {player === "B" && (
                           <tr className="bg-[#1a5c38]/5">
-                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs">A/B RESULT</td>
+                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>A/B RESULT</td>
                             {Array.from({length: 9}).map((_,i) => (
                               <td key={i} className="border border-gray-300 h-7"></td>
                             ))}
@@ -705,7 +713,7 @@ export default function Scorecard() {
                         )}
                         {player === "D" && (
                           <tr className="bg-[#1a5c38]/5">
-                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs">C/D RESULT</td>
+                            <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>C/D RESULT</td>
                             {Array.from({length: 9}).map((_,i) => (
                               <td key={i} className="border border-gray-300 h-7"></td>
                             ))}
@@ -720,7 +728,7 @@ export default function Scorecard() {
                       </React.Fragment>
                     ))}
                     <tr className="bg-[#1a5c38]/10">
-                      <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs">ALLIANCE</td>
+                      <td className="border border-gray-300 px-2 py-1 font-bold text-[#1a5c38] text-xs" colSpan={2}>ALLIANCE</td>
                       {Array.from({length: 9}).map((_,i) => (
                         <td key={i} className="border border-gray-300 h-7"></td>
                       ))}

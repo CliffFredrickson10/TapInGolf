@@ -1021,7 +1021,7 @@ export default function EventDetailScreen() {
                         <View style={{ borderTopWidth: 1, borderTopColor: colors.primary + "30", marginTop: 10, paddingTop: 10, flexDirection: "row", alignItems: "center", gap: 8 }}>
                           <ActivityIndicator size="small" color={colors.mutedForeground} />
                           <Text style={{ fontSize: 12, color: colors.mutedForeground, flex: 1 }}>
-                            Result submitted — waiting for {opponent ?? "your opponent"} to confirm.
+                            Result submitted — waiting for {opponentName ?? "your opponent"} to confirm.
                           </Text>
                         </View>
                       );
@@ -2032,4 +2032,6 @@ const styles = StyleSheet.create({
   lbName:        { flex: 3, fontSize: 13 },
   lbStat:        { flex: 1, fontSize: 13, textAlign: "right" },
   roundBtn:      { paddingHorizontal: 14, paddingVertical: 7, borderRadius: 8, borderWidth: 1 },
+  ctaBtn:        { borderRadius: 10, paddingVertical: 13, alignItems: "center", marginTop: 4 },
+  ctaBtnText:    { fontSize: 15, fontWeight: "700", color: "#fff" },
 });

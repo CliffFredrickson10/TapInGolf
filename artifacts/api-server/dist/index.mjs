@@ -67344,8 +67344,7 @@ router10.get("/admin/clubs-list", async (req, res) => {
   const [clubs, total] = await Promise.all([
     query(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
-              c.active, c.featured, c.created_at, c.username,
-              (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = 1) AS has_portal
+              c.active, c.featured, c.created_at, c.username
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     ),

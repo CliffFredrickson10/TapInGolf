@@ -433,6 +433,36 @@ router.post("/admin/clubs/:id/portal-accounts", async (req, res): Promise<void> 
   res.status(201).json({ account: created });
 });
 
+// PUT /admin/clubs/:id/portal-accounts/:userId — update a portal account
+router.put("/admin/clubs/:id/portal-accounts/:userId", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = parseInt(req.params.id, 10);
+  const userId = parseInt(req.params.userId, 10);
+  const account = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, clubId]);
+  if (!account) { res.status(404).json({ message: "Account not found" }); return; }
+  const { name, email, password } = req.body ?? {};
+  if (!name || !email) { res.status(400).json({ message: "name and email are required" }); return; }
+  const conflict = await row<any>(
+    "SELECT id FROM club_portal_users WHERE club_id = ? AND LOWER(email) = LOWER(?) AND id != ?",
+    [clubId, email, userId]
+  );
+  if (conflict) { res.status(409).json({ message: "Another account already uses that email" }); return; }
+  const sets: string[] = ["name = ?", "email = ?"];
+  const vals: any[]    = [String(name).trim(), String(email).trim().toLowerCase()];
+  if (password) {
+    const bcrypt = await import("bcryptjs");
+    sets.push("password_hash = ?");
+    vals.push(await bcrypt.hash(String(password), 10));
+  }
+  vals.push(userId, clubId);
+  const updated = await row<any>(
+    `UPDATE club_portal_users SET ${sets.join(", ")} WHERE id = ? AND club_id = ? RETURNING id, name, email, role, active, created_at`,
+    vals
+  );
+  res.json({ account: updated });
+});
+
 // DELETE /admin/clubs/:id/portal-accounts/:userId — remove a portal account
 router.delete("/admin/clubs/:id/portal-accounts/:userId", async (req, res): Promise<void> => {
   const caller = await getUser(req);

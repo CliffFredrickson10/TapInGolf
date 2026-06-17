@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff, UserPlus, CheckCircle2, Trash2, KeyRound } from "lucide-react";
+import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff, UserPlus, CheckCircle2, Trash2, KeyRound, Pencil, X } from "lucide-react";
 
 interface ClubRow {
   id: number;
@@ -47,14 +47,21 @@ function PortalAccountDialog({
   const { toast } = useToast();
   const [accounts, setAccounts] = useState<PortalAccount[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [creating, setCreating] = useState(false);
   const [deleting, setDeleting] = useState<number | null>(null);
   const [showForm, setShowForm] = useState(false);
 
+  // Create form
   const [name, setName]         = useState("");
   const [email, setEmail]       = useState("");
   const [password, setPassword] = useState("Golf2026!");
   const [saving, setSaving]     = useState(false);
+
+  // Edit state
+  const [editingId, setEditingId]       = useState<number | null>(null);
+  const [editName, setEditName]         = useState("");
+  const [editEmail, setEditEmail]       = useState("");
+  const [editPassword, setEditPassword] = useState("");
+  const [editSaving, setEditSaving]     = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,6 +75,32 @@ function PortalAccountDialog({
   }, [club.id, toast]);
 
   useEffect(() => { load(); }, [load]);
+
+  const startEdit = (a: PortalAccount) => {
+    setEditingId(a.id);
+    setEditName(a.name);
+    setEditEmail(a.email);
+    setEditPassword("");
+    setShowForm(false);
+  };
+
+  const cancelEdit = () => { setEditingId(null); setEditName(""); setEditEmail(""); setEditPassword(""); };
+
+  const saveEdit = async () => {
+    if (!editName.trim() || !editEmail.trim() || editingId == null) return;
+    setEditSaving(true);
+    try {
+      const data = await api<{ account: PortalAccount }>(`/api/admin/clubs/${club.id}/portal-accounts/${editingId}`, {
+        method: "PUT",
+        body: JSON.stringify({ name: editName.trim(), email: editEmail.trim(), password: editPassword || undefined }),
+      });
+      setAccounts(prev => prev.map(a => a.id === editingId ? data.account : a));
+      cancelEdit();
+      toast({ title: "Account updated", description: data.account.email });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setEditSaving(false); }
+  };
 
   const create = async () => {
     if (!name.trim() || !email.trim() || !password) return;
@@ -123,20 +156,65 @@ function PortalAccountDialog({
             <div className="space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Existing accounts</p>
               {accounts.map(a => (
-                <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
-                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">{a.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{a.email} · {a.role}</p>
+                <div key={a.id} className="rounded-lg border overflow-hidden">
+                  {/* Row summary */}
+                  <div className="flex items-center gap-3 px-3 py-2.5">
+                    <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{a.name}</p>
+                      <p className="text-xs text-muted-foreground truncate">{a.email} · {a.role}</p>
+                    </div>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-7 w-7 p-0 text-muted-foreground hover:text-[#1a5c38]"
+                      onClick={() => editingId === a.id ? cancelEdit() : startEdit(a)}
+                      title={editingId === a.id ? "Cancel edit" : "Edit account"}
+                    >
+                      {editingId === a.id ? <X className="h-3.5 w-3.5" /> : <Pencil className="h-3.5 w-3.5" />}
+                    </Button>
+                    <Button
+                      variant="ghost" size="sm"
+                      className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                      onClick={() => remove(a.id, a.email)}
+                      disabled={deleting === a.id}
+                      title="Remove account"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
                   </div>
-                  <Button
-                    variant="ghost" size="sm"
-                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
-                    onClick={() => remove(a.id, a.email)}
-                    disabled={deleting === a.id}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {/* Inline edit form */}
+                  {editingId === a.id && (
+                    <div className="border-t bg-muted/30 px-3 py-3 space-y-2">
+                      <Input
+                        placeholder="Contact name"
+                        value={editName}
+                        onChange={e => setEditName(e.target.value)}
+                      />
+                      <Input
+                        type="email"
+                        placeholder="Email address"
+                        value={editEmail}
+                        onChange={e => setEditEmail(e.target.value)}
+                      />
+                      <Input
+                        type="text"
+                        placeholder="New password (leave blank to keep current)"
+                        value={editPassword}
+                        onChange={e => setEditPassword(e.target.value)}
+                      />
+                      <div className="flex justify-end gap-2 pt-1">
+                        <Button variant="outline" size="sm" onClick={cancelEdit}>Cancel</Button>
+                        <Button
+                          size="sm"
+                          className="bg-[#1a5c38] hover:bg-[#154d30]"
+                          onClick={saveEdit}
+                          disabled={editSaving || !editName.trim() || !editEmail.trim()}
+                        >
+                          {editSaving ? "Saving…" : "Save changes"}
+                        </Button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -144,10 +222,10 @@ function PortalAccountDialog({
 
           {/* Create form */}
           {!showForm && accounts.length > 0 ? (
-            <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={() => setShowForm(true)}>
+            <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={() => { setShowForm(true); cancelEdit(); }}>
               <UserPlus className="h-3.5 w-3.5" /> Add another account
             </Button>
-          ) : (
+          ) : showForm ? (
             <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
                 {accounts.length === 0 ? "Create portal account" : "New account"}
@@ -173,7 +251,7 @@ function PortalAccountDialog({
               </div>
               <p className="text-xs text-muted-foreground">Share these credentials with the club. They can change their password after first login.</p>
             </div>
-          )}
+          ) : null}
         </div>
 
         <DialogFooter className="gap-2">

@@ -73,8 +73,9 @@ router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Respon
             (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
             (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
-             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label,
-            (SELECT COUNT(*) FROM event_teams et WHERE et.event_id = ge.id
+             AND EXISTS (SELECT 1 FROM knockout_matches km2 WHERE km2.round_id = kr2.id AND km2.status NOT IN ('complete','bye'))
+             ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label,
+            (SELECT COUNT(*) FROM event_teams et WHERE et.event_id = ge.id AND et.status = 'confirmed'
              AND (SELECT COUNT(*) FROM event_registrations er WHERE er.team_id = et.id AND er.event_id = ge.id) = 2) AS pair_count
      FROM golf_events ge
      WHERE ge.club_id = ? AND (ge.format = 'knockout_individual' OR ge.format = 'knockout_team')
@@ -120,16 +121,23 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
     if (audience.length > 0) {
       const evDate = event_date ? new Date(event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "";
       const notifTitle = `⛳ Tournament Now Open — ${club.name}`;
-      const notifBody  = `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Tap to view & enter.`;
+      const isBetterball = knockout_type === "team";
+      const deadlineStr  = pairing_deadline
+        ? ` before ${new Date(pairing_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
+        : "";
+      const notifBody = isBetterball
+        ? `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Betterball Knockout — open the app to choose your partner${deadlineStr}.`
+        : `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Tap to view & enter.`;
+      const notifType = isBetterball ? "knockout_pair_request" : "event_published";
       const pushAudience = audience.filter((u: any) => u.push_token);
       if (pushAudience.length > 0) {
         sendPushNotifications(pushAudience.map((u: any) => ({
           to: u.push_token, sound: "default", title: notifTitle, body: notifBody,
-          data: { type: "event_published", event_id: id, club_id: club.id },
+          data: { type: notifType, event_id: id, club_id: club.id },
         })));
       }
       for (const u of audience) {
-        saveUserNotification(u.id, "event_published", notifTitle, notifBody, { event_id: id, club_id: club.id });
+        saveUserNotification(u.id, notifType, notifTitle, notifBody, { event_id: id, club_id: club.id });
       }
     }
   } catch (err) {
@@ -161,8 +169,8 @@ router.get("/portal/knockout/:id/pairs", requireClubAuth, async (req: Request, r
   const ev = await row<any>("SELECT id, knockout_type, knockout_pairing_deadline FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
   if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
 
-  const pairs = await query<any>(
-    `SELECT et.id as team_id,
+  const allPairs = await query<any>(
+    `SELECT et.id as team_id, et.status as team_status,
             u1.id as p1_id, u1.name as p1_name,
             u2.id as p2_id, u2.name as p2_name
      FROM event_teams et
@@ -171,18 +179,20 @@ router.get("/portal/knockout/:id/pairs", requireClubAuth, async (req: Request, r
      JOIN users u1 ON u1.id = er1.user_id
      JOIN users u2 ON u2.id = er2.user_id
      WHERE et.event_id = ? AND er1.user_id < er2.user_id
-     ORDER BY et.id ASC`,
+     ORDER BY et.status ASC, et.id ASC`,
     [evId, evId, evId]
   );
 
-  const pairedIds = new Set(pairs.flatMap((p: any) => [p.p1_id, p.p2_id]));
+  const confirmedPairs = allPairs.filter((p: any) => p.team_status === "confirmed");
+  const pendingPairs   = allPairs.filter((p: any) => p.team_status === "pending");
+  const pairedIds = new Set(allPairs.flatMap((p: any) => [p.p1_id, p.p2_id]));
   const allMembers = await query<any>(
     `SELECT u.id, u.name FROM club_members cm JOIN users u ON u.id = cm.user_id
      WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
     [club.id]
   );
   const unpaired = allMembers.filter((m: any) => !pairedIds.has(m.id));
-  res.json({ pairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+  res.json({ pairs: confirmedPairs, pending_requests: pendingPairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
 });
 
 // ── Member: get own pair status ────────────────────────────────────────────────
@@ -195,23 +205,37 @@ router.get("/knockout/:id/pair-status", async (req: Request, res: Response): Pro
   if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
 
   const reg = await row<any>(
-    `SELECT er.team_id, u.id as partner_id, u.name as partner_name
+    `SELECT er.team_id, et.status as team_status, et.requested_by,
+            u.id as partner_id, u.name as partner_name
      FROM event_registrations er
+     JOIN event_teams et ON et.id = er.team_id
      LEFT JOIN event_registrations er2 ON er2.team_id = er.team_id AND er2.event_id = er.event_id AND er2.user_id != er.user_id
      LEFT JOIN users u ON u.id = er2.user_id
      WHERE er.event_id = ? AND er.user_id = ?`,
     [evId, user.id]
   );
 
+  if (!reg) {
+    res.json({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+    return;
+  }
+
+  const request_state = reg.team_status === "confirmed"
+    ? "confirmed"
+    : reg.requested_by === user.id
+      ? "pending_sent"
+      : "pending_received";
+
   res.json({
-    paired: !!reg,
-    team_id: reg?.team_id ?? null,
-    partner: reg?.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
+    paired: reg.team_status === "confirmed",
+    request_state,
+    team_id: reg.team_id,
+    partner: reg.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
     pairing_deadline: ev.knockout_pairing_deadline ?? null,
   });
 });
 
-// ── Member: create a pair ──────────────────────────────────────────────────────
+// ── Member: send a partner request (creates a pending pair) ───────────────────
 router.post("/knockout/:id/pair", async (req: Request, res: Response): Promise<void> => {
   const evId = Number(req.params.id);
   const user = await getUser(req).catch(() => null);
@@ -226,39 +250,113 @@ router.post("/knockout/:id/pair", async (req: Request, res: Response): Promise<v
   );
   if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
 
-  // Check both users are active club members
   const userMember    = await row<any>("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [user.id, ev.club_id]);
   const partnerMember = await row<any>("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [partner_id, ev.club_id]);
   if (!userMember || !partnerMember) { res.status(400).json({ message: "Both players must be active members of this club" }); return; }
 
-  // Check neither is already paired
   const existingUser    = await row<any>("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
   const existingPartner = await row<any>("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, partner_id]);
-  if (existingUser)    { res.status(400).json({ message: "You are already paired in this tournament" }); return; }
-  if (existingPartner) { res.status(400).json({ message: "That player is already paired in this tournament" }); return; }
+  if (existingUser)    { res.status(400).json({ message: "You already have a pairing in this tournament" }); return; }
+  if (existingPartner) { res.status(400).json({ message: "That player already has a pairing request in this tournament" }); return; }
 
   const partnerUser = await row<any>("SELECT id, name, push_token FROM users WHERE id = ?", [partner_id]);
   if (!partnerUser) { res.status(404).json({ message: "Partner not found" }); return; }
 
-  // Create team + two registrations
-  const teamId = await exec("INSERT INTO event_teams (event_id) VALUES (?)", [evId]);
+  // Create team as PENDING — partner must confirm before it becomes 'confirmed'
+  const teamId = await exec(
+    "INSERT INTO event_teams (event_id, status, requested_by) VALUES (?, 'pending', ?)",
+    [evId, user.id]
+  );
   await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, user.id, teamId]);
   await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, partner_id, teamId]);
 
-  // Notify partner
+  // Notify partner: confirm or deny
   try {
-    const title = `👥 Betterball Partner — ${ev.name}`;
-    const body  = `${user.name} has paired with you for ${ev.name}. You're in!`;
-    if (partnerUser.push_token) {
-      sendPushNotifications([{ to: partnerUser.push_token, sound: "default", title, body, data: { type: "event_published", event_id: evId } }]);
+    const title = `🤝 Partner Request — ${ev.name}`;
+    const body  = `${user.name} wants to be your Betterball partner. Open the app to confirm or deny.`;
+    const data  = { type: "knockout_pair_request", event_id: evId };
+    if (partnerUser.push_token?.startsWith("ExponentPushToken[")) {
+      sendPushNotifications([{ to: partnerUser.push_token, sound: "default", title, body, data }]);
     }
-    saveUserNotification(partner_id, "event_published", title, body, { event_id: evId });
+    saveUserNotification(partner_id, "knockout_pair_request", title, body, data);
   } catch (err) { logger.warn({ err }, "Knockout pair: failed to notify partner"); }
 
-  res.status(201).json({ ok: true, team_id: teamId });
+  res.status(201).json({ ok: true, team_id: teamId, request_state: "pending_sent" });
 });
 
-// ── Member: remove own pair ────────────────────────────────────────────────────
+// ── Member: confirm a received partner request ─────────────────────────────────
+router.post("/knockout/:id/pair/confirm", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const reg = await row<any>(
+    `SELECT er.team_id, et.status as team_status, et.requested_by,
+            req_u.id as requester_id, req_u.name as requester_name, req_u.push_token as requester_token
+     FROM event_registrations er
+     JOIN event_teams et ON et.id = er.team_id
+     JOIN users req_u ON req_u.id = et.requested_by
+     WHERE er.event_id = ? AND er.user_id = ?`,
+    [evId, user.id]
+  );
+  if (!reg) { res.status(404).json({ message: "No pending partner request found" }); return; }
+  if (reg.team_status === "confirmed") { res.status(400).json({ message: "Pair already confirmed" }); return; }
+  if (reg.requested_by === user.id) { res.status(400).json({ message: "You cannot confirm your own request" }); return; }
+
+  await run("UPDATE event_teams SET status = 'confirmed' WHERE id = ?", [reg.team_id]);
+
+  const ev = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
+  try {
+    const title = `🏌️ You're in the draw! — ${ev?.name ?? "Betterball Knockout"}`;
+    const body  = `You and ${reg.requester_name} are confirmed Betterball partners!`;
+    const data  = { type: "event_published", event_id: evId };
+    if (reg.requester_token?.startsWith("ExponentPushToken[")) {
+      sendPushNotifications([{ to: reg.requester_token, sound: "default", title, body, data }]);
+    }
+    saveUserNotification(reg.requester_id, "event_published", title, body, data);
+    saveUserNotification(user.id, "event_published", title, body, data);
+  } catch (err) { logger.warn({ err }, "Knockout pair confirm: failed to notify"); }
+
+  res.json({ ok: true, request_state: "confirmed" });
+});
+
+// ── Member: deny a received partner request ────────────────────────────────────
+router.post("/knockout/:id/pair/deny", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const reg = await row<any>(
+    `SELECT er.team_id, et.status as team_status, et.requested_by,
+            req_u.id as requester_id, req_u.name as requester_name, req_u.push_token as requester_token
+     FROM event_registrations er
+     JOIN event_teams et ON et.id = er.team_id
+     JOIN users req_u ON req_u.id = et.requested_by
+     WHERE er.event_id = ? AND er.user_id = ?`,
+    [evId, user.id]
+  );
+  if (!reg) { res.status(404).json({ message: "No pending partner request found" }); return; }
+  if (reg.team_status === "confirmed") { res.status(400).json({ message: "Cannot deny an already-confirmed pair" }); return; }
+  if (reg.requested_by === user.id) { res.status(400).json({ message: "You cannot deny your own request — use DELETE to cancel" }); return; }
+
+  await run("DELETE FROM event_registrations WHERE team_id = ? AND event_id = ?", [reg.team_id, evId]);
+  await run("DELETE FROM event_teams WHERE id = ?", [reg.team_id]);
+
+  const ev = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
+  try {
+    const title = `Partner request declined — ${ev?.name ?? "Betterball Knockout"}`;
+    const body  = `${user.name} declined your partner request. Open the app to choose a new partner.`;
+    const data  = { type: "knockout_pair_request", event_id: evId };
+    if (reg.requester_token?.startsWith("ExponentPushToken[")) {
+      sendPushNotifications([{ to: reg.requester_token, sound: "default", title, body, data }]);
+    }
+    saveUserNotification(reg.requester_id, "knockout_pair_request", title, body, data);
+  } catch (err) { logger.warn({ err }, "Knockout pair deny: failed to notify requester"); }
+
+  res.json({ ok: true, request_state: "none" });
+});
+
+// ── Member: cancel own pair request or remove confirmed pair ───────────────────
 router.delete("/knockout/:id/pair", async (req: Request, res: Response): Promise<void> => {
   const evId = Number(req.params.id);
   const user = await getUser(req).catch(() => null);
@@ -297,13 +395,13 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
        FROM event_teams et
        JOIN event_registrations er ON er.team_id = et.id AND er.event_id = ?
        JOIN users u ON u.id = er.user_id
-       WHERE et.event_id = ?
+       WHERE et.event_id = ? AND et.status = 'confirmed'
          AND (SELECT COUNT(*) FROM event_registrations er2 WHERE er2.team_id = et.id AND er2.event_id = ?) = 2
        ORDER BY et.id ASC, er.id ASC`,
       [evId, evId, evId]
     );
     if (teams.length < 2) {
-      res.status(400).json({ message: "Need at least 2 complete pairs to generate a betterball bracket. Make sure members have selected their partners first." });
+      res.status(400).json({ message: "Need at least 2 confirmed pairs to generate a betterball bracket. Make sure members have chosen and confirmed their partners first." });
       return;
     }
     members = teams;

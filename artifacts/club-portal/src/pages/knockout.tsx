@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
-import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX } from "lucide-react";
+import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -282,17 +282,19 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
 function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
   const { toast } = useToast();
-  const [pairs, setPairs]       = useState<KnockoutPair[]>([]);
-  const [unpaired, setUnpaired] = useState<UnpairedMember[]>([]);
-  const [deadline, setDeadline] = useState<string | null>(null);
-  const [loading, setLoading]   = useState(true);
+  const [pairs, setPairs]               = useState<KnockoutPair[]>([]);
+  const [pendingRequests, setPendingRequests] = useState<KnockoutPair[]>([]);
+  const [unpaired, setUnpaired]         = useState<UnpairedMember[]>([]);
+  const [deadline, setDeadline]         = useState<string | null>(null);
+  const [loading, setLoading]           = useState(true);
 
   const load = useCallback(async () => {
     try {
-      const r = await api<{ pairs: KnockoutPair[]; unpaired: UnpairedMember[]; pairing_deadline: string | null }>(
+      const r = await api<{ pairs: KnockoutPair[]; pending_requests: KnockoutPair[]; unpaired: UnpairedMember[]; pairing_deadline: string | null }>(
         `/api/portal/knockout/${ev.id}/pairs`
       );
       setPairs(r.pairs ?? []);
+      setPendingRequests(r.pending_requests ?? []);
       setUnpaired(r.unpaired ?? []);
       setDeadline(r.pairing_deadline ?? null);
     } catch (e: any) {
@@ -312,7 +314,7 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold text-blue-800">Betterball Pairing Phase</p>
           <p className="text-xs text-blue-700 mt-0.5">
-            Members are choosing their partners via the TapIn Golf app. Once the pairing deadline passes and enough pairs have formed, generate the bracket below.
+            Members choose their partner via the TapIn Golf app — one player sends a request, the other must confirm. Once partners confirm, they're a pair. Generate the bracket when ready.
           </p>
           {deadline && (
             <p className="text-xs text-blue-600 font-medium mt-1">
@@ -320,9 +322,17 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
             </p>
           )}
         </div>
-        <div className="text-right flex-shrink-0">
-          <div className="text-lg font-bold text-blue-700">{loading ? "—" : pairs.length}</div>
-          <div className="text-[10px] text-blue-500 uppercase font-semibold">pairs</div>
+        <div className="text-right flex-shrink-0 space-y-0.5">
+          <div>
+            <div className="text-lg font-bold text-blue-700">{loading ? "—" : pairs.length}</div>
+            <div className="text-[10px] text-blue-500 uppercase font-semibold">confirmed</div>
+          </div>
+          {!loading && pendingRequests.length > 0 && (
+            <div>
+              <div className="text-sm font-bold text-amber-600">{pendingRequests.length}</div>
+              <div className="text-[10px] text-amber-500 uppercase font-semibold">pending</div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -331,56 +341,79 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
           {[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          {/* Paired teams */}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-              <UserCheck className="h-3.5 w-3.5 text-green-600" />
-              PAIRED ({pairs.length})
-            </p>
-            {pairs.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">No pairs yet</p>
-            ) : (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            {/* Confirmed pairs */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <UserCheck className="h-3.5 w-3.5 text-green-600" />
+                CONFIRMED PAIRS ({pairs.length})
+              </p>
+              {pairs.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No confirmed pairs yet</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {pairs.map(p => (
+                    <div key={p.team_id} className="flex items-center gap-2 rounded-md border bg-green-50/60 border-green-100 px-3 py-2 text-xs">
+                      <Handshake className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                      <span className="font-medium text-green-900">{p.p1_name}</span>
+                      <span className="text-green-500 font-bold">+</span>
+                      <span className="font-medium text-green-900">{p.p2_name}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Unpaired members */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <UserX className="h-3.5 w-3.5 text-amber-600" />
+                UNPAIRED ({unpaired.length})
+              </p>
+              {unpaired.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">All members are paired!</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {unpaired.map(m => (
+                    <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Pending requests */}
+          {pendingRequests.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5 text-amber-500" />
+                AWAITING CONFIRMATION ({pendingRequests.length})
+              </p>
               <div className="space-y-1.5">
-                {pairs.map(p => (
-                  <div key={p.team_id} className="flex items-center gap-2 rounded-md border bg-green-50/60 border-green-100 px-3 py-2 text-xs">
-                    <Handshake className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
-                    <span className="font-medium text-green-900">{p.p1_name}</span>
-                    <span className="text-green-500 font-bold">+</span>
-                    <span className="font-medium text-green-900">{p.p2_name}</span>
+                {pendingRequests.map(p => (
+                  <div key={p.team_id} className="flex items-center gap-2 rounded-md border bg-amber-50/60 border-amber-100 px-3 py-2 text-xs">
+                    <Clock className="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                    <span className="font-medium text-amber-900">{p.p1_name}</span>
+                    <span className="text-amber-400">→</span>
+                    <span className="font-medium text-amber-900">{p.p2_name}</span>
+                    <span className="ml-auto text-[10px] text-amber-500 italic">waiting for confirmation</span>
                   </div>
                 ))}
               </div>
-            )}
-          </div>
-
-          {/* Unpaired members */}
-          <div>
-            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-              <UserX className="h-3.5 w-3.5 text-amber-600" />
-              UNPAIRED ({unpaired.length})
-            </p>
-            {unpaired.length === 0 ? (
-              <p className="text-xs text-muted-foreground italic">All members are paired!</p>
-            ) : (
-              <div className="flex flex-wrap gap-1.5">
-                {unpaired.map(m => (
-                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
-                    {m.name}
-                  </span>
-                ))}
-              </div>
-            )}
-          </div>
+            </div>
+          )}
         </div>
       )}
 
       <div className="flex items-center gap-2 pt-1">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
-          {loading ? "Loading…" : "Refresh pairs"}
+          {loading ? "Loading…" : "Refresh"}
         </Button>
         {pairs.length < 2 && (
-          <span className="text-xs text-muted-foreground">Need at least 2 pairs to generate the bracket.</span>
+          <span className="text-xs text-muted-foreground">Need at least 2 confirmed pairs to generate the bracket.</span>
         )}
       </div>
     </div>

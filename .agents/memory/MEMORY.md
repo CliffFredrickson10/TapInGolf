@@ -1,2 +1,4 @@
 - [Portal auth vs user auth](portal-auth.md) — portal uses club tokens (not HMAC user tokens); admin voucher routes must use requireClubAuth from lib/portalAuth.ts
 - [Architect includeGitDiff fails in sandbox](architect-gitdiff-sandbox.md) — never use includeGitDiff:true when calling architect from code_execution; capture diff via bash and pass inline instead
+- [Knockout round badge fix](knockout-round-badge.md) — current_round_label must check actual match statuses (NOT is_complete flag) to reliably show the current round
+- [Betterball pairing flow](betterball-pairing-flow.md) — pending/confirmed state lives on event_teams.status + requested_by; pair_count in portal list must filter status='confirmed'; bracket generator must also filter confirmed-only

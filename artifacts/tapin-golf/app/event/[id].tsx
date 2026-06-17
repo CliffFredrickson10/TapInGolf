@@ -203,7 +203,13 @@ export default function EventDetailScreen() {
   const [partnerSearching, setPartnerSearching] = useState(false);
 
   // Knockout betterball pairing state (separate from event registration partner picker)
-  type KnockoutPairStatus = { paired: boolean; team_id: number | null; partner: { id: number; name: string } | null; pairing_deadline: string | null };
+  type KnockoutPairStatus = {
+    paired: boolean;
+    request_state: "none" | "pending_sent" | "pending_received" | "confirmed";
+    team_id: number | null;
+    partner: { id: number; name: string } | null;
+    pairing_deadline: string | null;
+  };
   const [pairStatus, setPairStatus]         = useState<KnockoutPairStatus | null>(null);
   const [pairStatusLoaded, setPairStatusLoaded] = useState(false);
   const [koPairQuery, setKoPairQuery]       = useState("");
@@ -212,6 +218,8 @@ export default function EventDetailScreen() {
   const [selectedKoPair, setSelectedKoPair] = useState<PartnerResult | null>(null);
   const [submittingKoPair, setSubmittingKoPair] = useState(false);
   const [removingKoPair, setRemovingKoPair] = useState(false);
+  const [confirmingKoPair, setConfirmingKoPair] = useState(false);
+  const [denyingKoPair, setDenyingKoPair]   = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
 
@@ -358,15 +366,13 @@ export default function EventDetailScreen() {
         method: "POST",
         body: JSON.stringify({ partner_id: selectedKoPair.id }),
       });
-      setPairStatusLoaded(false);
       setSelectedKoPair(null);
       setKoPairQuery("");
       setKoPairResults([]);
-      // Reload pair status
       const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
       setPairStatus(data);
       setPairStatusLoaded(true);
-      Alert.alert("Paired!", `You're now paired with ${selectedKoPair.name} for this tournament.`);
+      Alert.alert("Request Sent!", `${selectedKoPair.name} has been notified. Waiting for them to confirm.`);
     } catch (e: any) {
       Alert.alert("Error", e.message ?? "Failed to submit pairing. Please try again.");
     } finally { setSubmittingKoPair(false); }
@@ -377,10 +383,35 @@ export default function EventDetailScreen() {
     setRemovingKoPair(true);
     try {
       await apiFetch(`/knockout/${event.id}/pair`, user.token, { method: "DELETE" });
-      setPairStatus({ paired: false, team_id: null, partner: null, pairing_deadline: pairStatus?.pairing_deadline ?? null });
+      setPairStatus({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: pairStatus?.pairing_deadline ?? null });
     } catch (e: any) {
       Alert.alert("Error", e.message ?? "Failed to remove pairing.");
     } finally { setRemovingKoPair(false); }
+  };
+
+  const confirmKoPairing = async () => {
+    if (!user || !event) return;
+    setConfirmingKoPair(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/pair/confirm`, user.token, { method: "POST" });
+      const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
+      setPairStatus(data);
+      setPairStatusLoaded(true);
+      Alert.alert("Confirmed! 🏌️", `You and ${pairStatus?.partner?.name} are now paired. You're in the draw!`);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to confirm pairing.");
+    } finally { setConfirmingKoPair(false); }
+  };
+
+  const denyKoPairing = async () => {
+    if (!user || !event) return;
+    setDenyingKoPair(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/pair/deny`, user.token, { method: "POST" });
+      setPairStatus({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: pairStatus?.pairing_deadline ?? null });
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to decline request.");
+    } finally { setDenyingKoPair(false); }
   };
 
   const handleRegister = async () => {
@@ -736,10 +767,17 @@ export default function EventDetailScreen() {
               <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: "#3b82f620", borderWidth: 1.5, marginBottom: 12 }]}>
                 <View style={styles.statusRow}>
                   <Ionicons name="people-outline" size={20} color="#3b82f6" />
-                  <Text style={[styles.ctaTitle, { color: "#1d4ed8" }]}>Betterball Knockout — Choose Your Partner</Text>
+                  <Text style={[styles.ctaTitle, { color: "#1d4ed8" }]}>
+                    {pairStatus?.request_state === "confirmed"        ? "Betterball Knockout — You're Paired!"
+                    : pairStatus?.request_state === "pending_sent"    ? "Betterball Knockout — Awaiting Confirmation"
+                    : pairStatus?.request_state === "pending_received" ? "Betterball Knockout — Confirm Your Partner"
+                    : "Betterball Knockout — Choose Your Partner"}
+                  </Text>
                 </View>
                 <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginBottom: 10 }]}>
-                  This is a betterball knockout tournament. You and your partner will compete as a team against other pairs. Choose your partner before the pairing deadline.
+                  {pairStatus?.request_state === "pending_received"
+                    ? `${pairStatus.partner?.name} has invited you to be their Betterball partner. Confirm to enter the draw together, or deny to pick someone else.`
+                    : "You and your partner will compete as a team against other pairs. Choose your partner before the pairing deadline."}
                 </Text>
                 {pairStatus?.pairing_deadline && (
                   <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 }}>
@@ -750,8 +788,8 @@ export default function EventDetailScreen() {
                   </View>
                 )}
 
-                {pairStatus?.paired && pairStatus.partner ? (
-                  /* Already paired */
+                {/* State: confirmed pair */}
+                {pairStatus?.request_state === "confirmed" && pairStatus.partner ? (
                   <View>
                     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#16a34a18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
                       <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
@@ -774,8 +812,72 @@ export default function EventDetailScreen() {
                       </Text>
                     </TouchableOpacity>
                   </View>
+
+                ) : pairStatus?.request_state === "pending_sent" && pairStatus.partner ? (
+                  /* State: requester waiting for partner to accept */
+                  <View>
+                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#f59e0b18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
+                      <Ionicons name="time-outline" size={18} color="#d97706" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: "#d97706", fontWeight: "700" }}>Request sent to</Text>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{pairStatus.partner.name}</Text>
+                        <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>Waiting for them to confirm or deny…</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, opacity: removingKoPair ? 0.6 : 1 }}
+                      onPress={() => Alert.alert("Cancel Request", `Cancel your partner request to ${pairStatus.partner?.name}?`, [
+                        { text: "Keep", style: "cancel" },
+                        { text: "Cancel Request", style: "destructive", onPress: removeKoPairing },
+                      ])}
+                      disabled={removingKoPair}
+                    >
+                      <Ionicons name="close-circle-outline" size={15} color={colors.mutedForeground} />
+                      <Text style={{ fontSize: 13, color: colors.mutedForeground, fontWeight: "600" }}>
+                        {removingKoPair ? "Cancelling…" : "Cancel request"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                ) : pairStatus?.request_state === "pending_received" && pairStatus.partner ? (
+                  /* State: received a request — confirm or deny */
+                  <View>
+                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#3b82f618", borderRadius: 8, padding: 10, gap: 10, marginBottom: 12 }}>
+                      <Ionicons name="person-circle-outline" size={22} color="#3b82f6" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: "#3b82f6", fontWeight: "700" }}>Partner invitation from</Text>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{pairStatus.partner.name}</Text>
+                      </View>
+                    </View>
+                    <View style={{ flexDirection: "row", gap: 8 }}>
+                      <TouchableOpacity
+                        style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8, backgroundColor: "#16a34a", opacity: confirmingKoPair ? 0.6 : 1 }}
+                        onPress={confirmKoPairing}
+                        disabled={confirmingKoPair || denyingKoPair}
+                      >
+                        <Ionicons name="checkmark-circle-outline" size={16} color="#fff" />
+                        <Text style={{ fontSize: 14, color: "#fff", fontWeight: "700" }}>
+                          {confirmingKoPair ? "Confirming…" : "Confirm"}
+                        </Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 10, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: denyingKoPair ? 0.6 : 1 }}
+                        onPress={() => Alert.alert("Deny Request", `Deny ${pairStatus.partner?.name}'s partner request? They will be notified to choose someone else.`, [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Deny", style: "destructive", onPress: denyKoPairing },
+                        ])}
+                        disabled={confirmingKoPair || denyingKoPair}
+                      >
+                        <Ionicons name="close-circle-outline" size={16} color="#dc2626" />
+                        <Text style={{ fontSize: 14, color: "#dc2626", fontWeight: "700" }}>
+                          {denyingKoPair ? "Denying…" : "Deny"}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+
                 ) : (
-                  /* Not yet paired — show partner search */
+                  /* State: no pair — show partner search */
                   <View>
                     {selectedKoPair ? (
                       <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#3b82f618", borderRadius: 8, padding: 10, gap: 10, marginBottom: 10 }}>
@@ -805,7 +907,7 @@ export default function EventDetailScreen() {
                               <Text style={{ fontSize: 13, color: colors.foreground }}>
                                 {p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}
                               </Text>
-                              {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Already paired</Text>}
+                              {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Already partnered</Text>}
                             </View>
                           </TouchableOpacity>
                         ))}
@@ -817,7 +919,7 @@ export default function EventDetailScreen() {
                       disabled={!selectedKoPair || submittingKoPair}
                     >
                       <Text style={[styles.ctaBtnText, { color: "#fff" }]}>
-                        {submittingKoPair ? "Submitting pairing…" : selectedKoPair ? `Pair with ${selectedKoPair.name}` : "Select a partner above"}
+                        {submittingKoPair ? "Sending request…" : selectedKoPair ? `Send request to ${selectedKoPair.name}` : "Search for a partner above"}
                       </Text>
                     </TouchableOpacity>
                   </View>

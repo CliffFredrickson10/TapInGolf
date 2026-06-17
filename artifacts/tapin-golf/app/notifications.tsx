@@ -50,6 +50,7 @@ function notifIcon(type: string): { name: any; color: string } {
     case "new_message":       return { name: "chatbubble-ellipses",color: "#6a1b9a" };
     case "club_broadcast":    return { name: "megaphone",          color: "#e65100" };
     case "event_dq":          return { name: "ban",                color: "#dc2626" };
+    case "knockout_pair_request": return { name: "people",         color: "#3b82f6" };
     case "event_created":
     case "event_published":
     case "event_draw_published":
@@ -77,6 +78,7 @@ function handleTap(notif: AppNotification) {
     case "event_published":
     case "event_cancelled":
     case "event_draw_published":
+    case "knockout_pair_request":
       if (d.event_id) router.push({ pathname: "/event/[id]", params: { id: d.event_id } });
       break;
     case "club_broadcast":

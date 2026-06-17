@@ -80,6 +80,7 @@ function RootLayoutNav() {
             router.push({ pathname: "/club/[id]", params: { id: data.club_id } });
           }
           break;
+        case "knockout_pair_request":
         case "event_created":
         case "event_published":
         case "event_cancelled":

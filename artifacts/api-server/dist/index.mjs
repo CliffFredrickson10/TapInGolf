@@ -74949,7 +74949,9 @@ router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
             (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
             (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
-             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label
+             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label,
+            (SELECT COUNT(*) FROM event_teams et WHERE et.event_id = ge.id
+             AND (SELECT COUNT(*) FROM event_registrations er WHERE er.team_id = et.id AND er.event_id = ge.id) = 2) AS pair_count
      FROM golf_events ge
      WHERE ge.club_id = ? AND (ge.format = 'knockout_individual' OR ge.format = 'knockout_team')
      ORDER BY ge.event_date DESC NULLS LAST, ge.created_at DESC`,
@@ -75036,6 +75038,135 @@ router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
   await run("DELETE FROM golf_events WHERE id = ?", [evId]);
   res.json({ ok: true });
 });
+router22.get("/portal/knockout/:id/pairs", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row("SELECT id, knockout_type, knockout_pairing_deadline FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const pairs = await query(
+    `SELECT et.id as team_id,
+            u1.id as p1_id, u1.name as p1_name,
+            u2.id as p2_id, u2.name as p2_name
+     FROM event_teams et
+     JOIN event_registrations er1 ON er1.team_id = et.id AND er1.event_id = ?
+     JOIN event_registrations er2 ON er2.team_id = et.id AND er2.event_id = ? AND er2.user_id != er1.user_id
+     JOIN users u1 ON u1.id = er1.user_id
+     JOIN users u2 ON u2.id = er2.user_id
+     WHERE et.event_id = ? AND er1.user_id < er2.user_id
+     ORDER BY et.id ASC`,
+    [evId, evId, evId]
+  );
+  const pairedIds = new Set(pairs.flatMap((p) => [p.p1_id, p.p2_id]));
+  const allMembers = await query(
+    `SELECT u.id, u.name FROM club_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
+    [club.id]
+  );
+  const unpaired = allMembers.filter((m) => !pairedIds.has(m.id));
+  res.json({ pairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+});
+router22.get("/knockout/:id/pair-status", async (req, res) => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  const ev = await row("SELECT id, knockout_type, knockout_pairing_deadline FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const reg = await row(
+    `SELECT er.team_id, u.id as partner_id, u.name as partner_name
+     FROM event_registrations er
+     LEFT JOIN event_registrations er2 ON er2.team_id = er.team_id AND er2.event_id = er.event_id AND er2.user_id != er.user_id
+     LEFT JOIN users u ON u.id = er2.user_id
+     WHERE er.event_id = ? AND er.user_id = ?`,
+    [evId, user.id]
+  );
+  res.json({
+    paired: !!reg,
+    team_id: reg?.team_id ?? null,
+    partner: reg?.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
+    pairing_deadline: ev.knockout_pairing_deadline ?? null
+  });
+});
+router22.post("/knockout/:id/pair", async (req, res) => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  const { partner_id } = req.body ?? {};
+  if (!partner_id || partner_id === user.id) {
+    res.status(400).json({ message: "Valid partner_id required" });
+    return;
+  }
+  const ev = await row(
+    "SELECT id, club_id, name, knockout_pairing_deadline FROM golf_events WHERE id = ? AND format = 'knockout_team'",
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const userMember = await row("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [user.id, ev.club_id]);
+  const partnerMember = await row("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [partner_id, ev.club_id]);
+  if (!userMember || !partnerMember) {
+    res.status(400).json({ message: "Both players must be active members of this club" });
+    return;
+  }
+  const existingUser = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  const existingPartner = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, partner_id]);
+  if (existingUser) {
+    res.status(400).json({ message: "You are already paired in this tournament" });
+    return;
+  }
+  if (existingPartner) {
+    res.status(400).json({ message: "That player is already paired in this tournament" });
+    return;
+  }
+  const partnerUser = await row("SELECT id, name, push_token FROM users WHERE id = ?", [partner_id]);
+  if (!partnerUser) {
+    res.status(404).json({ message: "Partner not found" });
+    return;
+  }
+  const teamId = await exec("INSERT INTO event_teams (event_id) VALUES (?)", [evId]);
+  await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, user.id, teamId]);
+  await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, partner_id, teamId]);
+  try {
+    const title = `\u{1F465} Betterball Partner \u2014 ${ev.name}`;
+    const body = `${user.name} has paired with you for ${ev.name}. You're in!`;
+    if (partnerUser.push_token) {
+      sendPushNotifications([{ to: partnerUser.push_token, sound: "default", title, body, data: { type: "event_published", event_id: evId } }]);
+    }
+    saveUserNotification(partner_id, "event_published", title, body, { event_id: evId });
+  } catch (err) {
+    logger.warn({ err }, "Knockout pair: failed to notify partner");
+  }
+  res.status(201).json({ ok: true, team_id: teamId });
+});
+router22.delete("/knockout/:id/pair", async (req, res) => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  const reg = await row("SELECT team_id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (!reg) {
+    res.status(404).json({ message: "No pairing found" });
+    return;
+  }
+  await run("DELETE FROM event_registrations WHERE team_id = ? AND event_id = ?", [reg.team_id, evId]);
+  await run("DELETE FROM event_teams WHERE id = ?", [reg.team_id]);
+  res.json({ ok: true });
+});
 router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const evId = Number(req.params.id);
@@ -75048,17 +75179,36 @@ router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res)
     return;
   }
   const { draw_method = ev.knockout_draw_method ?? "random", round_deadlines = [] } = req.body ?? {};
-  const members = await query(
-    `SELECT u.id as user_id, u.name, u.handicap
-     FROM club_members cm
-     JOIN users u ON u.id = cm.user_id
-     WHERE cm.club_id = ? AND cm.status = 'active'
-     ORDER BY cm.created_at ASC`,
-    [club.id]
-  );
-  if (members.length < 2) {
-    res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
-    return;
+  let members;
+  if (ev.knockout_type === "team") {
+    const teams = await query(
+      `SELECT DISTINCT ON (et.id) et.id as team_id, er.user_id as user_id, u.name, u.handicap
+       FROM event_teams et
+       JOIN event_registrations er ON er.team_id = et.id AND er.event_id = ?
+       JOIN users u ON u.id = er.user_id
+       WHERE et.event_id = ?
+         AND (SELECT COUNT(*) FROM event_registrations er2 WHERE er2.team_id = et.id AND er2.event_id = ?) = 2
+       ORDER BY et.id ASC, er.id ASC`,
+      [evId, evId, evId]
+    );
+    if (teams.length < 2) {
+      res.status(400).json({ message: "Need at least 2 complete pairs to generate a betterball bracket. Make sure members have selected their partners first." });
+      return;
+    }
+    members = teams;
+  } else {
+    members = await query(
+      `SELECT u.id as user_id, u.name, u.handicap
+       FROM club_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.club_id = ? AND cm.status = 'active'
+       ORDER BY cm.created_at ASC`,
+      [club.id]
+    );
+    if (members.length < 2) {
+      res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
+      return;
+    }
   }
   const N = members.length;
   const k = Math.ceil(Math.log2(Math.max(N, 2)));

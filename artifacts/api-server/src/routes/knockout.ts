@@ -73,7 +73,9 @@ router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Respon
             (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
             (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
-             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label
+             AND kr2.is_complete = 0 ORDER BY kr2.round_number ASC LIMIT 1) AS current_round_label,
+            (SELECT COUNT(*) FROM event_teams et WHERE et.event_id = ge.id
+             AND (SELECT COUNT(*) FROM event_registrations er WHERE er.team_id = et.id AND er.event_id = ge.id) = 2) AS pair_count
      FROM golf_events ge
      WHERE ge.club_id = ? AND (ge.format = 'knockout_individual' OR ge.format = 'knockout_team')
      ORDER BY ge.event_date DESC NULLS LAST, ge.created_at DESC`,
@@ -152,7 +154,125 @@ router.delete("/portal/knockout/:id", requireClubAuth, async (req: Request, res:
   res.json({ ok: true });
 });
 
-// ── Generate bracket (uses all active club members) ───────────────────────────
+// ── Portal: list pairs for a betterball tournament ────────────────────────────
+router.get("/portal/knockout/:id/pairs", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>("SELECT id, knockout_type, knockout_pairing_deadline FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  const pairs = await query<any>(
+    `SELECT et.id as team_id,
+            u1.id as p1_id, u1.name as p1_name,
+            u2.id as p2_id, u2.name as p2_name
+     FROM event_teams et
+     JOIN event_registrations er1 ON er1.team_id = et.id AND er1.event_id = ?
+     JOIN event_registrations er2 ON er2.team_id = et.id AND er2.event_id = ? AND er2.user_id != er1.user_id
+     JOIN users u1 ON u1.id = er1.user_id
+     JOIN users u2 ON u2.id = er2.user_id
+     WHERE et.event_id = ? AND er1.user_id < er2.user_id
+     ORDER BY et.id ASC`,
+    [evId, evId, evId]
+  );
+
+  const pairedIds = new Set(pairs.flatMap((p: any) => [p.p1_id, p.p2_id]));
+  const allMembers = await query<any>(
+    `SELECT u.id, u.name FROM club_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
+    [club.id]
+  );
+  const unpaired = allMembers.filter((m: any) => !pairedIds.has(m.id));
+  res.json({ pairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+});
+
+// ── Member: get own pair status ────────────────────────────────────────────────
+router.get("/knockout/:id/pair-status", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const ev = await row<any>("SELECT id, knockout_type, knockout_pairing_deadline FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  const reg = await row<any>(
+    `SELECT er.team_id, u.id as partner_id, u.name as partner_name
+     FROM event_registrations er
+     LEFT JOIN event_registrations er2 ON er2.team_id = er.team_id AND er2.event_id = er.event_id AND er2.user_id != er.user_id
+     LEFT JOIN users u ON u.id = er2.user_id
+     WHERE er.event_id = ? AND er.user_id = ?`,
+    [evId, user.id]
+  );
+
+  res.json({
+    paired: !!reg,
+    team_id: reg?.team_id ?? null,
+    partner: reg?.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
+    pairing_deadline: ev.knockout_pairing_deadline ?? null,
+  });
+});
+
+// ── Member: create a pair ──────────────────────────────────────────────────────
+router.post("/knockout/:id/pair", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const { partner_id } = req.body ?? {};
+  if (!partner_id || partner_id === user.id) { res.status(400).json({ message: "Valid partner_id required" }); return; }
+
+  const ev = await row<any>(
+    "SELECT id, club_id, name, knockout_pairing_deadline FROM golf_events WHERE id = ? AND format = 'knockout_team'",
+    [evId]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  // Check both users are active club members
+  const userMember    = await row<any>("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [user.id, ev.club_id]);
+  const partnerMember = await row<any>("SELECT id FROM club_members WHERE user_id = ? AND club_id = ? AND status = 'active'", [partner_id, ev.club_id]);
+  if (!userMember || !partnerMember) { res.status(400).json({ message: "Both players must be active members of this club" }); return; }
+
+  // Check neither is already paired
+  const existingUser    = await row<any>("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  const existingPartner = await row<any>("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, partner_id]);
+  if (existingUser)    { res.status(400).json({ message: "You are already paired in this tournament" }); return; }
+  if (existingPartner) { res.status(400).json({ message: "That player is already paired in this tournament" }); return; }
+
+  const partnerUser = await row<any>("SELECT id, name, push_token FROM users WHERE id = ?", [partner_id]);
+  if (!partnerUser) { res.status(404).json({ message: "Partner not found" }); return; }
+
+  // Create team + two registrations
+  const teamId = await exec("INSERT INTO event_teams (event_id) VALUES (?)", [evId]);
+  await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, user.id, teamId]);
+  await exec("INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)", [evId, partner_id, teamId]);
+
+  // Notify partner
+  try {
+    const title = `👥 Betterball Partner — ${ev.name}`;
+    const body  = `${user.name} has paired with you for ${ev.name}. You're in!`;
+    if (partnerUser.push_token) {
+      sendPushNotifications([{ to: partnerUser.push_token, sound: "default", title, body, data: { type: "event_published", event_id: evId } }]);
+    }
+    saveUserNotification(partner_id, "event_published", title, body, { event_id: evId });
+  } catch (err) { logger.warn({ err }, "Knockout pair: failed to notify partner"); }
+
+  res.status(201).json({ ok: true, team_id: teamId });
+});
+
+// ── Member: remove own pair ────────────────────────────────────────────────────
+router.delete("/knockout/:id/pair", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const user = await getUser(req).catch(() => null);
+  if (!user) { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const reg = await row<any>("SELECT team_id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  if (!reg) { res.status(404).json({ message: "No pairing found" }); return; }
+
+  await run("DELETE FROM event_registrations WHERE team_id = ? AND event_id = ?", [reg.team_id, evId]);
+  await run("DELETE FROM event_teams WHERE id = ?", [reg.team_id]);
+  res.json({ ok: true });
+});
+
+// ── Generate bracket (singles: all active members · betterball: from pairs) ───
 router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);
@@ -165,17 +285,43 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
 
   const { draw_method = ev.knockout_draw_method ?? "random", round_deadlines = [] } = req.body ?? {};
 
-  // Pull ALL active club members for the draw
-  const members = await query<any>(
-    `SELECT u.id as user_id, u.name, u.handicap
-     FROM club_members cm
-     JOIN users u ON u.id = cm.user_id
-     WHERE cm.club_id = ? AND cm.status = 'active'
-     ORDER BY cm.created_at ASC`,
-    [club.id]
-  );
+  // ── Participant list: betterball uses paired teams; singles uses all members ─
+  let members: Array<{ user_id: number; name: string; handicap: number | null }>;
 
-  if (members.length < 2) { res.status(400).json({ message: "Need at least 2 active members to generate a bracket" }); return; }
+  if (ev.knockout_type === "team") {
+    // For betterball, only complete pairs (2 registrations per team) enter the draw.
+    // The "participant" is the team captain (first-registered member); partner info
+    // is resolved at query time via event_registrations JOINs in the bracket GET.
+    const teams = await query<any>(
+      `SELECT DISTINCT ON (et.id) et.id as team_id, er.user_id as user_id, u.name, u.handicap
+       FROM event_teams et
+       JOIN event_registrations er ON er.team_id = et.id AND er.event_id = ?
+       JOIN users u ON u.id = er.user_id
+       WHERE et.event_id = ?
+         AND (SELECT COUNT(*) FROM event_registrations er2 WHERE er2.team_id = et.id AND er2.event_id = ?) = 2
+       ORDER BY et.id ASC, er.id ASC`,
+      [evId, evId, evId]
+    );
+    if (teams.length < 2) {
+      res.status(400).json({ message: "Need at least 2 complete pairs to generate a betterball bracket. Make sure members have selected their partners first." });
+      return;
+    }
+    members = teams;
+  } else {
+    // Singles: all active club members are in the draw
+    members = await query<any>(
+      `SELECT u.id as user_id, u.name, u.handicap
+       FROM club_members cm
+       JOIN users u ON u.id = cm.user_id
+       WHERE cm.club_id = ? AND cm.status = 'active'
+       ORDER BY cm.created_at ASC`,
+      [club.id]
+    );
+    if (members.length < 2) {
+      res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
+      return;
+    }
+  }
 
   // ── Bracket sizing ────────────────────────────────────────────────────────
   // Round up to the next power of 2. Players without real opponents in R1

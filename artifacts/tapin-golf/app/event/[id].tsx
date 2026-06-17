@@ -195,12 +195,23 @@ export default function EventDetailScreen() {
   const [myScores, setMyScores] = useState<Record<number, { gross: number | null; net: number | null; points: number | null }>>({});
   const [myScoresLoaded, setMyScoresLoaded] = useState(false);
 
-  // Partner picker (betterball / team formats)
+  // Partner picker (betterball / team formats — regular event registration)
   const [partnerQuery, setPartnerQuery] = useState("");
   const [partnerResults, setPartnerResults] = useState<PartnerResult[]>([]);
   const [selectedPartner, setSelectedPartner] = useState<PartnerResult | null>(null);
   const [selectedGroupPartners, setSelectedGroupPartners] = useState<PartnerResult[]>([]);
   const [partnerSearching, setPartnerSearching] = useState(false);
+
+  // Knockout betterball pairing state (separate from event registration partner picker)
+  type KnockoutPairStatus = { paired: boolean; team_id: number | null; partner: { id: number; name: string } | null; pairing_deadline: string | null };
+  const [pairStatus, setPairStatus]         = useState<KnockoutPairStatus | null>(null);
+  const [pairStatusLoaded, setPairStatusLoaded] = useState(false);
+  const [koPairQuery, setKoPairQuery]       = useState("");
+  const [koPairResults, setKoPairResults]   = useState<PartnerResult[]>([]);
+  const [koPairSearching, setKoPairSearching] = useState(false);
+  const [selectedKoPair, setSelectedKoPair] = useState<PartnerResult | null>(null);
+  const [submittingKoPair, setSubmittingKoPair] = useState(false);
+  const [removingKoPair, setRemovingKoPair] = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
 
@@ -278,6 +289,11 @@ export default function EventDetailScreen() {
     if (event?.format?.startsWith("knockout") && !bracketLoaded) loadBracket();
   }, [event, bracketLoaded, loadBracket]);
 
+  // Load pair status for betterball knockout events
+  useEffect(() => {
+    if (event?.format === "knockout_team" && user && !pairStatusLoaded) loadPairStatus();
+  }, [event, user, pairStatusLoaded, loadPairStatus]);
+
   useEffect(() => {
     if (activeTab === "draw" && !drawLoaded) loadDraw();
   }, [activeTab, drawLoaded, loadDraw]);
@@ -305,6 +321,15 @@ export default function EventDetailScreen() {
 
   // ── Actions ────────────────────────────────────────────────────────────────
 
+  const loadPairStatus = useCallback(async () => {
+    if (!user || !event || event.format !== "knockout_team" || pairStatusLoaded) return;
+    try {
+      const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
+      setPairStatus(data);
+    } catch { /* not a member — silently skip */ }
+    finally { setPairStatusLoaded(true); }
+  }, [user, event, pairStatusLoaded]);
+
   const searchPartners = async (q: string) => {
     if (!user || !event || q.length < 2) { setPartnerResults([]); return; }
     setPartnerSearching(true);
@@ -313,6 +338,49 @@ export default function EventDetailScreen() {
       setPartnerResults(res.players ?? []);
     } catch { setPartnerResults([]); }
     finally { setPartnerSearching(false); }
+  };
+
+  const searchKoPairPartners = async (q: string) => {
+    if (!user || !event || q.length < 2) { setKoPairResults([]); return; }
+    setKoPairSearching(true);
+    try {
+      const res = await apiFetch(`/events/${event.id}/partner-search?q=${encodeURIComponent(q)}`, user.token);
+      setKoPairResults(res.players ?? []);
+    } catch { setKoPairResults([]); }
+    finally { setKoPairSearching(false); }
+  };
+
+  const submitKoPairing = async () => {
+    if (!user || !event || !selectedKoPair) return;
+    setSubmittingKoPair(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/pair`, user.token, {
+        method: "POST",
+        body: JSON.stringify({ partner_id: selectedKoPair.id }),
+      });
+      setPairStatusLoaded(false);
+      setSelectedKoPair(null);
+      setKoPairQuery("");
+      setKoPairResults([]);
+      // Reload pair status
+      const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
+      setPairStatus(data);
+      setPairStatusLoaded(true);
+      Alert.alert("Paired!", `You're now paired with ${selectedKoPair.name} for this tournament.`);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to submit pairing. Please try again.");
+    } finally { setSubmittingKoPair(false); }
+  };
+
+  const removeKoPairing = async () => {
+    if (!user || !event) return;
+    setRemovingKoPair(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/pair`, user.token, { method: "DELETE" });
+      setPairStatus({ paired: false, team_id: null, partner: null, pairing_deadline: pairStatus?.pairing_deadline ?? null });
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to remove pairing.");
+    } finally { setRemovingKoPair(false); }
   };
 
   const handleRegister = async () => {
@@ -661,6 +729,100 @@ export default function EventDetailScreen() {
                   </View>
                 ))}
               </>
+            )}
+
+            {/* Betterball knockout: partner pairing panel (shown before bracket is generated) */}
+            {event?.format === "knockout_team" && bracketLoaded && (!bracketData || bracketData.rounds.length === 0) && user && (
+              <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: "#3b82f620", borderWidth: 1.5, marginBottom: 12 }]}>
+                <View style={styles.statusRow}>
+                  <Ionicons name="people-outline" size={20} color="#3b82f6" />
+                  <Text style={[styles.ctaTitle, { color: "#1d4ed8" }]}>Betterball Knockout — Choose Your Partner</Text>
+                </View>
+                <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginBottom: 10 }]}>
+                  This is a betterball knockout tournament. You and your partner will compete as a team against other pairs. Choose your partner before the pairing deadline.
+                </Text>
+                {pairStatus?.pairing_deadline && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 }}>
+                    <Ionicons name="time-outline" size={13} color={colors.mutedForeground} />
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                      Pairing deadline: {new Date(pairStatus.pairing_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                    </Text>
+                  </View>
+                )}
+
+                {pairStatus?.paired && pairStatus.partner ? (
+                  /* Already paired */
+                  <View>
+                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#16a34a18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
+                      <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: "#16a34a", fontWeight: "700" }}>You're paired with</Text>
+                        <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{pairStatus.partner.name}</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: removingKoPair ? 0.6 : 1 }}
+                      onPress={() => Alert.alert("Remove Pairing", `Remove your pairing with ${pairStatus.partner?.name}? You can pick a new partner before the deadline.`, [
+                        { text: "Cancel", style: "cancel" },
+                        { text: "Remove", style: "destructive", onPress: removeKoPairing },
+                      ])}
+                      disabled={removingKoPair}
+                    >
+                      <Ionicons name="close-circle-outline" size={15} color="#dc2626" />
+                      <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>
+                        {removingKoPair ? "Removing…" : "Remove pairing"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                ) : (
+                  /* Not yet paired — show partner search */
+                  <View>
+                    {selectedKoPair ? (
+                      <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#3b82f618", borderRadius: 8, padding: 10, gap: 10, marginBottom: 10 }}>
+                        <Ionicons name="person-outline" size={16} color="#3b82f6" />
+                        <Text style={{ flex: 1, fontSize: 14, fontWeight: "600", color: "#1d4ed8" }}>{selectedKoPair.name}</Text>
+                        <TouchableOpacity onPress={() => { setSelectedKoPair(null); setKoPairQuery(""); }}>
+                          <Ionicons name="close-circle" size={18} color={colors.mutedForeground} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={{ marginBottom: 8 }}>
+                        <TextInput
+                          style={{ borderWidth: 1, borderColor: colors.border, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 8, fontSize: 14, color: colors.foreground, backgroundColor: colors.background, marginBottom: 4 }}
+                          placeholder="Search by name…"
+                          placeholderTextColor={colors.mutedForeground}
+                          value={koPairQuery}
+                          onChangeText={q => { setKoPairQuery(q); searchKoPairPartners(q); }}
+                        />
+                        {koPairSearching && <Text style={{ fontSize: 11, color: colors.mutedForeground }}>Searching…</Text>}
+                        {koPairResults.map(p => (
+                          <TouchableOpacity key={p.id}
+                            style={{ flexDirection: "row", alignItems: "center", padding: 10, borderBottomWidth: 1, borderColor: colors.border, gap: 8 }}
+                            onPress={() => { setSelectedKoPair(p); setKoPairResults([]); setKoPairQuery(""); }}
+                          >
+                            <Ionicons name="person-outline" size={14} color={colors.mutedForeground} />
+                            <View style={{ flex: 1 }}>
+                              <Text style={{ fontSize: 13, color: colors.foreground }}>
+                                {p.name}{p.handicap_index != null ? ` (HCP ${p.handicap_index})` : ""}
+                              </Text>
+                              {p.has_partner && <Text style={{ fontSize: 10, color: "#f59e0b" }}>Already paired</Text>}
+                            </View>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                    <TouchableOpacity
+                      style={[styles.ctaBtn, { backgroundColor: selectedKoPair ? "#3b82f6" : colors.border, opacity: (submittingKoPair || !selectedKoPair) ? 0.6 : 1 }]}
+                      onPress={submitKoPairing}
+                      disabled={!selectedKoPair || submittingKoPair}
+                    >
+                      <Text style={[styles.ctaBtnText, { color: "#fff" }]}>
+                        {submittingKoPair ? "Submitting pairing…" : selectedKoPair ? `Pair with ${selectedKoPair.name}` : "Select a partner above"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </View>
             )}
 
             {/* Knockout: next match card */}

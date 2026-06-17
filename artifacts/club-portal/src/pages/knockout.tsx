@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
-import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft } from "lucide-react";
+import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -23,11 +23,26 @@ interface KnockoutEvent {
   format: "knockout_individual" | "knockout_team";
   knockout_type: "individual" | "team" | null;
   knockout_draw_method: "random" | "seeded" | null;
+  knockout_pairing_deadline: string | null;
   status: string;
   member_count: number;
+  pair_count: number;
   round_count: number;
   current_round_label: string | null;
   created_at: string;
+}
+
+interface KnockoutPair {
+  team_id: number;
+  p1_id: number;
+  p1_name: string;
+  p2_id: number;
+  p2_name: string;
+}
+
+interface UnpairedMember {
+  id: number;
+  name: string;
 }
 
 const EMPTY_FORM = {
@@ -51,6 +66,13 @@ function fmtDate(d: string | null | undefined) {
 
 function StatusBadge({ ev }: { ev: KnockoutEvent }) {
   if (ev.round_count === 0) {
+    if (ev.knockout_type === "team") {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+          <Handshake className="h-3 w-3" /> Pairing Phase
+        </span>
+      );
+    }
     return (
       <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
         Draw not generated
@@ -256,6 +278,115 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
   );
 }
 
+// ── Betterball Pairing Panel (shown before bracket is generated) ──────────────
+
+function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
+  const { toast } = useToast();
+  const [pairs, setPairs]       = useState<KnockoutPair[]>([]);
+  const [unpaired, setUnpaired] = useState<UnpairedMember[]>([]);
+  const [deadline, setDeadline] = useState<string | null>(null);
+  const [loading, setLoading]   = useState(true);
+
+  const load = useCallback(async () => {
+    try {
+      const r = await api<{ pairs: KnockoutPair[]; unpaired: UnpairedMember[]; pairing_deadline: string | null }>(
+        `/api/portal/knockout/${ev.id}/pairs`
+      );
+      setPairs(r.pairs ?? []);
+      setUnpaired(r.unpaired ?? []);
+      setDeadline(r.pairing_deadline ?? null);
+    } catch (e: any) {
+      toast({ title: "Error loading pairs", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [ev.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const isPastDeadline = deadline ? new Date(deadline) < new Date() : false;
+
+  return (
+    <div className="space-y-4 mb-6">
+      {/* Header banner */}
+      <div className="rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 flex items-start gap-3">
+        <Handshake className="h-4 w-4 text-blue-600 mt-0.5 flex-shrink-0" />
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-semibold text-blue-800">Betterball Pairing Phase</p>
+          <p className="text-xs text-blue-700 mt-0.5">
+            Members are choosing their partners via the TapIn Golf app. Once the pairing deadline passes and enough pairs have formed, generate the bracket below.
+          </p>
+          {deadline && (
+            <p className="text-xs text-blue-600 font-medium mt-1">
+              Pairing deadline: {fmtDate(deadline)}{isPastDeadline ? " (passed)" : ""}
+            </p>
+          )}
+        </div>
+        <div className="text-right flex-shrink-0">
+          <div className="text-lg font-bold text-blue-700">{loading ? "—" : pairs.length}</div>
+          <div className="text-[10px] text-blue-500 uppercase font-semibold">pairs</div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-10 w-full" />)}
+        </div>
+      ) : (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          {/* Paired teams */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <UserCheck className="h-3.5 w-3.5 text-green-600" />
+              PAIRED ({pairs.length})
+            </p>
+            {pairs.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No pairs yet</p>
+            ) : (
+              <div className="space-y-1.5">
+                {pairs.map(p => (
+                  <div key={p.team_id} className="flex items-center gap-2 rounded-md border bg-green-50/60 border-green-100 px-3 py-2 text-xs">
+                    <Handshake className="h-3.5 w-3.5 text-green-600 flex-shrink-0" />
+                    <span className="font-medium text-green-900">{p.p1_name}</span>
+                    <span className="text-green-500 font-bold">+</span>
+                    <span className="font-medium text-green-900">{p.p2_name}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Unpaired members */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <UserX className="h-3.5 w-3.5 text-amber-600" />
+              UNPAIRED ({unpaired.length})
+            </p>
+            {unpaired.length === 0 ? (
+              <p className="text-xs text-muted-foreground italic">All members are paired!</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {unpaired.map(m => (
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div className="flex items-center gap-2 pt-1">
+        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
+          {loading ? "Loading…" : "Refresh pairs"}
+        </Button>
+        {pairs.length < 2 && (
+          <span className="text-xs text-muted-foreground">Need at least 2 pairs to generate the bracket.</span>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ── Detail View (full page) ───────────────────────────────────────────────────
 
 function DetailView({ ev, onClose, onDeleted, readOnly }: {
@@ -313,7 +444,10 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
             )}
             <span className="flex items-center gap-1">
               <Users className="h-3 w-3" />
-              {ev.member_count} members
+              {ev.knockout_type === "team"
+                ? <>{ev.pair_count} pairs</>
+                : <>{ev.member_count} members</>
+              }
             </span>
           </div>
 
@@ -346,12 +480,16 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
         )}
       </div>
 
-      {/* Bracket — fills remaining space */}
+      {/* Body — fills remaining space */}
       <div className="flex-1 px-6 pt-4 pb-8 overflow-auto">
+        {/* For betterball tournaments show pairing phase panel before the bracket */}
+        {ev.knockout_type === "team" && (
+          <BetterballPairingPanel ev={ev} />
+        )}
         <KnockoutBracketTab
           eventId={ev.id}
           eventName={ev.name}
-          approvedCount={ev.member_count}
+          approvedCount={ev.knockout_type === "team" ? ev.pair_count : ev.member_count}
           readOnly={readOnly}
         />
       </div>
@@ -495,7 +633,10 @@ export default function KnockoutPage() {
                       <span>·</span>
                       <span className="flex items-center gap-1">
                         <Users className="h-3 w-3" />
-                        {ev.member_count} members
+                        {ev.knockout_type === "team"
+                          ? <>{ev.pair_count} pairs · {ev.member_count} members</>
+                          : <>{ev.member_count} members</>
+                        }
                       </span>
                       {ev.round_count > 0 && (
                         <>

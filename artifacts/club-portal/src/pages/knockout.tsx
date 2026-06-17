@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
 import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock } from "lucide-react";
 
@@ -65,6 +66,20 @@ function fmtDate(d: string | null | undefined) {
 }
 
 function StatusBadge({ ev }: { ev: KnockoutEvent }) {
+  if (ev.status === "cancelled") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+        Cancelled
+      </span>
+    );
+  }
+  if (ev.status === "completed") {
+    return (
+      <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#c8a84b]/20 text-[#92711a]">
+        🏆 Complete
+      </span>
+    );
+  }
   if (ev.round_count === 0) {
     if (ev.knockout_type === "team") {
       return (
@@ -532,6 +547,8 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
 
+type TabValue = "ongoing" | "past" | "cancelled";
+
 export default function KnockoutPage() {
   const { toast } = useToast();
   const readOnly = useReadOnly();
@@ -539,6 +556,12 @@ export default function KnockoutPage() {
   const [loading, setLoading]     = useState(true);
   const [createOpen, setCreateOpen] = useState(false);
   const [selected, setSelected]   = useState<KnockoutEvent | null>(null);
+  const [activeTab, setActiveTab] = useState<TabValue>("ongoing");
+
+  const ongoing   = events.filter(e => e.status === "active");
+  const past      = events.filter(e => e.status === "completed");
+  const cancelled = events.filter(e => e.status === "cancelled");
+  const tabEvents = activeTab === "ongoing" ? ongoing : activeTab === "past" ? past : cancelled;
 
   const load = useCallback(async () => {
     try {
@@ -609,22 +632,52 @@ export default function KnockoutPage() {
         </div>
       </div>
 
+      {/* Tabs */}
+      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabValue)} className="mb-4">
+        <TabsList className="h-9">
+          <TabsTrigger value="ongoing" className="text-xs gap-1.5">
+            Ongoing
+            {!loading && ongoing.length > 0 && (
+              <span className="rounded-full bg-[#1a5c38]/15 text-[#1a5c38] text-[10px] font-bold px-1.5 py-0.5 leading-none">{ongoing.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="past" className="text-xs gap-1.5">
+            Past
+            {!loading && past.length > 0 && (
+              <span className="rounded-full bg-muted text-muted-foreground text-[10px] font-bold px-1.5 py-0.5 leading-none">{past.length}</span>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="cancelled" className="text-xs gap-1.5">
+            Cancelled
+            {!loading && cancelled.length > 0 && (
+              <span className="rounded-full bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 leading-none">{cancelled.length}</span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+      </Tabs>
+
       {/* Tournament list */}
       {loading ? (
         <div className="space-y-3">
           {[1, 2, 3].map(i => <Skeleton key={i} className="h-24 w-full rounded-xl" />)}
         </div>
-      ) : events.length === 0 ? (
+      ) : tabEvents.length === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-16 text-center space-y-4">
-            <div className="text-5xl">🏆</div>
+            <div className="text-5xl">{activeTab === "past" ? "📋" : activeTab === "cancelled" ? "🚫" : "🏆"}</div>
             <div>
-              <p className="font-semibold text-base">No knockout tournaments yet</p>
+              <p className="font-semibold text-base">
+                {activeTab === "ongoing" ? "No ongoing tournaments" : activeTab === "past" ? "No past tournaments" : "No cancelled tournaments"}
+              </p>
               <p className="text-sm text-muted-foreground mt-1">
-                Create your first tournament to get started. All active club members will be automatically included.
+                {activeTab === "ongoing"
+                  ? "Create your first tournament to get started. All active club members will be automatically included."
+                  : activeTab === "past"
+                  ? "Completed tournaments will appear here once all rounds are finished."
+                  : "Cancelled tournaments will appear here."}
               </p>
             </div>
-            {!readOnly && (
+            {activeTab === "ongoing" && !readOnly && (
               <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2 mt-2" onClick={() => setCreateOpen(true)}>
                 <Plus className="h-4 w-4" />
                 New Tournament
@@ -634,7 +687,7 @@ export default function KnockoutPage() {
         </Card>
       ) : (
         <div className="space-y-3">
-          {events.map(ev => (
+          {tabEvents.map(ev => (
             <Card
               key={ev.id}
               className="hover:shadow-md transition-shadow cursor-pointer border"

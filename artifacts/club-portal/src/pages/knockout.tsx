@@ -427,7 +427,7 @@ function SinglesEntryPanel({ ev }: { ev: KnockoutEvent }) {
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {data?.opted_out.map(m => (
-                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-700 line-through">
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-700">
                     {m.name}
                   </span>
                 ))}
@@ -714,7 +714,7 @@ function BetterballPairingPanel({ ev, approvedCount, readOnly, onBracketGenerate
               ) : (
                 <div className="flex flex-wrap gap-1.5">
                   {optedOut.map(m => (
-                    <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-600 line-through">
+                    <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-600">
                       {m.name}
                     </span>
                   ))}

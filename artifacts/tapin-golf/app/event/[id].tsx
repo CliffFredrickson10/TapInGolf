@@ -297,6 +297,16 @@ export default function EventDetailScreen() {
     if (event?.format?.startsWith("knockout") && !bracketLoaded) loadBracket();
   }, [event, bracketLoaded, loadBracket]);
 
+  // Must be declared before the useEffect below that lists it as a dependency
+  const loadPairStatus = useCallback(async () => {
+    if (!user || !event || event.format !== "knockout_team" || pairStatusLoaded) return;
+    try {
+      const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
+      setPairStatus(data);
+    } catch { /* not a member — silently skip */ }
+    finally { setPairStatusLoaded(true); }
+  }, [user, event, pairStatusLoaded]);
+
   // Load pair status for betterball knockout events
   useEffect(() => {
     if (event?.format === "knockout_team" && user && !pairStatusLoaded) loadPairStatus();
@@ -328,15 +338,6 @@ export default function EventDetailScreen() {
   }, [activeTab, myScoresLoaded, user, event]);
 
   // ── Actions ────────────────────────────────────────────────────────────────
-
-  const loadPairStatus = useCallback(async () => {
-    if (!user || !event || event.format !== "knockout_team" || pairStatusLoaded) return;
-    try {
-      const data = await apiFetch(`/knockout/${event.id}/pair-status`, user.token);
-      setPairStatus(data);
-    } catch { /* not a member — silently skip */ }
-    finally { setPairStatusLoaded(true); }
-  }, [user, event, pairStatusLoaded]);
 
   const searchPartners = async (q: string) => {
     if (!user || !event || q.length < 2) { setPartnerResults([]); return; }

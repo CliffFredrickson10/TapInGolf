@@ -74901,6 +74901,12 @@ init_pg();
 init_logger();
 init_notifications();
 var router22 = (0, import_express22.Router)();
+async function markBracketReady(evId, reason) {
+  const ev = await row("SELECT bracket_ready_notified_at FROM golf_events WHERE id = ?", [evId]);
+  if (ev?.bracket_ready_notified_at) return;
+  await run("UPDATE golf_events SET bracket_ready_notified_at = NOW() WHERE id = ?", [evId]);
+  logger.info({ evId, reason }, "Knockout: bracket_ready_notified_at set");
+}
 function getRoundLabels(totalRounds) {
   const labels = [];
   let roundNum = 1;
@@ -74946,6 +74952,7 @@ router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const events = await query(
     `SELECT ge.*,
+            ge.bracket_ready_notified_at,
             (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
             (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
@@ -75198,7 +75205,7 @@ router22.post("/knockout/:id/pair/confirm", async (req, res) => {
     return;
   }
   await run("UPDATE event_teams SET status = 'confirmed' WHERE id = ?", [reg.team_id]);
-  const ev = await row("SELECT name FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row("SELECT name, club_id FROM golf_events WHERE id = ?", [evId]);
   try {
     const title = `\u{1F3CC}\uFE0F You're in the draw! \u2014 ${ev?.name ?? "Betterball Knockout"}`;
     const body = `You and ${reg.requester_name} are confirmed Betterball partners!`;
@@ -75210,6 +75217,22 @@ router22.post("/knockout/:id/pair/confirm", async (req, res) => {
     saveUserNotification(user.id, "event_published", title, body, data);
   } catch (err) {
     logger.warn({ err }, "Knockout pair confirm: failed to notify");
+  }
+  try {
+    const unpaired = await row(
+      `SELECT COUNT(*) AS n
+       FROM club_members cm
+       WHERE cm.club_id = ? AND cm.status = 'active'
+         AND cm.user_id NOT IN (
+           SELECT er.user_id FROM event_registrations er WHERE er.event_id = ?
+         )`,
+      [ev?.club_id, evId]
+    );
+    if (parseInt(unpaired?.n ?? "1") === 0) {
+      await markBracketReady(evId, "all_paired");
+    }
+  } catch (err) {
+    logger.warn({ err }, "Knockout pair confirm: bracket-ready check failed");
   }
   res.json({ ok: true, request_state: "confirmed" });
 });
@@ -77375,6 +77398,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
   await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);
@@ -78197,6 +78221,45 @@ function startKnockoutResultReminderWorker() {
   );
 }
 
+// src/worker/knockoutPairingDeadline.ts
+init_pg();
+init_logger();
+var POLL_INTERVAL_MS7 = 60 * 60 * 1e3;
+async function runCycle2() {
+  const due = await query(
+    `SELECT ge.id, ge.name
+     FROM golf_events ge
+     WHERE ge.format = 'knockout_team'
+       AND ge.status = 'active'
+       AND ge.knockout_pairing_deadline IS NOT NULL
+       AND ge.knockout_pairing_deadline < CURRENT_DATE
+       AND ge.bracket_ready_notified_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM knockout_rounds kr WHERE kr.event_id = ge.id)`,
+    []
+  );
+  if (!due.length) return;
+  logger.info({ count: due.length }, "Knockout pairing deadline: flagging events ready to generate");
+  for (const ev of due) {
+    try {
+      await run(
+        "UPDATE golf_events SET bracket_ready_notified_at = NOW() WHERE id = ?",
+        [ev.id]
+      );
+      logger.info({ evId: ev.id, name: ev.name }, "Knockout: pairing deadline passed \u2014 bracket ready to generate");
+    } catch (err) {
+      logger.error({ err, evId: ev.id }, "Knockout pairing deadline: failed to flag event");
+    }
+  }
+}
+function startKnockoutPairingDeadlineWorker() {
+  logger.info("Knockout pairing deadline worker started");
+  runCycle2().catch((err) => logger.error({ err }, "Knockout pairing deadline: startup cycle failed"));
+  setInterval(
+    () => runCycle2().catch((err) => logger.error({ err }, "Knockout pairing deadline: cycle failed")),
+    POLL_INTERVAL_MS7
+  );
+}
+
 // src/index.ts
 var rawPort = process.env["PORT"];
 if (!rawPort) {
@@ -78223,6 +78286,7 @@ migrate().then(() => {
   startMonthlyCounterInvoiceWorker();
   startMonthlyAdBillingWorker();
   startKnockoutResultReminderWorker();
+  startKnockoutPairingDeadlineWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
@@ -78231,6 +78295,7 @@ migrate().then(() => {
   startMonthlyCounterInvoiceWorker();
   startMonthlyAdBillingWorker();
   startKnockoutResultReminderWorker();
+  startKnockoutPairingDeadlineWorker();
 });
 /*! Bundled license information:
 

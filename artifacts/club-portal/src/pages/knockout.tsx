@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
-import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock } from "lucide-react";
+import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock, Zap } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -24,6 +24,7 @@ interface KnockoutEvent {
   knockout_type: "individual" | "team" | null;
   knockout_draw_method: "random" | "seeded" | null;
   knockout_pairing_deadline: string | null;
+  bracket_ready_notified_at: string | null;
   status: string;
   member_count: number;
   pair_count: number;
@@ -422,6 +423,24 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         </div>
       )}
 
+      {/* Ready-to-generate call-to-action */}
+      {!loading && (unpaired.length === 0 && pairs.length >= 2 || isPastDeadline && pairs.length >= 2) && (
+        <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 flex items-start gap-3">
+          <Zap className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+          <div className="flex-1 min-w-0">
+            <p className="text-sm font-semibold text-green-800">
+              {unpaired.length === 0 ? "All members are paired — bracket ready!" : "Pairing deadline has passed — bracket ready!"}
+            </p>
+            <p className="text-xs text-green-700 mt-0.5">
+              {unpaired.length === 0
+                ? `${pairs.length} confirmed pairs. Generate the draw below to assign matchups and publish to players.`
+                : `${pairs.length} confirmed pairs · ${unpaired.length} unpaired member${unpaired.length !== 1 ? "s" : ""} won't be included. Generate the draw below when ready.`
+              }
+            </p>
+          </div>
+        </div>
+      )}
+
       <div className="flex items-center gap-2 pt-1">
         <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
           {loading ? "Loading…" : "Refresh"}
@@ -699,6 +718,12 @@ export default function KnockoutPage() {
                     <div className="flex items-center gap-2 flex-wrap mb-1">
                       <p className="font-semibold text-sm truncate">{ev.name}</p>
                       <StatusBadge ev={ev} />
+                      {ev.bracket_ready_notified_at && Number(ev.round_count) === 0 && (
+                        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+                          <Zap className="h-2.5 w-2.5" />
+                          Generate bracket
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
                       <span className="capitalize">{ev.knockout_type ?? "individual"}</span>

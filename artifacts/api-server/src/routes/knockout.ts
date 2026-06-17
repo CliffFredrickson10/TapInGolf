@@ -8,6 +8,16 @@ import { saveUserNotification } from "../lib/userNotifications";
 
 const router = Router();
 
+// ── Notify club that bracket is ready to generate ─────────────────────────────
+// Sets bracket_ready_notified_at once (idempotent). Called from both the
+// pair-confirm endpoint (all members paired) and the pairing-deadline worker.
+async function markBracketReady(evId: number, reason: "all_paired" | "deadline_passed"): Promise<void> {
+  const ev = await row<any>("SELECT bracket_ready_notified_at FROM golf_events WHERE id = ?", [evId]);
+  if (ev?.bracket_ready_notified_at) return;
+  await run("UPDATE golf_events SET bracket_ready_notified_at = NOW() WHERE id = ?", [evId]);
+  logger.info({ evId, reason }, "Knockout: bracket_ready_notified_at set");
+}
+
 function getRoundLabels(totalRounds: number): string[] {
   const labels: string[] = [];
   let roundNum = 1;
@@ -70,6 +80,7 @@ router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Respon
 
   const events = await query<any>(
     `SELECT ge.*,
+            ge.bracket_ready_notified_at,
             (SELECT COUNT(*) FROM club_members cm WHERE cm.club_id = ge.club_id AND cm.status = 'active') AS member_count,
             (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
             (SELECT kr2.label FROM knockout_rounds kr2 WHERE kr2.event_id = ge.id
@@ -305,7 +316,7 @@ router.post("/knockout/:id/pair/confirm", async (req: Request, res: Response): P
 
   await run("UPDATE event_teams SET status = 'confirmed' WHERE id = ?", [reg.team_id]);
 
-  const ev = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row<any>("SELECT name, club_id FROM golf_events WHERE id = ?", [evId]);
   try {
     const title = `🏌️ You're in the draw! — ${ev?.name ?? "Betterball Knockout"}`;
     const body  = `You and ${reg.requester_name} are confirmed Betterball partners!`;
@@ -316,6 +327,22 @@ router.post("/knockout/:id/pair/confirm", async (req: Request, res: Response): P
     saveUserNotification(reg.requester_id, "event_published", title, body, data);
     saveUserNotification(user.id, "event_published", title, body, data);
   } catch (err) { logger.warn({ err }, "Knockout pair confirm: failed to notify"); }
+
+  // Check if all active club members are now paired — if so, flag bracket as ready
+  try {
+    const unpaired = await row<any>(
+      `SELECT COUNT(*) AS n
+       FROM club_members cm
+       WHERE cm.club_id = ? AND cm.status = 'active'
+         AND cm.user_id NOT IN (
+           SELECT er.user_id FROM event_registrations er WHERE er.event_id = ?
+         )`,
+      [ev?.club_id, evId]
+    );
+    if (parseInt(unpaired?.n ?? "1") === 0) {
+      await markBracketReady(evId, "all_paired");
+    }
+  } catch (err) { logger.warn({ err }, "Knockout pair confirm: bracket-ready check failed"); }
 
   res.json({ ok: true, request_state: "confirmed" });
 });

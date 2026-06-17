@@ -79,7 +79,7 @@ function StatusBadge({ ev }: { ev: KnockoutEvent }) {
       </span>
     );
   }
-  if (ev.round_count === 0) {
+  if (!ev.round_count || Number(ev.round_count) === 0) {
     if (ev.knockout_type === "team") {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">

@@ -1011,10 +1011,7 @@ export default function EventDetailScreen() {
                     ) : (
                       <TouchableOpacity
                         style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: removingKoPair ? 0.6 : 1 }}
-                        onPress={() => Alert.alert("Remove Pairing", `Remove your pairing with ${pairStatus.partner?.name}? You can pick a new partner before the deadline.`, [
-                          { text: "Cancel", style: "cancel" },
-                          { text: "Remove", style: "destructive", onPress: removeKoPairing },
-                        ])}
+                        onPress={removeKoPairing}
                         disabled={removingKoPair}
                       >
                         <Ionicons name="close-circle-outline" size={15} color="#dc2626" />
@@ -1038,10 +1035,7 @@ export default function EventDetailScreen() {
                     </View>
                     <TouchableOpacity
                       style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: colors.border, opacity: removingKoPair ? 0.6 : 1 }}
-                      onPress={() => Alert.alert("Cancel Request", `Cancel your partner request to ${pairStatus.partner?.name}?`, [
-                        { text: "Keep", style: "cancel" },
-                        { text: "Cancel Request", style: "destructive", onPress: removeKoPairing },
-                      ])}
+                      onPress={removeKoPairing}
                       disabled={removingKoPair}
                     >
                       <Ionicons name="close-circle-outline" size={15} color={colors.mutedForeground} />

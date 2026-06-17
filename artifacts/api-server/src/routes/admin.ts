@@ -390,7 +390,7 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
     query<any>(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
               c.active, c.featured, c.created_at,
-              (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = true) AS has_portal
+              (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = 1) AS has_portal
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     ),

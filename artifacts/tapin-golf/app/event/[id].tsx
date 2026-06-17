@@ -1170,8 +1170,12 @@ export default function EventDetailScreen() {
                 const isMySideP1 = myMatch.player1_id === user?.id || myMatch.player1_partner_id === user?.id;
                 const myPartner     = isMySideP1 ? myMatch.player1_partner_name : myMatch.player2_partner_name;
                 const opponentName  = isMySideP1
-                  ? (isTeam && myMatch.player2_team_name ? myMatch.player2_team_name : myMatch.player2_name)
-                  : (isTeam && myMatch.player1_team_name ? myMatch.player1_team_name : myMatch.player1_name);
+                  ? (isTeam && myMatch.player2_partner_name
+                      ? `${myMatch.player2_name ?? "TBD"} & ${myMatch.player2_partner_name}`
+                      : (myMatch.player2_team_name ?? myMatch.player2_name))
+                  : (isTeam && myMatch.player1_partner_name
+                      ? `${myMatch.player1_name ?? "TBD"} & ${myMatch.player1_partner_name}`
+                      : (myMatch.player1_team_name ?? myMatch.player1_name));
                 const opponentId    = isMySideP1 ? myMatch.player2_id : myMatch.player1_id;
                 const opponentChatName = isMySideP1 ? myMatch.player2_name : myMatch.player1_name;
                 return (

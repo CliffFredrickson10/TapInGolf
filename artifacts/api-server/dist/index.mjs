@@ -75182,6 +75182,62 @@ router22.delete("/knockout/:id/betterball-optout", async (req, res) => {
   );
   res.json({ ok: true });
 });
+router22.patch("/portal/knockout/:id", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT id, knockout_type FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const { name, description, event_date, end_date, draw_method, pairing_deadline, singles_entry_deadline } = req.body ?? {};
+  if (!name?.trim()) {
+    res.status(400).json({ message: "Name is required" });
+    return;
+  }
+  if (ev.knockout_type === "team" && pairing_deadline === "") {
+    res.status(400).json({ message: "Partner selection deadline is required for Betterball tournaments" });
+    return;
+  }
+  await run(
+    `UPDATE golf_events SET
+       name = ?, description = ?, event_date = ?, end_date = ?,
+       knockout_draw_method = ?, knockout_pairing_deadline = ?,
+       singles_entry_deadline = ?
+     WHERE id = ?`,
+    [
+      name.trim(),
+      description?.trim() || null,
+      event_date || null,
+      end_date || null,
+      draw_method || "random",
+      ev.knockout_type === "team" ? pairing_deadline || null : null,
+      ev.knockout_type !== "team" ? singles_entry_deadline || null : null,
+      evId
+    ]
+  );
+  const updated = await row(
+    `SELECT ge.id, ge.name, ge.description, ge.event_date, ge.end_date, ge.format,
+            ge.knockout_type, ge.knockout_draw_method, ge.knockout_pairing_deadline,
+            ge.singles_entry_deadline, ge.bracket_ready_notified_at, ge.status,
+            ge.created_at,
+            COUNT(DISTINCT CASE WHEN cm.status = 'active' THEN cm.user_id END) AS member_count,
+            (SELECT COUNT(DISTINCT et.id) FROM event_teams et
+             JOIN event_registrations er1 ON er1.team_id = et.id AND er1.event_id = ge.id
+             WHERE et.status = 'confirmed') AS pair_count,
+            (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
+            NULL AS current_round_label
+     FROM golf_events ge
+     LEFT JOIN club_members cm ON cm.club_id = ge.club_id
+     WHERE ge.id = ?
+     GROUP BY ge.id`,
+    [evId]
+  );
+  res.json(updated);
+});
 router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const evId = Number(req.params.id);
@@ -75928,23 +75984,33 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
   await run("UPDATE golf_events SET status = 'active' WHERE id = ? AND status != 'active'", [evId]);
   const entrants = await query(
     `SELECT u.id, u.name, u.push_token,
-            -- find their Round 1 match (they may be p1 or p2)
             km.id          as match_id,
             km.status      as match_status,
             p1.name        as p1_name,
             p2.name        as p2_name,
             km.player1_id,
-            km.player2_id
+            km.player2_id,
+            p1partner.name as p1_partner_name,
+            p2partner.name as p2_partner_name
      FROM event_registrations er
      JOIN users u ON u.id = er.user_id
      LEFT JOIN knockout_matches km
        ON km.round_id = ? AND km.status != 'bye'
-       AND (km.player1_id = u.id OR km.player2_id = u.id)
+       AND (km.player1_id = u.id OR km.player2_id = u.id
+            OR km.player1_id IN (SELECT er2.user_id FROM event_registrations er2 WHERE er2.team_id = er.team_id AND er2.event_id = er.event_id)
+            OR km.player2_id IN (SELECT er2.user_id FROM event_registrations er2 WHERE er2.team_id = er.team_id AND er2.event_id = er.event_id))
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = (SELECT er3.team_id FROM event_registrations er3 WHERE er3.user_id = km.player1_id AND er3.event_id = km.event_id LIMIT 1)
+                                       AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = (SELECT er4.team_id FROM event_registrations er4 WHERE er4.user_id = km.player2_id AND er4.event_id = km.event_id LIMIT 1)
+                                       AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE er.event_id = ? AND er.status = 'approved'`,
     [round1.id, evId]
   );
+  const isTeamFormat = ev.format === "knockout_team";
   const deadline = round1.deadline ? ` by ${round1.deadline instanceof Date ? round1.deadline.toISOString().slice(0, 10) : String(round1.deadline).slice(0, 10)}` : "";
   const pushMsgs = [];
   let notified = 0;
@@ -75952,12 +76018,15 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
   for (const e of entrants) {
     let opponentName = "TBD";
     if (e.match_id) {
-      opponentName = e.player1_id === e.id ? e.p2_name ?? "TBD" : e.p1_name ?? "TBD";
+      const isMeP1 = e.player1_id === e.id;
+      const oppMain = isMeP1 ? e.p2_name ?? "TBD" : e.p1_name ?? "TBD";
+      const oppPartner = isMeP1 ? e.p2_partner_name : e.p1_partner_name;
+      opponentName = isTeamFormat && oppPartner ? `${oppMain} & ${oppPartner}` : oppMain;
     }
     const title = `${ev.name} \u2014 Draw Published`;
     const body = e.match_id ? `You play ${opponentName} in Round 1${deadline}. Tap to view the bracket.` : `The draw has been published${deadline ? ` (Round 1 deadline${deadline})` : ""}. Tap to view the bracket.`;
-    const data = { type: "knockout_draw", eventId: evId };
-    await saveUserNotification(e.id, "knockout_draw", title, body, data);
+    const data = { type: "event_draw_published", event_id: evId, club_id: club.id };
+    await saveUserNotification(e.id, "event_draw_published", title, body, data);
     if (e.push_token?.startsWith("ExponentPushToken[")) {
       pushMsgs.push({ to: e.push_token, sound: "default", title, body, data });
       notified++;
@@ -77692,6 +77761,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS singles_entry_deadline DATE");
+  await ddl(`ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_status_check`);
+  await ddl(`ALTER TABLE event_registrations ADD CONSTRAINT event_registrations_status_check
+    CHECK (status IN ('pending','approved','rejected','opted_out'))`);
   await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);

@@ -75094,7 +75094,7 @@ router22.get("/knockout/:id/pair-status", async (req, res) => {
     return;
   }
   const reg = await row(
-    `SELECT er.team_id, et.status as team_status, et.requested_by,
+    `SELECT er.team_id, et.status as team_status, et.requested_by, et.club_assigned,
             u.id as partner_id, u.name as partner_name
      FROM event_registrations er
      JOIN event_teams et ON et.id = er.team_id
@@ -75104,7 +75104,7 @@ router22.get("/knockout/:id/pair-status", async (req, res) => {
     [evId, user.id]
   );
   if (!reg) {
-    res.json({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+    res.json({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: ev.knockout_pairing_deadline ?? null, club_assigned: false });
     return;
   }
   const request_state = reg.team_status === "confirmed" ? "confirmed" : reg.requested_by === user.id ? "pending_sent" : "pending_received";
@@ -75113,7 +75113,8 @@ router22.get("/knockout/:id/pair-status", async (req, res) => {
     request_state,
     team_id: reg.team_id,
     partner: reg.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
-    pairing_deadline: ev.knockout_pairing_deadline ?? null
+    pairing_deadline: ev.knockout_pairing_deadline ?? null,
+    club_assigned: reg.club_assigned === 1 || reg.club_assigned === true
   });
 });
 router22.post("/knockout/:id/pair", async (req, res) => {
@@ -75287,14 +75288,101 @@ router22.delete("/knockout/:id/pair", async (req, res) => {
     res.status(401).json({ message: "Unauthorised" });
     return;
   }
-  const reg = await row("SELECT team_id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
+  const reg = await row(
+    `SELECT er.team_id, et.club_assigned, et.status AS team_status,
+            er2.user_id AS partner_id, u2.name AS partner_name, u2.push_token AS partner_token,
+            ge.name AS event_name
+     FROM event_registrations er
+     JOIN event_teams et ON et.id = er.team_id
+     JOIN golf_events ge ON ge.id = er.event_id
+     LEFT JOIN event_registrations er2 ON er2.team_id = er.team_id AND er2.event_id = er.event_id AND er2.user_id != er.user_id
+     LEFT JOIN users u2 ON u2.id = er2.user_id
+     WHERE er.event_id = ? AND er.user_id = ?`,
+    [evId, user.id]
+  );
   if (!reg) {
     res.status(404).json({ message: "No pairing found" });
     return;
   }
   await run("DELETE FROM event_registrations WHERE team_id = ? AND event_id = ?", [reg.team_id, evId]);
   await run("DELETE FROM event_teams WHERE id = ?", [reg.team_id]);
+  if ((reg.club_assigned === 1 || reg.club_assigned === true) && reg.team_status === "confirmed" && reg.partner_id) {
+    try {
+      const title = `Pairing dissolved \u2014 ${reg.event_name}`;
+      const body = `${user.name} has opted out of your club-assigned Betterball pairing. You are currently unpaired for this tournament.`;
+      const data = { type: "knockout_pair_request", event_id: evId };
+      saveUserNotification(reg.partner_id, "knockout_pair_request", title, body, data);
+      if (reg.partner_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{ to: reg.partner_token, sound: "default", title, body, data }]);
+      }
+    } catch (err) {
+      logger.warn({ err }, "Knockout opt-out: failed to notify partner");
+    }
+  }
   res.json({ ok: true });
+});
+router22.post("/portal/knockout/:id/auto-pair", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT id, name, club_id FROM golf_events WHERE id = ? AND club_id = ? AND format = 'knockout_team'",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const unpaired = await query(
+    `SELECT u.id, u.name, u.push_token
+     FROM club_members cm
+     JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active'
+       AND u.id NOT IN (SELECT er.user_id FROM event_registrations er WHERE er.event_id = ?)
+     ORDER BY RANDOM()`,
+    [club.id, evId]
+  );
+  if (unpaired.length < 2) {
+    res.json({ pairs_created: 0, left_out: unpaired.length });
+    return;
+  }
+  let pairsCreated = 0;
+  const errors = [];
+  for (let i = 0; i + 1 < unpaired.length; i += 2) {
+    const playerA = unpaired[i];
+    const playerB = unpaired[i + 1];
+    try {
+      const teamId = await exec(
+        "INSERT INTO event_teams (event_id, status, requested_by, club_assigned) VALUES (?, 'confirmed', NULL, 1)",
+        [evId]
+      );
+      await exec(
+        "INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)",
+        [evId, playerA.id, teamId]
+      );
+      await exec(
+        "INSERT INTO event_registrations (event_id, user_id, status, team_id) VALUES (?, ?, 'approved', ?)",
+        [evId, playerB.id, teamId]
+      );
+      const title = `\u{1F91D} Partner Assigned \u2014 ${ev.name}`;
+      const data = { type: "knockout_pair_request", event_id: evId };
+      const bodyA = `${playerB.name} has been assigned as your Betterball partner by the club. Open the app to view your pairing or opt out.`;
+      const bodyB = `${playerA.name} has been assigned as your Betterball partner by the club. Open the app to view your pairing or opt out.`;
+      saveUserNotification(playerA.id, "knockout_pair_request", title, bodyA, data);
+      saveUserNotification(playerB.id, "knockout_pair_request", title, bodyB, data);
+      if (playerA.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{ to: playerA.push_token, sound: "default", title, body: bodyA, data }]);
+      }
+      if (playerB.push_token?.startsWith("ExponentPushToken[")) {
+        sendPushNotifications([{ to: playerB.push_token, sound: "default", title, body: bodyB, data }]);
+      }
+      pairsCreated++;
+    } catch (err) {
+      logger.error({ err, a: playerA.id, b: playerB.id }, "Auto-pair: failed to create pair");
+      errors.push(`${playerA.name} + ${playerB.name}`);
+    }
+  }
+  const leftOut = unpaired.length % 2 !== 0 ? 1 : 0;
+  res.json({ pairs_created: pairsCreated, left_out: leftOut, errors });
 });
 router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -77399,6 +77487,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
+  await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
   await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);

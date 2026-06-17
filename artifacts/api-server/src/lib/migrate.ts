@@ -1571,6 +1571,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
+  await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
 
   // ── Standardise tee_start_type to snake_case throughout ──────────────────────────────
   // Must drop the old CHECK constraint BEFORE updating data, then re-add it with the

@@ -302,6 +302,8 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
   const [unpaired, setUnpaired]         = useState<UnpairedMember[]>([]);
   const [deadline, setDeadline]         = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
+  const [autoPairing, setAutoPairing]   = useState(false);
+  const [confirmAutoPair, setConfirmAutoPair] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -320,6 +322,28 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
   useEffect(() => { load(); }, [load]);
 
   const isPastDeadline = deadline ? new Date(deadline) < new Date() : false;
+
+  const runAutoPair = async () => {
+    setConfirmAutoPair(false);
+    setAutoPairing(true);
+    try {
+      const r = await api<{ pairs_created: number; left_out: number }>(
+        `/api/portal/knockout/${ev.id}/auto-pair`,
+        { method: "POST" }
+      );
+      if (r.pairs_created === 0) {
+        toast({ title: "No pairs created", description: "There weren't enough unpaired members to form any new pairs.", variant: "destructive" });
+      } else {
+        const msg = r.left_out > 0
+          ? `${r.pairs_created} new pair${r.pairs_created !== 1 ? "s" : ""} created. ${r.left_out} member left out (odd number).`
+          : `${r.pairs_created} new pair${r.pairs_created !== 1 ? "s" : ""} created. All unpaired members have been paired.`;
+        toast({ title: "Auto-pairing complete", description: msg });
+      }
+      await load();
+    } catch (e: any) {
+      toast({ title: "Auto-pairing failed", description: e.message, variant: "destructive" });
+    } finally { setAutoPairing(false); }
+  };
 
   return (
     <div className="space-y-4 mb-6">
@@ -389,12 +413,52 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
               {unpaired.length === 0 ? (
                 <p className="text-xs text-muted-foreground italic">All members are paired!</p>
               ) : (
-                <div className="flex flex-wrap gap-1.5">
-                  {unpaired.map(m => (
-                    <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
-                      {m.name}
-                    </span>
-                  ))}
+                <div className="space-y-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {unpaired.map(m => (
+                      <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
+                        {m.name}
+                      </span>
+                    ))}
+                  </div>
+                  {/* Auto-pair button — only shown after deadline */}
+                  {isPastDeadline && unpaired.length >= 2 && (
+                    <div className="pt-1">
+                      {confirmAutoPair ? (
+                        <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2.5 space-y-2">
+                          <p className="text-xs font-semibold text-amber-800">
+                            Randomly pair {unpaired.length} unpaired member{unpaired.length !== 1 ? "s" : ""}?
+                          </p>
+                          <p className="text-xs text-amber-700">
+                            This will create {Math.floor(unpaired.length / 2)} pair{Math.floor(unpaired.length / 2) !== 1 ? "s" : ""} at random.
+                            {unpaired.length % 2 !== 0 ? " 1 member with no partner will be left out of the tournament." : " All unpaired members will receive an in-app notification."}
+                          </p>
+                          <div className="flex gap-2">
+                            <Button size="sm" className="h-7 text-xs bg-amber-600 hover:bg-amber-700" onClick={runAutoPair} disabled={autoPairing}>
+                              {autoPairing ? "Pairing…" : "Confirm auto-pair"}
+                            </Button>
+                            <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => setConfirmAutoPair(false)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-7 text-xs gap-1.5 border-amber-300 text-amber-700 hover:bg-amber-50"
+                          onClick={() => setConfirmAutoPair(true)}
+                          disabled={autoPairing}
+                        >
+                          <Zap className="h-3 w-3" />
+                          Auto-pair {unpaired.length} unpaired member{unpaired.length !== 1 ? "s" : ""}
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                  {!isPastDeadline && (
+                    <p className="text-xs text-muted-foreground">Auto-pairing is available once the pairing deadline has passed.</p>
+                  )}
                 </div>
               )}
             </div>

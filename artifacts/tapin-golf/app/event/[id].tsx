@@ -209,6 +209,7 @@ export default function EventDetailScreen() {
     team_id: number | null;
     partner: { id: number; name: string } | null;
     pairing_deadline: string | null;
+    club_assigned?: boolean;
   };
   const [pairStatus, setPairStatus]         = useState<KnockoutPairStatus | null>(null);
   const [pairStatusLoaded, setPairStatusLoaded] = useState(false);
@@ -795,23 +796,50 @@ export default function EventDetailScreen() {
                     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#16a34a18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
                       <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
                       <View style={{ flex: 1 }}>
-                        <Text style={{ fontSize: 12, color: "#16a34a", fontWeight: "700" }}>You're paired with</Text>
+                        <Text style={{ fontSize: 12, color: "#16a34a", fontWeight: "700" }}>
+                          {pairStatus.club_assigned ? "Club-assigned partner" : "You're paired with"}
+                        </Text>
                         <Text style={{ fontSize: 15, fontWeight: "700", color: colors.foreground }}>{pairStatus.partner.name}</Text>
+                        {pairStatus.club_assigned && (
+                          <Text style={{ fontSize: 11, color: colors.mutedForeground, marginTop: 2 }}>
+                            The club randomly assigned your partner after the pairing deadline.
+                          </Text>
+                        )}
                       </View>
                     </View>
-                    <TouchableOpacity
-                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: removingKoPair ? 0.6 : 1 }}
-                      onPress={() => Alert.alert("Remove Pairing", `Remove your pairing with ${pairStatus.partner?.name}? You can pick a new partner before the deadline.`, [
-                        { text: "Cancel", style: "cancel" },
-                        { text: "Remove", style: "destructive", onPress: removeKoPairing },
-                      ])}
-                      disabled={removingKoPair}
-                    >
-                      <Ionicons name="close-circle-outline" size={15} color="#dc2626" />
-                      <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>
-                        {removingKoPair ? "Removing…" : "Remove pairing"}
-                      </Text>
-                    </TouchableOpacity>
+                    {pairStatus.club_assigned ? (
+                      <TouchableOpacity
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: removingKoPair ? 0.6 : 1 }}
+                        onPress={() => Alert.alert(
+                          "Opt Out of Tournament",
+                          `This will remove you from ${event?.name}. Your partner ${pairStatus.partner?.name} will also lose their pairing. You will not be included in the draw.`,
+                          [
+                            { text: "Stay in", style: "cancel" },
+                            { text: "Opt out", style: "destructive", onPress: removeKoPairing },
+                          ]
+                        )}
+                        disabled={removingKoPair}
+                      >
+                        <Ionicons name="exit-outline" size={15} color="#dc2626" />
+                        <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>
+                          {removingKoPair ? "Opting out…" : "Opt out of tournament"}
+                        </Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <TouchableOpacity
+                        style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: removingKoPair ? 0.6 : 1 }}
+                        onPress={() => Alert.alert("Remove Pairing", `Remove your pairing with ${pairStatus.partner?.name}? You can pick a new partner before the deadline.`, [
+                          { text: "Cancel", style: "cancel" },
+                          { text: "Remove", style: "destructive", onPress: removeKoPairing },
+                        ])}
+                        disabled={removingKoPair}
+                      >
+                        <Ionicons name="close-circle-outline" size={15} color="#dc2626" />
+                        <Text style={{ fontSize: 13, color: "#dc2626", fontWeight: "600" }}>
+                          {removingKoPair ? "Removing…" : "Remove pairing"}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
 
                 ) : pairStatus?.request_state === "pending_sent" && pairStatus.partner ? (

@@ -549,7 +549,7 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         </div>
       ) : (
         <div className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Confirmed pairs */}
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -630,6 +630,25 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
                 </div>
               )}
             </div>
+
+            {/* Opted-out members */}
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <UserX className="h-3.5 w-3.5 text-red-500" />
+                OPTED OUT ({optedOut.length})
+              </p>
+              {optedOut.length === 0 ? (
+                <p className="text-xs text-muted-foreground italic">No members have opted out</p>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {optedOut.map(m => (
+                    <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-600 line-through">
+                      {m.name}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Pending requests */}
@@ -648,23 +667,6 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
                     <span className="font-medium text-amber-900">{p.p2_name}</span>
                     <span className="ml-auto text-[10px] text-amber-500 italic">waiting for confirmation</span>
                   </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Opted-out members */}
-          {optedOut.length > 0 && (
-            <div>
-              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
-                <UserX className="h-3.5 w-3.5 text-red-500" />
-                OPTED OUT ({optedOut.length})
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {optedOut.map(m => (
-                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-600 line-through">
-                    {m.name}
-                  </span>
                 ))}
               </div>
             </div>

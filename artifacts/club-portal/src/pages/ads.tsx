@@ -210,7 +210,8 @@ export default function Ads() {
     try {
       await api(`/api/portal/ad-requests/${id}/cancel`, { method: "POST" });
       toast({ title: "Ad cancelled", description: "Your campaign has been taken offline." });
-      load();
+      await load();
+      setActiveTab("cancelled");
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     }
@@ -218,9 +219,11 @@ export default function Ads() {
 
   const setF = (k: keyof ReturnType<typeof emptyForm>, v: string) => setForm(f => ({ ...f, [k]: v }));
 
-  const detailAds  = requests.filter(r => r.ad_type === "club_detail");
-  const featuredAds = requests.filter(r => r.ad_type === "featured_home");
-  const otherAds   = requests.filter(r => !["club_detail","featured_home"].includes(r.ad_type));
+  const activeRequests = requests.filter(r => r.status !== "cancelled");
+  const cancelledAds   = requests.filter(r => r.status === "cancelled");
+  const detailAds  = activeRequests.filter(r => r.ad_type === "club_detail");
+  const featuredAds = activeRequests.filter(r => r.ad_type === "featured_home");
+  const otherAds   = activeRequests.filter(r => !["club_detail","featured_home"].includes(r.ad_type));
 
   const selectedOffering = offerings.find(o => o.ad_type === selectedType);
 
@@ -241,6 +244,14 @@ export default function Ads() {
           <TabsTrigger value="my-ads">My Ads</TabsTrigger>
           <TabsTrigger value="new-ad">Request an Ad</TabsTrigger>
           <TabsTrigger value="packages">Options &amp; Pricing</TabsTrigger>
+          {cancelledAds.length > 0 && (
+            <TabsTrigger value="cancelled" className="relative">
+              Cancelled
+              <span className="ml-1.5 bg-gray-200 text-gray-600 text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                {cancelledAds.length}
+              </span>
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* ── MY ADS ── */}
@@ -258,7 +269,7 @@ export default function Ads() {
                   badge={`${otherAds.length}`}
                   ads={otherAds} onDelete={handleDelete} onCancel={handleCancelAd} onNew={() => startWizard()} />
               )}
-              {requests.length === 0 && (
+              {activeRequests.length === 0 && (
                 <div className="text-center py-16 text-muted-foreground">
                   <div className="text-4xl mb-3">📢</div>
                   <p className="font-medium">No ad requests yet</p>
@@ -274,6 +285,40 @@ export default function Ads() {
                 </div>
               </div>
             </>
+          )}
+        </TabsContent>
+
+        {/* ── CANCELLED ── */}
+        <TabsContent value="cancelled" className="pt-4">
+          {loading ? <Skeleton className="h-48 w-full" /> : cancelledAds.length === 0 ? (
+            <div className="text-center py-16 text-muted-foreground">
+              <div className="text-4xl mb-3">✅</div>
+              <p className="font-medium">No cancelled ads</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">{cancelledAds.length} cancelled campaign{cancelledAds.length !== 1 ? "s" : ""}</p>
+              <div className="grid gap-3 md:grid-cols-2">
+                {cancelledAds.map(ad => (
+                  <div key={ad.id} className="border rounded-xl p-4 bg-white opacity-70">
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div>
+                        <div className="font-bold text-sm">{ad.headline}</div>
+                        {ad.subtitle && <div className="text-xs text-muted-foreground">{ad.subtitle}</div>}
+                      </div>
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full flex-shrink-0 bg-gray-100 text-gray-500">Cancelled</span>
+                    </div>
+                    {ad.package_name && (
+                      <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">{ad.package_name}</span>
+                    )}
+                    {ad.confirmed_price && (
+                      <div className="text-xs text-muted-foreground mt-1">R {Number(ad.confirmed_price).toLocaleString()}</div>
+                    )}
+                    <div className="text-xs text-muted-foreground mt-2">{format(new Date(ad.created_at), "d MMM yyyy")}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </TabsContent>
 

@@ -389,7 +389,8 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
   const [clubs, total] = await Promise.all([
     query<any>(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
-              c.active, c.featured, c.created_at
+              c.active, c.featured, c.created_at,
+              (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = true) AS has_portal
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     ),
@@ -397,6 +398,51 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
   ]);
 
   res.json({ clubs, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+
+// GET /admin/clubs/:id/portal-accounts — list portal accounts for a club
+router.get("/admin/clubs/:id/portal-accounts", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const accounts = await query<any>(
+    `SELECT id, name, email, role, active, created_at FROM club_portal_users WHERE club_id = ? ORDER BY created_at ASC`,
+    [id]
+  );
+  res.json({ accounts });
+});
+
+// POST /admin/clubs/:id/portal-accounts — create a portal account for a club
+router.post("/admin/clubs/:id/portal-accounts", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { name, email, password } = req.body ?? {};
+  if (!name || !email || !password) { res.status(400).json({ message: "name, email and password are required" }); return; }
+  const club = await row<any>("SELECT id, name FROM clubs WHERE id = ?", [id]);
+  if (!club) { res.status(404).json({ message: "Club not found" }); return; }
+  const existing = await row<any>("SELECT id FROM club_portal_users WHERE club_id = ? AND LOWER(email) = LOWER(?)", [id, email]);
+  if (existing) { res.status(409).json({ message: "An account with that email already exists for this club" }); return; }
+  const bcrypt = await import("bcryptjs");
+  const hash = await bcrypt.hash(String(password), 10);
+  const created = await row<any>(
+    `INSERT INTO club_portal_users (club_id, name, email, password_hash, role, permissions)
+     VALUES (?, ?, ?, ?, 'admin', '[]') RETURNING id, name, email, role, active, created_at`,
+    [id, String(name).trim(), String(email).trim().toLowerCase(), hash]
+  );
+  res.status(201).json({ account: created });
+});
+
+// DELETE /admin/clubs/:id/portal-accounts/:userId — remove a portal account
+router.delete("/admin/clubs/:id/portal-accounts/:userId", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = parseInt(req.params.id, 10);
+  const userId = parseInt(req.params.userId, 10);
+  const account = await row<any>("SELECT id FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, clubId]);
+  if (!account) { res.status(404).json({ message: "Account not found" }); return; }
+  await exec("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, clubId]);
+  res.json({ ok: true });
 });
 
 // PUT /admin/clubs/:id/toggle — toggle active

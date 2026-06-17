@@ -3,8 +3,9 @@ import { api } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff, UserPlus, CheckCircle2, Trash2, KeyRound } from "lucide-react";
 
 interface ClubRow {
   id: number;
@@ -16,6 +17,16 @@ interface ClubRow {
   active: number;
   featured: number;
   created_at: string;
+  has_portal: number;
+}
+
+interface PortalAccount {
+  id: number;
+  name: string;
+  email: string;
+  role: string;
+  active: boolean;
+  created_at: string;
 }
 
 const SA_PROVINCES = [
@@ -23,6 +34,167 @@ const SA_PROVINCES = [
   "Limpopo", "Mpumalanga", "North West", "Northern Cape", "Western Cape",
 ];
 
+// ── Portal Account Dialog ──────────────────────────────────────────────────────
+function PortalAccountDialog({
+  club,
+  onClose,
+  onChanged,
+}: {
+  club: ClubRow;
+  onClose: () => void;
+  onChanged: (clubId: number, hasPortal: number) => void;
+}) {
+  const { toast } = useToast();
+  const [accounts, setAccounts] = useState<PortalAccount[]>([]);
+  const [loading, setLoading]   = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [deleting, setDeleting] = useState<number | null>(null);
+  const [showForm, setShowForm] = useState(false);
+
+  const [name, setName]         = useState("");
+  const [email, setEmail]       = useState("");
+  const [password, setPassword] = useState("Golf2026!");
+  const [saving, setSaving]     = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const data = await api<{ accounts: PortalAccount[] }>(`/api/admin/clubs/${club.id}/portal-accounts`);
+      setAccounts(data.accounts);
+      setShowForm(data.accounts.length === 0);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [club.id, toast]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const create = async () => {
+    if (!name.trim() || !email.trim() || !password) return;
+    setSaving(true);
+    try {
+      const data = await api<{ account: PortalAccount }>(`/api/admin/clubs/${club.id}/portal-accounts`, {
+        method: "POST",
+        body: JSON.stringify({ name: name.trim(), email: email.trim(), password }),
+      });
+      setAccounts(prev => [...prev, data.account]);
+      onChanged(club.id, 1);
+      setName(""); setEmail(""); setPassword("Golf2026!");
+      setShowForm(false);
+      toast({ title: "Account created", description: `${data.account.email} can now log in to the portal.` });
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  const remove = async (userId: number, userEmail: string) => {
+    if (!confirm(`Remove portal access for ${userEmail}?`)) return;
+    setDeleting(userId);
+    try {
+      await api(`/api/admin/clubs/${club.id}/portal-accounts/${userId}`, { method: "DELETE" });
+      const remaining = accounts.filter(a => a.id !== userId);
+      setAccounts(remaining);
+      onChanged(club.id, remaining.length > 0 ? 1 : 0);
+      toast({ title: "Account removed", description: userEmail });
+      if (remaining.length === 0) setShowForm(true);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setDeleting(null); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <KeyRound className="h-4 w-4 text-[#1a5c38]" />
+            Portal Access — {club.name}
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-1">
+          {/* Existing accounts */}
+          {loading ? (
+            <div className="space-y-2">
+              <Skeleton className="h-12 w-full" />
+              <Skeleton className="h-12 w-full" />
+            </div>
+          ) : accounts.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Existing accounts</p>
+              {accounts.map(a => (
+                <div key={a.id} className="flex items-center gap-3 rounded-lg border px-3 py-2.5">
+                  <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{a.name}</p>
+                    <p className="text-xs text-muted-foreground truncate">{a.email} · {a.role}</p>
+                  </div>
+                  <Button
+                    variant="ghost" size="sm"
+                    className="h-7 w-7 p-0 text-red-500 hover:text-red-600 hover:bg-red-50"
+                    onClick={() => remove(a.id, a.email)}
+                    disabled={deleting === a.id}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : null}
+
+          {/* Create form */}
+          {!showForm && accounts.length > 0 ? (
+            <Button variant="outline" size="sm" className="w-full gap-1.5" onClick={() => setShowForm(true)}>
+              <UserPlus className="h-3.5 w-3.5" /> Add another account
+            </Button>
+          ) : (
+            <div className="space-y-3 rounded-lg border p-4 bg-muted/30">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+                {accounts.length === 0 ? "Create portal account" : "New account"}
+              </p>
+              <div className="space-y-2">
+                <Input
+                  placeholder="Contact name"
+                  value={name}
+                  onChange={e => setName(e.target.value)}
+                />
+                <Input
+                  type="email"
+                  placeholder="Email address"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                />
+                <Input
+                  type="text"
+                  placeholder="Password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">Share these credentials with the club. They can change their password after first login.</p>
+            </div>
+          )}
+        </div>
+
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Close</Button>
+          {showForm && (
+            <Button
+              className="bg-[#1a5c38] hover:bg-[#154d30] gap-1.5"
+              onClick={create}
+              disabled={saving || !name.trim() || !email.trim() || !password}
+            >
+              <UserPlus className="h-4 w-4" />
+              {saving ? "Creating…" : "Create account"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Main page ──────────────────────────────────────────────────────────────────
 export default function StaffClubs() {
   const { toast } = useToast();
   const [clubs, setClubs] = useState<ClubRow[]>([]);
@@ -31,8 +203,10 @@ export default function StaffClubs() {
   const [q, setQ] = useState("");
   const [province, setProvince] = useState("");
   const [activeFilter, setActiveFilter] = useState("");
+  const [portalFilter, setPortalFilter] = useState("");
   const [page, setPage] = useState(1);
   const [toggling, setToggling] = useState<number | null>(null);
+  const [portalClub, setPortalClub] = useState<ClubRow | null>(null);
   const LIMIT = 30;
 
   const load = useCallback(async () => {
@@ -45,12 +219,15 @@ export default function StaffClubs() {
       params.set("page", String(page));
       params.set("limit", String(LIMIT));
       const data = await api<{ clubs: ClubRow[]; total: number }>(`/api/admin/clubs-list?${params}`);
-      setClubs(data.clubs);
+      let rows = data.clubs;
+      if (portalFilter === "1")   rows = rows.filter(c => c.has_portal > 0);
+      if (portalFilter === "0")   rows = rows.filter(c => c.has_portal === 0);
+      setClubs(rows);
       setTotal(data.total);
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
-  }, [q, province, activeFilter, page, toast]);
+  }, [q, province, activeFilter, portalFilter, page, toast]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -76,6 +253,10 @@ export default function StaffClubs() {
     } catch (e: any) {
       toast({ title: "Error", description: e.message, variant: "destructive" });
     } finally { setToggling(null); }
+  };
+
+  const handlePortalChanged = (clubId: number, hasPortal: number) => {
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, has_portal: hasPortal } : c));
   };
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -121,6 +302,15 @@ export default function StaffClubs() {
           <option value="1">Active only</option>
           <option value="0">Inactive only</option>
         </select>
+        <select
+          className="border rounded-md px-3 py-2 text-sm bg-background h-10"
+          value={portalFilter}
+          onChange={e => { setPortalFilter(e.target.value); resetPage(); }}
+        >
+          <option value="">All portal status</option>
+          <option value="1">Has portal access</option>
+          <option value="0">No portal access</option>
+        </select>
       </div>
 
       <div className="border rounded-lg overflow-hidden bg-background">
@@ -132,6 +322,7 @@ export default function StaffClubs() {
               <th className="text-left px-4 py-3 font-semibold">Location</th>
               <th className="text-center px-4 py-3 font-semibold">Holes</th>
               <th className="text-right px-4 py-3 font-semibold">Price from</th>
+              <th className="text-center px-4 py-3 font-semibold">Portal</th>
               <th className="text-center px-4 py-3 font-semibold">Featured</th>
               <th className="text-center px-4 py-3 font-semibold">Active</th>
             </tr>
@@ -140,14 +331,14 @@ export default function StaffClubs() {
             {loading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b last:border-0">
-                  {[0,1,2,3,4,5,6].map(j => (
+                  {[0,1,2,3,4,5,6,7].map(j => (
                     <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                   ))}
                 </tr>
               ))
             ) : clubs.length === 0 ? (
               <tr>
-                <td colSpan={7} className="text-center py-12 text-muted-foreground">
+                <td colSpan={8} className="text-center py-12 text-muted-foreground">
                   No clubs found
                 </td>
               </tr>
@@ -156,10 +347,29 @@ export default function StaffClubs() {
                 <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20 transition-colors">
                   <td className="px-4 py-3 font-medium">{c.name}</td>
                   <td className="px-4 py-3 text-muted-foreground">{c.province}</td>
-                  <td className="px-4 py-3 text-muted-foreground text-xs max-w-[160px] truncate">{c.location}</td>
+                  <td className="px-4 py-3 text-muted-foreground text-xs max-w-[140px] truncate">{c.location}</td>
                   <td className="px-4 py-3 text-center text-muted-foreground">{c.holes}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">
                     {c.price_from ? `R${parseFloat(c.price_from).toFixed(0)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    {c.has_portal > 0 ? (
+                      <button
+                        onClick={() => setPortalClub(c)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-green-100 text-green-700 hover:bg-green-200 transition-colors"
+                        title="Manage portal access"
+                      >
+                        <CheckCircle2 className="h-3 w-3" /> Active
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => setPortalClub(c)}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-100 text-gray-500 hover:bg-blue-100 hover:text-blue-700 transition-colors"
+                        title="Create portal account"
+                      >
+                        <UserPlus className="h-3 w-3" /> Set up
+                      </button>
+                    )}
                   </td>
                   <td className="px-4 py-3 text-center">
                     <button
@@ -211,6 +421,14 @@ export default function StaffClubs() {
             </Button>
           </div>
         </div>
+      )}
+
+      {portalClub && (
+        <PortalAccountDialog
+          club={portalClub}
+          onClose={() => setPortalClub(null)}
+          onChanged={handlePortalChanged}
+        />
       )}
     </div>
   );

@@ -134,7 +134,7 @@ function NotifRow({
                 fontFamily: notif.is_read ? "Inter_600SemiBold" : "Inter_700Bold",
               },
             ]}
-            numberOfLines={1}
+            numberOfLines={2}
           >
             {notif.title}
           </Text>
@@ -147,7 +147,7 @@ function NotifRow({
             styles.rowBody,
             { color: notif.type === "event_dq" ? "#dc2626" : colors.mutedForeground },
           ]}
-          numberOfLines={notif.type === "event_dq" ? undefined : 2}
+          numberOfLines={notif.type === "event_dq" ? undefined : 3}
         >
           {notif.body}
         </Text>

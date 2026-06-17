@@ -140,11 +140,11 @@ function MatchCard({ match, x, y, onScore, feeders = [] }: { match: KnockoutMatc
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p1win ? "#f0faf4" : "#fff" }}>
         {match.player1_name ? (
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#374151" }}>
+            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p1win ? GREEN : "#111827" }}>
               {match.player1_name}
             </span>
             {match.player1_partner_name && (
-              <span style={{ fontSize: 9, color: "#9ca3af", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 9, color: "#111827", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 &amp; {match.player1_partner_name}
               </span>
             )}
@@ -162,11 +162,11 @@ function MatchCard({ match, x, y, onScore, feeders = [] }: { match: KnockoutMatc
       <div style={{ display: "flex", alignItems: "center", gap: 4, padding: "4px 8px", background: p2win ? "#f0faf4" : "#fff" }}>
         {match.player2_name ? (
           <div style={{ flex: 1, minWidth: 0 }}>
-            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#374151" }}>
+            <span style={{ fontSize: 10, fontWeight: 600, display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", color: p2win ? GREEN : "#111827" }}>
               {match.player2_name}
             </span>
             {match.player2_partner_name && (
-              <span style={{ fontSize: 9, color: "#9ca3af", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              <span style={{ fontSize: 9, color: "#111827", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 &amp; {match.player2_partner_name}
               </span>
             )}

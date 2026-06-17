@@ -1144,36 +1144,47 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
   // ── Fetch all approved entrants with their Round 1 opponent ─────────────────
   const entrants = await query<any>(
     `SELECT u.id, u.name, u.push_token,
-            -- find their Round 1 match (they may be p1 or p2)
             km.id          as match_id,
             km.status      as match_status,
             p1.name        as p1_name,
             p2.name        as p2_name,
             km.player1_id,
-            km.player2_id
+            km.player2_id,
+            p1partner.name as p1_partner_name,
+            p2partner.name as p2_partner_name
      FROM event_registrations er
      JOIN users u ON u.id = er.user_id
      LEFT JOIN knockout_matches km
        ON km.round_id = ? AND km.status != 'bye'
-       AND (km.player1_id = u.id OR km.player2_id = u.id)
+       AND (km.player1_id = u.id OR km.player2_id = u.id
+            OR km.player1_id IN (SELECT er2.user_id FROM event_registrations er2 WHERE er2.team_id = er.team_id AND er2.event_id = er.event_id)
+            OR km.player2_id IN (SELECT er2.user_id FROM event_registrations er2 WHERE er2.team_id = er.team_id AND er2.event_id = er.event_id))
      LEFT JOIN users p1 ON p1.id = km.player1_id
      LEFT JOIN users p2 ON p2.id = km.player2_id
+     LEFT JOIN event_registrations p1pr ON p1pr.team_id = (SELECT er3.team_id FROM event_registrations er3 WHERE er3.user_id = km.player1_id AND er3.event_id = km.event_id LIMIT 1)
+                                       AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
+     LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
+     LEFT JOIN event_registrations p2pr ON p2pr.team_id = (SELECT er4.team_id FROM event_registrations er4 WHERE er4.user_id = km.player2_id AND er4.event_id = km.event_id LIMIT 1)
+                                       AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
+     LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE er.event_id = ? AND er.status = 'approved'`,
     [round1.id, evId]
   );
 
+  const isTeamFormat = ev.format === "knockout_team";
   const deadline  = round1.deadline ? ` by ${round1.deadline instanceof Date ? round1.deadline.toISOString().slice(0, 10) : String(round1.deadline).slice(0, 10)}` : "";
   const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
   let   notified  = 0;
   const notifiedMatchIds = new Set<number>();
 
   for (const e of entrants) {
-    // Determine opponent name for personalised message
+    // Determine opponent name(s) for personalised message
     let opponentName = "TBD";
     if (e.match_id) {
-      opponentName = e.player1_id === e.id
-        ? (e.p2_name ?? "TBD")
-        : (e.p1_name ?? "TBD");
+      const isMeP1 = e.player1_id === e.id;
+      const oppMain    = isMeP1 ? (e.p2_name ?? "TBD") : (e.p1_name ?? "TBD");
+      const oppPartner = isMeP1 ? e.p2_partner_name : e.p1_partner_name;
+      opponentName = isTeamFormat && oppPartner ? `${oppMain} & ${oppPartner}` : oppMain;
     }
 
     const title = `${ev.name} — Draw Published`;

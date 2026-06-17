@@ -78,8 +78,9 @@ function handleTap(notif: AppNotification) {
     case "event_published":
     case "event_cancelled":
     case "event_draw_published":
+    case "knockout_draw":
     case "knockout_pair_request":
-      if (d.event_id) router.push({ pathname: "/event/[id]", params: { id: d.event_id } });
+      if (d.event_id || d.eventId) router.push({ pathname: "/event/[id]", params: { id: d.event_id ?? d.eventId } });
       break;
     case "club_broadcast":
       if (d.club_id) router.push({ pathname: "/club/[id]", params: { id: d.club_id } });

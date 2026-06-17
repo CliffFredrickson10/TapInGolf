@@ -90,6 +90,7 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   const { club_id, season_start, season_end, lookahead_days, players_per_slot, config_type } = rule;
   const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : (rule.config_data ?? {});
   const slotTemplate = buildSlotsForDay(config_type, configData);
+  const blockedDays: number[] = typeof rule.blocked_days === "string" ? JSON.parse(rule.blocked_days) : (rule.blocked_days ?? []);
 
   if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0, no_config: true };
 
@@ -99,7 +100,11 @@ export async function runAutoRuleNow(rule: any): Promise<{ datesProcessed: numbe
   const dates: string[] = [];
   for (let i = -lookback; i < lookahead; i++) {
     const d = formatDate(addDaysToDate(new Date(), i));
-    if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
+    if (!dateInSeason(d, String(season_start), String(season_end))) continue;
+    // Skip blocked days-of-week (0=Sun … 6=Sat)
+    const dow = new Date(d + "T12:00:00").getDay();
+    if (blockedDays.includes(dow)) continue;
+    dates.push(d);
   }
 
   if (!dates.length) {

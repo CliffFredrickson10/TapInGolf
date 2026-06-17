@@ -651,6 +651,7 @@ async function createSchema(): Promise<void> {
     )
   `);
   await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS lookback_days INT NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS blocked_days JSONB NOT NULL DEFAULT '[]'`);
 
   // ── Tournament templates ──────────────────────────────────────────────────
   await ddl(`

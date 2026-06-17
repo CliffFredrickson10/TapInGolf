@@ -30,6 +30,7 @@ interface AutoRule {
   players_per_slot: number;
   config_type: string;
   config_data: any;
+  blocked_days: number[];
   active: boolean;
   last_run_at: string | null;
 }
@@ -45,8 +46,12 @@ interface RuleForm {
   players_per_slot: number;
   config_type: string;
   config_data: any;
+  blocked_days: number[];
   active: boolean;
 }
+
+const DOW_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DOW_ORDER  = [1, 2, 3, 4, 5, 6, 0]; // Mon → Sun
 
 const MONTHS = [
   { v: "01", l: "January" }, { v: "02", l: "February" }, { v: "03", l: "March" },
@@ -60,7 +65,7 @@ const DEFAULT_RULE_FORM: RuleForm = {
   name: "", season_start_month: "09", season_start_day: "01",
   season_end_month: "04", season_end_day: "30",
   lookahead_days: 14, lookback_days: 0, players_per_slot: 4,
-  config_type: "A", config_data: {}, active: true,
+  config_type: "A", config_data: {}, blocked_days: [], active: true,
 };
 
 interface TeeTime {
@@ -1513,7 +1518,8 @@ export default function Schedule() {
       season_end_month: em, season_end_day: ed,
       lookahead_days: r.lookahead_days, lookback_days: r.lookback_days ?? 0,
       players_per_slot: r.players_per_slot,
-      config_type: r.config_type, config_data: r.config_data, active: r.active,
+      config_type: r.config_type, config_data: r.config_data,
+      blocked_days: r.blocked_days ?? [], active: r.active,
     });
     setRuleSavedConfigs([]);
     setRuleDlgOpen(true);
@@ -1533,6 +1539,7 @@ export default function Schedule() {
         players_per_slot: ruleForm.players_per_slot,
         config_type: ruleForm.config_type,
         config_data: ruleForm.config_data,
+        blocked_days: ruleForm.blocked_days,
         active: ruleForm.active,
       };
       if (ruleEditId) {
@@ -1840,6 +1847,9 @@ export default function Schedule() {
                         &nbsp;·&nbsp;{rule.lookahead_days}d ahead
                         {rule.lookback_days > 0 && <>&nbsp;·&nbsp;{rule.lookback_days}d back</>}
                         &nbsp;·&nbsp;{rule.players_per_slot} players/slot
+                        {(rule.blocked_days ?? []).length > 0 && (
+                          <>&nbsp;·&nbsp;<span className="text-red-600">Blocked: {DOW_ORDER.filter(d => (rule.blocked_days ?? []).includes(d)).map(d => DOW_LABELS[d]).join(", ")}</span></>
+                        )}
                       </p>
                       {rule.last_run_at && (
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1 mt-0.5">
@@ -2330,6 +2340,38 @@ export default function Schedule() {
                   </SelectContent>
                 </Select>
               </div>
+            </div>
+
+            {/* Blocked days */}
+            <div>
+              <Label className="text-xs font-medium mb-1.5 block">Blocked days — no tee times generated</Label>
+              <div className="flex gap-1.5">
+                {DOW_ORDER.map(d => {
+                  const blocked = (ruleForm.blocked_days ?? []).includes(d);
+                  return (
+                    <button
+                      key={d}
+                      type="button"
+                      onClick={() => setRuleForm(p => {
+                        const cur = p.blocked_days ?? [];
+                        return { ...p, blocked_days: blocked ? cur.filter(x => x !== d) : [...cur, d] };
+                      })}
+                      className={`flex-1 py-1.5 text-xs rounded border font-medium transition-colors select-none ${
+                        blocked
+                          ? "bg-red-100 border-red-300 text-red-700"
+                          : "bg-muted border-border text-muted-foreground hover:bg-muted/60"
+                      }`}
+                    >
+                      {DOW_LABELS[d]}
+                    </button>
+                  );
+                })}
+              </div>
+              {(ruleForm.blocked_days ?? []).length > 0 && (
+                <p className="text-[10px] text-red-600 mt-1">
+                  Skipping: {DOW_ORDER.filter(d => (ruleForm.blocked_days ?? []).includes(d)).map(d => DOW_LABELS[d]).join(", ")}
+                </p>
+              )}
             </div>
 
             {/* Saved config picker */}

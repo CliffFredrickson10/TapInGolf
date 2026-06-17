@@ -56341,13 +56341,17 @@ async function runAutoRuleNow(rule) {
   const { club_id, season_start, season_end, lookahead_days, players_per_slot, config_type } = rule;
   const configData = typeof rule.config_data === "string" ? JSON.parse(rule.config_data) : rule.config_data ?? {};
   const slotTemplate = buildSlotsForDay(config_type, configData);
+  const blockedDays = typeof rule.blocked_days === "string" ? JSON.parse(rule.blocked_days) : rule.blocked_days ?? [];
   if (!slotTemplate.length) return { datesProcessed: 0, slotsCreated: 0, no_config: true };
   const lookback = Number(rule.lookback_days ?? 0);
   const lookahead = Number(lookahead_days ?? 14);
   const dates = [];
   for (let i = -lookback; i < lookahead; i++) {
     const d = formatDate(addDaysToDate(/* @__PURE__ */ new Date(), i));
-    if (dateInSeason(d, String(season_start), String(season_end))) dates.push(d);
+    if (!dateInSeason(d, String(season_start), String(season_end))) continue;
+    const dow = (/* @__PURE__ */ new Date(d + "T12:00:00")).getDay();
+    if (blockedDays.includes(dow)) continue;
+    dates.push(d);
   }
   if (!dates.length) {
     return { datesProcessed: 0, slotsCreated: 0, out_of_season: true, season_start: String(season_start), season_end: String(season_end) };
@@ -72757,24 +72761,32 @@ router14.delete("/portal/schedule-configs/:id", requireClubAuth2, async (req, re
 router14.get("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
-    "SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
+    "SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active, last_run_at, created_at FROM tee_auto_rules WHERE club_id = ? ORDER BY created_at ASC",
     [club.id]
   );
-  res.json(rows.map((r) => ({ ...r, config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data })));
+  res.json(rows.map((r) => ({
+    ...r,
+    config_data: typeof r.config_data === "string" ? JSON.parse(r.config_data) : r.config_data,
+    blocked_days: typeof r.blocked_days === "string" ? JSON.parse(r.blocked_days) : r.blocked_days ?? []
+  })));
 });
 router14.post("/portal/tee-auto-rules", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
-  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active } = req.body ?? {};
   if (!name || !season_start || !season_end) {
     res.status(400).json({ message: "name, season_start and season_end are required" });
     return;
   }
   const id = await exec(
-    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(lookback_days ?? 0), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), active !== false]
+    "INSERT INTO tee_auto_rules (club_id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    [club.id, String(name).trim(), season_start, season_end, Number(lookahead_days ?? 14), Number(lookback_days ?? 0), Number(players_per_slot ?? 4), config_type ?? "A", JSON.stringify(config_data ?? {}), JSON.stringify(blocked_days ?? []), active !== false]
   );
-  const created = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
-  res.status(201).json({ ...created, config_data: typeof created?.config_data === "string" ? JSON.parse(created.config_data) : created?.config_data });
+  const created = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [id]);
+  res.status(201).json({
+    ...created,
+    config_data: typeof created?.config_data === "string" ? JSON.parse(created.config_data) : created?.config_data,
+    blocked_days: typeof created?.blocked_days === "string" ? JSON.parse(created.blocked_days) : created?.blocked_days ?? []
+  });
 });
 router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -72784,7 +72796,7 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
     res.status(404).json({ message: "Rule not found" });
     return;
   }
-  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active } = req.body ?? {};
+  const { name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active } = req.body ?? {};
   const updates = [];
   const vals = [];
   if (name !== void 0) {
@@ -72819,6 +72831,10 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
     updates.push("config_data = ?");
     vals.push(JSON.stringify(config_data));
   }
+  if (blocked_days !== void 0) {
+    updates.push("blocked_days = ?");
+    vals.push(JSON.stringify(blocked_days));
+  }
   if (active !== void 0) {
     updates.push("active = ?");
     vals.push(Boolean(active));
@@ -72829,8 +72845,12 @@ router14.put("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) =>
   }
   vals.push(ruleId, club.id);
   await run(`UPDATE tee_auto_rules SET ${updates.join(", ")} WHERE id = ? AND club_id = ?`, vals);
-  const updated = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
-  res.json({ ...updated, config_data: typeof updated?.config_data === "string" ? JSON.parse(updated.config_data) : updated?.config_data });
+  const updated = await row("SELECT id, name, season_start, season_end, lookahead_days, lookback_days, players_per_slot, config_type, config_data, blocked_days, active, last_run_at, created_at FROM tee_auto_rules WHERE id = ?", [ruleId]);
+  res.json({
+    ...updated,
+    config_data: typeof updated?.config_data === "string" ? JSON.parse(updated.config_data) : updated?.config_data,
+    blocked_days: typeof updated?.blocked_days === "string" ? JSON.parse(updated.blocked_days) : updated?.blocked_days ?? []
+  });
 });
 router14.delete("/portal/tee-auto-rules/:id", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -74878,6 +74898,7 @@ var bans_default = router21;
 // src/routes/knockout.ts
 var import_express22 = __toESM(require_express2(), 1);
 init_pg();
+init_logger();
 init_notifications();
 var router22 = (0, import_express22.Router)();
 function getRoundLabels(totalRounds) {
@@ -74970,6 +74991,35 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       club.id
     ]
   );
+  try {
+    const audience = await query(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+       LIMIT 500`,
+      [club.id]
+    );
+    if (audience.length > 0) {
+      const evDate = event_date ? new Date(event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "";
+      const notifTitle = `\u26F3 Tournament Now Open \u2014 ${club.name}`;
+      const notifBody = `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Tap to view & enter.`;
+      const pushAudience = audience.filter((u) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u) => ({
+          to: u.push_token,
+          sound: "default",
+          title: notifTitle,
+          body: notifBody,
+          data: { type: "event_published", event_id: id, club_id: club.id }
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_published", notifTitle, notifBody, { event_id: id, club_id: club.id });
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "Knockout creation: failed to send member notifications");
+  }
   res.json({ id });
 });
 router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
@@ -76294,6 +76344,7 @@ async function createSchema() {
     )
   `);
   await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS lookback_days INT NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE tee_auto_rules ADD COLUMN IF NOT EXISTS blocked_days JSONB NOT NULL DEFAULT '[]'`);
   await ddl(`
     CREATE TABLE IF NOT EXISTS tournament_templates (
       id            SERIAL PRIMARY KEY,

@@ -105,6 +105,35 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
      format, knockout_type, draw_method, pairing_deadline || null, club.id]
   );
 
+  // Notify all active club members — knockouts go straight to 'active' so there
+  // is no separate publish step. Mirror the same logic as the regular publish route.
+  try {
+    const audience = await query<any>(
+      `SELECT DISTINCT u.id, u.push_token
+       FROM users u
+       JOIN club_members cm ON cm.user_id = u.id AND cm.club_id = ? AND cm.status = 'active'
+       LIMIT 500`,
+      [club.id]
+    );
+    if (audience.length > 0) {
+      const evDate = event_date ? new Date(event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) : "";
+      const notifTitle = `⛳ Tournament Now Open — ${club.name}`;
+      const notifBody  = `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Tap to view & enter.`;
+      const pushAudience = audience.filter((u: any) => u.push_token);
+      if (pushAudience.length > 0) {
+        sendPushNotifications(pushAudience.map((u: any) => ({
+          to: u.push_token, sound: "default", title: notifTitle, body: notifBody,
+          data: { type: "event_published", event_id: id, club_id: club.id },
+        })));
+      }
+      for (const u of audience) {
+        saveUserNotification(u.id, "event_published", notifTitle, notifBody, { event_id: id, club_id: club.id });
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "Knockout creation: failed to send member notifications");
+  }
+
   res.json({ id });
 });
 

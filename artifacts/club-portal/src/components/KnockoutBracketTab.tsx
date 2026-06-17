@@ -461,8 +461,10 @@ function GenerateDialog({ eventId, approvedCount, isPublished, onClose, onGenera
 }
 
 // ── Main export ───────────────────────────────────────────────────────────────
-export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly }: {
-  eventId: number; eventName: string; approvedCount: number; readOnly?: boolean;
+export { GenerateDialog };
+
+export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly, hideBanner }: {
+  eventId: number; eventName: string; approvedCount: number; readOnly?: boolean; hideBanner?: boolean;
 }) {
   const { toast } = useToast();
   const [data, setData]           = useState<BracketData | null>(null);
@@ -700,6 +702,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const hasRounds = data && data.rounds.length > 0;
 
   if (!hasRounds) {
+    if (hideBanner) return null;
     return (
       <div className="py-10 text-center space-y-4">
         {showGenerate && (

@@ -9,7 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
+import { KnockoutBracketTab, GenerateDialog } from "@/components/KnockoutBracketTab";
 import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock, Zap } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -461,7 +461,12 @@ function SinglesEntryPanel({ ev }: { ev: KnockoutEvent }) {
 
 // ── Betterball Pairing Panel (shown before bracket is generated) ──────────────
 
-function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
+function BetterballPairingPanel({ ev, approvedCount, readOnly, onBracketGenerated }: {
+  ev: KnockoutEvent;
+  approvedCount: number;
+  readOnly?: boolean;
+  onBracketGenerated?: () => void;
+}) {
   const { toast } = useToast();
   const [pairs, setPairs]               = useState<KnockoutPair[]>([]);
   const [pendingRequests, setPendingRequests] = useState<KnockoutPair[]>([]);
@@ -471,6 +476,8 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
   const [loading, setLoading]           = useState(true);
   const [autoPairing, setAutoPairing]   = useState(false);
   const [confirmAutoPair, setConfirmAutoPair] = useState(false);
+  const [bracketExists, setBracketExists] = useState((ev.round_count ?? 0) > 0);
+  const [showGenerate, setShowGenerate] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -549,8 +556,46 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* No bracket generated yet */}
+          {!bracketExists && (
+            <div className="rounded-lg border border-dashed border-[#c8a84b]/60 bg-[#c8a84b]/5 px-4 py-5 flex flex-col sm:flex-row items-center gap-4">
+              {showGenerate && (
+                <GenerateDialog
+                  eventId={ev.id}
+                  approvedCount={approvedCount}
+                  isPublished={false}
+                  onClose={() => setShowGenerate(false)}
+                  onGenerated={() => {
+                    setShowGenerate(false);
+                    setBracketExists(true);
+                    onBracketGenerated?.();
+                  }}
+                />
+              )}
+              <div className="text-3xl flex-shrink-0">🏆</div>
+              <div className="flex-1 text-center sm:text-left">
+                <p className="font-semibold text-sm">No bracket generated yet</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {approvedCount < 2
+                    ? `Need at least 2 confirmed pairs — currently ${approvedCount}.`
+                    : `${approvedCount} confirmed pair${approvedCount !== 1 ? "s" : ""} approved and ready.`}
+                </p>
+              </div>
+              {!readOnly && (
+                <Button
+                  size="sm"
+                  disabled={approvedCount < 2}
+                  className="bg-[#1a5c38] hover:bg-[#154a2d] text-white flex-shrink-0"
+                  onClick={() => setShowGenerate(true)}
+                >
+                  Generate Bracket
+                </Button>
+              )}
+            </div>
+          )}
+
           {/* Ready-to-generate call-to-action */}
-          {(unpaired.length === 0 && pairs.length >= 2 || isPastDeadline && pairs.length >= 2) && (
+          {!bracketExists && (unpaired.length === 0 && pairs.length >= 2 || isPastDeadline && pairs.length >= 2) && (
             <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 flex items-start gap-3">
               <Zap className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
               <div className="flex-1 min-w-0">
@@ -716,6 +761,7 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
   const { toast } = useToast();
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [bracketKey, setBracketKey] = useState(0);
 
   const del = async () => {
     setDeleting(true);
@@ -802,17 +848,24 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
       <div className="flex-1 px-6 pt-4 pb-8 overflow-auto">
         {/* For betterball tournaments show pairing phase panel before the bracket */}
         {ev.knockout_type === "team" && (
-          <BetterballPairingPanel ev={ev} />
+          <BetterballPairingPanel
+            ev={ev}
+            approvedCount={ev.pair_count}
+            readOnly={readOnly}
+            onBracketGenerated={() => setBracketKey(k => k + 1)}
+          />
         )}
         {/* For singles tournaments with entry phase show entry panel before the bracket */}
         {ev.knockout_type === "individual" && ev.singles_entry_deadline && (
           <SinglesEntryPanel ev={ev} />
         )}
         <KnockoutBracketTab
+          key={bracketKey}
           eventId={ev.id}
           eventName={ev.name}
           approvedCount={ev.knockout_type === "team" ? ev.pair_count : ev.member_count}
           readOnly={readOnly}
+          hideBanner={ev.knockout_type === "team"}
         />
       </div>
     </div>

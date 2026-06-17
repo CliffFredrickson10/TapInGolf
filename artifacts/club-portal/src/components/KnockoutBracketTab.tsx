@@ -15,7 +15,7 @@ const RED   = "#dc2626";
 const LGRAY = "#d1d5db";
 
 const CARD_W   = 160;
-const CARD_H   = 80;
+const CARD_H   = 100;
 const SLOT_GAP = 8;
 const COL_GAP  = 44;
 const HEADER_H = 60;

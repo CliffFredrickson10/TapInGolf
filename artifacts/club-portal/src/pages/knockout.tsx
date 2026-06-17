@@ -9,7 +9,6 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { KnockoutBracketTab } from "@/components/KnockoutBracketTab";
 import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock } from "lucide-react";
 
@@ -632,29 +631,27 @@ export default function KnockoutPage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={v => setActiveTab(v as TabValue)} className="mb-4">
-        <TabsList className="h-9">
-          <TabsTrigger value="ongoing" className="text-xs gap-1.5">
-            Ongoing
-            {!loading && ongoing.length > 0 && (
-              <span className="rounded-full bg-[#1a5c38]/15 text-[#1a5c38] text-[10px] font-bold px-1.5 py-0.5 leading-none">{ongoing.length}</span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="past" className="text-xs gap-1.5">
-            Past
-            {!loading && past.length > 0 && (
-              <span className="rounded-full bg-muted text-muted-foreground text-[10px] font-bold px-1.5 py-0.5 leading-none">{past.length}</span>
-            )}
-          </TabsTrigger>
-          <TabsTrigger value="cancelled" className="text-xs gap-1.5">
-            Cancelled
-            {!loading && cancelled.length > 0 && (
-              <span className="rounded-full bg-red-100 text-red-600 text-[10px] font-bold px-1.5 py-0.5 leading-none">{cancelled.length}</span>
-            )}
-          </TabsTrigger>
-        </TabsList>
-      </Tabs>
+      {/* Tab bar */}
+      <div className="flex gap-1 border-b mb-4">
+        {(["ongoing", "past", "cancelled"] as const).map(tab => {
+          const count = tab === "ongoing" ? ongoing.length : tab === "past" ? past.length : cancelled.length;
+          const active = activeTab === tab;
+          return (
+            <button
+              key={tab}
+              onClick={() => setActiveTab(tab)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors flex items-center gap-1.5 capitalize ${active ? "border-[#1a5c38] text-[#1a5c38]" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+            >
+              {tab}
+              {!loading && count > 0 && (
+                <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${tab === "cancelled" ? "bg-red-100 text-red-600" : tab === "ongoing" ? "bg-[#1a5c38]/10 text-[#1a5c38]" : "bg-gray-100 text-gray-600"}`}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {/* Tournament list */}
       {loading ? (

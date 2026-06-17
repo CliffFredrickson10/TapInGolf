@@ -100,7 +100,7 @@ router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Respon
 // ── Create knockout tournament ────────────────────────────────────────────────
 router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline } = req.body ?? {};
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline } = req.body ?? {};
 
   if (!name?.trim()) { res.status(400).json({ message: "Name is required" }); return; }
   if (!knockout_type) { res.status(400).json({ message: "Format is required" }); return; }
@@ -113,11 +113,25 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        knockout_pairing_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
+        knockout_pairing_deadline, singles_entry_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [club.id, name.trim(), description?.trim() ?? null, event_date || null, end_date || null,
-     format, knockout_type, draw_method, pairing_deadline || null, club.id]
+     format, knockout_type, draw_method, pairing_deadline || null, singles_entry_deadline || null, club.id]
   );
+
+  // For singles with entry deadline: create pending registrations for all active members now
+  if (knockout_type !== "team" && singles_entry_deadline) {
+    const members = await query<any>(
+      `SELECT u.id FROM club_members cm JOIN users u ON u.id = cm.user_id WHERE cm.club_id = ? AND cm.status = 'active'`,
+      [club.id]
+    );
+    for (const m of members) {
+      await exec(
+        `INSERT INTO event_registrations (event_id, user_id, status) VALUES (?, ?, 'pending') ON CONFLICT DO NOTHING`,
+        [id, m.id]
+      );
+    }
+  }
 
   // Notify all active club members — knockouts go straight to 'active' so there
   // is no separate publish step. Mirror the same logic as the regular publish route.
@@ -136,9 +150,14 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
       const deadlineStr  = pairing_deadline
         ? ` before ${new Date(pairing_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
         : "";
+      const entryDeadlineStr = singles_entry_deadline
+        ? ` by ${new Date(singles_entry_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}`
+        : "";
       const notifBody = isBetterball
         ? `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Betterball Knockout — open the app to choose your partner${deadlineStr}.`
-        : `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Tap to view & enter.`;
+        : singles_entry_deadline
+          ? `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Singles Knockout — accept your spot or opt out${entryDeadlineStr}.`
+          : `${name.trim()}${evDate ? ` · ${evDate}` : ""}. Tap to view & enter.`;
       const notifType = isBetterball ? "knockout_pair_request" : "event_published";
       const pushAudience = audience.filter((u: any) => u.push_token);
       if (pushAudience.length > 0) {
@@ -156,6 +175,75 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
   }
 
   res.json({ id });
+});
+
+// ── Member: singles knockout entry status ─────────────────────────────────────
+router.get("/knockout/:id/entry-status", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  const ev = await row<any>(
+    "SELECT id, singles_entry_deadline FROM golf_events WHERE id = ? AND format = 'knockout_individual' AND status = 'active'",
+    [evId]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  if (!ev.singles_entry_deadline) {
+    res.json({ enrolled: false, status: "none", entry_deadline: null });
+    return;
+  }
+
+  let user: any = null;
+  try { user = await getUser(req); } catch { /* unauthenticated */ }
+  if (!user) { res.json({ enrolled: false, status: "none", entry_deadline: ev.singles_entry_deadline }); return; }
+
+  const reg = await row<any>(
+    "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+
+  res.json({
+    enrolled: !!reg,
+    status: reg ? (reg.status === "approved" ? "accepted" : "pending") : "none",
+    entry_deadline: ev.singles_entry_deadline,
+  });
+});
+
+// ── Member: accept singles knockout entry ──────────────────────────────────────
+router.post("/knockout/:id/accept", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  let user: any;
+  try { user = await getUser(req); } catch { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  const ev = await row<any>(
+    "SELECT id, name, singles_entry_deadline FROM golf_events WHERE id = ? AND format = 'knockout_individual' AND status = 'active'",
+    [evId]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  const reg = await row<any>(
+    "SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  if (!reg) { res.status(404).json({ message: "You are not entered in this tournament" }); return; }
+  if (reg.status === "approved") { res.json({ ok: true, status: "accepted" }); return; }
+
+  await run(
+    "UPDATE event_registrations SET status = 'approved' WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  res.json({ ok: true, status: "accepted" });
+});
+
+// ── Member: opt out of singles knockout ───────────────────────────────────────
+router.delete("/knockout/:id/entry", async (req: Request, res: Response): Promise<void> => {
+  const evId = Number(req.params.id);
+  let user: any;
+  try { user = await getUser(req); } catch { res.status(401).json({ message: "Unauthorised" }); return; }
+
+  await run(
+    "DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  res.json({ ok: true });
 });
 
 // ── Delete knockout tournament ────────────────────────────────────────────────
@@ -204,6 +292,39 @@ router.get("/portal/knockout/:id/pairs", requireClubAuth, async (req: Request, r
   );
   const unpaired = allMembers.filter((m: any) => !pairedIds.has(m.id));
   res.json({ pairs: confirmedPairs, pending_requests: pendingPairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+});
+
+// ── Portal: singles entry phase status ────────────────────────────────────────
+router.get("/portal/knockout/:id/entries", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row<any>(
+    "SELECT id, singles_entry_deadline FROM golf_events WHERE id = ? AND club_id = ? AND format = 'knockout_individual'",
+    [evId, club.id]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  const registrations = await query<any>(
+    `SELECT er.status, u.id, u.name
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.team_id IS NULL
+     ORDER BY u.name ASC`,
+    [evId]
+  );
+
+  const registeredIds = new Set(registrations.map((r: any) => r.id));
+  const allMembers = await query<any>(
+    `SELECT u.id, u.name FROM club_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
+    [club.id]
+  );
+
+  const accepted  = registrations.filter((r: any) => r.status === "approved");
+  const pending   = registrations.filter((r: any) => r.status === "pending");
+  const opted_out = allMembers.filter((m: any) => !registeredIds.has(m.id));
+
+  res.json({ accepted, pending, opted_out, entry_deadline: ev.singles_entry_deadline });
 });
 
 // ── Member: get own pair status ────────────────────────────────────────────────
@@ -532,17 +653,29 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
     }
     members = teams;
   } else {
-    // Singles: all active club members are in the draw
-    members = await query<any>(
-      `SELECT u.id as user_id, u.name, u.handicap
-       FROM club_members cm
-       JOIN users u ON u.id = cm.user_id
-       WHERE cm.club_id = ? AND cm.status = 'active'
-       ORDER BY cm.created_at ASC`,
-      [club.id]
-    );
+    // Singles: if entry deadline configured, use only registered (non-opted-out) members
+    if (ev.singles_entry_deadline) {
+      members = await query<any>(
+        `SELECT u.id as user_id, u.name, u.handicap
+         FROM event_registrations er
+         JOIN users u ON u.id = er.user_id
+         WHERE er.event_id = ? AND er.status IN ('pending', 'approved') AND er.team_id IS NULL
+         ORDER BY er.created_at ASC`,
+        [evId]
+      );
+    } else {
+      // No entry phase: all active club members are in the draw
+      members = await query<any>(
+        `SELECT u.id as user_id, u.name, u.handicap
+         FROM club_members cm
+         JOIN users u ON u.id = cm.user_id
+         WHERE cm.club_id = ? AND cm.status = 'active'
+         ORDER BY cm.created_at ASC`,
+        [club.id]
+      );
+    }
     if (members.length < 2) {
-      res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
+      res.status(400).json({ message: "Need at least 2 members entered to generate a bracket" });
       return;
     }
   }

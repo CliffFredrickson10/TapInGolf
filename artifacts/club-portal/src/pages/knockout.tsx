@@ -24,6 +24,7 @@ interface KnockoutEvent {
   knockout_type: "individual" | "team" | null;
   knockout_draw_method: "random" | "seeded" | null;
   knockout_pairing_deadline: string | null;
+  singles_entry_deadline: string | null;
   bracket_ready_notified_at: string | null;
   status: string;
   member_count: number;
@@ -54,6 +55,7 @@ const EMPTY_FORM = {
   knockout_type: "" as "" | "individual" | "team",
   draw_method: "random" as "random" | "seeded",
   pairing_deadline: "",
+  singles_entry_deadline: "",
 };
 
 function fmtDate(d: string | null | undefined) {
@@ -85,6 +87,13 @@ function StatusBadge({ ev }: { ev: KnockoutEvent }) {
       return (
         <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
           <Handshake className="h-3 w-3" /> Pairing Phase
+        </span>
+      );
+    }
+    if (ev.knockout_type === "individual" && ev.singles_entry_deadline) {
+      return (
+        <span className="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full bg-[#1a5c38]/10 text-[#1a5c38]">
+          <UserCheck className="h-3 w-3" /> Entry Phase
         </span>
       );
     }
@@ -266,10 +275,36 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </Select>
           </div>
 
+          {/* Singles entry deadline (optional) */}
+          {form.knockout_type === "individual" && (
+            <div className="rounded-lg border border-[#1a5c38]/30 bg-[#1a5c38]/5 px-3 py-3 text-xs text-[#1a5c38] space-y-3">
+              <div>
+                <p className="font-semibold mb-1">🏌️ Member entry phase (optional)</p>
+                <p className="text-[#1a5c38]/80 leading-snug">
+                  If set, members receive a notification and can accept or opt out of the tournament before the deadline. Only members who haven't opted out will be included in the draw.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-[#1a5c38]">
+                  Entry opt-out deadline <span className="text-muted-foreground text-xs font-normal">(optional)</span>
+                </Label>
+                <Input
+                  type="date"
+                  value={form.singles_entry_deadline}
+                  onChange={e => setForm(f => ({ ...f, singles_entry_deadline: e.target.value }))}
+                  className="bg-white border-[#1a5c38]/40 focus-visible:ring-[#1a5c38]"
+                />
+                <p className="text-[10px] text-[#1a5c38]/70">
+                  Members can opt out until this date. Leave blank to include all active members automatically.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="rounded-lg border border-[#1a5c38]/20 bg-[#1a5c38]/5 px-3 py-2.5 text-xs text-[#1a5c38]">
             <p className="font-semibold mb-1">ℹ️ How knockout tournaments work</p>
             <ul className="space-y-0.5 text-[#1a5c38]/80 list-disc list-inside">
-              <li>All active club members are automatically in the draw</li>
+              <li>{form.knockout_type === "individual" && form.singles_entry_deadline ? "Members can accept or opt out; remaining members enter the draw" : "All active club members are automatically in the draw"}</li>
               <li>No registration, entry fee, or tee times required</li>
               <li>Players book their own tee times to complete each match</li>
               <li>Generate the bracket once, then update results round by round</li>
@@ -290,6 +325,137 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+// ── Singles Entry Phase Panel (shown before bracket is generated) ────────────
+
+interface SinglesEntryData {
+  accepted: { id: number; name: string }[];
+  pending:  { id: number; name: string }[];
+  opted_out: { id: number; name: string }[];
+  entry_deadline: string | null;
+}
+
+function SinglesEntryPanel({ ev }: { ev: KnockoutEvent }) {
+  const { toast } = useToast();
+  const [data, setData]     = useState<SinglesEntryData | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    try {
+      const r = await api<SinglesEntryData>(`/api/portal/knockout/${ev.id}/entries`);
+      setData(r);
+    } catch (e: any) {
+      toast({ title: "Error loading entries", description: e.message, variant: "destructive" });
+    } finally { setLoading(false); }
+  }, [ev.id]);
+
+  useEffect(() => { load(); }, [load]);
+
+  const isPastDeadline = data?.entry_deadline ? new Date(data.entry_deadline) < new Date() : false;
+  const totalIn = (data?.accepted.length ?? 0) + (data?.pending.length ?? 0);
+
+  return (
+    <div className="space-y-4 mb-6">
+      {/* Header banner */}
+      <div className="rounded-lg border border-[#1a5c38]/30 bg-[#1a5c38]/5 px-4 py-3">
+        <div className="flex items-center gap-2 mb-1">
+          <UserCheck className="h-4 w-4 text-[#1a5c38]" />
+          <span className="text-sm font-semibold text-[#1a5c38]">Singles Entry Phase</span>
+        </div>
+        <p className="text-xs text-[#1a5c38]/80">
+          Members are notified and can accept their spot or opt out before the draw is generated.
+          {data?.entry_deadline && (
+            <> Opt-out deadline: <strong>{fmtDate(data.entry_deadline)}</strong>{isPastDeadline ? " (passed)" : ""}.</>
+          )}
+        </p>
+      </div>
+
+      {loading ? (
+        <div className="space-y-2">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-6 w-64" />
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {/* Accepted */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <UserCheck className="h-3.5 w-3.5 text-green-600" />
+              ACCEPTED ({data?.accepted.length ?? 0})
+            </p>
+            {(data?.accepted.length ?? 0) === 0 ? (
+              <p className="text-xs text-muted-foreground italic">No members have accepted yet.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {data?.accepted.map(m => (
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-green-50 border-green-100 px-2.5 py-1 text-xs text-green-800">
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Pending (not responded) */}
+          <div>
+            <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+              <Clock className="h-3.5 w-3.5 text-amber-600" />
+              AWAITING RESPONSE ({data?.pending.length ?? 0})
+            </p>
+            {(data?.pending.length ?? 0) === 0 ? (
+              <p className="text-xs text-muted-foreground italic">All members have responded.</p>
+            ) : (
+              <div className="flex flex-wrap gap-1.5">
+                {data?.pending.map(m => (
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-amber-50 border-amber-100 px-2.5 py-1 text-xs text-amber-800">
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Opted out */}
+          {(data?.opted_out.length ?? 0) > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <UserX className="h-3.5 w-3.5 text-red-500" />
+                OPTED OUT ({data?.opted_out.length ?? 0})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {data?.opted_out.map(m => (
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-700 line-through">
+                    {m.name}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Ready-to-generate CTA */}
+          {totalIn >= 2 && (isPastDeadline || (data?.pending.length ?? 0) === 0) && (
+            <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 flex items-start gap-3">
+              <Zap className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-semibold text-green-800">
+                  {isPastDeadline ? "Entry deadline has passed — bracket ready!" : "All members have responded — bracket ready!"}
+                </p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  {totalIn} member{totalIn !== 1 ? "s" : ""} will enter the draw. Generate it below.
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
+        {loading ? "Loading…" : "Refresh"}
+      </Button>
+    </div>
   );
 }
 
@@ -615,6 +781,10 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
         {/* For betterball tournaments show pairing phase panel before the bracket */}
         {ev.knockout_type === "team" && (
           <BetterballPairingPanel ev={ev} />
+        )}
+        {/* For singles tournaments with entry phase show entry panel before the bracket */}
+        {ev.knockout_type === "individual" && ev.singles_entry_deadline && (
+          <SinglesEntryPanel ev={ev} />
         )}
         <KnockoutBracketTab
           eventId={ev.id}

@@ -74969,7 +74969,7 @@ router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
 });
 router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   const club = getClub(req);
-  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline } = req.body ?? {};
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline } = req.body ?? {};
   if (!name?.trim()) {
     res.status(400).json({ message: "Name is required" });
     return;
@@ -74986,8 +74986,8 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        knockout_pairing_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
+        knockout_pairing_deadline, singles_entry_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [
       club.id,
       name.trim(),
@@ -74998,9 +74998,22 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       knockout_type,
       draw_method,
       pairing_deadline || null,
+      singles_entry_deadline || null,
       club.id
     ]
   );
+  if (knockout_type !== "team" && singles_entry_deadline) {
+    const members = await query(
+      `SELECT u.id FROM club_members cm JOIN users u ON u.id = cm.user_id WHERE cm.club_id = ? AND cm.status = 'active'`,
+      [club.id]
+    );
+    for (const m of members) {
+      await exec(
+        `INSERT INTO event_registrations (event_id, user_id, status) VALUES (?, ?, 'pending') ON CONFLICT DO NOTHING`,
+        [id, m.id]
+      );
+    }
+  }
   try {
     const audience = await query(
       `SELECT DISTINCT u.id, u.push_token
@@ -75014,7 +75027,8 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       const notifTitle = `\u26F3 Tournament Now Open \u2014 ${club.name}`;
       const isBetterball = knockout_type === "team";
       const deadlineStr = pairing_deadline ? ` before ${new Date(pairing_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
-      const notifBody = isBetterball ? `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Betterball Knockout \u2014 open the app to choose your partner${deadlineStr}.` : `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Tap to view & enter.`;
+      const entryDeadlineStr = singles_entry_deadline ? ` by ${new Date(singles_entry_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}` : "";
+      const notifBody = isBetterball ? `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Betterball Knockout \u2014 open the app to choose your partner${deadlineStr}.` : singles_entry_deadline ? `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Singles Knockout \u2014 accept your spot or opt out${entryDeadlineStr}.` : `${name.trim()}${evDate ? ` \xB7 ${evDate}` : ""}. Tap to view & enter.`;
       const notifType = isBetterball ? "knockout_pair_request" : "event_published";
       const pushAudience = audience.filter((u) => u.push_token);
       if (pushAudience.length > 0) {
@@ -75034,6 +75048,89 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
     logger.warn({ err }, "Knockout creation: failed to send member notifications");
   }
   res.json({ id });
+});
+router22.get("/knockout/:id/entry-status", async (req, res) => {
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT id, singles_entry_deadline FROM golf_events WHERE id = ? AND format = 'knockout_individual' AND status = 'active'",
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  if (!ev.singles_entry_deadline) {
+    res.json({ enrolled: false, status: "none", entry_deadline: null });
+    return;
+  }
+  let user = null;
+  try {
+    user = await getUser(req);
+  } catch {
+  }
+  if (!user) {
+    res.json({ enrolled: false, status: "none", entry_deadline: ev.singles_entry_deadline });
+    return;
+  }
+  const reg = await row(
+    "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  res.json({
+    enrolled: !!reg,
+    status: reg ? reg.status === "approved" ? "accepted" : "pending" : "none",
+    entry_deadline: ev.singles_entry_deadline
+  });
+});
+router22.post("/knockout/:id/accept", async (req, res) => {
+  const evId = Number(req.params.id);
+  let user;
+  try {
+    user = await getUser(req);
+  } catch {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  const ev = await row(
+    "SELECT id, name, singles_entry_deadline FROM golf_events WHERE id = ? AND format = 'knockout_individual' AND status = 'active'",
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const reg = await row(
+    "SELECT id, status FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  if (!reg) {
+    res.status(404).json({ message: "You are not entered in this tournament" });
+    return;
+  }
+  if (reg.status === "approved") {
+    res.json({ ok: true, status: "accepted" });
+    return;
+  }
+  await run(
+    "UPDATE event_registrations SET status = 'approved' WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  res.json({ ok: true, status: "accepted" });
+});
+router22.delete("/knockout/:id/entry", async (req, res) => {
+  const evId = Number(req.params.id);
+  let user;
+  try {
+    user = await getUser(req);
+  } catch {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  await run(
+    "DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  res.json({ ok: true });
 });
 router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -75080,6 +75177,36 @@ router22.get("/portal/knockout/:id/pairs", requireClubAuth, async (req, res) => 
   );
   const unpaired = allMembers.filter((m) => !pairedIds.has(m.id));
   res.json({ pairs: confirmedPairs, pending_requests: pendingPairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+});
+router22.get("/portal/knockout/:id/entries", requireClubAuth, async (req, res) => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+  const ev = await row(
+    "SELECT id, singles_entry_deadline FROM golf_events WHERE id = ? AND club_id = ? AND format = 'knockout_individual'",
+    [evId, club.id]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const registrations = await query(
+    `SELECT er.status, u.id, u.name
+     FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.team_id IS NULL
+     ORDER BY u.name ASC`,
+    [evId]
+  );
+  const registeredIds = new Set(registrations.map((r) => r.id));
+  const allMembers = await query(
+    `SELECT u.id, u.name FROM club_members cm JOIN users u ON u.id = cm.user_id
+     WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
+    [club.id]
+  );
+  const accepted = registrations.filter((r) => r.status === "approved");
+  const pending = registrations.filter((r) => r.status === "pending");
+  const opted_out = allMembers.filter((m) => !registeredIds.has(m.id));
+  res.json({ accepted, pending, opted_out, entry_deadline: ev.singles_entry_deadline });
 });
 router22.get("/knockout/:id/pair-status", async (req, res) => {
   const evId = Number(req.params.id);
@@ -75414,16 +75541,27 @@ router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res)
     }
     members = teams;
   } else {
-    members = await query(
-      `SELECT u.id as user_id, u.name, u.handicap
-       FROM club_members cm
-       JOIN users u ON u.id = cm.user_id
-       WHERE cm.club_id = ? AND cm.status = 'active'
-       ORDER BY cm.created_at ASC`,
-      [club.id]
-    );
+    if (ev.singles_entry_deadline) {
+      members = await query(
+        `SELECT u.id as user_id, u.name, u.handicap
+         FROM event_registrations er
+         JOIN users u ON u.id = er.user_id
+         WHERE er.event_id = ? AND er.status IN ('pending', 'approved') AND er.team_id IS NULL
+         ORDER BY er.created_at ASC`,
+        [evId]
+      );
+    } else {
+      members = await query(
+        `SELECT u.id as user_id, u.name, u.handicap
+         FROM club_members cm
+         JOIN users u ON u.id = cm.user_id
+         WHERE cm.club_id = ? AND cm.status = 'active'
+         ORDER BY cm.created_at ASC`,
+        [club.id]
+      );
+    }
     if (members.length < 2) {
-      res.status(400).json({ message: "Need at least 2 active members to generate a bracket" });
+      res.status(400).json({ message: "Need at least 2 members entered to generate a bracket" });
       return;
     }
   }
@@ -77488,6 +77626,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS singles_entry_deadline DATE");
   await ddl(`ALTER TABLE portal_tee_slots DROP CONSTRAINT IF EXISTS portal_tee_slots_tee_start_type_check`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'first_tee'  WHERE tee_start_type = '1st Tee'`);
   await exec(`UPDATE portal_tee_slots SET tee_start_type = 'tenth_tee'  WHERE tee_start_type = '10th Tee'`);
@@ -78315,7 +78454,7 @@ init_pg();
 init_logger();
 var POLL_INTERVAL_MS7 = 60 * 60 * 1e3;
 async function runCycle2() {
-  const due = await query(
+  const dueBetterball = await query(
     `SELECT ge.id, ge.name
      FROM golf_events ge
      WHERE ge.format = 'knockout_team'
@@ -78326,17 +78465,29 @@ async function runCycle2() {
        AND NOT EXISTS (SELECT 1 FROM knockout_rounds kr WHERE kr.event_id = ge.id)`,
     []
   );
+  const dueSingles = await query(
+    `SELECT ge.id, ge.name
+     FROM golf_events ge
+     WHERE ge.format = 'knockout_individual'
+       AND ge.status = 'active'
+       AND ge.singles_entry_deadline IS NOT NULL
+       AND ge.singles_entry_deadline < CURRENT_DATE
+       AND ge.bracket_ready_notified_at IS NULL
+       AND NOT EXISTS (SELECT 1 FROM knockout_rounds kr WHERE kr.event_id = ge.id)`,
+    []
+  );
+  const due = [...dueBetterball, ...dueSingles];
   if (!due.length) return;
-  logger.info({ count: due.length }, "Knockout pairing deadline: flagging events ready to generate");
+  logger.info({ count: due.length }, "Knockout deadline worker: flagging events ready to generate");
   for (const ev of due) {
     try {
       await run(
         "UPDATE golf_events SET bracket_ready_notified_at = NOW() WHERE id = ?",
         [ev.id]
       );
-      logger.info({ evId: ev.id, name: ev.name }, "Knockout: pairing deadline passed \u2014 bracket ready to generate");
+      logger.info({ evId: ev.id, name: ev.name }, "Knockout: deadline passed \u2014 bracket ready to generate");
     } catch (err) {
-      logger.error({ err, evId: ev.id }, "Knockout pairing deadline: failed to flag event");
+      logger.error({ err, evId: ev.id }, "Knockout deadline worker: failed to flag event");
     }
   }
 }

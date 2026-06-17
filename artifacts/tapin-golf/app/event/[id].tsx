@@ -51,6 +51,7 @@ interface EventDetail {
   user_eligible: boolean | null;
   user_division_preview: string | null;
   team_format: "pair" | "group" | "individual";
+  singles_entry_deadline: string | null;
 }
 
 interface DrawEntry {
@@ -213,6 +214,18 @@ export default function EventDetailScreen() {
   };
   const [pairStatus, setPairStatus]         = useState<KnockoutPairStatus | null>(null);
   const [pairStatusLoaded, setPairStatusLoaded] = useState(false);
+
+  // Singles knockout entry phase
+  type KnockoutEntryStatus = {
+    enrolled: boolean;
+    status: "none" | "pending" | "accepted";
+    entry_deadline: string | null;
+  };
+  const [entryStatus, setEntryStatus]           = useState<KnockoutEntryStatus | null>(null);
+  const [entryStatusLoaded, setEntryStatusLoaded] = useState(false);
+  const [acceptingEntry, setAcceptingEntry]     = useState(false);
+  const [optingOutEntry, setOptingOutEntry]     = useState(false);
+
   const [koPairQuery, setKoPairQuery]       = useState("");
   const [koPairResults, setKoPairResults]   = useState<PartnerResult[]>([]);
   const [koPairSearching, setKoPairSearching] = useState(false);
@@ -299,6 +312,22 @@ export default function EventDetailScreen() {
   }, [event, bracketLoaded, loadBracket]);
 
   // Must be declared before the useEffect below that lists it as a dependency
+  const loadEntryStatus = useCallback(async () => {
+    if (!user || !event || event.format !== "knockout_individual" || entryStatusLoaded) return;
+    if (!event.singles_entry_deadline) { setEntryStatusLoaded(true); return; }
+    try {
+      const data = await apiFetch(`/knockout/${event.id}/entry-status`, user.token);
+      setEntryStatus(data);
+    } catch { /* silently skip */ }
+    finally { setEntryStatusLoaded(true); }
+  }, [user, event, entryStatusLoaded]);
+
+  // Load singles entry status for knockout_individual events with entry deadline
+  useEffect(() => {
+    if (event?.format === "knockout_individual" && user && !entryStatusLoaded) loadEntryStatus();
+  }, [event, user, entryStatusLoaded, loadEntryStatus]);
+
+  // Must be declared before the useEffect below that lists it as a dependency
   const loadPairStatus = useCallback(async () => {
     if (!user || !event || event.format !== "knockout_team" || pairStatusLoaded) return;
     try {
@@ -378,6 +407,28 @@ export default function EventDetailScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message ?? "Failed to submit pairing. Please try again.");
     } finally { setSubmittingKoPair(false); }
+  };
+
+  const acceptEntry = async () => {
+    if (!user || !event) return;
+    setAcceptingEntry(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/accept`, user.token, { method: "POST" });
+      setEntryStatus(s => s ? { ...s, status: "accepted", enrolled: true } : s);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to accept entry.");
+    } finally { setAcceptingEntry(false); }
+  };
+
+  const optOutEntry = async () => {
+    if (!user || !event) return;
+    setOptingOutEntry(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/entry`, user.token, { method: "DELETE" });
+      setEntryStatus(s => s ? { ...s, status: "none", enrolled: false } : s);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to opt out.");
+    } finally { setOptingOutEntry(false); }
   };
 
   const removeKoPairing = async () => {
@@ -762,6 +813,89 @@ export default function EventDetailScreen() {
                   </View>
                 ))}
               </>
+            )}
+
+            {/* Singles knockout: entry phase card (shown before bracket is generated) */}
+            {event?.format === "knockout_individual" && event?.singles_entry_deadline && bracketLoaded && (!bracketData || bracketData.rounds.length === 0) && user && entryStatusLoaded && entryStatus && entryStatus.status !== "none" && (
+              <View style={[styles.ctaCard, { backgroundColor: colors.card, borderColor: "#1a5c3820", borderWidth: 1.5, marginBottom: 12 }]}>
+                <View style={styles.statusRow}>
+                  <Ionicons name="person-outline" size={20} color="#1a5c38" />
+                  <Text style={[styles.ctaTitle, { color: "#1a5c38" }]}>
+                    {entryStatus.status === "accepted"
+                      ? "Singles Knockout — You're In! ✓"
+                      : "Singles Knockout — Confirm Your Entry"}
+                  </Text>
+                </View>
+
+                {entryStatus.status === "pending" && (
+                  <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginBottom: 10 }]}>
+                    You've been entered in this Singles Knockout. Confirm your spot to stay in the draw, or opt out if you won't be competing.
+                  </Text>
+                )}
+                {entryStatus.status === "accepted" && (
+                  <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginBottom: 10 }]}>
+                    You've confirmed your entry. The club will generate the draw once the entry deadline has passed.
+                  </Text>
+                )}
+
+                {entryStatus.entry_deadline && (
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 4, marginBottom: 10 }}>
+                    <Ionicons name="time-outline" size={13} color={colors.mutedForeground} />
+                    <Text style={{ fontSize: 12, color: colors.mutedForeground }}>
+                      Entry deadline: {new Date(entryStatus.entry_deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
+                    </Text>
+                  </View>
+                )}
+
+                {entryStatus.status === "pending" && (
+                  <View style={{ flexDirection: "row", gap: 8 }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 8, backgroundColor: "#1a5c38", opacity: acceptingEntry ? 0.6 : 1 }}
+                      onPress={acceptEntry}
+                      disabled={acceptingEntry || optingOutEntry}
+                    >
+                      <Text style={{ color: "#fff", fontWeight: "700", fontSize: 13 }}>
+                        {acceptingEntry ? "Confirming…" : "✓  Accept entry"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, alignItems: "center", paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: "#dc2626", opacity: optingOutEntry ? 0.6 : 1 }}
+                      onPress={() => Alert.alert(
+                        "Opt Out of Tournament",
+                        `This will remove you from ${event?.name}. You will not be included in the draw.`,
+                        [
+                          { text: "Stay in", style: "cancel" },
+                          { text: "Opt out", style: "destructive", onPress: optOutEntry },
+                        ]
+                      )}
+                      disabled={acceptingEntry || optingOutEntry}
+                    >
+                      <Text style={{ color: "#dc2626", fontWeight: "600", fontSize: 13 }}>
+                        {optingOutEntry ? "Opting out…" : "Opt out"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+
+                {entryStatus.status === "accepted" && (
+                  <TouchableOpacity
+                    style={{ alignItems: "center", paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: "#dc262640", opacity: optingOutEntry ? 0.6 : 1 }}
+                    onPress={() => Alert.alert(
+                      "Opt Out of Tournament",
+                      `This will remove you from ${event?.name}. You will not be included in the draw.`,
+                      [
+                        { text: "Stay in", style: "cancel" },
+                        { text: "Opt out", style: "destructive", onPress: optOutEntry },
+                      ]
+                    )}
+                    disabled={optingOutEntry}
+                  >
+                    <Text style={{ color: "#dc2626", fontSize: 12 }}>
+                      {optingOutEntry ? "Opting out…" : "Opt out of tournament"}
+                    </Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             )}
 
             {/* Betterball knockout: partner pairing panel (shown before bracket is generated) */}

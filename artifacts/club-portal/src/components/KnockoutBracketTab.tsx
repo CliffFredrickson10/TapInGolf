@@ -369,10 +369,9 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
   );
 }
 
-function GenerateDialog({ eventId, approvedCount, isPublished, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; onClose: () => void; onGenerated: () => void }) {
+function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; knockoutType: string; onClose: () => void; onGenerated: () => void }) {
   const { toast } = useToast();
   const [drawMethod, setDrawMethod] = useState("random");
-  const [knockoutType, setKnockoutType] = useState("individual");
   const [generating, setGenerating] = useState(false);
   const [understood, setUnderstood] = useState(false);
   const bracketSize = approvedCount < 2 ? 2 : Math.pow(2, Math.ceil(Math.log2(Math.max(approvedCount, 2))));
@@ -419,18 +418,9 @@ function GenerateDialog({ eventId, approvedCount, isPublished, onClose, onGenera
             </div>
           )}
           <div className="rounded-lg border bg-muted/30 p-3 text-sm space-y-1">
-            <p><span className="font-semibold">{approvedCount}</span> approved players</p>
+            <p><span className="font-semibold">{approvedCount}</span> approved {knockoutType === "team" ? "pairs" : "players"}</p>
             <p>Bracket size: <span className="font-semibold">{bracketSize}</span> {byeCount > 0 ? `(${byeCount} bye${byeCount > 1 ? "s" : ""})` : ""}</p>
-          </div>
-          <div className="space-y-1.5">
-            <Label>Type</Label>
-            <Select value={knockoutType} onValueChange={setKnockoutType}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="individual">Individual</SelectItem>
-                <SelectItem value="team">Team</SelectItem>
-              </SelectContent>
-            </Select>
+            <p className="text-muted-foreground capitalize">Type: {knockoutType === "team" ? "Betterball (team)" : "Individual"}</p>
           </div>
           <div className="space-y-1.5">
             <Label>Draw method</Label>
@@ -463,8 +453,8 @@ function GenerateDialog({ eventId, approvedCount, isPublished, onClose, onGenera
 // ── Main export ───────────────────────────────────────────────────────────────
 export { GenerateDialog };
 
-export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly, hideBanner }: {
-  eventId: number; eventName: string; approvedCount: number; readOnly?: boolean; hideBanner?: boolean;
+export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly, hideBanner, knockoutType }: {
+  eventId: number; eventName: string; approvedCount: number; readOnly?: boolean; hideBanner?: boolean; knockoutType?: string;
 }) {
   const { toast } = useToast();
   const [data, setData]           = useState<BracketData | null>(null);
@@ -710,6 +700,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             eventId={eventId}
             approvedCount={approvedCount}
             isPublished={false}
+            knockoutType={knockoutType ?? "individual"}
             onClose={() => setShowGenerate(false)}
             onGenerated={() => { setShowGenerate(false); load(); }}
           />
@@ -751,7 +742,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         <ScoreDialog match={editScore} eventId={eventId} onClose={() => setEditScore(null)} onSaved={() => { setEditScore(null); load(); }} />
       )}
       {showGenerate && (
-        <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
+        <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} knockoutType={knockoutType ?? "individual"} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
       )}
 
       {/* Published banner */}

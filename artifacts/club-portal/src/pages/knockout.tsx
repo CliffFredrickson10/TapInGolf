@@ -564,6 +564,7 @@ function BetterballPairingPanel({ ev, approvedCount, readOnly, onBracketGenerate
                   eventId={ev.id}
                   approvedCount={approvedCount}
                   isPublished={false}
+                  knockoutType={ev.knockout_type ?? "team"}
                   onClose={() => setShowGenerate(false)}
                   onGenerated={() => {
                     setShowGenerate(false);
@@ -866,6 +867,7 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
           approvedCount={ev.knockout_type === "team" ? ev.pair_count : ev.member_count}
           readOnly={readOnly}
           hideBanner={ev.knockout_type === "team"}
+          knockoutType={ev.knockout_type ?? "individual"}
         />
       </div>
     </div>

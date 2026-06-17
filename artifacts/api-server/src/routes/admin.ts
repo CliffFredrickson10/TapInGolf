@@ -389,7 +389,7 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
   const [clubs, total] = await Promise.all([
     query<any>(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
-              c.active, c.featured, c.created_at,
+              c.active, c.featured, c.created_at, c.username,
               (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = 1) AS has_portal
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
@@ -473,6 +473,29 @@ router.delete("/admin/clubs/:id/portal-accounts/:userId", async (req, res): Prom
   if (!account) { res.status(404).json({ message: "Account not found" }); return; }
   await exec("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, clubId]);
   res.json({ ok: true });
+});
+
+// PUT /admin/clubs/:id/credentials — set club admin username + password
+router.put("/admin/clubs/:id/credentials", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const id = parseInt(req.params.id, 10);
+  const { username, password } = req.body ?? {};
+  if (!username) { res.status(400).json({ message: "username is required" }); return; }
+  const slug = String(username).trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  const conflict = await row<any>("SELECT id FROM clubs WHERE username = ? AND id != ?", [slug, id]);
+  if (conflict) { res.status(409).json({ message: "That username is already taken by another club" }); return; }
+  const sets: string[] = ["username = ?"];
+  const vals: any[]    = [slug];
+  if (password) {
+    const bcrypt = await import("bcryptjs");
+    sets.push("password_hash = ?");
+    vals.push(await bcrypt.hash(String(password), 10));
+  }
+  vals.push(id);
+  await exec(`UPDATE clubs SET ${sets.join(", ")} WHERE id = ?`, vals);
+  const club = await row<any>("SELECT id, username FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
 });
 
 // PUT /admin/clubs/:id/toggle — toggle active

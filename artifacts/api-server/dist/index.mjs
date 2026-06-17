@@ -67344,7 +67344,7 @@ router10.get("/admin/clubs-list", async (req, res) => {
   const [clubs, total] = await Promise.all([
     query(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
-              c.active, c.featured, c.created_at,
+              c.active, c.featured, c.created_at, c.username,
               (SELECT COUNT(*) FROM club_portal_users cpu WHERE cpu.club_id = c.id AND cpu.active = 1) AS has_portal
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
@@ -67452,6 +67452,36 @@ router10.delete("/admin/clubs/:id/portal-accounts/:userId", async (req, res) => 
   }
   await exec("DELETE FROM club_portal_users WHERE id = ? AND club_id = ?", [userId, clubId]);
   res.json({ ok: true });
+});
+router10.put("/admin/clubs/:id/credentials", async (req, res) => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  const { username, password } = req.body ?? {};
+  if (!username) {
+    res.status(400).json({ message: "username is required" });
+    return;
+  }
+  const slug = String(username).trim().toLowerCase().replace(/[^a-z0-9_]/g, "_");
+  const conflict = await row("SELECT id FROM clubs WHERE username = ? AND id != ?", [slug, id]);
+  if (conflict) {
+    res.status(409).json({ message: "That username is already taken by another club" });
+    return;
+  }
+  const sets = ["username = ?"];
+  const vals = [slug];
+  if (password) {
+    const bcrypt = await Promise.resolve().then(() => (init_bcryptjs(), bcryptjs_exports));
+    sets.push("password_hash = ?");
+    vals.push(await bcrypt.hash(String(password), 10));
+  }
+  vals.push(id);
+  await exec(`UPDATE clubs SET ${sets.join(", ")} WHERE id = ?`, vals);
+  const club = await row("SELECT id, username FROM clubs WHERE id = ?", [id]);
+  res.json({ club });
 });
 router10.put("/admin/clubs/:id/toggle", async (req, res) => {
   const caller = await getUser(req);

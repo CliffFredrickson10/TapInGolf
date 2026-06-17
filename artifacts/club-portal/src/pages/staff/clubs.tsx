@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff, UserPlus, CheckCircle2, Trash2, KeyRound, Pencil, X } from "lucide-react";
+import { Flag, Search, ChevronLeft, ChevronRight, Star, Eye, EyeOff, UserPlus, CheckCircle2, Trash2, KeyRound, Pencil, X, ShieldCheck } from "lucide-react";
 
 interface ClubRow {
   id: number;
@@ -18,6 +18,7 @@ interface ClubRow {
   featured: number;
   created_at: string;
   has_portal: number;
+  username: string | null;
 }
 
 interface PortalAccount {
@@ -272,6 +273,88 @@ function PortalAccountDialog({
   );
 }
 
+// ── Club Credentials Dialog ────────────────────────────────────────────────────
+function ClubCredentialsDialog({ club, onClose, onUpdated }: {
+  club: ClubRow;
+  onClose: () => void;
+  onUpdated: (clubId: number, username: string) => void;
+}) {
+  const { toast } = useToast();
+  const [username, setUsername] = useState(club.username ?? "");
+  const [password, setPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!username.trim()) return;
+    setSaving(true);
+    try {
+      const data = await api<{ club: { id: number; username: string } }>(`/api/admin/clubs/${club.id}/credentials`, {
+        method: "PUT",
+        body: JSON.stringify({ username: username.trim(), password: password || undefined }),
+      });
+      onUpdated(club.id, data.club.username);
+      toast({ title: "Credentials updated", description: `Username: ${data.club.username}${password ? " · Password reset" : ""}` });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <ShieldCheck className="h-4 w-4 text-[#1a5c38]" />
+            Club Admin credentials — {club.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <p className="text-xs text-muted-foreground">
+            The <strong>Club Admin</strong> account logs in via the <em>Club Admin</em> tab with a username + password. This is different from Club Staff accounts (which use email).
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">Username</label>
+              <Input
+                placeholder="e.g. soutpansberg_golf_club"
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">Spaces and special characters are converted to underscores automatically.</p>
+            </div>
+            <div className="space-y-1.5">
+              <label className="text-sm font-medium">New password <span className="text-muted-foreground font-normal">(leave blank to keep current)</span></label>
+              <Input
+                type="text"
+                placeholder="New password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+              />
+            </div>
+          </div>
+          {club.username && (
+            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs text-muted-foreground">
+              Current username: <span className="font-mono font-medium text-foreground">{club.username}</span>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            className="bg-[#1a5c38] hover:bg-[#154d30] gap-1.5"
+            onClick={save}
+            disabled={saving || !username.trim()}
+          >
+            <ShieldCheck className="h-4 w-4" />
+            {saving ? "Saving…" : "Save credentials"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function StaffClubs() {
   const { toast } = useToast();
@@ -285,6 +368,7 @@ export default function StaffClubs() {
   const [page, setPage] = useState(1);
   const [toggling, setToggling] = useState<number | null>(null);
   const [portalClub, setPortalClub] = useState<ClubRow | null>(null);
+  const [credsClub, setCredsClub] = useState<ClubRow | null>(null);
   const LIMIT = 30;
 
   const load = useCallback(async () => {
@@ -335,6 +419,10 @@ export default function StaffClubs() {
 
   const handlePortalChanged = (clubId: number, hasPortal: number) => {
     setClubs(prev => prev.map(c => c.id === clubId ? { ...c, has_portal: hasPortal } : c));
+  };
+
+  const handleCredentialsUpdated = (clubId: number, username: string) => {
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, username } : c));
   };
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -400,6 +488,7 @@ export default function StaffClubs() {
               <th className="text-left px-4 py-3 font-semibold">Location</th>
               <th className="text-center px-4 py-3 font-semibold">Holes</th>
               <th className="text-right px-4 py-3 font-semibold">Price from</th>
+              <th className="text-center px-4 py-3 font-semibold">Club Admin</th>
               <th className="text-center px-4 py-3 font-semibold">Portal</th>
               <th className="text-center px-4 py-3 font-semibold">Featured</th>
               <th className="text-center px-4 py-3 font-semibold">Active</th>
@@ -409,14 +498,14 @@ export default function StaffClubs() {
             {loading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b last:border-0">
-                  {[0,1,2,3,4,5,6,7].map(j => (
+                  {[0,1,2,3,4,5,6,7,8].map(j => (
                     <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                   ))}
                 </tr>
               ))
             ) : clubs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                <td colSpan={9} className="text-center py-12 text-muted-foreground">
                   No clubs found
                 </td>
               </tr>
@@ -429,6 +518,20 @@ export default function StaffClubs() {
                   <td className="px-4 py-3 text-center text-muted-foreground">{c.holes}</td>
                   <td className="px-4 py-3 text-right text-muted-foreground">
                     {c.price_from ? `R${parseFloat(c.price_from).toFixed(0)}` : "—"}
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => setCredsClub(c)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-colors ${
+                        c.username
+                          ? "bg-blue-50 text-blue-700 hover:bg-blue-100"
+                          : "bg-gray-100 text-gray-500 hover:bg-blue-50 hover:text-blue-600"
+                      }`}
+                      title="Edit club admin credentials"
+                    >
+                      <ShieldCheck className="h-3 w-3" />
+                      {c.username ? c.username : "Set up"}
+                    </button>
                   </td>
                   <td className="px-4 py-3 text-center">
                     {c.has_portal > 0 ? (
@@ -506,6 +609,14 @@ export default function StaffClubs() {
           club={portalClub}
           onClose={() => setPortalClub(null)}
           onChanged={handlePortalChanged}
+        />
+      )}
+
+      {credsClub && (
+        <ClubCredentialsDialog
+          club={credsClub}
+          onClose={() => setCredsClub(null)}
+          onUpdated={handleCredentialsUpdated}
         />
       )}
     </div>

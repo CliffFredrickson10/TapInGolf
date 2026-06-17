@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,6 +31,7 @@ type Tab = "club" | "club_user" | "staff";
 
 export default function Login() {
   const { login, clubUserLogin, staffLogin } = useAuth();
+  const [, navigate] = useLocation();
   const [tab, setTab] = useState<Tab>("club");
   const [username, setUsername] = useState("");
   const [email, setEmail] = useState("");
@@ -56,6 +58,7 @@ export default function Login() {
       } else {
         await login(username.trim(), password);
       }
+      navigate("/");
     } catch (err: any) {
       setError(err.message || "Login failed");
     } finally {

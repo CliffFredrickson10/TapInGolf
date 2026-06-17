@@ -1180,10 +1180,10 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
     const body  = e.match_id
       ? `You play ${opponentName} in Round 1${deadline}. Tap to view the bracket.`
       : `The draw has been published${deadline ? ` (Round 1 deadline${deadline})` : ""}. Tap to view the bracket.`;
-    const data  = { type: "knockout_draw", eventId: evId };
+    const data  = { type: "event_draw_published", event_id: evId, club_id: club.id };
 
     // In-app inbox notification (works for everyone, no push token needed)
-    await saveUserNotification(e.id, "knockout_draw", title, body, data);
+    await saveUserNotification(e.id, "event_draw_published", title, body, data);
 
     // Expo push notification (for those with the app installed)
     if (e.push_token?.startsWith("ExponentPushToken[")) {

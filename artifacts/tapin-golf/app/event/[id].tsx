@@ -211,6 +211,7 @@ export default function EventDetailScreen() {
     partner: { id: number; name: string } | null;
     pairing_deadline: string | null;
     club_assigned?: boolean;
+    opted_out?: boolean;
   };
   const [pairStatus, setPairStatus]         = useState<KnockoutPairStatus | null>(null);
   const [pairStatusLoaded, setPairStatusLoaded] = useState(false);
@@ -234,6 +235,8 @@ export default function EventDetailScreen() {
   const [removingKoPair, setRemovingKoPair] = useState(false);
   const [confirmingKoPair, setConfirmingKoPair] = useState(false);
   const [denyingKoPair, setDenyingKoPair]   = useState(false);
+  const [bbOptingOut, setBbOptingOut]       = useState(false);
+  const [bbUndoingOptout, setBbUndoingOptout] = useState(false);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
 
@@ -465,6 +468,28 @@ export default function EventDetailScreen() {
     } catch (e: any) {
       Alert.alert("Error", e.message ?? "Failed to decline request.");
     } finally { setDenyingKoPair(false); }
+  };
+
+  const bbOptOut = async () => {
+    if (!user || !event) return;
+    setBbOptingOut(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/betterball-optout`, user.token, { method: "POST" });
+      setPairStatus(prev => prev ? { ...prev, opted_out: true, request_state: "none", paired: false, partner: null } : prev);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to opt out.");
+    } finally { setBbOptingOut(false); }
+  };
+
+  const bbUndoOptout = async () => {
+    if (!user || !event) return;
+    setBbUndoingOptout(true);
+    try {
+      await apiFetch(`/knockout/${event.id}/betterball-optout`, user.token, { method: "DELETE" });
+      setPairStatus(prev => prev ? { ...prev, opted_out: false } : prev);
+    } catch (e: any) {
+      Alert.alert("Error", e.message ?? "Failed to undo opt-out.");
+    } finally { setBbUndoingOptout(false); }
   };
 
   const handleRegister = async () => {
@@ -904,14 +929,17 @@ export default function EventDetailScreen() {
                 <View style={styles.statusRow}>
                   <Ionicons name="people-outline" size={20} color="#3b82f6" />
                   <Text style={[styles.ctaTitle, { color: "#1d4ed8" }]}>
-                    {pairStatus?.request_state === "confirmed"        ? "Betterball Knockout — You're Paired!"
-                    : pairStatus?.request_state === "pending_sent"    ? "Betterball Knockout — Awaiting Confirmation"
+                    {pairStatus?.opted_out                             ? "Betterball Knockout — Opted Out"
+                    : pairStatus?.request_state === "confirmed"        ? "Betterball Knockout — You're Paired!"
+                    : pairStatus?.request_state === "pending_sent"     ? "Betterball Knockout — Awaiting Confirmation"
                     : pairStatus?.request_state === "pending_received" ? "Betterball Knockout — Confirm Your Partner"
                     : "Betterball Knockout — Choose Your Partner"}
                   </Text>
                 </View>
                 <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginBottom: 10 }]}>
-                  {pairStatus?.request_state === "pending_received"
+                  {pairStatus?.opted_out
+                    ? "You've opted out of this tournament. You won't be included in the draw unless you change your mind."
+                    : pairStatus?.request_state === "pending_received"
                     ? `${pairStatus.partner?.name} has invited you to be their Betterball partner. Confirm to enter the draw together, or deny to pick someone else.`
                     : "You and your partner will compete as a team against other pairs. Choose your partner before the pairing deadline."}
                 </Text>
@@ -924,8 +952,29 @@ export default function EventDetailScreen() {
                   </View>
                 )}
 
-                {/* State: confirmed pair */}
-                {pairStatus?.request_state === "confirmed" && pairStatus.partner ? (
+                {/* State: opted out */}
+                {pairStatus?.opted_out ? (
+                  <View>
+                    <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#dc262618", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
+                      <Ionicons name="exit-outline" size={18} color="#dc2626" />
+                      <View style={{ flex: 1 }}>
+                        <Text style={{ fontSize: 12, color: "#dc2626", fontWeight: "700" }}>Not competing</Text>
+                        <Text style={{ fontSize: 13, color: colors.foreground }}>You've opted out of this tournament.</Text>
+                      </View>
+                    </View>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 9, borderRadius: 8, borderWidth: 1, borderColor: "#3b82f6", opacity: bbUndoingOptout ? 0.6 : 1 }}
+                      onPress={bbUndoOptout}
+                      disabled={bbUndoingOptout}
+                    >
+                      <Ionicons name="return-up-back-outline" size={15} color="#3b82f6" />
+                      <Text style={{ fontSize: 13, color: "#3b82f6", fontWeight: "600" }}>
+                        {bbUndoingOptout ? "Undoing…" : "Undo — re-enter tournament"}
+                      </Text>
+                    </TouchableOpacity>
+                  </View>
+
+                ) : pairStatus?.request_state === "confirmed" && pairStatus.partner ? (
                   <View>
                     <View style={{ flexDirection: "row", alignItems: "center", backgroundColor: "#16a34a18", borderRadius: 8, padding: 10, gap: 10, marginBottom: 8 }}>
                       <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
@@ -1083,6 +1132,23 @@ export default function EventDetailScreen() {
                     >
                       <Text style={[styles.ctaBtnText, { color: "#fff" }]}>
                         {submittingKoPair ? "Sending request…" : selectedKoPair ? `Send request to ${selectedKoPair.name}` : "Search for a partner above"}
+                      </Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 5, marginTop: 10, paddingVertical: 7, borderRadius: 8, borderWidth: 1, borderColor: "#dc262640", opacity: bbOptingOut ? 0.6 : 1 }}
+                      onPress={() => Alert.alert(
+                        "Opt Out of Tournament",
+                        `This will remove you from ${event?.name}. You won't be included in the draw.`,
+                        [
+                          { text: "Stay in", style: "cancel" },
+                          { text: "Opt out", style: "destructive", onPress: bbOptOut },
+                        ]
+                      )}
+                      disabled={bbOptingOut}
+                    >
+                      <Ionicons name="exit-outline" size={13} color="#dc2626" />
+                      <Text style={{ fontSize: 12, color: "#dc2626" }}>
+                        {bbOptingOut ? "Opting out…" : "Opt out of tournament"}
                       </Text>
                     </TouchableOpacity>
                   </View>

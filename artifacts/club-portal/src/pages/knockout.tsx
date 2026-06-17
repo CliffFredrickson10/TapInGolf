@@ -466,6 +466,7 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
   const [pairs, setPairs]               = useState<KnockoutPair[]>([]);
   const [pendingRequests, setPendingRequests] = useState<KnockoutPair[]>([]);
   const [unpaired, setUnpaired]         = useState<UnpairedMember[]>([]);
+  const [optedOut, setOptedOut]         = useState<UnpairedMember[]>([]);
   const [deadline, setDeadline]         = useState<string | null>(null);
   const [loading, setLoading]           = useState(true);
   const [autoPairing, setAutoPairing]   = useState(false);
@@ -473,12 +474,13 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
 
   const load = useCallback(async () => {
     try {
-      const r = await api<{ pairs: KnockoutPair[]; pending_requests: KnockoutPair[]; unpaired: UnpairedMember[]; pairing_deadline: string | null }>(
+      const r = await api<{ pairs: KnockoutPair[]; pending_requests: KnockoutPair[]; unpaired: UnpairedMember[]; opted_out: UnpairedMember[]; pairing_deadline: string | null }>(
         `/api/portal/knockout/${ev.id}/pairs`
       );
       setPairs(r.pairs ?? []);
       setPendingRequests(r.pending_requests ?? []);
       setUnpaired(r.unpaired ?? []);
+      setOptedOut(r.opted_out ?? []);
       setDeadline(r.pairing_deadline ?? null);
     } catch (e: any) {
       toast({ title: "Error loading pairs", description: e.message, variant: "destructive" });
@@ -646,6 +648,23 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
                     <span className="font-medium text-amber-900">{p.p2_name}</span>
                     <span className="ml-auto text-[10px] text-amber-500 italic">waiting for confirmation</span>
                   </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Opted-out members */}
+          {optedOut.length > 0 && (
+            <div>
+              <p className="text-xs font-semibold text-muted-foreground mb-2 flex items-center gap-1.5">
+                <UserX className="h-3.5 w-3.5 text-red-500" />
+                OPTED OUT ({optedOut.length})
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {optedOut.map(m => (
+                  <span key={m.id} className="inline-flex items-center gap-1 rounded-full border bg-red-50 border-red-100 px-2.5 py-1 text-xs text-red-600 line-through">
+                    {m.name}
+                  </span>
                 ))}
               </div>
             </div>

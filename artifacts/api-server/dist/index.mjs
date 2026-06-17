@@ -75132,6 +75132,56 @@ router22.delete("/knockout/:id/entry", async (req, res) => {
   );
   res.json({ ok: true });
 });
+router22.post("/knockout/:id/betterball-optout", async (req, res) => {
+  const evId = Number(req.params.id);
+  let user;
+  try {
+    user = await getUser(req);
+  } catch {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  const ev = await row(
+    "SELECT id FROM golf_events WHERE id = ? AND format = 'knockout_team' AND status = 'active'",
+    [evId]
+  );
+  if (!ev) {
+    res.status(404).json({ message: "Tournament not found" });
+    return;
+  }
+  const teamReg = await row(
+    "SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NOT NULL",
+    [evId, user.id]
+  );
+  if (teamReg) {
+    res.status(400).json({ message: "Remove your current pairing before opting out" });
+    return;
+  }
+  await run(
+    "DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL",
+    [evId, user.id]
+  );
+  await exec(
+    "INSERT INTO event_registrations (event_id, user_id, status) VALUES (?, ?, 'opted_out')",
+    [evId, user.id]
+  );
+  res.json({ ok: true });
+});
+router22.delete("/knockout/:id/betterball-optout", async (req, res) => {
+  const evId = Number(req.params.id);
+  let user;
+  try {
+    user = await getUser(req);
+  } catch {
+    res.status(401).json({ message: "Unauthorised" });
+    return;
+  }
+  await run(
+    "DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL AND status = 'opted_out'",
+    [evId, user.id]
+  );
+  res.json({ ok: true });
+});
 router22.delete("/portal/knockout/:id", requireClubAuth, async (req, res) => {
   const club = getClub(req);
   const evId = Number(req.params.id);
@@ -75175,8 +75225,16 @@ router22.get("/portal/knockout/:id/pairs", requireClubAuth, async (req, res) => 
      WHERE cm.club_id = ? AND cm.status = 'active' ORDER BY u.name ASC`,
     [club.id]
   );
-  const unpaired = allMembers.filter((m) => !pairedIds.has(m.id));
-  res.json({ pairs: confirmedPairs, pending_requests: pendingPairs, unpaired, pairing_deadline: ev.knockout_pairing_deadline ?? null });
+  const optedOutRows = await query(
+    `SELECT u.id, u.name FROM event_registrations er
+     JOIN users u ON u.id = er.user_id
+     WHERE er.event_id = ? AND er.team_id IS NULL AND er.status = 'opted_out'
+     ORDER BY u.name ASC`,
+    [evId]
+  );
+  const optedOutIds = new Set(optedOutRows.map((m) => m.id));
+  const unpaired = allMembers.filter((m) => !pairedIds.has(m.id) && !optedOutIds.has(m.id));
+  res.json({ pairs: confirmedPairs, pending_requests: pendingPairs, unpaired, opted_out: optedOutRows, pairing_deadline: ev.knockout_pairing_deadline ?? null });
 });
 router22.get("/portal/knockout/:id/entries", requireClubAuth, async (req, res) => {
   const club = getClub(req);
@@ -75231,7 +75289,11 @@ router22.get("/knockout/:id/pair-status", async (req, res) => {
     [evId, user.id]
   );
   if (!reg) {
-    res.json({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: ev.knockout_pairing_deadline ?? null, club_assigned: false });
+    const optout = await row(
+      "SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL AND status = 'opted_out'",
+      [evId, user.id]
+    );
+    res.json({ paired: false, request_state: "none", team_id: null, partner: null, pairing_deadline: ev.knockout_pairing_deadline ?? null, club_assigned: false, opted_out: !!optout });
     return;
   }
   const request_state = reg.team_status === "confirmed" ? "confirmed" : reg.requested_by === user.id ? "pending_sent" : "pending_received";
@@ -75241,7 +75303,8 @@ router22.get("/knockout/:id/pair-status", async (req, res) => {
     team_id: reg.team_id,
     partner: reg.partner_id ? { id: reg.partner_id, name: reg.partner_name } : null,
     pairing_deadline: ev.knockout_pairing_deadline ?? null,
-    club_assigned: reg.club_assigned === 1 || reg.club_assigned === true
+    club_assigned: reg.club_assigned === 1 || reg.club_assigned === true,
+    opted_out: false
   });
 });
 router22.post("/knockout/:id/pair", async (req, res) => {
@@ -75270,8 +75333,8 @@ router22.post("/knockout/:id/pair", async (req, res) => {
     res.status(400).json({ message: "Both players must be active members of this club" });
     return;
   }
-  const existingUser = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, user.id]);
-  const existingPartner = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ?", [evId, partner_id]);
+  const existingUser = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NOT NULL", [evId, user.id]);
+  const existingPartner = await row("SELECT id FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NOT NULL", [evId, partner_id]);
   if (existingUser) {
     res.status(400).json({ message: "You already have a pairing in this tournament" });
     return;
@@ -75280,6 +75343,8 @@ router22.post("/knockout/:id/pair", async (req, res) => {
     res.status(400).json({ message: "That player already has a pairing request in this tournament" });
     return;
   }
+  await run("DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL", [evId, user.id]);
+  await run("DELETE FROM event_registrations WHERE event_id = ? AND user_id = ? AND team_id IS NULL", [evId, partner_id]);
   const partnerUser = await row("SELECT id, name, push_token FROM users WHERE id = ?", [partner_id]);
   if (!partnerUser) {
     res.status(404).json({ message: "Partner not found" });

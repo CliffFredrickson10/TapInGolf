@@ -1574,6 +1574,11 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS singles_entry_deadline DATE");
 
+  // ── Betterball opt-out: add 'opted_out' to event_registrations status ────────
+  await ddl(`ALTER TABLE event_registrations DROP CONSTRAINT IF EXISTS event_registrations_status_check`);
+  await ddl(`ALTER TABLE event_registrations ADD CONSTRAINT event_registrations_status_check
+    CHECK (status IN ('pending','approved','rejected','opted_out'))`);
+
   // ── Standardise tee_start_type to snake_case throughout ──────────────────────────────
   // Must drop the old CHECK constraint BEFORE updating data, then re-add it with the
   // new snake_case values so the UPDATEs don't violate the old constraint.

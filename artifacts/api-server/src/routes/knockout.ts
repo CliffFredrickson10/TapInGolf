@@ -291,6 +291,62 @@ router.delete("/knockout/:id/betterball-optout", async (req: Request, res: Respo
 });
 
 // ── Delete knockout tournament ────────────────────────────────────────────────
+router.patch("/portal/knockout/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+
+  const ev = await row<any>(
+    "SELECT id, knockout_type FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+
+  const { name, description, event_date, end_date, draw_method, pairing_deadline, singles_entry_deadline } = req.body ?? {};
+
+  if (!name?.trim()) { res.status(400).json({ message: "Name is required" }); return; }
+  if (ev.knockout_type === "team" && pairing_deadline === "") {
+    res.status(400).json({ message: "Partner selection deadline is required for Betterball tournaments" }); return;
+  }
+
+  await run(
+    `UPDATE golf_events SET
+       name = ?, description = ?, event_date = ?, end_date = ?,
+       knockout_draw_method = ?, knockout_pairing_deadline = ?,
+       singles_entry_deadline = ?
+     WHERE id = ?`,
+    [
+      name.trim(),
+      description?.trim() || null,
+      event_date || null,
+      end_date || null,
+      draw_method || "random",
+      ev.knockout_type === "team" ? (pairing_deadline || null) : null,
+      ev.knockout_type !== "team" ? (singles_entry_deadline || null) : null,
+      evId,
+    ]
+  );
+
+  const updated = await row<any>(
+    `SELECT ge.id, ge.name, ge.description, ge.event_date, ge.end_date, ge.format,
+            ge.knockout_type, ge.knockout_draw_method, ge.knockout_pairing_deadline,
+            ge.singles_entry_deadline, ge.bracket_ready_notified_at, ge.status,
+            ge.created_at,
+            COUNT(DISTINCT CASE WHEN cm.status = 'active' THEN cm.user_id END) AS member_count,
+            (SELECT COUNT(DISTINCT et.id) FROM event_teams et
+             JOIN event_registrations er1 ON er1.team_id = et.id AND er1.event_id = ge.id
+             WHERE et.status = 'confirmed') AS pair_count,
+            (SELECT COUNT(*) FROM knockout_rounds kr WHERE kr.event_id = ge.id) AS round_count,
+            NULL AS current_round_label
+     FROM golf_events ge
+     LEFT JOIN club_members cm ON cm.club_id = ge.club_id
+     WHERE ge.id = ?
+     GROUP BY ge.id`,
+    [evId]
+  );
+
+  res.json(updated);
+});
+
 router.delete("/portal/knockout/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const evId = Number(req.params.id);

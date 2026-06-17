@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { KnockoutBracketTab, GenerateDialog } from "@/components/KnockoutBracketTab";
-import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock, Zap } from "lucide-react";
+import { Trophy, Plus, Trash2, CalendarDays, Users, ChevronRight, Swords, ArrowLeft, Handshake, UserCheck, UserX, Clock, Zap, Pencil } from "lucide-react";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -321,6 +321,141 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             onClick={save}
           >
             {saving ? "Creating…" : "Create Tournament"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+// ── Edit Dialog ───────────────────────────────────────────────────────────────
+
+function EditDialog({ ev, onClose, onSaved }: { ev: KnockoutEvent; onClose: () => void; onSaved: (updated: KnockoutEvent) => void }) {
+  const { toast } = useToast();
+  const isBetterball = ev.knockout_type === "team";
+  const [form, setForm] = useState({
+    name: ev.name,
+    description: ev.description ?? "",
+    event_date: ev.event_date ? String(ev.event_date).slice(0, 10) : "",
+    end_date: ev.end_date ? String(ev.end_date).slice(0, 10) : "",
+    draw_method: ev.knockout_draw_method ?? "random",
+    pairing_deadline: ev.knockout_pairing_deadline ? String(ev.knockout_pairing_deadline).slice(0, 10) : "",
+    singles_entry_deadline: ev.singles_entry_deadline ? String(ev.singles_entry_deadline).slice(0, 10) : "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    if (!form.name.trim()) { toast({ title: "Name is required", variant: "destructive" }); return; }
+    if (isBetterball && !form.pairing_deadline) { toast({ title: "Partner deadline is required", variant: "destructive" }); return; }
+    setSaving(true);
+    try {
+      const updated = await api<KnockoutEvent>(`/api/portal/knockout/${ev.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(form),
+      });
+      toast({ title: "Tournament updated" });
+      onSaved(updated);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={o => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Pencil className="h-4 w-4 text-[#1a5c38]" />
+            Edit Tournament
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Format — read-only */}
+          <div className="flex items-center gap-2 rounded-lg border bg-muted/40 px-3 py-2">
+            {isBetterball
+              ? <Users className="h-3.5 w-3.5 text-[#92711a]" />
+              : <Swords className="h-3.5 w-3.5 text-[#1a5c38]" />}
+            <span className="text-sm font-medium">{isBetterball ? "Betterball" : "Singles"}</span>
+            <span className="ml-auto text-xs text-muted-foreground">Format cannot be changed</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Tournament name <span className="text-destructive">*</span></Label>
+            <Input
+              value={form.name}
+              onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+              onKeyDown={e => e.key === "Enter" && save()}
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Description <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Input
+              placeholder="Brief description shown to members…"
+              value={form.description}
+              onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Start date <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+              <Input type="date" value={form.event_date} onChange={e => setForm(f => ({ ...f, event_date: e.target.value }))} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>End date <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+              <Input type="date" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} />
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Draw method</Label>
+            <Select value={form.draw_method} onValueChange={v => setForm(f => ({ ...f, draw_method: v as "random" | "seeded" }))}>
+              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="random">Random draw</SelectItem>
+                <SelectItem value="seeded">Seeded by handicap</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          {isBetterball && (
+            <div className="space-y-1.5">
+              <Label>
+                Partner selection deadline <span className="text-destructive">*</span>
+              </Label>
+              <Input
+                type="date"
+                value={form.pairing_deadline}
+                onChange={e => setForm(f => ({ ...f, pairing_deadline: e.target.value }))}
+                className="border-[#c8a84b]/50 focus-visible:ring-[#c8a84b]"
+              />
+            </div>
+          )}
+
+          {!isBetterball && (
+            <div className="space-y-1.5">
+              <Label>Entry opt-out deadline <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+              <Input
+                type="date"
+                value={form.singles_entry_deadline}
+                onChange={e => setForm(f => ({ ...f, singles_entry_deadline: e.target.value }))}
+                className="border-[#1a5c38]/40 focus-visible:ring-[#1a5c38]"
+              />
+            </div>
+          )}
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button
+            size="sm"
+            className="bg-[#1a5c38] hover:bg-[#164d30]"
+            disabled={saving || !form.name.trim() || (isBetterball && !form.pairing_deadline)}
+            onClick={save}
+          >
+            {saving ? "Saving…" : "Save Changes"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -753,15 +888,17 @@ function BetterballPairingPanel({ ev, approvedCount, readOnly, onBracketGenerate
 
 // ── Detail View (full page) ───────────────────────────────────────────────────
 
-function DetailView({ ev, onClose, onDeleted, readOnly }: {
+function DetailView({ ev: evProp, onClose, onDeleted, readOnly }: {
   ev: KnockoutEvent;
   onClose: () => void;
   onDeleted: () => void;
   readOnly: boolean;
 }) {
   const { toast } = useToast();
+  const [ev, setEv] = useState(evProp);
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
   const [bracketKey, setBracketKey] = useState(0);
 
   const del = async () => {
@@ -777,6 +914,9 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
 
   return (
     <div className="flex flex-col min-h-0 h-full">
+      {showEdit && (
+        <EditDialog ev={ev} onClose={() => setShowEdit(false)} onSaved={updated => { setEv(updated); setShowEdit(false); }} />
+      )}
       {/* Sticky header */}
       <div className="sticky top-0 z-10 bg-background border-b px-6 py-3">
         <div className="flex items-center gap-3">
@@ -817,7 +957,7 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
           </div>
 
           {!readOnly && (
-            <div className="flex-shrink-0 ml-2">
+            <div className="flex-shrink-0 ml-2 flex items-center gap-1">
               {confirmDelete ? (
                 <div className="flex items-center gap-2">
                   <span className="text-xs text-destructive font-medium">Delete?</span>
@@ -829,12 +969,20 @@ function DetailView({ ev, onClose, onDeleted, readOnly }: {
                   </Button>
                 </div>
               ) : (
-                <Button
-                  variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
-                  onClick={() => setConfirmDelete(true)}
-                >
-                  <Trash2 className="h-3.5 w-3.5" />Delete
-                </Button>
+                <>
+                  <Button
+                    variant="ghost" size="sm" className="h-7 text-xs gap-1"
+                    onClick={() => setShowEdit(true)}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />Edit
+                  </Button>
+                  <Button
+                    variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive gap-1"
+                    onClick={() => setConfirmDelete(true)}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />Delete
+                  </Button>
+                </>
               )}
             </div>
           )}

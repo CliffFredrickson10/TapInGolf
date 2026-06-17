@@ -549,6 +549,33 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         </div>
       ) : (
         <div className="space-y-4">
+          {/* Ready-to-generate call-to-action */}
+          {(unpaired.length === 0 && pairs.length >= 2 || isPastDeadline && pairs.length >= 2) && (
+            <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 flex items-start gap-3">
+              <Zap className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-semibold text-green-800">
+                  {unpaired.length === 0 ? "All members are paired — bracket ready!" : "Pairing deadline has passed — bracket ready!"}
+                </p>
+                <p className="text-xs text-green-700 mt-0.5">
+                  {unpaired.length === 0
+                    ? `${pairs.length} confirmed pairs. Generate the draw below to assign matchups and publish to players.`
+                    : `${pairs.length} confirmed pairs · ${unpaired.length} unpaired member${unpaired.length !== 1 ? "s" : ""} won't be included. Generate the draw below when ready.`
+                  }
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
+              Refresh
+            </Button>
+            {pairs.length < 2 && (
+              <span className="text-xs text-muted-foreground">Need at least 2 confirmed pairs to generate the bracket.</span>
+            )}
+          </div>
+
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
             {/* Confirmed pairs */}
             <div>
@@ -674,32 +701,6 @@ function BetterballPairingPanel({ ev }: { ev: KnockoutEvent }) {
         </div>
       )}
 
-      {/* Ready-to-generate call-to-action */}
-      {!loading && (unpaired.length === 0 && pairs.length >= 2 || isPastDeadline && pairs.length >= 2) && (
-        <div className="rounded-lg border border-green-300 bg-green-50 px-4 py-3 flex items-start gap-3">
-          <Zap className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-          <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold text-green-800">
-              {unpaired.length === 0 ? "All members are paired — bracket ready!" : "Pairing deadline has passed — bracket ready!"}
-            </p>
-            <p className="text-xs text-green-700 mt-0.5">
-              {unpaired.length === 0
-                ? `${pairs.length} confirmed pairs. Generate the draw below to assign matchups and publish to players.`
-                : `${pairs.length} confirmed pairs · ${unpaired.length} unpaired member${unpaired.length !== 1 ? "s" : ""} won't be included. Generate the draw below when ready.`
-              }
-            </p>
-          </div>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 pt-1">
-        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={load} disabled={loading}>
-          {loading ? "Loading…" : "Refresh"}
-        </Button>
-        {pairs.length < 2 && (
-          <span className="text-xs text-muted-foreground">Need at least 2 confirmed pairs to generate the bracket.</span>
-        )}
-      </div>
     </div>
   );
 }

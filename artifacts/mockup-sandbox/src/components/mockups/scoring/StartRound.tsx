@@ -14,14 +14,59 @@ const TEE_COLORS = [
   { key: "red",    label: "Red",    hex: "#EF4444" },
 ];
 
-const FORMATS = [
-  { key: "stableford", label: "Stableford",     desc: "Points per hole (recommended)" },
-  { key: "medal",      label: "Medal",          desc: "Stroke play — lowest total wins" },
-  { key: "fourball",   label: "4BBB",           desc: "Best ball of 2 partners" },
-  { key: "alliance",   label: "Alliance",       desc: "2–4 scores count per hole" },
-  { key: "matchplay",  label: "Match Play",     desc: "Hole-by-hole vs opponent" },
-  { key: "sundowner",  label: "Sundowner (9H)", desc: "9-hole evening format" },
+type FormatGroup = { group: string; formats: { key: string; label: string }[] };
+
+const FORMAT_GROUPS: FormatGroup[] = [
+  {
+    group: "Individual",
+    formats: [
+      { key: "individual_stableford",  label: "Individual Stableford" },
+      { key: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
+      { key: "net_stroke_play",        label: "Net Stroke Play" },
+      { key: "singles_match_play",     label: "Singles Match Play" },
+      { key: "par_bogey",              label: "Par / Bogey Competition" },
+      { key: "individual_par",         label: "Individual Par Competition" },
+      { key: "individual_bogey",       label: "Individual Bogey Competition" },
+      { key: "modified_stableford",    label: "Modified Stableford" },
+      { key: "individual_bonus_bogey", label: "Individual Bonus Bogey" },
+      { key: "chairman",               label: "Chairman (The Perch)" },
+      { key: "maximum_score",          label: "Maximum Score" },
+      { key: "eclectic",               label: "Eclectic (Multi-Round)" },
+    ],
+  },
+  {
+    group: "Betterball (2 Players)",
+    formats: [
+      { key: "fourball_stableford",       label: "Betterball Stableford (4BBB)" },
+      { key: "fourball_gross_betterball", label: "Four-Ball Gross Betterball" },
+      { key: "fourball_net_betterball",   label: "Four-Ball Net Betterball" },
+      { key: "betterball_match_play",     label: "Betterball Match Play" },
+      { key: "shamble",                   label: "Shamble" },
+      { key: "best_ball_aggregate",       label: "Best Ball Aggregate" },
+      { key: "high_low",                  label: "High-Low" },
+      { key: "daytona",                   label: "Daytona (Las Vegas)" },
+      { key: "low_ball_total",            label: "Low Ball / Total Score" },
+      { key: "the_ghost",                 label: "The Ghost" },
+      { key: "betterball_bonus_bogey",    label: "Betterball Bonus Bogey" },
+      { key: "pinehurst_points",          label: "Multiplication Betterball (Pinehurst)" },
+    ],
+  },
+  {
+    group: "Team (3–4 Players)",
+    formats: [
+      { key: "alliance",         label: "Alliance" },
+      { key: "american_scramble", label: "American Scramble" },
+    ],
+  },
+  {
+    group: "Other",
+    formats: [
+      { key: "other", label: "Other / Custom" },
+    ],
+  },
 ];
+
+const ALL_FORMATS = FORMAT_GROUPS.flatMap(g => g.formats);
 
 const ALLOWANCES = [
   { value: 100, label: "100%" },
@@ -34,25 +79,35 @@ const ALLOWANCES = [
 
 export default function StartRound() {
   const [tee, setTee] = useState("white");
-  const [format, setFormat] = useState("stableford");
+  const [format, setFormat] = useState("individual_stableford");
   const [courseHcp, setCourseHcp] = useState("11");
   const [allowance, setAllowance] = useState(95);
   const [players, setPlayers] = useState(1);
   const [showAllowanceDropdown, setShowAllowanceDropdown] = useState(false);
+  const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["Individual"]));
 
   const ch = parseInt(courseHcp) || 0;
   const ph = Math.round(ch * (allowance / 100));
   const selectedAllowance = ALLOWANCES.find(a => a.value === allowance)!;
+  const selectedLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;
+
+  const isTeamFormat = ["fourball_stableford","fourball_gross_betterball","fourball_net_betterball",
+    "betterball_match_play","shamble","best_ball_aggregate","high_low","daytona","low_ball_total",
+    "the_ghost","betterball_bonus_bogey","pinehurst_points","alliance","american_scramble"].includes(format);
+
+  const toggleGroup = (g: string) => setExpandedGroups(prev => {
+    const next = new Set(prev);
+    next.has(g) ? next.delete(g) : next.add(g);
+    return next;
+  });
 
   return (
-    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", background: BG, minHeight: "100vh", maxWidth: 390, margin: "0 auto", position: "relative", overflow: "hidden" }}>
+    <div style={{ fontFamily: "system-ui, -apple-system, sans-serif", background: BG, minHeight: "100vh", maxWidth: 390, margin: "0 auto", position: "relative" }}>
       {/* Status bar */}
       <div style={{ background: PRIMARY, height: 44, display: "flex", alignItems: "flex-end", justifyContent: "space-between", padding: "0 20px 8px", color: "white", fontSize: 12, fontWeight: 600 }}>
         <span>9:41</span>
-        <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          <svg width="16" height="12" viewBox="0 0 16 12" fill="white"><rect x="0" y="3" width="3" height="9" rx="1"/><rect x="4.5" y="2" width="3" height="10" rx="1"/><rect x="9" y="0" width="3" height="12" rx="1"/><rect x="13.5" y="1" width="2.5" height="11" rx="1" opacity=".3"/></svg>
-          <span style={{ fontSize: 11 }}>WiFi</span>
-          <span>🔋</span>
+        <div style={{ display: "flex", gap: 6, alignItems: "center", fontSize: 11 }}>
+          <span>▐▐▐</span><span>WiFi</span><span>🔋</span>
         </div>
       </div>
 
@@ -65,7 +120,6 @@ export default function StartRound() {
             <div style={{ fontSize: 13, opacity: 0.8 }}>Set up your scoring session</div>
           </div>
         </div>
-        {/* Club chip */}
         <div style={{ background: "rgba(255,255,255,0.15)", borderRadius: 12, padding: "10px 14px", display: "flex", alignItems: "center", gap: 10 }}>
           <div style={{ width: 32, height: 32, background: GOLD, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>⛳</div>
           <div style={{ flex: 1 }}>
@@ -76,7 +130,6 @@ export default function StartRound() {
         </div>
       </div>
 
-      {/* Scrollable content */}
       <div style={{ padding: "16px 16px 110px", display: "flex", flexDirection: "column", gap: 14 }}>
 
         {/* Tee colour */}
@@ -92,29 +145,58 @@ export default function StartRound() {
           </div>
         </div>
 
-        {/* Format */}
+        {/* Game Format — grouped, collapsible */}
         <div style={{ background: CARD, borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
-          <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Game Format</div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {FORMATS.map(f => (
-              <button key={f.key} onClick={() => setFormat(f.key)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, border: `2px solid ${format === f.key ? PRIMARY : BORDER}`, background: format === f.key ? "#f0f7f4" : "white", cursor: "pointer", textAlign: "left" }}>
-                <div style={{ width: 20, height: 20, borderRadius: "50%", border: `2px solid ${format === f.key ? PRIMARY : "#d1d5db"}`, background: format === f.key ? PRIMARY : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                  {format === f.key && <div style={{ width: 8, height: 8, borderRadius: "50%", background: "white" }} />}
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 14, fontWeight: 600, color: format === f.key ? PRIMARY : "#111827" }}>{f.label}</div>
-                  <div style={{ fontSize: 12, color: MUTED }}>{f.desc}</div>
-                </div>
-              </button>
-            ))}
+          <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 4 }}>Game Format</div>
+          {/* Selected format chip */}
+          <div style={{ marginBottom: 12, padding: "8px 12px", background: "#f0f7f4", borderRadius: 10, border: `1px solid ${PRIMARY}30`, display: "flex", alignItems: "center", gap: 8 }}>
+            <span style={{ fontSize: 13 }}>🏌️</span>
+            <span style={{ fontSize: 13, fontWeight: 600, color: PRIMARY }}>{selectedLabel}</span>
           </div>
+
+          {FORMAT_GROUPS.map(g => {
+            const isOpen = expandedGroups.has(g.group);
+            const groupHasSelected = g.formats.some(f => f.key === format);
+            return (
+              <div key={g.group} style={{ marginBottom: 6 }}>
+                {/* Group header */}
+                <button
+                  onClick={() => toggleGroup(g.group)}
+                  style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "9px 12px", borderRadius: 10, border: `1px solid ${groupHasSelected ? PRIMARY + "40" : BORDER}`, background: groupHasSelected ? "#f0f7f4" : "#f9fafb", cursor: "pointer", marginBottom: isOpen ? 6 : 0 }}
+                >
+                  <span style={{ fontSize: 13, fontWeight: 700, color: groupHasSelected ? PRIMARY : "#374151" }}>
+                    {g.group} {groupHasSelected && <span style={{ fontSize: 11, color: PRIMARY }}>✓</span>}
+                  </span>
+                  <span style={{ fontSize: 12, color: MUTED, transform: isOpen ? "rotate(180deg)" : "none", display: "inline-block", transition: "transform 0.2s" }}>▼</span>
+                </button>
+
+                {/* Format options */}
+                {isOpen && (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 5, paddingLeft: 8 }}>
+                    {g.formats.map(f => (
+                      <button
+                        key={f.key}
+                        onClick={() => setFormat(f.key)}
+                        style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 12px", borderRadius: 10, border: `1.5px solid ${format === f.key ? PRIMARY : BORDER}`, background: format === f.key ? "#f0f7f4" : "white", cursor: "pointer", textAlign: "left" }}
+                      >
+                        <div style={{ width: 18, height: 18, borderRadius: "50%", border: `2px solid ${format === f.key ? PRIMARY : "#d1d5db"}`, background: format === f.key ? PRIMARY : "white", display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                          {format === f.key && <div style={{ width: 7, height: 7, borderRadius: "50%", background: "white" }} />}
+                        </div>
+                        <span style={{ fontSize: 13, fontWeight: format === f.key ? 600 : 400, color: format === f.key ? PRIMARY : "#111827" }}>{f.label}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
 
-        {/* Handicap section */}
+        {/* Handicap */}
         <div style={{ background: CARD, borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
           <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 14 }}>Handicap</div>
 
-          {/* Course Handicap input */}
+          {/* Course Handicap */}
           <div style={{ marginBottom: 14 }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
               Course Handicap
@@ -122,50 +204,35 @@ export default function StartRound() {
             </div>
             <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#f9fafb", borderRadius: 12, border: `1.5px solid ${BORDER}`, padding: "4px 14px" }}>
               <button onClick={() => setCourseHcp(v => String(Math.max(0, parseInt(v || "0") - 1)))} style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${BORDER}`, background: "white", cursor: "pointer", fontSize: 18, color: PRIMARY, display: "flex", alignItems: "center", justifyContent: "center" }}>−</button>
-              <input
-                value={courseHcp}
-                onChange={e => { const v = e.target.value.replace(/\D/g, ""); if (parseInt(v || "0") <= 54) setCourseHcp(v); }}
-                style={{ flex: 1, fontSize: 32, fontWeight: 800, color: PRIMARY, border: "none", outline: "none", background: "transparent", textAlign: "center", width: 0 }}
-                inputMode="numeric"
-              />
+              <input value={courseHcp} onChange={e => { const v = e.target.value.replace(/\D/g, ""); if (parseInt(v || "0") <= 54) setCourseHcp(v); }} style={{ flex: 1, fontSize: 32, fontWeight: 800, color: PRIMARY, border: "none", outline: "none", background: "transparent", textAlign: "center", width: 0 }} inputMode="numeric" />
               <button onClick={() => setCourseHcp(v => String(Math.min(54, parseInt(v || "0") + 1)))} style={{ width: 32, height: 32, borderRadius: "50%", border: `2px solid ${PRIMARY}`, background: PRIMARY, cursor: "pointer", fontSize: 18, color: "white", display: "flex", alignItems: "center", justifyContent: "center" }}>+</button>
             </div>
-            {/* HNA hint */}
             <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 7, padding: "8px 12px", background: "#eff6ff", borderRadius: 10, border: "1px solid #bfdbfe" }}>
-              <span style={{ fontSize: 16 }}>ℹ️</span>
-              <span style={{ fontSize: 12, color: "#1e40af", lineHeight: 1.4 }}>
-                Open the <strong>HNA Handicaps app</strong> → Course HCP → select this course &amp; tee to get your Course Handicap.
-              </span>
+              <span style={{ fontSize: 15 }}>ℹ️</span>
+              <span style={{ fontSize: 12, color: "#1e40af", lineHeight: 1.4 }}>Open the <strong>HNA Handicaps app</strong> → Course HCP → select this course &amp; tee.</span>
             </div>
           </div>
 
-          {/* HCP Allowance dropdown */}
+          {/* Allowance dropdown */}
           <div>
             <div style={{ fontSize: 13, fontWeight: 600, color: "#374151", marginBottom: 6, display: "flex", alignItems: "center", gap: 6 }}>
               Playing HCP Allowance
               <span style={{ fontSize: 11, background: "#fef9ee", color: "#92400e", padding: "2px 7px", borderRadius: 20, border: "1px solid #fde68a" }}>Set by club</span>
             </div>
             <div style={{ position: "relative" }}>
-              <button
-                onClick={() => setShowAllowanceDropdown(v => !v)}
-                style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${showAllowanceDropdown ? PRIMARY : BORDER}`, background: showAllowanceDropdown ? "#f0f7f4" : "#f9fafb", cursor: "pointer", transition: "all 0.15s" }}
-              >
+              <button onClick={() => setShowAllowanceDropdown(v => !v)} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", borderRadius: 12, border: `1.5px solid ${showAllowanceDropdown ? PRIMARY : BORDER}`, background: showAllowanceDropdown ? "#f0f7f4" : "#f9fafb", cursor: "pointer" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span style={{ fontSize: 20, fontWeight: 800, color: PRIMARY }}>{selectedAllowance.label}</span>
                   <span style={{ fontSize: 13, color: MUTED }}>GolfRSA allowance</span>
                 </div>
-                <span style={{ fontSize: 14, color: MUTED, transform: showAllowanceDropdown ? "rotate(180deg)" : "none", transition: "transform 0.2s", display: "inline-block" }}>▼</span>
+                <span style={{ fontSize: 12, color: MUTED, transform: showAllowanceDropdown ? "rotate(180deg)" : "none", display: "inline-block", transition: "transform 0.2s" }}>▼</span>
               </button>
               {showAllowanceDropdown && (
                 <div style={{ position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0, background: "white", borderRadius: 14, boxShadow: "0 8px 24px rgba(0,0,0,0.14)", border: `1px solid ${BORDER}`, zIndex: 50, overflow: "hidden" }}>
                   {ALLOWANCES.map((a, i) => (
-                    <button
-                      key={a.value}
-                      onClick={() => { setAllowance(a.value); setShowAllowanceDropdown(false); }}
-                      style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", border: "none", background: allowance === a.value ? "#f0f7f4" : "white", cursor: "pointer", borderBottom: i < ALLOWANCES.length - 1 ? `1px solid ${BORDER}` : "none", textAlign: "left" }}
-                    >
+                    <button key={a.value} onClick={() => { setAllowance(a.value); setShowAllowanceDropdown(false); }} style={{ width: "100%", display: "flex", alignItems: "center", justifyContent: "space-between", padding: "13px 16px", border: "none", background: allowance === a.value ? "#f0f7f4" : "white", cursor: "pointer", borderBottom: i < ALLOWANCES.length - 1 ? `1px solid ${BORDER}` : "none", textAlign: "left" }}>
                       <span style={{ fontSize: 15, fontWeight: allowance === a.value ? 700 : 500, color: allowance === a.value ? PRIMARY : "#111827" }}>{a.label}</span>
-                      {allowance === a.value && <span style={{ color: PRIMARY, fontSize: 16 }}>✓</span>}
+                      {allowance === a.value && <span style={{ color: PRIMARY }}>✓</span>}
                     </button>
                   ))}
                 </div>
@@ -174,12 +241,12 @@ export default function StartRound() {
           </div>
         </div>
 
-        {/* Players (team formats only) */}
-        {(format === "fourball" || format === "alliance" || format === "matchplay") && (
+        {/* Players (team formats) */}
+        {isTeamFormat && (
           <div style={{ background: CARD, borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
             <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 12 }}>Number of Players</div>
             <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 20 }}>
-              <button onClick={() => setPlayers(Math.max(1, players - 1))} style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${BORDER}`, background: "white", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>−</button>
+              <button onClick={() => setPlayers(Math.max(2, players - 1))} style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${BORDER}`, background: "white", cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", color: PRIMARY }}>−</button>
               <span style={{ fontSize: 36, fontWeight: 800, color: PRIMARY, minWidth: 40, textAlign: "center" }}>{players}</span>
               <button onClick={() => setPlayers(Math.min(4, players + 1))} style={{ width: 40, height: 40, borderRadius: "50%", border: `2px solid ${PRIMARY}`, background: PRIMARY, cursor: "pointer", fontSize: 20, display: "flex", alignItems: "center", justifyContent: "center", color: "white" }}>+</button>
             </div>
@@ -189,32 +256,27 @@ export default function StartRound() {
         {/* Playing handicap summary */}
         {ch > 0 && (
           <div style={{ background: `${GOLD}18`, border: `1px solid ${GOLD}50`, borderRadius: 14, padding: "14px 16px" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 8 }}>
-              <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e" }}>Playing Handicap Summary</div>
-              <div style={{ fontSize: 22, fontWeight: 900, color: PRIMARY }}>{ph}</div>
-            </div>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#92400e", marginBottom: 10 }}>Playing Handicap Summary</div>
+            <div style={{ display: "flex", gap: 6 }}>
               {[
                 { label: "Course HCP", value: ch },
                 { label: "Allowance", value: `${allowance}%` },
                 { label: "Playing HCP", value: ph, highlight: true },
               ].map(item => (
-                <div key={item.label} style={{ flex: 1, background: item.highlight ? PRIMARY : "rgba(255,255,255,0.6)", borderRadius: 10, padding: "8px 10px", textAlign: "center", minWidth: 70 }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: item.highlight ? "white" : "#92400e" }}>{item.value}</div>
-                  <div style={{ fontSize: 10, color: item.highlight ? "rgba(255,255,255,0.8)" : "#b45309", marginTop: 1 }}>{item.label}</div>
+                <div key={item.label} style={{ flex: 1, background: item.highlight ? PRIMARY : "rgba(255,255,255,0.6)", borderRadius: 10, padding: "8px 6px", textAlign: "center" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: item.highlight ? "white" : "#92400e" }}>{item.value}</div>
+                  <div style={{ fontSize: 10, color: item.highlight ? "rgba(255,255,255,0.75)" : "#b45309", marginTop: 1 }}>{item.label}</div>
                 </div>
               ))}
             </div>
-            <div style={{ marginTop: 8, fontSize: 11, color: "#b45309" }}>
-              = Round({ch} × {allowance}%) · GolfRSA official rule
-            </div>
+            <div style={{ marginTop: 8, fontSize: 11, color: "#b45309" }}>= Round({ch} × {allowance}%) · GolfRSA official</div>
           </div>
         )}
       </div>
 
       {/* Start button */}
       <div style={{ position: "fixed", bottom: 0, left: "50%", transform: "translateX(-50%)", width: 390, padding: "12px 16px 32px", background: "linear-gradient(to top, white 65%, transparent)", boxSizing: "border-box" }}>
-        <button disabled={!ch} style={{ width: "100%", padding: "16px", borderRadius: 16, background: ch ? PRIMARY : "#d1d5db", border: "none", color: "white", fontSize: 17, fontWeight: 700, cursor: ch ? "pointer" : "default", boxShadow: ch ? `0 4px 16px ${PRIMARY}60` : "none", letterSpacing: 0.3, transition: "all 0.2s" }}>
+        <button disabled={!ch} style={{ width: "100%", padding: "16px", borderRadius: 16, background: ch ? PRIMARY : "#d1d5db", border: "none", color: "white", fontSize: 17, fontWeight: 700, cursor: ch ? "pointer" : "default", boxShadow: ch ? `0 4px 16px ${PRIMARY}60` : "none", letterSpacing: 0.3 }}>
           ⛳ Start Round
         </button>
       </div>

@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 type Club = { id: number; name: string; location: string; province: string };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
@@ -234,8 +235,9 @@ export default function StartRoundScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+      <AppHeader />
+      {/* Sub-header */}
+      <View style={[styles.subHeader, { backgroundColor: colors.primary }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
@@ -591,8 +593,8 @@ export default function StartRoundScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: {
-    flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingBottom: 16,
+  subHeader: {
+    flexDirection: "row", alignItems: "center", gap: 14, paddingHorizontal: 16, paddingVertical: 12,
   },
   backBtn: {
     width: 38, height: 38, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.2)",

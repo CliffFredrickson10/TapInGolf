@@ -336,33 +336,25 @@ export default function HoleEntryScreen() {
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         {/* Hole identity */}
-        <View style={[styles.holeHeader, isMatchPlay && { paddingTop: 2, paddingBottom: 2 }]}>
+        <View style={[styles.holeHeader, isMatchPlay && { paddingTop: 2, paddingBottom: 4 }]}>
           {!isMatchPlay && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
           <Text style={[styles.holeName, isMatchPlay && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
-          {isMatchPlay ? (
-            <Text style={styles.compactStats}>
-              PAR {hole.par}{"  ·  "}SI {hole.stroke_index}{hole.distance_m ? `${"  ·  "}${hole.distance_m}m` : ""}{ha > 0 ? `${"  ·  "}+${ha} stroke${ha > 1 ? "s" : ""}` : ""}
-            </Text>
-          ) : (
-            <>
-              <View style={styles.hcpChip}>
-                <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+          <View style={styles.hcpChip}>
+            <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+          </View>
+          <View style={styles.statsRow}>
+            {[
+              { label: "PAR",          value: String(hole.par),          accent: true },
+              { label: "STROKE INDEX", value: String(hole.stroke_index), accent: false },
+              { label: "DISTANCE",     value: hole.distance_m ? `${hole.distance_m}m` : "—", accent: false },
+              { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
+            ].map(s => (
+              <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
+                <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
+                <Text style={styles.statLabel}>{s.label}</Text>
               </View>
-              <View style={styles.statsRow}>
-                {[
-                  { label: "PAR",          value: String(hole.par),          accent: true },
-                  { label: "STROKE INDEX", value: String(hole.stroke_index), accent: false },
-                  { label: "DISTANCE",     value: hole.distance_m ? `${hole.distance_m}m` : "—", accent: false },
-                  { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
-                ].map(s => (
-                  <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
-                    <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
-                    <Text style={styles.statLabel}>{s.label}</Text>
-                  </View>
-                ))}
-              </View>
-            </>
-          )}
+            ))}
+          </View>
         </View>
 
         {/* Match status banner */}
@@ -428,7 +420,7 @@ export default function HoleEntryScreen() {
             ref={quickRowRef}
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={[styles.quickRow, isMatchPlay && { marginTop: 6, paddingBottom: 2 }]}
+            contentContainerStyle={styles.quickRow}
           >
             {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
               const val = hole.par + offset;
@@ -439,11 +431,10 @@ export default function HoleEntryScreen() {
                 <TouchableOpacity
                   key={offset}
                   onPress={() => { Haptics.selectionAsync(); setGross(val); }}
-                  style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER },
-                    isMatchPlay && { paddingVertical: 5, width: 46 }]}
+                  style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                 >
                   <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                  {!isMatchPlay && <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>}
+                  <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
                 </TouchableOpacity>
               );
             })}
@@ -507,19 +498,21 @@ export default function HoleEntryScreen() {
               <ScrollView
                 horizontal
                 showsHorizontalScrollIndicator={false}
-                contentContainerStyle={[styles.quickRow, { marginTop: 6, paddingBottom: 2 }]}
+                contentContainerStyle={styles.quickRow}
               >
                 {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
                   const val = hole.par + offset;
                   const active = oppGross === val;
                   const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+                  const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
                   return (
                     <TouchableOpacity
                       key={offset}
                       onPress={() => { Haptics.selectionAsync(); setOppGross(val); }}
-                      style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER, paddingVertical: 5, width: 46 }]}
+                      style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                     >
                       <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                      <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
                     </TouchableOpacity>
                   );
                 })}
@@ -613,10 +606,6 @@ const styles = StyleSheet.create({
     marginTop: -4, marginBottom: 6,
   },
   hcpChipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#a3e4bc" },
-  compactStats: {
-    fontSize: 12, fontFamily: "Inter_600SemiBold", color: MUTED_FG,
-    marginTop: 2, letterSpacing: 0.3,
-  },
   statsRow: {
     flexDirection: "row", gap: 8, marginTop: 4,
   },

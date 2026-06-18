@@ -91,6 +91,7 @@ export default function HoleEntryScreen() {
   const [holeIdx, setHoleIdx] = useState(0);
   const [gross, setGross] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [finishing, setFinishing] = useState(false);
   const holeStripRef = useRef<ScrollView>(null);
 
   const loadRound = useCallback(async () => {
@@ -180,7 +181,7 @@ export default function HoleEntryScreen() {
           "You've scored all holes. Finish the round?",
           [
             { text: "Not Yet", style: "cancel" },
-            { text: "Finish Round", onPress: finishRound },
+            { text: "Finish Round", onPress: doFinishRound },
           ]
         );
       }
@@ -196,13 +197,28 @@ export default function HoleEntryScreen() {
     }
   };
 
-  const finishRound = async () => {
+  const doFinishRound = async () => {
+    if (finishing) return;
+    setFinishing(true);
     try {
       await apiFetch(`/scoring/rounds/${id}/complete`, token, { method: "POST" });
       router.replace(`/scoring/${id}/complete`);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to complete round");
+    } finally {
+      setFinishing(false);
     }
+  };
+
+  const confirmAndFinish = () => {
+    Alert.alert(
+      "Finish Round?",
+      "This will end the round. Any unscored holes will be recorded as No Return.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Finish Round", onPress: doFinishRound },
+      ]
+    );
   };
 
   const isLastHole = holeIdx === scorecard.length - 1;
@@ -218,6 +234,13 @@ export default function HoleEntryScreen() {
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
+        <TouchableOpacity
+          onPress={confirmAndFinish}
+          disabled={finishing}
+          style={[styles.cardBtn, { opacity: finishing ? 0.5 : 1 }]}
+        >
+          <Ionicons name="flag" size={18} color="#f87171" />
+        </TouchableOpacity>
         <TouchableOpacity onPress={() => router.push(`/scoring/${id}/complete`)} style={styles.cardBtn}>
           <Ionicons name="list" size={18} color={GOLD} />
         </TouchableOpacity>
@@ -345,21 +368,34 @@ export default function HoleEntryScreen() {
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
           onPress={() => saveAndNext(true)}
-          disabled={saving}
+          disabled={saving || finishing}
           style={[styles.nrBtn, { borderColor: BORDER }]}
         >
           <Text style={[styles.nrBtnText, { color: MUTED_FG }]}>NR / Pickup</Text>
         </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => saveAndNext(false)}
-          disabled={saving || gross == null}
-          style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : SURFACE, opacity: saving ? 0.7 : 1 }]}
-        >
-          {saving
-            ? <ActivityIndicator color="#fff" />
-            : <Text style={styles.nextBtnText}>{isLastHole ? "Finish Round 🏁" : "Save · Next →"}</Text>
-          }
-        </TouchableOpacity>
+        {isLastHole ? (
+          <TouchableOpacity
+            onPress={() => gross != null ? saveAndNext(false) : confirmAndFinish()}
+            disabled={saving || finishing}
+            style={[styles.nextBtn, { backgroundColor: GREEN, opacity: (saving || finishing) ? 0.7 : 1 }]}
+          >
+            {(saving || finishing)
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.nextBtnText}>Finish Round 🏁</Text>
+            }
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={() => saveAndNext(false)}
+            disabled={saving || gross == null}
+            style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : SURFACE, opacity: saving ? 0.7 : 1 }]}
+          >
+            {saving
+              ? <ActivityIndicator color="#fff" />
+              : <Text style={styles.nextBtnText}>Save · Next →</Text>
+            }
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );

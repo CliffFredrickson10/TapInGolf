@@ -178,11 +178,19 @@ export default function StartRoundScreen() {
 
   const linkTournament = (t: any) => {
     setLinkedTournamentId(t.id);
-    // Knockouts: use knockout_scoring_format; regular events: use format
-    const rawFormat = t.knockout_type
-      ? (t.knockout_scoring_format ?? "stableford")
-      : (t.format ?? "stableford");
-    const mappedFormat = TOURNAMENT_FORMAT_MAP[rawFormat] ?? rawFormat ?? "individual_stableford";
+    let mappedFormat: string;
+    if (t.knockout_type === "individual") {
+      // Singles knockout → always matchplay scoring
+      mappedFormat = "singles_match_play";
+    } else if (t.knockout_type === "team") {
+      // Betterball knockout → derive from scoring format
+      const raw = t.knockout_scoring_format ?? "fourball";
+      mappedFormat = TOURNAMENT_FORMAT_MAP[raw] ?? "fourball_stableford";
+    } else {
+      // Regular stroke/stableford event
+      const raw = t.format ?? "stableford";
+      mappedFormat = TOURNAMENT_FORMAT_MAP[raw] ?? raw ?? "individual_stableford";
+    }
     setFormat(mappedFormat);
   };
 

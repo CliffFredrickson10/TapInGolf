@@ -645,12 +645,12 @@ const styles = StyleSheet.create({
   hintChip: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   hintText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   stepperRow: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    flexDirection: "row", alignItems: "center",
     borderRadius: 14, borderWidth: 1.5, paddingHorizontal: 8, paddingVertical: 4,
   },
-  stepperBtn: { width: 40, height: 40, borderRadius: 20, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  stepperBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   stepperBtnText: { fontSize: 22, fontFamily: "Inter_400Regular", lineHeight: 28 },
-  stepperValue: { fontSize: 36, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center" },
+  stepperValue: { fontSize: 36, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center", minWidth: 0 },
   allowancePicker: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     padding: 14, borderRadius: 12, borderWidth: 1.5,

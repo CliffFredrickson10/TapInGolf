@@ -279,7 +279,7 @@ export default function HoleEntryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
       {/* Top bar — clears notch/Dynamic Island on device; min-36 for web sim */}
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36) }]}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36), paddingBottom: isMatchPlay ? 2 : 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
@@ -305,7 +305,7 @@ export default function HoleEntryScreen() {
         ref={holeStripRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.holeStrip}
+        contentContainerStyle={[styles.holeStrip, isMatchPlay && { paddingBottom: 2 }]}
       >
         {scorecard.map((h, i) => {
           const saved = round.holes[h.number];
@@ -315,16 +315,18 @@ export default function HoleEntryScreen() {
           const dotBg = active ? "#fff"
             : played ? (p == null ? "#f87171" : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171")
             : SURFACE;
+          const chipH = isMatchPlay ? (active ? 28 : 22) : (active ? 36 : 28);
+          const chipFs = isMatchPlay ? (active ? 11 : 9) : (active ? 12 : 10);
           return (
-            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: active ? 36 : 28 }]}>
-              <Text style={{ fontSize: active ? 12 : 10, fontFamily: "Inter_700Bold", color: active ? DARK_BG : played ? "#fff" : MUTED_FG }}>
+            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: chipH }]}>
+              <Text style={{ fontSize: chipFs, fontFamily: "Inter_700Bold", color: active ? DARK_BG : played ? "#fff" : MUTED_FG }}>
                 {h.number}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      <Text style={styles.stripMeta}>
+      <Text style={[styles.stripMeta, isMatchPlay && { marginBottom: 1 }]}>
         {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
       </Text>
 

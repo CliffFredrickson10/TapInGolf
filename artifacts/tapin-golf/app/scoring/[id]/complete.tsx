@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import GolfBallLoader from "@/components/GolfBallLoader";
 
 type ScorecardHole = { number: number; par: number; stroke_index: number; distance_m?: number };
 type SavedHole = {
@@ -123,7 +124,7 @@ export default function RoundCompleteScreen() {
   if (loading || !round) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
+        <GolfBallLoader size={60} />
       </View>
     );
   }

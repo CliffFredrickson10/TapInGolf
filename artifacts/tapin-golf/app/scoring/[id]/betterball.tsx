@@ -15,6 +15,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import GolfBallLoader from "@/components/GolfBallLoader";
 
 const DARK_BG  = "#0d1f14";
 const SURFACE  = "#162a1e";
@@ -76,7 +77,7 @@ export default function BetterballHoleScreen() {
   useEffect(() => { loadRound(); }, [loadRound]);
 
   if (loading || !round) {
-    return <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={GOLD} size="large" /></View>;
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}><GolfBallLoader size={60} /></View>;
   }
 
   const sc = round.scorecard;

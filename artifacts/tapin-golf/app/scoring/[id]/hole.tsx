@@ -16,6 +16,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import GolfBallLoader from "@/components/GolfBallLoader";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DARK_BG   = "#0d1f14";
@@ -135,7 +136,7 @@ export default function HoleEntryScreen() {
   if (loading || !round) {
     return (
       <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}>
-        <ActivityIndicator color={GOLD} size="large" />
+        <GolfBallLoader size={60} />
       </View>
     );
   }

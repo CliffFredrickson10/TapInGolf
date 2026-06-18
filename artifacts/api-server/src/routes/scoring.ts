@@ -118,6 +118,34 @@ router.post("/scoring/rounds", async (req, res) => {
 
     if (!clubId) { res.status(400).json({ message: "clubId is required" }); return; }
 
+    // For matchplay formats, auto-lookup the user's current knockout match
+    let matchId: number | null = req.body.matchId ?? null;
+    let opponentName: string | null = req.body.opponentName ?? null;
+    let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
+
+    if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
+      const m = await row<any>(`
+        SELECT km.id,
+          CASE WHEN km.player1_id = ? THEN u2.name  ELSE u1.name  END AS opp_name,
+          CASE WHEN km.player1_id = ? THEN u2.handicap ELSE u1.handicap END AS opp_hcp
+        FROM knockout_matches km
+        JOIN knockout_rounds  kr ON kr.id = km.round_id
+        LEFT JOIN users u1 ON u1.id = km.player1_id
+        LEFT JOIN users u2 ON u2.id = km.player2_id
+        WHERE km.event_id = ? AND (km.player1_id = ? OR km.player2_id = ?)
+          AND km.status NOT IN ('complete','bye')
+        ORDER BY kr.round_number ASC
+        LIMIT 1
+      `, [user.id, user.id, tournamentId, user.id, user.id]);
+      if (m) {
+        matchId          = m.id;
+        opponentName     = m.opp_name ?? null;
+        opponentPlayingHcp = m.opp_hcp
+          ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100))
+          : 0;
+      }
+    }
+
     // Abandon any existing active round
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
@@ -126,10 +154,12 @@ router.post("/scoring/rounds", async (req, res) => {
 
     const [{ id }] = await query<{ id: number }>(`
       INSERT INTO scoring_rounds
-        (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct, tournament_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
+         tournament_id, match_id, opponent_name, opponent_playing_hcp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
-    `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct, tournamentId]);
+    `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
+        tournamentId, matchId, opponentName, opponentPlayingHcp]);
 
     res.json({ id });
   } catch (err: any) {
@@ -270,6 +300,12 @@ router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
 
 // ─── Complete round ───────────────────────────────────────────────────────────
 
+function getHALocal(si: number, ph: number): number {
+  if (ph <= 0) return 0;
+  if (ph <= 18) return si <= ph ? 1 : 0;
+  return 1 + (si <= ph - 18 ? 1 : 0);
+}
+
 router.post("/scoring/rounds/:id/complete", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -277,13 +313,14 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
     const roundId = parseInt(req.params.id);
 
     const rounds = await query<any>(
-      "SELECT id FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      "SELECT * FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
       [roundId, user.id]
     );
     if (rounds.length === 0) { res.status(404).json({ message: "Active round not found" }); return; }
+    const round = rounds[0];
 
     const holeRows = await query<any>(
-      "SELECT gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",
+      "SELECT hole_number, gross_score, net_score, stableford_points, stroke_index, is_nr FROM scoring_holes WHERE round_id = ?",
       [roundId]
     );
 
@@ -303,6 +340,70 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
           holes_played = ?
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
+
+    // Auto-resolve knockout match for matchplay formats
+    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play")) {
+      try {
+        const match = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
+        if (match && match.status !== "complete" && match.status !== "bye") {
+          const oppRows = await query<any>(
+            "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+            [roundId]
+          );
+          const oppHoleMap: Record<number, any> = {};
+          for (const p of oppRows) oppHoleMap[p.hole_number] = p;
+
+          let won = 0, lost = 0, halved = 0;
+          for (const h of holeRows) {
+            const opp = oppHoleMap[h.hole_number];
+            if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
+            const myNet  = h.gross_score  - getHALocal(h.stroke_index, round.playing_handicap);
+            const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+            if      (myNet < oppNet) won++;
+            else if (myNet > oppNet) lost++;
+            else                     halved++;
+          }
+
+          const holesUp       = won - lost;
+          const holesRemaining = 18 - holeRows.length;
+
+          if (holesUp !== 0) {
+            const winnerId = holesUp > 0
+              ? user.id
+              : (match.player1_id === user.id ? match.player2_id : match.player1_id);
+            const margin    = Math.abs(holesUp);
+            const scoreStr  = holesRemaining > 0 ? `${margin}&${holesRemaining}` : `${margin} UP`;
+            const p1Result  = match.player1_id === user.id
+              ? (holesUp > 0 ? "won" : "lost")
+              : (holesUp < 0 ? "won" : "lost");
+            const p2Result  = p1Result === "won" ? "lost" : "won";
+
+            await run(
+              `UPDATE knockout_matches
+               SET winner_id = ?, score = ?, status = 'complete',
+                   player1_result = ?, player2_result = ?, dispute = FALSE
+               WHERE id = ?`,
+              [winnerId, scoreStr, p1Result, p2Result, match.id]
+            );
+
+            if (match.next_match_id) {
+              const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+              if (nxt) {
+                const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+                await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+              }
+            }
+
+            const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+            if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
+              await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+            }
+          }
+        }
+      } catch (matchErr: any) {
+        req.log?.error({ matchErr }, "matchplay auto-resolve error (non-fatal)");
+      }
+    }
 
     res.json({ ok: true, totalGross, totalNet, totalPoints, holesPlayed: holeRows.length });
   } catch (err: any) {

@@ -34,6 +34,10 @@ type Round = {
   score_submitted: number;
   scorecard: ScorecardHole[];
   holes: Record<number, SavedHole>;
+  opponent_name?: string | null;
+  opponent_playing_hcp?: number;
+  match_id?: number | null;
+  playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -47,6 +51,35 @@ const FORMAT_LABELS: Record<string, string> = {
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
 function calcPts(gross: number, par: number, ha: number) { return Math.max(0,par+2-(gross-ha)); }
+
+function calcMatchResult(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    const opp  = playerHoles[`0_${h.number}`];
+    if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
+    const myNet  = mine.gross_score - getHA(h.stroke_index, myHcp);
+    const oppNet = opp.gross_score  - getHA(h.stroke_index, oppHcp);
+    if      (myNet < oppNet) won++;
+    else if (myNet > oppNet) lost++;
+    else                     halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  if (holesPlayed === 0) return { holesUp: 0, holesPlayed: 0, holesRemaining: sc.length, won: 0, lost: 0, halved: 0, label: "No scores recorded", color: "#a3e4bc" };
+  if (holesPlayed > 0 && holesUp > holesRemaining) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `Won ${holesUp}&${holesRemaining}`, color: "#22c55e" };
+  if (holesPlayed > 0 && -holesUp > holesRemaining) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
+  if (holesUp === 0) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: "All Square", color: GOLD };
+  if (holesUp > 0) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `${holesUp} UP`, color: "#22c55e" };
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `${-holesUp} DOWN`, color: "#f87171" };
+}
 
 function scoreLabel(d: number): string {
   if (d <= -3) return "ALB";
@@ -148,6 +181,11 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
+  const isMatchPlay = round.format === "singles_match_play";
+  const matchResult = (isMatchPlay && round.playerHoles)
+    ? calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    : null;
+
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       {/* Header */}
@@ -188,6 +226,26 @@ export default function RoundCompleteScreen() {
             </View>
           ))}
         </View>
+
+        {/* Matchplay result card */}
+        {isMatchPlay && matchResult && (
+          <View style={[styles.matchCard, { backgroundColor: matchResult.color + "14", borderColor: matchResult.color + "55" }]}>
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.matchCardLabel, { color: matchResult.color }]}>{matchResult.label}</Text>
+              <Text style={[styles.matchCardOpp, { color: colors.mutedForeground }]}>
+                vs {round.opponent_name ?? "Opponent"}
+              </Text>
+              <Text style={[styles.matchCardDetail, { color: colors.mutedForeground }]}>
+                {matchResult.won}W · {matchResult.lost}L · {matchResult.halved}H  ·  {matchResult.holesPlayed} holes scored
+              </Text>
+            </View>
+            <Ionicons
+              name={matchResult.holesUp > 0 ? "trophy" : matchResult.holesUp < 0 ? "close-circle" : "remove-circle"}
+              size={36}
+              color={matchResult.color}
+            />
+          </View>
+        )}
 
         {/* Round info */}
         <View style={[styles.roundInfo, { backgroundColor: colors.card, borderColor: colors.border }]}>
@@ -350,6 +408,14 @@ const styles = StyleSheet.create({
   scTotalPar: { flex: 1, fontSize: 13, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
   scTotalBlank: { flex: 1, fontSize: 13, color: "rgba(255,255,255,0.5)", textAlign: "center" },
   scTotalValue: { flex: 1, fontSize: 13, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
+  matchCard: {
+    flexDirection: "row", alignItems: "center",
+    marginHorizontal: 16, marginTop: 4, marginBottom: 4,
+    borderRadius: 16, borderWidth: 1.5, padding: 16,
+  },
+  matchCardLabel: { fontSize: 24, fontFamily: "Inter_700Bold" },
+  matchCardOpp: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 3 },
+  matchCardDetail: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 16, paddingVertical: 15 },
   footerBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },

@@ -35387,50 +35387,50 @@ var require_result = __commonJS({
         }
       }
       _parseRowAsArray(rowData) {
-        const row5 = new Array(rowData.length);
+        const row4 = new Array(rowData.length);
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           if (rawValue !== null) {
-            row5[i] = this._parsers[i](rawValue);
+            row4[i] = this._parsers[i](rawValue);
           } else {
-            row5[i] = null;
+            row4[i] = null;
           }
         }
-        return row5;
+        return row4;
       }
       parseRow(rowData) {
-        const row5 = { ...this._prebuiltEmptyResultObject };
+        const row4 = { ...this._prebuiltEmptyResultObject };
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           const field = this.fields[i].name;
           if (rawValue !== null) {
             const v = this.fields[i].format === "binary" ? Buffer.from(rawValue) : rawValue;
-            row5[field] = this._parsers[i](v);
+            row4[field] = this._parsers[i](v);
           } else {
-            row5[field] = null;
+            row4[field] = null;
           }
         }
-        return row5;
+        return row4;
       }
-      addRow(row5) {
-        this.rows.push(row5);
+      addRow(row4) {
+        this.rows.push(row4);
       }
       addFields(fieldDescriptions) {
         this.fields = fieldDescriptions;
         if (this.fields.length) {
           this._parsers = new Array(fieldDescriptions.length);
         }
-        const row5 = {};
+        const row4 = {};
         for (let i = 0; i < fieldDescriptions.length; i++) {
           const desc = fieldDescriptions[i];
-          row5[desc.name] = null;
+          row4[desc.name] = null;
           if (this._types) {
             this._parsers[i] = this._types.getTypeParser(desc.dataTypeID, desc.format || "text");
           } else {
             this._parsers[i] = types2.getTypeParser(desc.dataTypeID, desc.format || "text");
           }
         }
-        this._prebuiltEmptyResultObject = { ...row5 };
+        this._prebuiltEmptyResultObject = { ...row4 };
       }
     };
     module.exports = Result2;
@@ -35501,19 +35501,19 @@ var require_query = __commonJS({
         this._accumulateRows = this.callback || !this.listeners("row").length;
       }
       handleDataRow(msg) {
-        let row5;
+        let row4;
         if (this._canceledDueToError) {
           return;
         }
         try {
-          row5 = this._result.parseRow(msg.fields);
+          row4 = this._result.parseRow(msg.fields);
         } catch (err) {
           this._canceledDueToError = err;
           return;
         }
-        this.emit("row", row5, this._result);
+        this.emit("row", row4, this._result);
         if (this._accumulateRows) {
-          this._result.addRow(row5);
+          this._result.addRow(row4);
         }
       }
       handleCommandComplete(msg, connection) {
@@ -38169,13 +38169,13 @@ var require_query2 = __commonJS({
         if (self2._emitRowEvents) {
           if (results.length > 1) {
             rows.forEach((rowOfRows, i) => {
-              rowOfRows.forEach((row5) => {
-                self2.emit("row", row5, results[i]);
+              rowOfRows.forEach((row4) => {
+                self2.emit("row", row4, results[i]);
               });
             });
           } else {
-            rows.forEach(function(row5) {
-              self2.emit("row", row5, results);
+            rows.forEach(function(row4) {
+              self2.emit("row", row4, results);
             });
           }
         }
@@ -76550,16 +76550,52 @@ router23.post("/scoring/rounds", async (req, res) => {
       res.status(400).json({ message: "clubId is required" });
       return;
     }
+    let matchId = req.body.matchId ?? null;
+    let opponentName = req.body.opponentName ?? null;
+    let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
+    if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
+      const m = await row(`
+        SELECT km.id,
+          CASE WHEN km.player1_id = ? THEN u2.name  ELSE u1.name  END AS opp_name,
+          CASE WHEN km.player1_id = ? THEN u2.handicap ELSE u1.handicap END AS opp_hcp
+        FROM knockout_matches km
+        JOIN knockout_rounds  kr ON kr.id = km.round_id
+        LEFT JOIN users u1 ON u1.id = km.player1_id
+        LEFT JOIN users u2 ON u2.id = km.player2_id
+        WHERE km.event_id = ? AND (km.player1_id = ? OR km.player2_id = ?)
+          AND km.status NOT IN ('complete','bye')
+        ORDER BY kr.round_number ASC
+        LIMIT 1
+      `, [user.id, user.id, tournamentId, user.id, user.id]);
+      if (m) {
+        matchId = m.id;
+        opponentName = m.opp_name ?? null;
+        opponentPlayingHcp = m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0;
+      }
+    }
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]
     );
     const [{ id }] = await query(`
       INSERT INTO scoring_rounds
-        (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct, tournament_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
+         tournament_id, match_id, opponent_name, opponent_playing_hcp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
-    `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct, tournamentId]);
+    `, [
+      user.id,
+      clubId,
+      teeColor,
+      format,
+      courseHandicap,
+      playingHandicap,
+      allowancePct,
+      tournamentId,
+      matchId,
+      opponentName,
+      opponentPlayingHcp
+    ]);
     res.json({ id });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
@@ -76696,6 +76732,11 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
     res.status(500).json({ message: "Failed to save hole score" });
   }
 });
+function getHALocal(si, ph) {
+  if (ph <= 0) return 0;
+  if (ph <= 18) return si <= ph ? 1 : 0;
+  return 1 + (si <= ph - 18 ? 1 : 0);
+}
 router23.post("/scoring/rounds/:id/complete", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -76705,15 +76746,16 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
     }
     const roundId = parseInt(req.params.id);
     const rounds = await query(
-      "SELECT id FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      "SELECT * FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
       [roundId, user.id]
     );
     if (rounds.length === 0) {
       res.status(404).json({ message: "Active round not found" });
       return;
     }
+    const round = rounds[0];
     const holeRows = await query(
-      "SELECT gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",
+      "SELECT hole_number, gross_score, net_score, stableford_points, stroke_index, is_nr FROM scoring_holes WHERE round_id = ?",
       [roundId]
     );
     let totalGross = 0, totalNet = 0, totalPoints = 0;
@@ -76731,6 +76773,58 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
           holes_played = ?
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
+    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play")) {
+      try {
+        const match = await row("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
+        if (match && match.status !== "complete" && match.status !== "bye") {
+          const oppRows = await query(
+            "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+            [roundId]
+          );
+          const oppHoleMap = {};
+          for (const p of oppRows) oppHoleMap[p.hole_number] = p;
+          let won = 0, lost = 0, halved = 0;
+          for (const h of holeRows) {
+            const opp = oppHoleMap[h.hole_number];
+            if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
+            const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+            const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+            if (myNet < oppNet) won++;
+            else if (myNet > oppNet) lost++;
+            else halved++;
+          }
+          const holesUp = won - lost;
+          const holesRemaining = 18 - holeRows.length;
+          if (holesUp !== 0) {
+            const winnerId = holesUp > 0 ? user.id : match.player1_id === user.id ? match.player2_id : match.player1_id;
+            const margin = Math.abs(holesUp);
+            const scoreStr = holesRemaining > 0 ? `${margin}&${holesRemaining}` : `${margin} UP`;
+            const p1Result = match.player1_id === user.id ? holesUp > 0 ? "won" : "lost" : holesUp < 0 ? "won" : "lost";
+            const p2Result = p1Result === "won" ? "lost" : "won";
+            await run(
+              `UPDATE knockout_matches
+               SET winner_id = ?, score = ?, status = 'complete',
+                   player1_result = ?, player2_result = ?, dispute = FALSE
+               WHERE id = ?`,
+              [winnerId, scoreStr, p1Result, p2Result, match.id]
+            );
+            if (match.next_match_id) {
+              const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
+              if (nxt) {
+                const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+                await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+              }
+            }
+            const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+            if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
+              await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+            }
+          }
+        }
+      } catch (matchErr) {
+        req.log?.error({ matchErr }, "matchplay auto-resolve error (non-fatal)");
+      }
+    }
     res.json({ ok: true, totalGross, totalNet, totalPoints, holesPlayed: holeRows.length });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
@@ -78323,6 +78417,9 @@ async function applyLateAlters() {
     )
   `);
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS score_submitted SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_name VARCHAR(100)");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

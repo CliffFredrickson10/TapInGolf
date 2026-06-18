@@ -50,6 +50,9 @@ type Round = {
   status: string;
   scorecard: ScorecardHole[];
   holes: Record<number, SavedHole>;
+  opponent_name?: string | null;
+  opponent_playing_hcp?: number;
+  playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -81,6 +84,48 @@ function scoreColor(gross: number, par: number): string {
   return "#f87171";
 }
 
+// ─── Match Status ─────────────────────────────────────────────────────────────
+type MatchStatus = {
+  holesUp: number; holesPlayed: number; holesRemaining: number;
+  won: number; lost: number; halved: number;
+  decided: boolean; label: string; color: string;
+};
+function calcMatchStatus(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+): MatchStatus {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    const opp  = playerHoles[`0_${h.number}`];
+    if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
+    const myNet  = mine.gross_score - getHA(h.stroke_index, myHcp);
+    const oppNet = opp.gross_score  - getHA(h.stroke_index, oppHcp);
+    if      (myNet < oppNet) won++;
+    else if (myNet > oppNet) lost++;
+    else                     halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  if (holesPlayed > 0 && holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+  if (holesPlayed > 0 && -holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
+  if (holesPlayed === 0 || holesUp === 0)
+    return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
+  if (holesUp > 0 && holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+  if (holesUp < 0 && -holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie (Down)`,    color: "#f87171" };
+  if (holesUp > 0)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+  return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
+}
+
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function HoleEntryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -93,6 +138,7 @@ export default function HoleEntryScreen() {
   const [holeIdx, setHoleIdx] = useState(0);
   const [gross, setGross] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [oppGross, setOppGross] = useState<number | null>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
 
@@ -124,6 +170,8 @@ export default function HoleEntryScreen() {
       const startIdx = firstUnsaved >= 0 ? firstUnsaved : scorecard.length - 1;
       setHoleIdx(startIdx);
       setGross(holes[scorecard[startIdx]?.number]?.gross_score ?? null);
+      const ph0 = data.playerHoles as Record<string, any> | undefined;
+      setOppGross(ph0?.[`0_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to load round");
     } finally {
@@ -162,6 +210,7 @@ export default function HoleEntryScreen() {
   const goToHole = (idx: number) => {
     setHoleIdx(idx);
     setGross(round.holes[scorecard[idx].number]?.gross_score ?? null);
+    setOppGross(round.playerHoles?.[`0_${scorecard[idx].number}`]?.gross_score ?? null);
     holeStripRef.current?.scrollTo({ x: Math.max(0, (idx - 3) * 42), animated: true });
   };
 
@@ -169,14 +218,19 @@ export default function HoleEntryScreen() {
     if (!isNr && gross == null) return;
     setSaving(true);
     try {
+      const isMP = round.format === "singles_match_play";
+      const body: Record<string, unknown> = {
+        par: hole.par,
+        strokeIndex: hole.stroke_index,
+        grossScore: isNr ? null : gross,
+        isNr,
+      };
+      if (isMP && oppGross != null) {
+        body.players = [{ name: round.opponent_name ?? "Opponent", grossScore: oppGross }];
+      }
       await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, {
         method: "PUT",
-        body: JSON.stringify({
-          par: hole.par,
-          strokeIndex: hole.stroke_index,
-          grossScore: isNr ? null : gross,
-          isNr,
-        }),
+        body: JSON.stringify(body),
       });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
@@ -185,20 +239,22 @@ export default function HoleEntryScreen() {
       updatedHoles[hole.number] = {
         hole_number: hole.number,
         gross_score: isNr ? null : gross,
-        net_score: isNr ? null : netScore,
+        net_score:   isNr ? null : netScore,
         stableford_points: isNr ? null : pts,
         is_nr: isNr ? 1 : 0,
       };
-      setRound({ ...round, holes: updatedHoles });
+      const updatedPlayerHoles = { ...(round.playerHoles ?? {}) };
+      if (isMP && oppGross != null) {
+        updatedPlayerHoles[`0_${hole.number}`] = { gross_score: oppGross, is_nr: 0 };
+      }
+      setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
 
       if (holeIdx < scorecard.length - 1) {
         goToHole(holeIdx + 1);
       } else {
-        // Last hole saved → go to complete screen to review + finish
         router.replace(`/scoring/${id}/complete`);
       }
     } catch (err: any) {
-      // If the round is already complete, navigate to the scorecard instead of showing an error
       if (err?.message?.includes("404") || err?.status === 404 || err?.message?.includes("not found")) {
         router.replace(`/scoring/${id}/complete`);
       } else {
@@ -213,7 +269,11 @@ export default function HoleEntryScreen() {
     router.replace(`/scoring/${id}/complete`);
   };
 
-  const isLastHole = holeIdx === scorecard.length - 1;
+  const isLastHole  = holeIdx === scorecard.length - 1;
+  const isMatchPlay = round.format === "singles_match_play";
+  const matchSt: MatchStatus | null = isMatchPlay
+    ? calcMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    : null;
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
@@ -360,12 +420,57 @@ export default function HoleEntryScreen() {
         </ScrollView>
       </View>
 
-      {/* Points summary */}
-      {pts != null && (
+      {/* Points summary — only for non-matchplay */}
+      {pts != null && !isMatchPlay && (
         <View style={styles.ptsSummary}>
           <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
           <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
         </View>
+      )}
+
+      {/* Matchplay panel */}
+      {isMatchPlay && (
+        <>
+          {matchSt && matchSt.holesPlayed > 0 && (
+            <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18" }]}>
+              <View>
+                <Text style={[styles.matchBannerLabel, { color: matchSt.color }]}>{matchSt.label}</Text>
+                <Text style={styles.matchBannerSub}>
+                  {matchSt.won}W · {matchSt.lost}L · {matchSt.halved}H  ·  {matchSt.holesRemaining > 0 ? `${matchSt.holesRemaining} to play` : "Done"}
+                </Text>
+              </View>
+              {matchSt.decided && (
+                <Ionicons name={matchSt.holesUp > 0 ? "trophy" : "close-circle"} size={22} color={matchSt.color} />
+              )}
+            </View>
+          )}
+          <View style={styles.oppRow}>
+            <View style={styles.oppLabelWrap}>
+              <Text style={styles.oppVs}>VS</Text>
+              <Text style={styles.oppName} numberOfLines={1}>{round.opponent_name ?? "Opponent"}</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
+              style={styles.oppBtn}
+            >
+              <Text style={styles.oppBtnText}>−</Text>
+            </TouchableOpacity>
+            <View style={styles.oppScoreBox}>
+              <Text style={[styles.oppScore, { color: oppGross == null ? MUTED_FG : "#fff" }]}>{oppGross ?? "—"}</Text>
+              {oppGross != null && (
+                <Text style={styles.oppNet}>
+                  Net {oppGross - getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0)}
+                </Text>
+              )}
+            </View>
+            <TouchableOpacity
+              onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
+              style={styles.oppBtn}
+            >
+              <Text style={styles.oppBtnText}>+</Text>
+            </TouchableOpacity>
+          </View>
+        </>
       )}
 
       {/* Action buttons */}
@@ -505,4 +610,28 @@ const styles = StyleSheet.create({
     flex: 3, paddingVertical: 15, borderRadius: 16, alignItems: "center",
   },
   nextBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
+  matchBanner: {
+    marginHorizontal: 16, marginTop: 8, borderRadius: 12, borderWidth: 1.5,
+    paddingVertical: 10, paddingHorizontal: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  matchBannerLabel: { fontSize: 20, fontFamily: "Inter_700Bold" },
+  matchBannerSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: MUTED_FG, marginTop: 2 },
+  oppRow: {
+    marginHorizontal: 16, marginTop: 8,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
+    paddingHorizontal: 14, paddingVertical: 10,
+  },
+  oppLabelWrap: { flex: 1, minWidth: 0 },
+  oppVs: { fontSize: 9, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 1 },
+  oppName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#a3e4bc", marginTop: 2 },
+  oppBtn: {
+    width: 36, height: 36, borderRadius: 18, backgroundColor: DARK_BG,
+    alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: BORDER,
+  },
+  oppBtnText: { fontSize: 22, color: "#fff", lineHeight: 28 },
+  oppScoreBox: { width: 52, alignItems: "center" },
+  oppScore: { fontSize: 26, fontFamily: "Inter_700Bold" },
+  oppNet: { fontSize: 9, color: MUTED_FG, fontFamily: "Inter_400Regular" },
 });

@@ -175,15 +175,8 @@ export default function HoleEntryScreen() {
       if (holeIdx < scorecard.length - 1) {
         goToHole(holeIdx + 1);
       } else {
-        // All holes done → complete
-        Alert.alert(
-          "Round Complete?",
-          "You've scored all holes. Finish the round?",
-          [
-            { text: "Not Yet", style: "cancel" },
-            { text: "Finish Round", onPress: doFinishRound },
-          ]
-        );
+        // Last hole saved → go to complete screen to review + finish
+        router.replace(`/scoring/${id}/complete`);
       }
     } catch (err: any) {
       // If the round is already complete, navigate to the scorecard instead of showing an error

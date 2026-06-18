@@ -155,12 +155,20 @@ router.get("/scoring/rounds/:id", async (req, res) => {
     if (rounds.length === 0) { res.status(404).json({ message: "Round not found" }); return; }
     const round = rounds[0];
 
-    // Scorecard
+    // Scorecard — map per-tee-colour distances from the portal format to distance_m
     const scRows = await query<any>(
       "SELECT holes, tee_colors FROM club_scorecards WHERE club_id = ?",
       [round.club_id]
     );
-    const scorecard: any[] = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const rawHoles: any[] = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const tee = round.tee_color ?? "white";
+    const scorecard: any[] = rawHoles.map((h: any) => ({
+      number:       h.number,
+      par:          h.par ?? 4,
+      stroke_index: h.stroke_index ?? h.number,
+      // Use the distance for the player's tee colour, fall back through other tees
+      distance_m:   h[tee] ?? h.white ?? h.yellow ?? h.blue ?? h.red ?? h.distance_m ?? null,
+    }));
 
     // Saved hole scores
     const holeRows = await query<any>(

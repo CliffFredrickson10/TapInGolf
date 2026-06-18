@@ -76582,7 +76582,15 @@ router23.get("/scoring/rounds/:id", async (req, res) => {
       "SELECT holes, tee_colors FROM club_scorecards WHERE club_id = ?",
       [round.club_id]
     );
-    const scorecard = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const rawHoles = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const tee = round.tee_color ?? "white";
+    const scorecard = rawHoles.map((h) => ({
+      number: h.number,
+      par: h.par ?? 4,
+      stroke_index: h.stroke_index ?? h.number,
+      // Use the distance for the player's tee colour, fall back through other tees
+      distance_m: h[tee] ?? h.white ?? h.yellow ?? h.blue ?? h.red ?? h.distance_m ?? null
+    }));
     const holeRows = await query(
       "SELECT * FROM scoring_holes WHERE round_id = ? ORDER BY hole_number",
       [roundId]

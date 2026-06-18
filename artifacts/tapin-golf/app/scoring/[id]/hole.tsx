@@ -305,7 +305,8 @@ export default function HoleEntryScreen() {
         ref={holeStripRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        contentContainerStyle={[styles.holeStrip, isMatchPlay && { paddingBottom: 2 }]}
+        style={{ height: 42 }}
+        contentContainerStyle={styles.holeStrip}
       >
         {scorecard.map((h, i) => {
           const saved = round.holes[h.number];
@@ -315,18 +316,16 @@ export default function HoleEntryScreen() {
           const dotBg = active ? "#fff"
             : played ? (p == null ? "#f87171" : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171")
             : SURFACE;
-          const chipH = isMatchPlay ? (active ? 28 : 22) : (active ? 36 : 28);
-          const chipFs = isMatchPlay ? (active ? 11 : 9) : (active ? 12 : 10);
           return (
-            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: chipH }]}>
-              <Text style={{ fontSize: chipFs, fontFamily: "Inter_700Bold", color: active ? DARK_BG : played ? "#fff" : MUTED_FG }}>
+            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: active ? 36 : 28 }]}>
+              <Text style={{ fontSize: active ? 12 : 10, fontFamily: "Inter_700Bold", color: active ? DARK_BG : played ? "#fff" : MUTED_FG }}>
                 {h.number}
               </Text>
             </TouchableOpacity>
           );
         })}
       </ScrollView>
-      <Text style={[styles.stripMeta, isMatchPlay && { marginBottom: 1 }]}>
+      <Text style={styles.stripMeta}>
         {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
       </Text>
 

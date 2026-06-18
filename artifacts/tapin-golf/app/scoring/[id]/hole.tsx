@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   Platform,
   ScrollView,
   StyleSheet,
@@ -92,6 +93,19 @@ export default function HoleEntryScreen() {
   const [gross, setGross] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const holeStripRef = useRef<ScrollView>(null);
+  const quickRowRef = useRef<ScrollView>(null);
+
+  // Centre the Par button in the quick-tap row whenever the hole changes
+  useEffect(() => {
+    const PAR_INDEX = 3; // index of offset=0 in [-3,-2,-1,0,1,2,3,4,5]
+    const BTN_WIDTH = 68;
+    const GAP = 6;
+    const PADDING = 20;
+    const screenWidth = Dimensions.get("window").width;
+    const parCenter = PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
+    const scrollX = Math.max(0, parCenter - screenWidth / 2);
+    setTimeout(() => quickRowRef.current?.scrollTo({ x: scrollX, animated: false }), 50);
+  }, [holeIdx]);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -314,8 +328,9 @@ export default function HoleEntryScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Quick-tap row — scrollable */}
+        {/* Quick-tap row — scrollable, centred on Par by default */}
         <ScrollView
+          ref={quickRowRef}
           horizontal
           showsHorizontalScrollIndicator={false}
           contentContainerStyle={styles.quickRow}

@@ -121,7 +121,7 @@ export default function StartRoundScreen() {
   const [teeColor, setTeeColor] = useState("white");
   const [format, setFormat] = useState("individual_stableford");
   const [courseHcp, setCourseHcp] = useState("0");
-  const [allowancePct, setAllowancePct] = useState(95);
+  const [allowancePct, setAllowancePct] = useState(100);
   const [expandedGroup, setExpandedGroup] = useState("Individual");
   const [submitting, setSubmitting] = useState(false);
   const [showAllowancePicker, setShowAllowancePicker] = useState(false);

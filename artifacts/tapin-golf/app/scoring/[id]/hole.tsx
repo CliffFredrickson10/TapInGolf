@@ -535,7 +535,15 @@ export default function HoleEntryScreen() {
         >
           <Text style={[styles.nrBtnText, { color: MUTED_FG }]}>NR / Pickup</Text>
         </TouchableOpacity>
-        {isLastHole ? (
+        {isMatchPlay && matchSt?.decided ? (
+          <TouchableOpacity
+            onPress={confirmAndFinish}
+            disabled={saving}
+            style={[styles.nextBtn, { backgroundColor: GREEN, opacity: saving ? 0.7 : 1 }]}
+          >
+            <Text style={styles.nextBtnText}>End Match 🏆</Text>
+          </TouchableOpacity>
+        ) : isLastHole ? (
           <TouchableOpacity
             onPress={() => gross != null ? saveAndNext(false) : confirmAndFinish()}
             disabled={saving}

@@ -5,6 +5,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   ScrollView,
   StyleSheet,
   Text,
@@ -77,7 +78,8 @@ export default function BetterballHoleScreen() {
   useEffect(() => { loadRound(); }, [loadRound]);
 
   if (loading || !round) {
-    return <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}><GolfBallLoader size={60} /></View>;
+    const { width: sw, height: sh } = Dimensions.get("window");
+    return <View style={{ width: sw, height: sh, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }}><GolfBallLoader size={60} /></View>;
   }
 
   const sc = round.scorecard;

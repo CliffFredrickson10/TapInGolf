@@ -134,8 +134,9 @@ export default function HoleEntryScreen() {
   useEffect(() => { loadRound(); }, [loadRound]);
 
   if (loading || !round) {
+    const { width: sw, height: sh } = Dimensions.get("window");
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}>
+      <View style={{ width: sw, height: sh, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }}>
         <GolfBallLoader size={60} />
       </View>
     );

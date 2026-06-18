@@ -4,6 +4,7 @@ import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Dimensions,
   ScrollView,
   Share,
   StyleSheet,
@@ -122,8 +123,9 @@ export default function RoundCompleteScreen() {
   };
 
   if (loading || !round) {
+    const { width: sw, height: sh } = Dimensions.get("window");
     return (
-      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
+      <View style={{ width: sw, height: sh, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
         <GolfBallLoader size={60} />
       </View>
     );

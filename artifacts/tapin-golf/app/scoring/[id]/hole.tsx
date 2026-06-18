@@ -336,9 +336,9 @@ export default function HoleEntryScreen() {
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         {/* Hole identity */}
-        <View style={styles.holeHeader}>
-          <Text style={styles.nowScoringLabel}>NOW SCORING</Text>
-          <Text style={styles.holeName}>HOLE {hole.number}</Text>
+        <View style={[styles.holeHeader, isMatchPlay && { paddingTop: 2, paddingBottom: 4 }]}>
+          {!isMatchPlay && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
+          <Text style={[styles.holeName, isMatchPlay && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <View style={styles.hcpChip}>
             <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
           </View>
@@ -359,7 +359,7 @@ export default function HoleEntryScreen() {
 
         {/* Match status banner */}
         {isMatchPlay && matchSt && matchSt.holesPlayed > 0 && (
-          <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18" }]}>
+          <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18", paddingVertical: 6 }]}>
             <View>
               <Text style={[styles.matchBannerLabel, { color: matchSt.color }]}>{matchSt.label}</Text>
               <Text style={styles.matchBannerSub}>
@@ -374,14 +374,14 @@ export default function HoleEntryScreen() {
 
         {/* ── YOUR SCORE section ─────────────────────────────────── */}
         {isMatchPlay && (
-          <View style={styles.scoringSectionHeader}>
+          <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
             <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
             <Text style={[styles.sectionLabel, { color: GREEN }]}>YOUR SCORE</Text>
           </View>
         )}
 
         <View style={styles.stepperSection}>
-          <View style={{ height: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+          <View style={{ height: isMatchPlay ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isMatchPlay ? 4 : 8 }}>
             {gross != null && (
               <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
                 <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
@@ -394,25 +394,25 @@ export default function HoleEntryScreen() {
           <View style={styles.stepper}>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-              style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER }]}
+              style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER, width: isMatchPlay ? 52 : 64, height: isMatchPlay ? 52 : 64, borderRadius: isMatchPlay ? 26 : 32 }]}
             >
-              <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG }]}>−</Text>
+              <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG, fontSize: isMatchPlay ? 24 : 30 }]}>−</Text>
             </TouchableOpacity>
             <View style={styles.scoreDisplay}>
               {gross != null ? (
                 <>
-                  <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par) }]}>{gross}</Text>
+                  <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isMatchPlay ? 60 : 84, lineHeight: isMatchPlay ? 64 : 88 }]}>{gross}</Text>
                   <Text style={styles.scoreNet}>Net {gross - ha} · {pts}pts</Text>
                 </>
               ) : (
-                <Text style={[styles.scoreValue, { color: SURFACE }]}>—</Text>
+                <Text style={[styles.scoreValue, { color: SURFACE, fontSize: isMatchPlay ? 60 : 84, lineHeight: isMatchPlay ? 64 : 88 }]}>—</Text>
               )}
             </View>
             <TouchableOpacity
               onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-              style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN }]}
+              style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN, width: isMatchPlay ? 52 : 64, height: isMatchPlay ? 52 : 64, borderRadius: isMatchPlay ? 26 : 32 }]}
             >
-              <Text style={[styles.stepBtnText, { color: "#22c55e" }]}>+</Text>
+              <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isMatchPlay ? 24 : 30 }]}>+</Text>
             </TouchableOpacity>
           </View>
 
@@ -452,7 +452,7 @@ export default function HoleEntryScreen() {
         {/* ── OPPONENT score section (matchplay only) ────────────── */}
         {isMatchPlay && (
           <>
-            <View style={styles.scoringSectionHeader}>
+            <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
               <View style={[styles.sectionDot, { backgroundColor: "#a78bfa" }]} />
               <Text style={[styles.sectionLabel, { color: "#a78bfa" }]}>
                 {(round.opponent_name ?? "OPPONENT").toUpperCase()}
@@ -460,7 +460,7 @@ export default function HoleEntryScreen() {
             </View>
 
             <View style={[styles.stepperSection, styles.oppStepperSection]}>
-              <View style={{ height: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+              <View style={{ height: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
                 {oppGross != null && (
                   <View style={[styles.scoreBadge, { backgroundColor: scoreColor(oppGross, hole.par) + "22", borderColor: scoreColor(oppGross, hole.par) + "60" }]}>
                     <Text style={[styles.scoreBadgeText, { color: scoreColor(oppGross, hole.par) }]}>
@@ -473,25 +473,25 @@ export default function HoleEntryScreen() {
               <View style={styles.stepper}>
                 <TouchableOpacity
                   onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-                  style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: oppGross != null && oppGross > 1 ? "#f87171" : BORDER }]}
+                  style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: oppGross != null && oppGross > 1 ? "#f87171" : BORDER, width: 52, height: 52, borderRadius: 26 }]}
                 >
-                  <Text style={[styles.stepBtnText, { color: oppGross != null && oppGross > 1 ? "#f87171" : MUTED_FG }]}>−</Text>
+                  <Text style={[styles.stepBtnText, { color: oppGross != null && oppGross > 1 ? "#f87171" : MUTED_FG, fontSize: 24 }]}>−</Text>
                 </TouchableOpacity>
                 <View style={styles.scoreDisplay}>
                   {oppGross != null ? (
                     <>
-                      <Text style={[styles.scoreValue, { color: scoreColor(oppGross, hole.par) }]}>{oppGross}</Text>
+                      <Text style={[styles.scoreValue, { color: scoreColor(oppGross, hole.par), fontSize: 60, lineHeight: 64 }]}>{oppGross}</Text>
                       <Text style={styles.scoreNet}>Net {oppGross - oppHA}</Text>
                     </>
                   ) : (
-                    <Text style={[styles.scoreValue, { color: SURFACE }]}>—</Text>
+                    <Text style={[styles.scoreValue, { color: SURFACE, fontSize: 60, lineHeight: 64 }]}>—</Text>
                   )}
                 </View>
                 <TouchableOpacity
                   onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                  style={[styles.stepBtn, { borderColor: "#a78bfa", backgroundColor: "#2d1f4a" }]}
+                  style={[styles.stepBtn, { borderColor: "#a78bfa", backgroundColor: "#2d1f4a", width: 52, height: 52, borderRadius: 26 }]}
                 >
-                  <Text style={[styles.stepBtnText, { color: "#a78bfa" }]}>+</Text>
+                  <Text style={[styles.stepBtnText, { color: "#a78bfa", fontSize: 24 }]}>+</Text>
                 </TouchableOpacity>
               </View>
 

@@ -164,9 +164,9 @@ export default function HoleEntry() {
         <div style={{ display: "flex", gap: 8, justifyContent: "center", marginTop: 10, marginBottom: 4 }}>
           {[
             { label: "PAR",     value: hole.par,          accent: true },
-            { label: "SI",      value: hole.si,           accent: false },
-            { label: "DIST",    value: `${hole.dist}m`,   accent: false },
-            { label: "STROKES", value: ha > 0 ? `+${ha}` : "–", accent: ha > 0 },
+            { label: "STROKE INDEX", value: hole.si,           accent: false },
+            { label: "DISTANCE",     value: `${hole.dist}m`,   accent: false },
+            { label: "STROKES",      value: ha > 0 ? `+${ha}` : "–", accent: ha > 0 },
           ].map(stat => (
             <div key={stat.label} style={{
               flex: 1, padding: "10px 4px", borderRadius: 12,

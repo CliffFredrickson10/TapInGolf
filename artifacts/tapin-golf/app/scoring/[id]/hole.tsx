@@ -301,7 +301,7 @@ export default function HoleEntryScreen() {
       </View>
 
       {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
-      <View style={{ height: 40, overflow: "hidden", marginTop: 8, marginBottom: 6 }}>
+      <View style={{ height: 40, overflow: "hidden", marginTop: 14, marginBottom: 6 }}>
       <ScrollView
         ref={holeStripRef}
         horizontal
@@ -339,7 +339,7 @@ export default function HoleEntryScreen() {
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         {/* Hole identity */}
-        <View style={[styles.holeHeader, isMatchPlay && { paddingTop: 2, paddingBottom: 4 }]}>
+        <View style={[styles.holeHeader, isMatchPlay && { paddingTop: 20, paddingBottom: 4 }]}>
           {!isMatchPlay && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
           <Text style={[styles.holeName, isMatchPlay && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <View style={styles.hcpChip}>

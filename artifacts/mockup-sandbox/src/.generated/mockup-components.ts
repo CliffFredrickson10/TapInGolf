@@ -8,6 +8,10 @@ export const modules: ModuleMap = {
   "./components/mockups/knockout/FormatSelection.tsx": () => import("../components/mockups/knockout/FormatSelection.tsx"),
   "./components/mockups/knockout/PublishDraw.tsx": () => import("../components/mockups/knockout/PublishDraw.tsx"),
   "./components/mockups/knockout/ScoreEntry.tsx": () => import("../components/mockups/knockout/ScoreEntry.tsx"),
+  "./components/mockups/scoring/HoleEntry.tsx": () => import("../components/mockups/scoring/HoleEntry.tsx"),
+  "./components/mockups/scoring/RoundComplete.tsx": () => import("../components/mockups/scoring/RoundComplete.tsx"),
+  "./components/mockups/scoring/ScorecardProgress.tsx": () => import("../components/mockups/scoring/ScorecardProgress.tsx"),
+  "./components/mockups/scoring/StartRound.tsx": () => import("../components/mockups/scoring/StartRound.tsx"),
   "./components/mockups/shotgun/ShotgunCreation.tsx": () => import("../components/mockups/shotgun/ShotgunCreation.tsx"),
   "./components/mockups/shotgun/ShotgunDraw.tsx": () => import("../components/mockups/shotgun/ShotgunDraw.tsx")
 };

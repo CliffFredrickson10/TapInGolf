@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
@@ -75,7 +76,7 @@ export default function BetterballHoleScreen() {
   useEffect(() => { loadRound(); }, [loadRound]);
 
   if (loading || !round) {
-    return <View style={{ flex: 1, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }}><ActivityIndicator color={GOLD} size="large" /></View>;
+    return <View style={[StyleSheet.absoluteFill, { backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }]}><ActivityIndicator color={GOLD} size="large" /></View>;
   }
 
   const sc = round.scorecard;

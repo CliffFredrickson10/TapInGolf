@@ -11,6 +11,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
@@ -121,7 +122,7 @@ export default function RoundCompleteScreen() {
 
   if (loading || !round) {
     return (
-      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
+      <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }]}>
         <ActivityIndicator color={colors.primary} size="large" />
       </View>
     );

@@ -60,7 +60,8 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
              knockout_type, knockout_scoring_format
       FROM golf_events
       WHERE club_id = ?
-        AND event_date >= CURRENT_DATE - INTERVAL '1 day'
+        AND COALESCE(end_date, event_date) >= CURRENT_DATE - INTERVAL '1 day'
+        AND status NOT IN ('cancelled', 'completed')
       ORDER BY event_date ASC
       LIMIT 20
     `, [clubId]);

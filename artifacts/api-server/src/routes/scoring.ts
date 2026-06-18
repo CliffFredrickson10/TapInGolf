@@ -56,7 +56,8 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     if (!clubId) { res.status(400).json({ message: "Invalid club id" }); return; }
 
     const tournaments = await query<any>(`
-      SELECT id, name, event_date, end_date, format, format2, format_custom
+      SELECT id, name, event_date, end_date, format, format2, format_custom,
+             knockout_type, knockout_scoring_format
       FROM golf_events
       WHERE club_id = ?
         AND event_date >= CURRENT_DATE - INTERVAL '1 day'

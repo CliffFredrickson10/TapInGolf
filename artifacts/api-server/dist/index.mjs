@@ -75099,7 +75099,7 @@ router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
 });
 router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   const club = getClub(req);
-  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline } = req.body ?? {};
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline, knockout_scoring_format } = req.body ?? {};
   if (!name?.trim()) {
     res.status(400).json({ message: "Name is required" });
     return;
@@ -75113,11 +75113,12 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
     return;
   }
   const format = knockout_type === "team" ? "knockout_team" : "knockout_individual";
+  const scoringFmt = knockout_scoring_format || "stableford";
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        knockout_pairing_deadline, singles_entry_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
+        knockout_pairing_deadline, singles_entry_deadline, knockout_scoring_format, status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [
       club.id,
       name.trim(),
@@ -75129,6 +75130,7 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       draw_method,
       pairing_deadline || null,
       singles_entry_deadline || null,
+      scoringFmt,
       club.id
     ]
   );
@@ -76477,7 +76479,8 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
       return;
     }
     const tournaments = await query(`
-      SELECT id, name, event_date, end_date, format, format2, format_custom
+      SELECT id, name, event_date, end_date, format, format2, format_custom,
+             knockout_type, knockout_scoring_format
       FROM golf_events
       WHERE club_id = ?
         AND event_date >= CURRENT_DATE - INTERVAL '1 day'
@@ -77676,6 +77679,7 @@ async function createSchema() {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_type VARCHAR(20)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_draw_method VARCHAR(20) NOT NULL DEFAULT 'random'");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_pairing_deadline DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_scoring_format VARCHAR(50)");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");
   await ddl("ALTER TABLE golf_events ADD CONSTRAINT golf_events_restriction_check CHECK (restriction IN ('open','members_only','invitation_only','whs_players_only'))");
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_status_check");

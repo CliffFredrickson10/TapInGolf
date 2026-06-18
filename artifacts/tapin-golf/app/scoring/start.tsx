@@ -155,23 +155,29 @@ export default function StartRoundScreen() {
       .catch(() => setTournaments([]));
   }, [selectedClub, token]);
 
-  // Map golf_events.format values → our scoring format keys
+  // Map golf_events.format / knockout_scoring_format values → our scoring format keys
   const TOURNAMENT_FORMAT_MAP: Record<string, string> = {
-    stroke_play:        "gross_stroke_play",
-    stableford:         "individual_stableford",
-    match_play:         "singles_match_play",
-    fourball:           "fourball_stableford",
-    scramble:           "american_scramble",
-    alliance:           "alliance",
-    bogey:              "par_bogey",
-    modified_stableford:"modified_stableford",
-    par:                "individual_par",
-    other:              "other",
+    stroke_play:         "gross_stroke_play",
+    net_stroke_play:     "net_stroke_play",
+    stableford:          "individual_stableford",
+    match_play:          "singles_match_play",
+    fourball:            "fourball_stableford",
+    scramble:            "american_scramble",
+    alliance:            "alliance",
+    bogey:               "par_bogey",
+    par_bogey:           "par_bogey",
+    modified_stableford: "modified_stableford",
+    par:                 "individual_par",
+    other:               "other",
   };
 
-  const linkTournament = (t: Tournament) => {
+  const linkTournament = (t: any) => {
     setLinkedTournamentId(t.id);
-    const mappedFormat = TOURNAMENT_FORMAT_MAP[t.format] ?? t.format ?? "individual_stableford";
+    // Knockouts: use knockout_scoring_format; regular events: use format
+    const rawFormat = t.knockout_type
+      ? (t.knockout_scoring_format ?? "stableford")
+      : (t.format ?? "stableford");
+    const mappedFormat = TOURNAMENT_FORMAT_MAP[rawFormat] ?? rawFormat ?? "individual_stableford";
     setFormat(mappedFormat);
   };
 
@@ -301,17 +307,28 @@ export default function StartRoundScreen() {
                   </View>
                 ) : (
                   <View style={{ gap: 8 }}>
-                    {tournaments.length > 0 ? tournaments.map(t => (
+                    {tournaments.length > 0 ? tournaments.map((t: any) => (
                       <TouchableOpacity
                         key={t.id}
                         onPress={() => linkTournament(t)}
                         style={[styles.tournamentRow, { borderColor: colors.border, backgroundColor: colors.background }]}
                       >
-                        <Ionicons name="trophy-outline" size={18} color={colors.primary} />
+                        <Ionicons name={t.knockout_type ? "git-merge-outline" : "trophy-outline"} size={18} color={colors.primary} />
                         <View style={{ flex: 1 }}>
-                          <Text style={[styles.clubName, { color: colors.foreground }]}>{t.name}</Text>
+                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                            <Text style={[styles.clubName, { color: colors.foreground, flex: 1 }]}>{t.name}</Text>
+                            {t.knockout_type && (
+                              <View style={{ backgroundColor: "#7c3aed20", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 9, color: "#7c3aed", fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>
+                                  Knockout
+                                </Text>
+                              </View>
+                            )}
+                          </View>
                           <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>
-                            {new Date(t.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                            {t.event_date
+                              ? new Date(t.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+                              : "Date TBD"}
                           </Text>
                         </View>
                         <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />

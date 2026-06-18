@@ -47,6 +47,15 @@ interface UnpairedMember {
   name: string;
 }
 
+const SCORING_FORMATS = [
+  { value: "stableford",  label: "Stableford" },
+  { value: "stroke_play", label: "Stroke Play (Gross)" },
+  { value: "match_play",  label: "Match Play" },
+  { value: "net_stroke_play", label: "Stroke Play (Net)" },
+  { value: "par_bogey",   label: "Par / Bogey" },
+  { value: "other",       label: "Other" },
+];
+
 const EMPTY_FORM = {
   name: "",
   description: "",
@@ -56,6 +65,7 @@ const EMPTY_FORM = {
   draw_method: "random" as "random" | "seeded",
   pairing_deadline: "",
   singles_entry_deadline: "",
+  knockout_scoring_format: "stableford",
 };
 
 function fmtDate(d: string | null | undefined) {
@@ -264,15 +274,33 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <Label>Draw method</Label>
-            <Select value={form.draw_method} onValueChange={v => setForm(f => ({ ...f, draw_method: v as "random" | "seeded" }))}>
-              <SelectTrigger><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="random">Random draw</SelectItem>
-                <SelectItem value="seeded">Seeded by handicap</SelectItem>
-              </SelectContent>
-            </Select>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Draw method</Label>
+              <Select value={form.draw_method} onValueChange={v => setForm(f => ({ ...f, draw_method: v as "random" | "seeded" }))}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="random">Random draw</SelectItem>
+                  <SelectItem value="seeded">Seeded by handicap</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>
+                Match scoring format <span className="text-destructive">*</span>
+              </Label>
+              <Select
+                value={form.knockout_scoring_format}
+                onValueChange={v => setForm(f => ({ ...f, knockout_scoring_format: v }))}
+              >
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {SCORING_FORMATS.map(sf => (
+                    <SelectItem key={sf.value} value={sf.value}>{sf.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           {/* Singles entry deadline (optional) */}

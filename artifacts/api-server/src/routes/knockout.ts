@@ -100,7 +100,7 @@ router.get("/portal/knockout", requireClubAuth, async (req: Request, res: Respon
 // ── Create knockout tournament ────────────────────────────────────────────────
 router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline } = req.body ?? {};
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline, knockout_scoring_format } = req.body ?? {};
 
   if (!name?.trim()) { res.status(400).json({ message: "Name is required" }); return; }
   if (!knockout_type) { res.status(400).json({ message: "Format is required" }); return; }
@@ -109,14 +109,15 @@ router.post("/portal/knockout", requireClubAuth, async (req: Request, res: Respo
   }
 
   const format = knockout_type === "team" ? "knockout_team" : "knockout_individual";
+  const scoringFmt = knockout_scoring_format || "stableford";
 
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        knockout_pairing_deadline, singles_entry_deadline, status, scoring_enabled, entries_required, payment_required, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
+        knockout_pairing_deadline, singles_entry_deadline, knockout_scoring_format, status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [club.id, name.trim(), description?.trim() ?? null, event_date || null, end_date || null,
-     format, knockout_type, draw_method, pairing_deadline || null, singles_entry_deadline || null, club.id]
+     format, knockout_type, draw_method, pairing_deadline || null, singles_entry_deadline || null, scoringFmt, club.id]
   );
 
   // For singles with entry deadline: create pending registrations for all active members now

@@ -974,6 +974,7 @@ async function createSchema(): Promise<void> {
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_type VARCHAR(20)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_draw_method VARCHAR(20) NOT NULL DEFAULT 'random'");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_pairing_deadline DATE");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS knockout_scoring_format VARCHAR(50)");
 
   // Widen restriction check to include whs_players_only
   await ddl("ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_restriction_check");

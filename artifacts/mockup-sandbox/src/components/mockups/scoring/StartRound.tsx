@@ -7,6 +7,15 @@ const CARD = "#ffffff";
 const MUTED = "#6b7280";
 const BORDER = "#e5e7eb";
 
+type Tournament = { id: string; name: string; date: string; format: string; allowance: number; description: string };
+
+const MOCK_TOURNAMENTS: Tournament[] = [
+  { id: "t1", name: "Monthly Medal",       date: "Today · Sat 18 Jun",   format: "net_stroke_play",      allowance: 100, description: "Net Stroke Play · Full handicap" },
+  { id: "t2", name: "Club Stableford",     date: "Sat 25 Jun",           format: "individual_stableford", allowance: 95,  description: "Individual Stableford · 95%" },
+  { id: "t3", name: "Betterball Classic",  date: "Sun 26 Jun",           format: "fourball_stableford",  allowance: 90,  description: "Betterball Stableford · 90%" },
+  { id: "t4", name: "Captain's Day",       date: "Sat 2 Jul",            format: "chairman",             allowance: 100, description: "Chairman (The Perch) · Full handicap" },
+];
+
 const TEE_COLORS = [
   { key: "yellow", label: "Yellow", hex: "#F5C518" },
   { key: "white",  label: "White",  hex: "#FFFFFF" },
@@ -85,6 +94,19 @@ export default function StartRound() {
   const [players, setPlayers] = useState(1);
   const [showAllowanceDropdown, setShowAllowanceDropdown] = useState(false);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set(["Individual"]));
+  const [tournamentId, setTournamentId] = useState<string | null>(null);
+
+  const linkedTournament = MOCK_TOURNAMENTS.find(t => t.id === tournamentId) ?? null;
+
+  const linkTournament = (t: Tournament) => {
+    setTournamentId(t.id);
+    setFormat(t.format);
+    setAllowance(t.allowance);
+    const grp = FORMAT_GROUPS.find(g => g.formats.some(f => f.key === t.format));
+    if (grp) setExpandedGroups(new Set([grp.group]));
+  };
+
+  const unlinkTournament = () => setTournamentId(null);
 
   const ch = parseInt(courseHcp) || 0;
   const ph = Math.round(ch * (allowance / 100));
@@ -131,6 +153,49 @@ export default function StartRound() {
       </div>
 
       <div style={{ padding: "16px 16px 110px", display: "flex", flexDirection: "column", gap: 14 }}>
+
+        {/* Tournament link */}
+        <div style={{ background: CARD, borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 12 }}>
+            <div style={{ fontSize: 12, fontWeight: 600, color: MUTED, textTransform: "uppercase", letterSpacing: 0.8 }}>Club Tournament</div>
+            {linkedTournament && (
+              <button onClick={unlinkTournament} style={{ fontSize: 11, color: "#ef4444", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 20, padding: "3px 10px", cursor: "pointer", fontWeight: 600 }}>Unlink</button>
+            )}
+          </div>
+
+          {linkedTournament ? (
+            <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 14px", background: `${PRIMARY}10`, border: `1.5px solid ${PRIMARY}40`, borderRadius: 14 }}>
+              <div style={{ width: 40, height: 40, background: PRIMARY, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, flexShrink: 0 }}>🏆</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 14, color: PRIMARY }}>{linkedTournament.name}</div>
+                <div style={{ fontSize: 12, color: MUTED, marginTop: 2 }}>{linkedTournament.date}</div>
+                <div style={{ fontSize: 11, color: "#16a34a", marginTop: 3, fontWeight: 600 }}>{linkedTournament.description}</div>
+              </div>
+              <div style={{ fontSize: 18, color: "#16a34a" }}>✓</div>
+            </div>
+          ) : (
+            <div>
+              <div style={{ fontSize: 13, color: MUTED, marginBottom: 10 }}>
+                Link your round to an official club competition — the format and allowance will be set automatically.
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                {MOCK_TOURNAMENTS.map(t => (
+                  <button key={t.id} onClick={() => linkTournament(t)} style={{ display: "flex", alignItems: "center", gap: 12, padding: "11px 14px", borderRadius: 12, border: `1.5px solid ${BORDER}`, background: "#f9fafb", cursor: "pointer", textAlign: "left" }}>
+                    <div style={{ width: 34, height: 34, background: `${GOLD}22`, border: `1px solid ${GOLD}50`, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>🏆</div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 600, fontSize: 13, color: "#111827" }}>{t.name}</div>
+                      <div style={{ fontSize: 11, color: MUTED, marginTop: 2 }}>{t.description}</div>
+                    </div>
+                    <div style={{ fontSize: 12, color: MUTED, flexShrink: 0 }}>{t.date.split(" · ")[0]}</div>
+                  </button>
+                ))}
+              </div>
+              <button style={{ width: "100%", marginTop: 10, padding: "10px", borderRadius: 12, border: `1.5px dashed ${BORDER}`, background: "transparent", color: MUTED, fontSize: 13, cursor: "pointer" }}>
+                ⛳ Playing casually (no tournament)
+              </button>
+            </div>
+          )}
+        </div>
 
         {/* Tee colour */}
         <div style={{ background: CARD, borderRadius: 16, padding: 16, boxShadow: "0 1px 4px rgba(0,0,0,0.06)" }}>

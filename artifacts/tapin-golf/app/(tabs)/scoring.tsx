@@ -160,7 +160,7 @@ export default function ScoringScreen() {
         {/* Hero */}
         <View style={[styles.hero, { backgroundColor: colors.primary }]}>
           <Text style={styles.heroTitle}>Scoring</Text>
-          <Text style={styles.heroSub}>GolfRSA handicap scoring · Live scorecards</Text>
+          <Text style={styles.heroSub}>Track scores, Stableford points & round history</Text>
         </View>
 
         <View style={{ padding: 16, gap: 16 }}>

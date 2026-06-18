@@ -79,6 +79,7 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
 router.get("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const rounds = await query<any>(`
       SELECT r.id, r.club_id, r.tee_color, r.format, r.course_handicap,
              r.playing_handicap, r.allowance_pct, r.status, r.holes_played,
@@ -108,6 +109,7 @@ router.get("/scoring/rounds", async (req, res) => {
 router.post("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const {
       clubId, teeColor = "white", format = "individual_stableford",
       courseHandicap = 0, playingHandicap = 0, allowancePct = 100,
@@ -142,6 +144,7 @@ router.post("/scoring/rounds", async (req, res) => {
 router.get("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const roundId = parseInt(req.params.id);
 
     const rounds = await query<any>(`
@@ -200,6 +203,7 @@ router.get("/scoring/rounds/:id", async (req, res) => {
 router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const roundId = parseInt(req.params.id);
     const holeNum = parseInt(req.params.holeNum);
 
@@ -269,6 +273,7 @@ router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
 router.post("/scoring/rounds/:id/complete", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const roundId = parseInt(req.params.id);
 
     const rounds = await query<any>(
@@ -312,6 +317,7 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
 router.delete("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const roundId = parseInt(req.params.id);
     await run("DELETE FROM scoring_rounds WHERE id = ? AND user_id = ?", [roundId, user.id]);
     res.json({ ok: true });

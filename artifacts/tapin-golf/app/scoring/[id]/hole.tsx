@@ -278,13 +278,16 @@ export default function HoleEntryScreen() {
       <View style={styles.holeHeader}>
         <Text style={styles.nowScoringLabel}>NOW SCORING</Text>
         <Text style={styles.holeName}>HOLE {hole.number}</Text>
+        <View style={styles.hcpChip}>
+          <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+        </View>
         {/* Stats row */}
         <View style={styles.statsRow}>
           {[
             { label: "PAR",          value: String(hole.par),          accent: true },
             { label: "STROKE INDEX", value: String(hole.stroke_index), accent: false },
             { label: "DISTANCE",     value: hole.distance_m ? `${hole.distance_m}m` : "—", accent: false },
-            { label: "STROKES",      value: ha > 0 ? `+${ha}` : "—", accent: ha > 0 },
+            { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
           ].map(s => (
             <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
               <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
@@ -436,6 +439,12 @@ const styles = StyleSheet.create({
     fontSize: 72, fontFamily: "Inter_700Bold", color: "#fff",
     lineHeight: 76, letterSpacing: -2,
   },
+  hcpChip: {
+    paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20,
+    backgroundColor: GREEN + "66", borderWidth: 1, borderColor: GREEN,
+    marginTop: -4, marginBottom: 6,
+  },
+  hcpChipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#a3e4bc" },
   statsRow: {
     flexDirection: "row", gap: 8, marginTop: 4,
   },

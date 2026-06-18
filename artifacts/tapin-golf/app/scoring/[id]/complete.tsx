@@ -193,7 +193,7 @@ export default function RoundCompleteScreen() {
 
           {/* Header */}
           <View style={[styles.scHeaderRow, { backgroundColor: colors.primary, borderRadius: 10, marginBottom: 2 }]}>
-            {["Hole", "Par", "SI", "Gross", "Net", "Pts"].map(h => (
+            {["Hole", "Par", "SI", "H/C", "Gross", "Net", "Pts"].map(h => (
               <Text key={h} style={styles.scHeaderCell}>{h}</Text>
             ))}
           </View>
@@ -213,6 +213,9 @@ export default function RoundCompleteScreen() {
                 <Text style={[styles.scCell, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{h.number}</Text>
                 <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.par}</Text>
                 <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.stroke_index}</Text>
+                <Text style={[styles.scCell, { color: ha > 0 ? "#c8a84b" : colors.mutedForeground, fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular" }]}>
+                  {ha > 0 ? `+${ha}` : "0"}
+                </Text>
                 <View style={[styles.scCellWrap, ss?.border ? { borderColor: ss.border, borderWidth: 1.5, borderRadius: 6 } : {}]}>
                   <Text style={[styles.scCell, { color: ss?.text ?? colors.mutedForeground }]}>
                     {isNr ? "NR" : gross != null ? String(gross) : "—"}
@@ -231,6 +234,7 @@ export default function RoundCompleteScreen() {
             <Text style={styles.scTotalLabel}>TOTAL</Text>
             <Text style={styles.scTotalPar}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
             <Text style={styles.scTotalBlank}>—</Text>
+            <Text style={[styles.scTotalBlank, { color: "#c8a84b" }]}>{round.playing_handicap}</Text>
             <Text style={styles.scTotalValue}>{totalGross || "—"}</Text>
             <Text style={styles.scTotalValue}>{totalNet || "—"}</Text>
             <Text style={[styles.scTotalValue, { color: GOLD }]}>{totalPts}</Text>

@@ -76483,7 +76483,8 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
              knockout_type, knockout_scoring_format
       FROM golf_events
       WHERE club_id = ?
-        AND event_date >= CURRENT_DATE - INTERVAL '1 day'
+        AND COALESCE(end_date, event_date) >= CURRENT_DATE - INTERVAL '1 day'
+        AND status NOT IN ('cancelled', 'completed')
       ORDER BY event_date ASC
       LIMIT 20
     `, [clubId]);
@@ -76500,6 +76501,10 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
 router23.get("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const rounds = await query(`
       SELECT r.id, r.club_id, r.tee_color, r.format, r.course_handicap,
              r.playing_handicap, r.allowance_pct, r.status, r.holes_played,
@@ -76528,6 +76533,10 @@ router23.get("/scoring/rounds", async (req, res) => {
 router23.post("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const {
       clubId,
       teeColor = "white",
@@ -76564,6 +76573,10 @@ router23.post("/scoring/rounds", async (req, res) => {
 router23.get("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const roundId = parseInt(req.params.id);
     const rounds = await query(`
       SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
@@ -76616,6 +76629,10 @@ router23.get("/scoring/rounds/:id", async (req, res) => {
 router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const roundId = parseInt(req.params.id);
     const holeNum = parseInt(req.params.holeNum);
     const rounds = await query(
@@ -76682,6 +76699,10 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
 router23.post("/scoring/rounds/:id/complete", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const roundId = parseInt(req.params.id);
     const rounds = await query(
       "SELECT id FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
@@ -76723,6 +76744,10 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
 router23.delete("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const roundId = parseInt(req.params.id);
     await run("DELETE FROM scoring_rounds WHERE id = ? AND user_id = ?", [roundId, user.id]);
     res.json({ ok: true });

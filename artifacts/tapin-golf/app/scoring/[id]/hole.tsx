@@ -277,11 +277,8 @@ export default function HoleEntryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
-      {/* Status bar spacer */}
-      <View style={{ height: insets.top }} />
-
-      {/* Top bar */}
-      <View style={styles.topBar}>
+      {/* Top bar — paddingTop absorbs the safe-area inset (notch / Dynamic Island) */}
+      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
@@ -512,7 +509,7 @@ export default function HoleEntryScreen() {
 
 const styles = StyleSheet.create({
   topBar: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingVertical: 8, gap: 10,
+    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 10,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,

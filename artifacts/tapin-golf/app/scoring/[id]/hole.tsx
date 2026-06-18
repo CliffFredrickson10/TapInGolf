@@ -230,12 +230,17 @@ export default function HoleEntryScreen() {
         <TouchableOpacity
           onPress={confirmAndFinish}
           disabled={finishing}
-          style={[styles.cardBtn, { opacity: finishing ? 0.5 : 1 }]}
+          style={[styles.topActionBtn, { borderColor: "#f87171" + "55", opacity: finishing ? 0.5 : 1 }]}
         >
-          <Ionicons name="flag" size={18} color="#f87171" />
+          <Ionicons name="flag" size={13} color="#f87171" />
+          <Text style={[styles.topActionText, { color: "#f87171" }]}>End Round</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push(`/scoring/${id}/complete`)} style={styles.cardBtn}>
-          <Ionicons name="list" size={18} color={GOLD} />
+        <TouchableOpacity
+          onPress={() => router.push(`/scoring/${id}/complete`)}
+          style={[styles.topActionBtn, { borderColor: GOLD + "55" }]}
+        >
+          <Ionicons name="list" size={13} color={GOLD} />
+          <Text style={[styles.topActionText, { color: GOLD }]}>Scorecard</Text>
         </TouchableOpacity>
       </View>
 
@@ -331,13 +336,17 @@ export default function HoleEntryScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* Quick-tap row */}
-        <View style={styles.quickRow}>
-          {[-1, 0, 1, 2, 3].map(offset => {
+        {/* Quick-tap row — scrollable */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.quickRow}
+        >
+          {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
             const val = hole.par + offset;
             const active = gross === val;
             const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-            const labels = ["Birdie", "Par", "Bogey", "Double", "+3"];
+            const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
             return (
               <TouchableOpacity
                 key={offset}
@@ -345,11 +354,11 @@ export default function HoleEntryScreen() {
                 style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
               >
                 <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labels[offset + 1]}</Text>
+                <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
               </TouchableOpacity>
             );
           })}
-        </View>
+        </ScrollView>
       </View>
 
       {/* Points summary */}
@@ -412,6 +421,12 @@ const styles = StyleSheet.create({
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,
     alignItems: "center", justifyContent: "center",
   },
+  topActionBtn: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingHorizontal: 10, paddingVertical: 7, borderRadius: 10,
+    backgroundColor: SURFACE, borderWidth: 1,
+  },
+  topActionText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   holeStrip: {
     paddingHorizontal: 16, paddingBottom: 4, gap: 4, alignItems: "center",
   },
@@ -467,10 +482,10 @@ const styles = StyleSheet.create({
   scoreValue: { fontSize: 84, fontFamily: "Inter_700Bold", lineHeight: 88, letterSpacing: -3 },
   scoreNet: { fontSize: 12, color: MUTED_FG, fontFamily: "Inter_400Regular", marginTop: -4 },
   quickRow: {
-    flexDirection: "row", gap: 6, marginTop: 8, justifyContent: "center",
+    flexDirection: "row", gap: 6, marginTop: 8, paddingHorizontal: 20, paddingBottom: 4,
   },
   quickBtn: {
-    flex: 1, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, alignItems: "center", gap: 2,
+    width: 68, paddingVertical: 8, borderRadius: 10, borderWidth: 1.5, alignItems: "center", gap: 2,
   },
   quickBtnScore: { fontSize: 16, fontFamily: "Inter_700Bold" },
   quickBtnLabel: { fontSize: 9, fontFamily: "Inter_600SemiBold" },

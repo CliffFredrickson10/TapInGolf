@@ -76498,6 +76498,51 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     res.status(500).json({ message: "Failed to load tournaments" });
   }
 });
+router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const tournamentId = parseInt(req.params.tournamentId);
+    const m = await row(`
+      SELECT km.id,
+             km.status,
+             kr.label  AS round_label,
+             CASE WHEN km.player1_id = ? THEN u2.name     ELSE u1.name     END AS opponent_name,
+             CASE WHEN km.player1_id = ? THEN u2.handicap ELSE u1.handicap END AS opponent_handicap
+      FROM knockout_matches km
+      JOIN knockout_rounds  kr ON kr.id = km.round_id
+      LEFT JOIN users u1 ON u1.id = km.player1_id
+      LEFT JOIN users u2 ON u2.id = km.player2_id
+      WHERE km.event_id = ? AND (km.player1_id = ? OR km.player2_id = ?)
+        AND km.status NOT IN ('complete','bye')
+      ORDER BY kr.round_number ASC
+      LIMIT 1
+    `, [user.id, user.id, tournamentId, user.id, user.id]);
+    if (!m) {
+      res.json({ match: null });
+      return;
+    }
+    res.json({
+      match: {
+        matchId: m.id,
+        opponentName: m.opponent_name ?? "TBD",
+        opponentHandicap: m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
+        roundLabel: m.round_label ?? null,
+        status: m.status
+      }
+    });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "my-match lookup error");
+    res.status(500).json({ message: "Failed to load match" });
+  }
+});
 router23.get("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);

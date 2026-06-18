@@ -21,6 +21,7 @@ import { apiFetch } from "@/lib/api";
 
 type Club = { id: number; name: string; location: string; province: string };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
+type MatchOpponent = { matchId: number; opponentName: string; opponentHandicap: number | null; roundLabel: string | null };
 
 type FormatEntry = { key: string; label: string };
 type FormatGroup = { group: string; formats: FormatEntry[] };
@@ -116,6 +117,8 @@ export default function StartRoundScreen() {
   // Tournament
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [linkedTournamentId, setLinkedTournamentId] = useState<number | null>(null);
+  const [matchOpponent, setMatchOpponent] = useState<MatchOpponent | null>(null);
+  const [matchOpponentLoading, setMatchOpponentLoading] = useState(false);
 
   // Form
   const [teeColor, setTeeColor] = useState("white");
@@ -156,6 +159,19 @@ export default function StartRoundScreen() {
       .catch(() => setTournaments([]));
   }, [selectedClub, token]);
 
+  // Fetch opponent when a matchplay knockout tournament is linked
+  useEffect(() => {
+    if (!linkedTournamentId || !token || format !== "singles_match_play") {
+      setMatchOpponent(null);
+      return;
+    }
+    setMatchOpponentLoading(true);
+    apiFetch(`/scoring/tournaments/${linkedTournamentId}/my-match`, token)
+      .then(d => setMatchOpponent(d.match ?? null))
+      .catch(() => setMatchOpponent(null))
+      .finally(() => setMatchOpponentLoading(false));
+  }, [linkedTournamentId, format, token]);
+
   // Map golf_events.format / knockout_scoring_format values → our scoring format keys
   const TOURNAMENT_FORMAT_MAP: Record<string, string> = {
     stroke_play:         "gross_stroke_play",
@@ -182,7 +198,7 @@ export default function StartRoundScreen() {
     setFormat(mappedFormat);
   };
 
-  const unlinkTournament = () => setLinkedTournamentId(null);
+  const unlinkTournament = () => { setLinkedTournamentId(null); setMatchOpponent(null); };
 
   const onStartRound = async () => {
     if (!selectedClub) { Alert.alert("Select a club", "Please choose a golf club first."); return; }
@@ -292,19 +308,56 @@ export default function StartRoundScreen() {
               {/* Tournament */}
               <Section title="CLUB TOURNAMENT (OPTIONAL)">
                 {linkedTournament ? (
-                  <View style={[styles.linkedTournament, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }]}>
-                    <View style={[styles.trophyIcon, { backgroundColor: colors.primary }]}>
-                      <Ionicons name="trophy" size={16} color="#fff" />
+                  <View>
+                    <View style={[styles.linkedTournament, { backgroundColor: colors.primary + "12", borderColor: colors.primary + "40" }]}>
+                      <View style={[styles.trophyIcon, { backgroundColor: colors.primary }]}>
+                        <Ionicons name="trophy" size={16} color="#fff" />
+                      </View>
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.tournamentName, { color: colors.primary }]}>{linkedTournament.name}</Text>
+                        <Text style={[styles.tournamentDate, { color: colors.mutedForeground }]}>
+                          {new Date(linkedTournament.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
+                        </Text>
+                      </View>
+                      <TouchableOpacity onPress={() => { unlinkTournament(); setShowTournamentPicker(false); }}>
+                        <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Unlink</Text>
+                      </TouchableOpacity>
                     </View>
-                    <View style={{ flex: 1 }}>
-                      <Text style={[styles.tournamentName, { color: colors.primary }]}>{linkedTournament.name}</Text>
-                      <Text style={[styles.tournamentDate, { color: colors.mutedForeground }]}>
-                        {new Date(linkedTournament.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
-                      </Text>
-                    </View>
-                    <TouchableOpacity onPress={() => { unlinkTournament(); setShowTournamentPicker(false); }}>
-                      <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Unlink</Text>
-                    </TouchableOpacity>
+
+                    {/* Matchplay opponent preview */}
+                    {format === "singles_match_play" && (
+                      <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
+                        {matchOpponentLoading ? (
+                          <ActivityIndicator size="small" color="#7c3aed" />
+                        ) : matchOpponent ? (
+                          <>
+                            <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
+                              <Ionicons name="person" size={14} color="#fff" />
+                            </View>
+                            <View style={{ flex: 1 }}>
+                              <Text style={styles.opponentVsLabel}>YOUR OPPONENT</Text>
+                              <Text style={[styles.opponentName, { color: colors.foreground }]}>
+                                {matchOpponent.opponentName}
+                              </Text>
+                              {matchOpponent.roundLabel && (
+                                <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
+                                  {matchOpponent.roundLabel}
+                                  {matchOpponent.opponentHandicap != null ? ` · HCP ${matchOpponent.opponentHandicap}` : ""}
+                                </Text>
+                              )}
+                            </View>
+                            <Ionicons name="git-merge-outline" size={20} color="#7c3aed" />
+                          </>
+                        ) : (
+                          <>
+                            <Ionicons name="help-circle-outline" size={18} color={colors.mutedForeground} />
+                            <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
+                              No match scheduled yet
+                            </Text>
+                          </>
+                        )}
+                      </View>
+                    )}
                   </View>
                 ) : (
                   <View>
@@ -635,6 +688,14 @@ const styles = StyleSheet.create({
   trophyIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   tournamentName: { fontSize: 14, fontFamily: "Inter_700Bold" },
   tournamentDate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  opponentBanner: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    marginTop: 8, borderRadius: 12, borderWidth: 1.5, padding: 12,
+  },
+  opponentAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  opponentVsLabel: { fontSize: 9, fontFamily: "Inter_700Bold", color: "#7c3aed", letterSpacing: 1 },
+  opponentName: { fontSize: 15, fontFamily: "Inter_700Bold", marginTop: 1 },
+  opponentRound: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 2 },
   tournamentToggle: {
     flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
     borderRadius: 12, borderWidth: 1.5,

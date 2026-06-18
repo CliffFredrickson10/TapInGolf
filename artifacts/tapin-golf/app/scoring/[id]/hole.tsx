@@ -362,15 +362,13 @@ export default function HoleEntryScreen() {
 
         {/* Match status banner */}
         {isMatchPlay && matchSt && matchSt.holesPlayed > 0 && (
-          <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18", paddingVertical: 6 }]}>
-            <View>
+          <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18", paddingVertical: 8 }]}>
+            <Text numberOfLines={1} style={{ flexShrink: 1 }}>
               <Text style={[styles.matchBannerLabel, { color: matchSt.color }]}>{matchSt.label}</Text>
-              <Text style={styles.matchBannerSub}>
-                {matchSt.won}W · {matchSt.lost}L · {matchSt.halved}H  ·  {matchSt.holesRemaining > 0 ? `${matchSt.holesRemaining} to play` : "Done"}
-              </Text>
-            </View>
+              <Text style={styles.matchBannerSub}>{"  ·  "}{matchSt.won}W · {matchSt.lost}L · {matchSt.halved}H{"  ·  "}{matchSt.holesRemaining > 0 ? `${matchSt.holesRemaining} to play` : "Done"}</Text>
+            </Text>
             {matchSt.decided && (
-              <Ionicons name={matchSt.holesUp > 0 ? "trophy" : "close-circle"} size={22} color={matchSt.color} />
+              <Ionicons name={matchSt.holesUp > 0 ? "trophy" : "close-circle"} size={18} color={matchSt.color} />
             )}
           </View>
         )}

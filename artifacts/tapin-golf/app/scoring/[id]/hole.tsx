@@ -300,13 +300,14 @@ export default function HoleEntryScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Hole strip */}
+      {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
+      <View style={{ height: 40, overflow: "hidden" }}>
       <ScrollView
         ref={holeStripRef}
         horizontal
         showsHorizontalScrollIndicator={false}
-        style={{ height: 42 }}
         contentContainerStyle={styles.holeStrip}
+        style={{ flex: 1 }}
       >
         {scorecard.map((h, i) => {
           const saved = round.holes[h.number];
@@ -325,6 +326,7 @@ export default function HoleEntryScreen() {
           );
         })}
       </ScrollView>
+      </View>
       <Text style={styles.stripMeta}>
         {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
       </Text>

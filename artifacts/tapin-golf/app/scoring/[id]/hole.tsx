@@ -95,15 +95,19 @@ export default function HoleEntryScreen() {
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
 
-  // Centre the Par button in the quick-tap row whenever the hole changes
+  // Centre the Par button in the quick-tap row whenever the hole changes.
+  // stepperSection has paddingHorizontal:20, so the ScrollView viewport is
+  // screenWidth-40 wide. We must use that viewport width, not screenWidth.
   useEffect(() => {
-    const PAR_INDEX = 3; // index of offset=0 in [-3,-2,-1,0,1,2,3,4,5]
+    const PAR_INDEX = 3;      // index of offset=0 in [-3,-2,-1,0,1,2,3,4,5]
     const BTN_WIDTH = 68;
     const GAP = 6;
-    const PADDING = 20;
+    const ROW_PADDING = 20;   // quickRow contentContainerStyle paddingHorizontal
+    const SECTION_PAD = 20;   // stepperSection paddingHorizontal (shrinks viewport)
     const screenWidth = Dimensions.get("window").width;
-    const parCenter = PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
-    const scrollX = Math.max(0, parCenter - screenWidth / 2);
+    const viewportWidth = screenWidth - SECTION_PAD * 2;
+    const parCenter = ROW_PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
+    const scrollX = Math.max(0, parCenter - viewportWidth / 2);
     setTimeout(() => quickRowRef.current?.scrollTo({ x: scrollX, animated: false }), 50);
   }, [holeIdx]);
 

@@ -155,11 +155,24 @@ export default function StartRoundScreen() {
       .catch(() => setTournaments([]));
   }, [selectedClub, token]);
 
+  // Map golf_events.format values → our scoring format keys
+  const TOURNAMENT_FORMAT_MAP: Record<string, string> = {
+    stroke_play:        "gross_stroke_play",
+    stableford:         "individual_stableford",
+    match_play:         "singles_match_play",
+    fourball:           "fourball_stableford",
+    scramble:           "american_scramble",
+    alliance:           "alliance",
+    bogey:              "par_bogey",
+    modified_stableford:"modified_stableford",
+    par:                "individual_par",
+    other:              "other",
+  };
+
   const linkTournament = (t: Tournament) => {
     setLinkedTournamentId(t.id);
-    setFormat(t.format || "individual_stableford");
-    const grp = FORMAT_GROUPS.find(g => g.formats.some(f => f.key === t.format));
-    if (grp) setExpandedGroup(grp.group);
+    const mappedFormat = TOURNAMENT_FORMAT_MAP[t.format] ?? t.format ?? "individual_stableford";
+    setFormat(mappedFormat);
   };
 
   const unlinkTournament = () => setLinkedTournamentId(null);
@@ -338,6 +351,25 @@ export default function StartRoundScreen() {
 
               {/* Format */}
               <Section title="GAME FORMAT">
+                {linkedTournamentId ? (
+                  // Locked — set by tournament
+                  <View style={{ gap: 10 }}>
+                    <View style={[styles.selectedFormatChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
+                      <Ionicons name="golf" size={14} color={colors.primary} />
+                      <Text style={[styles.selectedFormatText, { color: colors.primary }]}>{selectedFormatLabel}</Text>
+                      <View style={{ flex: 1 }} />
+                      <Ionicons name="lock-closed" size={13} color={colors.primary} />
+                    </View>
+                    <View style={[styles.infoBanner, { backgroundColor: "#fef9ee", borderColor: "#fde68a" }]}>
+                      <Ionicons name="trophy" size={14} color="#92400e" />
+                      <Text style={[styles.infoText, { color: "#92400e" }]}>
+                        Format set by the club tournament. Unlink the tournament above to choose a different format.
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  // Editable
+                  <View>
                 <View style={[styles.selectedFormatChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
                   <Ionicons name="golf" size={14} color={colors.primary} />
                   <Text style={[styles.selectedFormatText, { color: colors.primary }]}>{selectedFormatLabel}</Text>
@@ -394,6 +426,8 @@ export default function StartRoundScreen() {
                     <Text style={[styles.infoText, { color: "#1d4ed8" }]}>
                       You'll be prompted to enter your partner's score on each hole.
                     </Text>
+                  </View>
+                )}
                   </View>
                 )}
               </Section>

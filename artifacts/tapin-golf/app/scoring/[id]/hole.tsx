@@ -185,7 +185,12 @@ export default function HoleEntryScreen() {
         );
       }
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to save score");
+      // If the round is already complete, navigate to the scorecard instead of showing an error
+      if (err?.message?.includes("404") || err?.status === 404 || err?.message?.includes("not found")) {
+        router.replace(`/scoring/${id}/complete`);
+      } else {
+        Alert.alert("Error", err.message || "Failed to save score");
+      }
     } finally {
       setSaving(false);
     }

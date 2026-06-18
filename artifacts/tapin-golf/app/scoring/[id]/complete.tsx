@@ -69,6 +69,7 @@ export default function RoundCompleteScreen() {
   const insets = useSafeAreaInsets();
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState(true);
+  const [completing, setCompleting] = useState(false);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -83,11 +84,16 @@ export default function RoundCompleteScreen() {
   useEffect(() => { loadRound(); }, [loadRound]);
 
   const onComplete = async () => {
-    if (!round) return;
+    if (!round || completing) return;
+    setCompleting(true);
     try {
       await apiFetch(`/scoring/rounds/${id}/complete`, token, { method: "POST" });
-      loadRound();
-    } catch (err: any) { Alert.alert("Error", err.message || "Failed to complete"); }
+      await loadRound();
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to complete round");
+    } finally {
+      setCompleting(false);
+    }
   };
 
   const onShare = async () => {
@@ -245,10 +251,15 @@ export default function RoundCompleteScreen() {
             </TouchableOpacity>
             <TouchableOpacity
               onPress={onComplete}
-              style={[styles.footerBtn, { backgroundColor: colors.primary, flex: 1 }]}
+              disabled={completing}
+              style={[styles.footerBtn, { backgroundColor: colors.primary, flex: 1, opacity: completing ? 0.6 : 1 }]}
             >
-              <Ionicons name="checkmark-circle" size={18} color="#fff" />
-              <Text style={[styles.footerBtnText, { color: "#fff" }]}>Finish Round</Text>
+              {completing
+                ? <ActivityIndicator color="#fff" size="small" />
+                : <Ionicons name="checkmark-circle" size={18} color="#fff" />}
+              <Text style={[styles.footerBtnText, { color: "#fff" }]}>
+                {completing ? "Finishing…" : "Finish Round"}
+              </Text>
             </TouchableOpacity>
           </View>
         ) : (

@@ -125,6 +125,7 @@ export default function StartRoundScreen() {
   const [expandedGroup, setExpandedGroup] = useState("Individual");
   const [submitting, setSubmitting] = useState(false);
   const [showAllowancePicker, setShowAllowancePicker] = useState(false);
+  const [showTournamentPicker, setShowTournamentPicker] = useState(false);
 
   const ph = Math.round((parseInt(courseHcp) || 0) * (allowancePct / 100));
   const selectedFormatLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;
@@ -301,42 +302,68 @@ export default function StartRoundScreen() {
                         {new Date(linkedTournament.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}
                       </Text>
                     </View>
-                    <TouchableOpacity onPress={unlinkTournament}>
+                    <TouchableOpacity onPress={() => { unlinkTournament(); setShowTournamentPicker(false); }}>
                       <Text style={{ color: "#ef4444", fontSize: 12, fontFamily: "Inter_600SemiBold" }}>Unlink</Text>
                     </TouchableOpacity>
                   </View>
                 ) : (
-                  <View style={{ gap: 8 }}>
-                    {tournaments.length > 0 ? tournaments.map((t: any) => (
-                      <TouchableOpacity
-                        key={t.id}
-                        onPress={() => linkTournament(t)}
-                        style={[styles.tournamentRow, { borderColor: colors.border, backgroundColor: colors.background }]}
-                      >
-                        <Ionicons name={t.knockout_type ? "git-merge-outline" : "trophy-outline"} size={18} color={colors.primary} />
-                        <View style={{ flex: 1 }}>
-                          <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
-                            <Text style={[styles.clubName, { color: colors.foreground, flex: 1 }]}>{t.name}</Text>
-                            {t.knockout_type && (
-                              <View style={{ backgroundColor: "#7c3aed20", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
-                                <Text style={{ fontSize: 9, color: "#7c3aed", fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>
-                                  Knockout
-                                </Text>
-                              </View>
-                            )}
-                          </View>
-                          <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>
-                            {t.event_date
-                              ? new Date(t.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
-                              : "Date TBD"}
-                          </Text>
-                        </View>
-                        <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    )) : (
-                      <Text style={[styles.noTournaments, { color: colors.mutedForeground }]}>
-                        No upcoming tournaments at this club. Tap below to play casually.
+                  <View>
+                    {/* Dropdown toggle */}
+                    <TouchableOpacity
+                      onPress={() => setShowTournamentPicker(v => !v)}
+                      style={[styles.tournamentToggle, {
+                        borderColor: showTournamentPicker ? colors.primary + "60" : colors.border,
+                        backgroundColor: showTournamentPicker ? colors.primary + "08" : colors.background,
+                      }]}
+                    >
+                      <Ionicons name="trophy-outline" size={16} color={showTournamentPicker ? colors.primary : colors.mutedForeground} />
+                      <Text style={[styles.tournamentToggleText, { color: showTournamentPicker ? colors.primary : colors.mutedForeground }]}>
+                        {tournaments.length > 0
+                          ? `${tournaments.length} tournament${tournaments.length === 1 ? "" : "s"} available`
+                          : "No upcoming tournaments"}
                       </Text>
+                      <Ionicons
+                        name={showTournamentPicker ? "chevron-up" : "chevron-down"}
+                        size={16}
+                        color={showTournamentPicker ? colors.primary : colors.mutedForeground}
+                      />
+                    </TouchableOpacity>
+
+                    {/* Dropdown list */}
+                    {showTournamentPicker && (
+                      <View style={[styles.tournamentDropdown, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                        {tournaments.length > 0 ? tournaments.map((t: any) => (
+                          <TouchableOpacity
+                            key={t.id}
+                            onPress={() => { linkTournament(t); setShowTournamentPicker(false); }}
+                            style={[styles.tournamentRow, { borderBottomColor: colors.border }]}
+                          >
+                            <Ionicons name={t.knockout_type ? "git-merge-outline" : "trophy-outline"} size={18} color={colors.primary} />
+                            <View style={{ flex: 1 }}>
+                              <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                                <Text style={[styles.clubName, { color: colors.foreground, flex: 1 }]}>{t.name}</Text>
+                                {t.knockout_type && (
+                                  <View style={{ backgroundColor: "#7c3aed20", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                                    <Text style={{ fontSize: 9, color: "#7c3aed", fontFamily: "Inter_700Bold", textTransform: "uppercase" }}>
+                                      Knockout
+                                    </Text>
+                                  </View>
+                                )}
+                              </View>
+                              <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>
+                                {t.event_date
+                                  ? new Date(t.event_date).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })
+                                  : "Date TBD"}
+                              </Text>
+                            </View>
+                            <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                          </TouchableOpacity>
+                        )) : (
+                          <Text style={[styles.noTournaments, { color: colors.mutedForeground }]}>
+                            No upcoming tournaments at this club.
+                          </Text>
+                        )}
+                      </View>
                     )}
                   </View>
                 )}
@@ -608,10 +635,20 @@ const styles = StyleSheet.create({
   trophyIcon: { width: 32, height: 32, borderRadius: 8, alignItems: "center", justifyContent: "center" },
   tournamentName: { fontSize: 14, fontFamily: "Inter_700Bold" },
   tournamentDate: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  tournamentRow: {
-    flexDirection: "row", alignItems: "center", gap: 10, padding: 12, borderRadius: 12, borderWidth: 1.5,
+  tournamentToggle: {
+    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
+    borderRadius: 12, borderWidth: 1.5,
   },
-  noTournaments: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+  tournamentToggleText: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  tournamentDropdown: {
+    borderWidth: 1.5, borderTopWidth: 0, borderBottomLeftRadius: 12, borderBottomRightRadius: 12,
+    overflow: "hidden", marginTop: -4,
+  },
+  tournamentRow: {
+    flexDirection: "row", alignItems: "center", gap: 10, padding: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  noTournaments: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18, padding: 12 },
   teeRow: { flexDirection: "row", gap: 10 },
   teeBtn: {
     flex: 1, alignItems: "center", gap: 6, padding: 10, borderRadius: 12, borderWidth: 1.5,

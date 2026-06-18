@@ -196,6 +196,7 @@ export default function HoleEntryScreen() {
 
   const ph = round.playing_handicap;
   const ha = getHA(hole.stroke_index, ph);
+  const oppHA = getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0);
   const pts = gross != null ? calcPoints(gross, hole.par, ha) : null;
   const netScore = gross != null ? gross - ha : null;
 
@@ -327,150 +328,201 @@ export default function HoleEntryScreen() {
         {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
       </Text>
 
-      {/* Hole identity */}
-      <View style={styles.holeHeader}>
-        <Text style={styles.nowScoringLabel}>NOW SCORING</Text>
-        <Text style={styles.holeName}>HOLE {hole.number}</Text>
-        <View style={styles.hcpChip}>
-          <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+      {/* Scrollable scoring content */}
+      <ScrollView
+        style={{ flex: 1 }}
+        showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        contentContainerStyle={{ paddingBottom: 8 }}
+      >
+        {/* Hole identity */}
+        <View style={styles.holeHeader}>
+          <Text style={styles.nowScoringLabel}>NOW SCORING</Text>
+          <Text style={styles.holeName}>HOLE {hole.number}</Text>
+          <View style={styles.hcpChip}>
+            <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+          </View>
+          <View style={styles.statsRow}>
+            {[
+              { label: "PAR",          value: String(hole.par),          accent: true },
+              { label: "STROKE INDEX", value: String(hole.stroke_index), accent: false },
+              { label: "DISTANCE",     value: hole.distance_m ? `${hole.distance_m}m` : "—", accent: false },
+              { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
+            ].map(s => (
+              <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
+                <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
+                <Text style={styles.statLabel}>{s.label}</Text>
+              </View>
+            ))}
+          </View>
         </View>
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          {[
-            { label: "PAR",          value: String(hole.par),          accent: true },
-            { label: "STROKE INDEX", value: String(hole.stroke_index), accent: false },
-            { label: "DISTANCE",     value: hole.distance_m ? `${hole.distance_m}m` : "—", accent: false },
-            { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
-          ].map(s => (
-            <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
-              <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
-              <Text style={styles.statLabel}>{s.label}</Text>
-            </View>
-          ))}
-        </View>
-      </View>
 
-      {/* Score stepper */}
-      <View style={styles.stepperSection}>
-        {/* Score name badge */}
-        <View style={{ height: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
-          {gross != null && (
-            <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
-              <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
-                {scoreName(gross, hole.par)}
+        {/* Match status banner */}
+        {isMatchPlay && matchSt && matchSt.holesPlayed > 0 && (
+          <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18" }]}>
+            <View>
+              <Text style={[styles.matchBannerLabel, { color: matchSt.color }]}>{matchSt.label}</Text>
+              <Text style={styles.matchBannerSub}>
+                {matchSt.won}W · {matchSt.lost}L · {matchSt.halved}H  ·  {matchSt.holesRemaining > 0 ? `${matchSt.holesRemaining} to play` : "Done"}
               </Text>
             </View>
-          )}
-        </View>
+            {matchSt.decided && (
+              <Ionicons name={matchSt.holesUp > 0 ? "trophy" : "close-circle"} size={22} color={matchSt.color} />
+            )}
+          </View>
+        )}
 
-        {/* +/− stepper */}
-        <View style={styles.stepper}>
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-            style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER }]}
-          >
-            <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG }]}>−</Text>
-          </TouchableOpacity>
+        {/* ── YOUR SCORE section ─────────────────────────────────── */}
+        {isMatchPlay && (
+          <View style={styles.scoringSectionHeader}>
+            <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
+            <Text style={[styles.sectionLabel, { color: GREEN }]}>YOUR SCORE</Text>
+          </View>
+        )}
 
-          <View style={styles.scoreDisplay}>
-            {gross != null ? (
-              <>
-                <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par) }]}>{gross}</Text>
-                <Text style={styles.scoreNet}>Net {gross - ha} · {pts}pts</Text>
-              </>
-            ) : (
-              <Text style={[styles.scoreValue, { color: SURFACE }]}>—</Text>
+        <View style={styles.stepperSection}>
+          <View style={{ height: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+            {gross != null && (
+              <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
+                <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
+                  {scoreName(gross, hole.par)}
+                </Text>
+              </View>
             )}
           </View>
 
-          <TouchableOpacity
-            onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-            style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN }]}
-          >
-            <Text style={[styles.stepBtnText, { color: "#22c55e" }]}>+</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Quick-tap row — scrollable, centred on Par by default */}
-        <ScrollView
-          ref={quickRowRef}
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.quickRow}
-        >
-          {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
-            const val = hole.par + offset;
-            const active = gross === val;
-            const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-            const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
-            return (
-              <TouchableOpacity
-                key={offset}
-                onPress={() => { Haptics.selectionAsync(); setGross(val); }}
-                style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
-              >
-                <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
-              </TouchableOpacity>
-            );
-          })}
-        </ScrollView>
-      </View>
-
-      {/* Points summary — only for non-matchplay */}
-      {pts != null && !isMatchPlay && (
-        <View style={styles.ptsSummary}>
-          <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
-          <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
-        </View>
-      )}
-
-      {/* Matchplay panel */}
-      {isMatchPlay && (
-        <>
-          {matchSt && matchSt.holesPlayed > 0 && (
-            <View style={[styles.matchBanner, { borderColor: matchSt.color + "55", backgroundColor: matchSt.color + "18" }]}>
-              <View>
-                <Text style={[styles.matchBannerLabel, { color: matchSt.color }]}>{matchSt.label}</Text>
-                <Text style={styles.matchBannerSub}>
-                  {matchSt.won}W · {matchSt.lost}L · {matchSt.halved}H  ·  {matchSt.holesRemaining > 0 ? `${matchSt.holesRemaining} to play` : "Done"}
-                </Text>
-              </View>
-              {matchSt.decided && (
-                <Ionicons name={matchSt.holesUp > 0 ? "trophy" : "close-circle"} size={22} color={matchSt.color} />
-              )}
-            </View>
-          )}
-          <View style={styles.oppRow}>
-            <View style={styles.oppLabelWrap}>
-              <Text style={styles.oppVs}>VS</Text>
-              <Text style={styles.oppName} numberOfLines={1}>{round.opponent_name ?? "Opponent"}</Text>
-            </View>
+          <View style={styles.stepper}>
             <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-              style={styles.oppBtn}
+              onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
+              style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER }]}
             >
-              <Text style={styles.oppBtnText}>−</Text>
+              <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG }]}>−</Text>
             </TouchableOpacity>
-            <View style={styles.oppScoreBox}>
-              <Text style={[styles.oppScore, { color: oppGross == null ? MUTED_FG : "#fff" }]}>{oppGross ?? "—"}</Text>
-              {oppGross != null && (
-                <Text style={styles.oppNet}>
-                  Net {oppGross - getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0)}
-                </Text>
+            <View style={styles.scoreDisplay}>
+              {gross != null ? (
+                <>
+                  <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par) }]}>{gross}</Text>
+                  <Text style={styles.scoreNet}>Net {gross - ha} · {pts}pts</Text>
+                </>
+              ) : (
+                <Text style={[styles.scoreValue, { color: SURFACE }]}>—</Text>
               )}
             </View>
             <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-              style={styles.oppBtn}
+              onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
+              style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN }]}
             >
-              <Text style={styles.oppBtnText}>+</Text>
+              <Text style={[styles.stepBtnText, { color: "#22c55e" }]}>+</Text>
             </TouchableOpacity>
           </View>
-        </>
-      )}
 
-      {/* Action buttons */}
+          <ScrollView
+            ref={quickRowRef}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.quickRow}
+          >
+            {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+              const val = hole.par + offset;
+              const active = gross === val;
+              const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+              const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+              return (
+                <TouchableOpacity
+                  key={offset}
+                  onPress={() => { Haptics.selectionAsync(); setGross(val); }}
+                  style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
+                >
+                  <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                  <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+
+        {/* Points summary — non-matchplay only */}
+        {pts != null && !isMatchPlay && (
+          <View style={styles.ptsSummary}>
+            <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
+            <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
+          </View>
+        )}
+
+        {/* ── OPPONENT score section (matchplay only) ────────────── */}
+        {isMatchPlay && (
+          <>
+            <View style={styles.scoringSectionHeader}>
+              <View style={[styles.sectionDot, { backgroundColor: "#a78bfa" }]} />
+              <Text style={[styles.sectionLabel, { color: "#a78bfa" }]}>
+                {(round.opponent_name ?? "OPPONENT").toUpperCase()}
+              </Text>
+            </View>
+
+            <View style={[styles.stepperSection, styles.oppStepperSection]}>
+              <View style={{ height: 32, alignItems: "center", justifyContent: "center", marginBottom: 8 }}>
+                {oppGross != null && (
+                  <View style={[styles.scoreBadge, { backgroundColor: scoreColor(oppGross, hole.par) + "22", borderColor: scoreColor(oppGross, hole.par) + "60" }]}>
+                    <Text style={[styles.scoreBadgeText, { color: scoreColor(oppGross, hole.par) }]}>
+                      {scoreName(oppGross, hole.par)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.stepper}>
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
+                  style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: oppGross != null && oppGross > 1 ? "#f87171" : BORDER }]}
+                >
+                  <Text style={[styles.stepBtnText, { color: oppGross != null && oppGross > 1 ? "#f87171" : MUTED_FG }]}>−</Text>
+                </TouchableOpacity>
+                <View style={styles.scoreDisplay}>
+                  {oppGross != null ? (
+                    <>
+                      <Text style={[styles.scoreValue, { color: scoreColor(oppGross, hole.par) }]}>{oppGross}</Text>
+                      <Text style={styles.scoreNet}>Net {oppGross - oppHA}</Text>
+                    </>
+                  ) : (
+                    <Text style={[styles.scoreValue, { color: SURFACE }]}>—</Text>
+                  )}
+                </View>
+                <TouchableOpacity
+                  onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
+                  style={[styles.stepBtn, { borderColor: "#a78bfa", backgroundColor: "#2d1f4a" }]}
+                >
+                  <Text style={[styles.stepBtnText, { color: "#a78bfa" }]}>+</Text>
+                </TouchableOpacity>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.quickRow}
+              >
+                {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+                  const val = hole.par + offset;
+                  const active = oppGross === val;
+                  const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+                  const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                  return (
+                    <TouchableOpacity
+                      key={offset}
+                      onPress={() => { Haptics.selectionAsync(); setOppGross(val); }}
+                      style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
+                    >
+                      <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                      <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </>
+        )}
+      </ScrollView>
+
+      {/* Action buttons — fixed at bottom */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
           onPress={() => saveAndNext(true)}
@@ -596,8 +648,21 @@ const styles = StyleSheet.create({
   },
   ptsSummaryLabel: { fontSize: 12, color: MUTED_FG, fontFamily: "Inter_400Regular" },
   ptsSummaryValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
+  scoringSectionHeader: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    paddingHorizontal: 20, paddingTop: 12, paddingBottom: 4,
+  },
+  sectionDot: { width: 8, height: 8, borderRadius: 4 },
+  sectionLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1.5 },
+  oppStepperSection: {
+    borderTopWidth: 0,
+    backgroundColor: "#1a0e2e",
+    borderRadius: 16,
+    marginHorizontal: 12,
+    paddingVertical: 8,
+  },
   actions: {
-    flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12, marginTop: "auto",
+    flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12,
   },
   nrBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 16, borderWidth: 1.5, alignItems: "center",
@@ -614,21 +679,4 @@ const styles = StyleSheet.create({
   },
   matchBannerLabel: { fontSize: 20, fontFamily: "Inter_700Bold" },
   matchBannerSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: MUTED_FG, marginTop: 2 },
-  oppRow: {
-    marginHorizontal: 16, marginTop: 8,
-    flexDirection: "row", alignItems: "center", gap: 10,
-    backgroundColor: SURFACE, borderRadius: 12, borderWidth: 1, borderColor: BORDER,
-    paddingHorizontal: 14, paddingVertical: 10,
-  },
-  oppLabelWrap: { flex: 1, minWidth: 0 },
-  oppVs: { fontSize: 9, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 1 },
-  oppName: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#a3e4bc", marginTop: 2 },
-  oppBtn: {
-    width: 36, height: 36, borderRadius: 18, backgroundColor: DARK_BG,
-    alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: BORDER,
-  },
-  oppBtnText: { fontSize: 22, color: "#fff", lineHeight: 28 },
-  oppScoreBox: { width: 52, alignItems: "center" },
-  oppScore: { fontSize: 26, fontFamily: "Inter_700Bold" },
-  oppNet: { fontSize: 9, color: MUTED_FG, fontFamily: "Inter_400Regular" },
 });

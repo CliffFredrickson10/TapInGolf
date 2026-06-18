@@ -301,7 +301,7 @@ export default function HoleEntryScreen() {
       </View>
 
       {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
-      <View style={{ height: 40, overflow: "hidden", marginBottom: 6 }}>
+      <View style={{ height: 40, overflow: "hidden", marginTop: 8, marginBottom: 6 }}>
       <ScrollView
         ref={holeStripRef}
         horizontal

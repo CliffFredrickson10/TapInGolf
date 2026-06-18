@@ -312,6 +312,37 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
   }
 });
 
+// ─── Submit score to club tournament ─────────────────────────────────────────
+
+router.post("/scoring/rounds/:id/submit", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    const roundId = parseInt(req.params.id);
+
+    const rounds = await query<any>(
+      "SELECT id, status, tournament_id, score_submitted FROM scoring_rounds WHERE id = ? AND user_id = ?",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) { res.status(404).json({ message: "Round not found" }); return; }
+    const round = rounds[0];
+    if (round.status !== "complete") { res.status(400).json({ message: "Round must be completed before submitting" }); return; }
+    if (!round.tournament_id) { res.status(400).json({ message: "Round is not linked to a tournament" }); return; }
+    if (round.score_submitted) { res.json({ ok: true, alreadySubmitted: true }); return; }
+
+    await run(
+      "UPDATE scoring_rounds SET score_submitted = 1 WHERE id = ?",
+      [roundId]
+    );
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    req.log?.error({ err }, "submit score error");
+    res.status(500).json({ message: "Failed to submit score" });
+  }
+});
+
 // ─── Abandon / delete round ───────────────────────────────────────────────────
 
 router.delete("/scoring/rounds/:id", async (req, res) => {

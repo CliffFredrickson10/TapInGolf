@@ -441,7 +441,7 @@ export default function StartRoundScreen() {
                             {g.formats.map(f => (
                               <TouchableOpacity
                                 key={f.key}
-                                onPress={() => setFormat(f.key)}
+                                onPress={() => { setFormat(f.key); setExpandedGroup(""); }}
                                 style={[styles.formatRow, {
                                   borderColor: format === f.key ? colors.primary : colors.border,
                                   backgroundColor: format === f.key ? colors.primary + "10" : colors.background,

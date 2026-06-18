@@ -1632,9 +1632,11 @@ async function applyLateAlters() {
       total_points     INT,
       started_at       TIMESTAMP DEFAULT NOW(),
       completed_at     TIMESTAMP,
-      notes            TEXT
+      notes            TEXT,
+      score_submitted  SMALLINT NOT NULL DEFAULT 0
     )
   `);
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS score_submitted SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
 
   await ddl(`

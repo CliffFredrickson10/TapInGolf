@@ -76741,6 +76741,49 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
     res.status(500).json({ message: "Failed to complete round" });
   }
 });
+router23.post("/scoring/rounds/:id/submit", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const roundId = parseInt(req.params.id);
+    const rounds = await query(
+      "SELECT id, status, tournament_id, score_submitted FROM scoring_rounds WHERE id = ? AND user_id = ?",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) {
+      res.status(404).json({ message: "Round not found" });
+      return;
+    }
+    const round = rounds[0];
+    if (round.status !== "complete") {
+      res.status(400).json({ message: "Round must be completed before submitting" });
+      return;
+    }
+    if (!round.tournament_id) {
+      res.status(400).json({ message: "Round is not linked to a tournament" });
+      return;
+    }
+    if (round.score_submitted) {
+      res.json({ ok: true, alreadySubmitted: true });
+      return;
+    }
+    await run(
+      "UPDATE scoring_rounds SET score_submitted = 1 WHERE id = ?",
+      [roundId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "submit score error");
+    res.status(500).json({ message: "Failed to submit score" });
+  }
+});
 router23.delete("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -78275,9 +78318,11 @@ async function applyLateAlters() {
       total_points     INT,
       started_at       TIMESTAMP DEFAULT NOW(),
       completed_at     TIMESTAMP,
-      notes            TEXT
+      notes            TEXT,
+      score_submitted  SMALLINT NOT NULL DEFAULT 0
     )
   `);
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS score_submitted SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

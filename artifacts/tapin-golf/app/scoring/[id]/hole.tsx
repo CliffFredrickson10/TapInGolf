@@ -277,8 +277,8 @@ export default function HoleEntryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
-      {/* Top bar — paddingTop absorbs the safe-area inset (notch / Dynamic Island) */}
-      <View style={[styles.topBar, { paddingTop: insets.top + 8 }]}>
+      {/* Top bar — clears notch/Dynamic Island on device; min-36 for web sim */}
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36) }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>

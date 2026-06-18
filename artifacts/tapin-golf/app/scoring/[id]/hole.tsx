@@ -279,7 +279,7 @@ export default function HoleEntryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
       {/* Top bar — clears notch/Dynamic Island on device; min-36 for web sim */}
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36), paddingBottom: isMatchPlay ? 2 : 8 }]}>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36), paddingBottom: isMatchPlay ? 8 : 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
@@ -301,7 +301,7 @@ export default function HoleEntryScreen() {
       </View>
 
       {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
-      <View style={{ height: 40, overflow: "hidden" }}>
+      <View style={{ height: 40, overflow: "hidden", marginBottom: 6 }}>
       <ScrollView
         ref={holeStripRef}
         horizontal

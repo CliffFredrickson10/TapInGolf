@@ -76,14 +76,6 @@ const FORMAT_GROUPS: FormatGroup[] = [
 
 const ALL_FORMATS = FORMAT_GROUPS.flatMap(g => g.formats);
 
-const ALLOWANCES = [
-  { value: 100, label: "100%" },
-  { value: 95,  label: "95%" },
-  { value: 90,  label: "90%" },
-  { value: 85,  label: "85%" },
-  { value: 75,  label: "75%" },
-  { value: 50,  label: "50% (Foursomes)" },
-];
 
 const TEE_COLORS = [
   { key: "yellow", label: "Yellow", hex: "#F5C518" },
@@ -124,13 +116,9 @@ export default function StartRoundScreen() {
   const [teeColor, setTeeColor] = useState("white");
   const [format, setFormat] = useState("individual_stableford");
   const [courseHcp, setCourseHcp] = useState("0");
-  const [allowancePct, setAllowancePct] = useState(100);
   const [expandedGroup, setExpandedGroup] = useState("Individual");
   const [submitting, setSubmitting] = useState(false);
-  const [showAllowancePicker, setShowAllowancePicker] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
-
-  const ph = Math.round((parseInt(courseHcp) || 0) * (allowancePct / 100));
   const selectedFormatLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;
   const linkedTournament = tournaments.find(t => t.id === linkedTournamentId) ?? null;
   const isBetterball = BETTERBALL_FORMATS.has(format);
@@ -212,8 +200,8 @@ export default function StartRoundScreen() {
           teeColor,
           format,
           courseHandicap: ch,
-          playingHandicap: ph,
-          allowancePct,
+          playingHandicap: ch,
+          allowancePct: 100,
           tournamentId: linkedTournamentId,
         }),
       });
@@ -564,63 +552,6 @@ export default function StartRoundScreen() {
                     </View>
                   </View>
 
-                  {/* Allowance */}
-                  <View>
-                    <View style={styles.hcpLabelRow}>
-                      <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Playing Allowance</Text>
-                      <View style={[styles.hintChip, { backgroundColor: "#fef9ee", borderWidth: 1, borderColor: "#fde68a" }]}>
-                        <Text style={[styles.hintText, { color: "#92400e" }]}>Set by club</Text>
-                      </View>
-                    </View>
-                    <TouchableOpacity
-                      onPress={() => setShowAllowancePicker(v => !v)}
-                      style={[styles.allowancePicker, { borderColor: colors.border, backgroundColor: colors.background }]}
-                    >
-                      <Text style={[styles.allowanceValue, { color: colors.primary }]}>
-                        {ALLOWANCES.find(a => a.value === allowancePct)?.label ?? `${allowancePct}%`}
-                      </Text>
-                      <Ionicons name={showAllowancePicker ? "chevron-up" : "chevron-down"} size={16} color={colors.mutedForeground} />
-                    </TouchableOpacity>
-                    {showAllowancePicker && (
-                      <View style={[styles.allowanceDropdown, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        {ALLOWANCES.map((a, i) => (
-                          <TouchableOpacity
-                            key={a.value}
-                            onPress={() => { setAllowancePct(a.value); setShowAllowancePicker(false); }}
-                            style={[styles.allowanceOption, {
-                              backgroundColor: allowancePct === a.value ? colors.primary + "10" : "transparent",
-                              borderBottomColor: i < ALLOWANCES.length - 1 ? colors.border : "transparent",
-                            }]}
-                          >
-                            <Text style={[styles.allowanceOptionText, { color: allowancePct === a.value ? colors.primary : colors.foreground, fontFamily: allowancePct === a.value ? "Inter_700Bold" : "Inter_400Regular" }]}>
-                              {a.label}
-                            </Text>
-                            {allowancePct === a.value && <Ionicons name="checkmark" size={18} color={colors.primary} />}
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    )}
-                  </View>
-
-                  {/* Summary */}
-                  {(parseInt(courseHcp) || 0) > 0 && (
-                    <View style={[styles.hcpSummary, { backgroundColor: "#c8a84b20", borderColor: "#c8a84b50" }]}>
-                      <View style={styles.hcpSummaryItem}>
-                        <Text style={styles.hcpSummaryValue}>{parseInt(courseHcp) || 0}</Text>
-                        <Text style={styles.hcpSummaryLabel}>Course HCP</Text>
-                      </View>
-                      <Ionicons name="close" size={14} color="#92400e" style={{ marginTop: 8 }} />
-                      <View style={styles.hcpSummaryItem}>
-                        <Text style={styles.hcpSummaryValue}>{allowancePct}%</Text>
-                        <Text style={styles.hcpSummaryLabel}>Allowance</Text>
-                      </View>
-                      <Ionicons name="remove" size={14} color="#92400e" style={{ marginTop: 8 }} />
-                      <View style={[styles.hcpSummaryItem, styles.hcpSummaryHighlight]}>
-                        <Text style={[styles.hcpSummaryValue, { color: "#fff" }]}>{ph}</Text>
-                        <Text style={[styles.hcpSummaryLabel, { color: "rgba(255,255,255,0.75)" }]}>Playing HCP</Text>
-                      </View>
-                    </View>
-                  )}
                 </View>
               </Section>
             </>
@@ -749,29 +680,6 @@ const styles = StyleSheet.create({
   stepperBtn: { width: 44, height: 44, borderRadius: 22, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   stepperBtnText: { fontSize: 22, fontFamily: "Inter_400Regular", lineHeight: 28 },
   stepperValue: { fontSize: 36, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center", minWidth: 0 },
-  allowancePicker: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    padding: 14, borderRadius: 12, borderWidth: 1.5,
-  },
-  allowanceValue: { fontSize: 18, fontFamily: "Inter_700Bold" },
-  allowanceDropdown: {
-    marginTop: 4, borderRadius: 14, borderWidth: 1, overflow: "hidden",
-  },
-  allowanceOption: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    padding: 14, borderBottomWidth: 1,
-  },
-  allowanceOptionText: { fontSize: 15 },
-  hcpSummary: {
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 10, padding: 14, borderRadius: 14, borderWidth: 1,
-  },
-  hcpSummaryItem: { alignItems: "center" },
-  hcpSummaryHighlight: {
-    backgroundColor: "#1a5c38", borderRadius: 10, paddingHorizontal: 14, paddingVertical: 6,
-  },
-  hcpSummaryValue: { fontSize: 20, fontFamily: "Inter_700Bold", color: "#92400e" },
-  hcpSummaryLabel: { fontSize: 10, fontFamily: "Inter_600SemiBold", color: "#b45309", marginTop: 2 },
   footer: {
     paddingHorizontal: 16, paddingTop: 12,
     borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: "#e5e7eb",

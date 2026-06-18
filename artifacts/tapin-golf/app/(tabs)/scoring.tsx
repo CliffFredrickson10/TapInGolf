@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   Alert,
@@ -107,6 +107,7 @@ export default function ScoringScreen() {
   }, [token]);
 
   useEffect(() => { loadRounds(); }, [loadRounds]);
+  useFocusEffect(useCallback(() => { loadRounds(); }, [loadRounds]));
 
   const activeRound = rounds.find(r => r.status === "active") ?? null;
   const completedRounds = rounds.filter(r => r.status === "complete");

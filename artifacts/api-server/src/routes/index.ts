@@ -21,6 +21,7 @@ import hnaVerificationRouter from "./hnaVerification";
 import moderationRouter from "./moderation";
 import bansRouter from "./bans";
 import knockoutRouter from "./knockout";
+import scoringRouter from "./scoring";
 
 const router: IRouter = Router();
 
@@ -46,5 +47,6 @@ router.use(hnaVerificationRouter);
 router.use(moderationRouter);
 router.use(bansRouter);
 router.use(knockoutRouter);
+router.use(scoringRouter);
 
 export default router;

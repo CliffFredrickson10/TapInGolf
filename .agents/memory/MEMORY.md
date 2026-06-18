@@ -2,3 +2,5 @@
 - [Architect includeGitDiff fails in sandbox](architect-gitdiff-sandbox.md) — never use includeGitDiff:true when calling architect from code_execution; capture diff via bash and pass inline instead
 - [Knockout round badge fix](knockout-round-badge.md) — current_round_label must check actual match statuses (NOT is_complete flag) to reliably show the current round
 - [Betterball pairing flow](betterball-pairing-flow.md) — pending/confirmed state lives on event_teams.status + requested_by; pair_count in portal list must filter status='confirmed'; bracket generator must also filter confirmed-only
+- [API route prefix convention](api-route-prefix.md) — Express routes are registered WITHOUT the /api prefix; the main router is mounted at /api in app init; routes must be /scoring/rounds not /api/scoring/rounds
+- [Auth token location](auth-token-location.md) — token lives on user.token (the User object), NOT as a top-level field on AuthContextType; use const token = user?.token after const { user } = useAuth()

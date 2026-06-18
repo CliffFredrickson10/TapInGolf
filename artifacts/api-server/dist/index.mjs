@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router24;
+    module.exports = Router25;
     module.exports.Route = Route;
-    function Router24(options) {
-      if (!(this instanceof Router24)) {
-        return new Router24(options);
+    function Router25(options) {
+      if (!(this instanceof Router25)) {
+        return new Router25(options);
       }
       const opts = options || {};
-      function router24(req, res, next) {
-        router24.handle(req, res, next);
+      function router25(req, res, next) {
+        router25.handle(req, res, next);
       }
-      Object.setPrototypeOf(router24, this);
-      router24.caseSensitive = opts.caseSensitive;
-      router24.mergeParams = opts.mergeParams;
-      router24.params = {};
-      router24.strict = opts.strict;
-      router24.stack = [];
-      return router24;
+      Object.setPrototypeOf(router25, this);
+      router25.caseSensitive = opts.caseSensitive;
+      router25.mergeParams = opts.mergeParams;
+      router25.params = {};
+      router25.strict = opts.strict;
+      router25.stack = [];
+      return router25;
     }
-    Router24.prototype = function() {
+    Router25.prototype = function() {
     };
-    Router24.prototype.param = function param(name, fn) {
+    Router25.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router24.prototype.handle = function handle(req, res, callback) {
+    Router25.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router24.prototype.use = function use(handler) {
+    Router25.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router24.prototype.route = function route(path4) {
+    Router25.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router24.prototype[method] = function(path4) {
+      Router25.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router24 = require_router();
+    var Router25 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router24 = null;
+      var router25 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router24 === null) {
-            router24 = new Router24({
+          if (router25 === null) {
+            router25 = new Router25({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router24;
+          return router25;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router24 = this.router;
+      var router25 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router24.use(path4, fn2);
+          return router25.use(path4, fn2);
         }
         debug7(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router24.use(path4, function mounted_app(req, res, next) {
+        router25.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router24 = require_router();
+    var Router25 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router24.Route;
-    exports.Router = Router24;
+    exports.Route = Router25.Route;
+    exports.Router = Router25;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -35387,50 +35387,50 @@ var require_result = __commonJS({
         }
       }
       _parseRowAsArray(rowData) {
-        const row4 = new Array(rowData.length);
+        const row5 = new Array(rowData.length);
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           if (rawValue !== null) {
-            row4[i] = this._parsers[i](rawValue);
+            row5[i] = this._parsers[i](rawValue);
           } else {
-            row4[i] = null;
+            row5[i] = null;
           }
         }
-        return row4;
+        return row5;
       }
       parseRow(rowData) {
-        const row4 = { ...this._prebuiltEmptyResultObject };
+        const row5 = { ...this._prebuiltEmptyResultObject };
         for (let i = 0, len = rowData.length; i < len; i++) {
           const rawValue = rowData[i];
           const field = this.fields[i].name;
           if (rawValue !== null) {
             const v = this.fields[i].format === "binary" ? Buffer.from(rawValue) : rawValue;
-            row4[field] = this._parsers[i](v);
+            row5[field] = this._parsers[i](v);
           } else {
-            row4[field] = null;
+            row5[field] = null;
           }
         }
-        return row4;
+        return row5;
       }
-      addRow(row4) {
-        this.rows.push(row4);
+      addRow(row5) {
+        this.rows.push(row5);
       }
       addFields(fieldDescriptions) {
         this.fields = fieldDescriptions;
         if (this.fields.length) {
           this._parsers = new Array(fieldDescriptions.length);
         }
-        const row4 = {};
+        const row5 = {};
         for (let i = 0; i < fieldDescriptions.length; i++) {
           const desc = fieldDescriptions[i];
-          row4[desc.name] = null;
+          row5[desc.name] = null;
           if (this._types) {
             this._parsers[i] = this._types.getTypeParser(desc.dataTypeID, desc.format || "text");
           } else {
             this._parsers[i] = types2.getTypeParser(desc.dataTypeID, desc.format || "text");
           }
         }
-        this._prebuiltEmptyResultObject = { ...row4 };
+        this._prebuiltEmptyResultObject = { ...row5 };
       }
     };
     module.exports = Result2;
@@ -35501,19 +35501,19 @@ var require_query = __commonJS({
         this._accumulateRows = this.callback || !this.listeners("row").length;
       }
       handleDataRow(msg) {
-        let row4;
+        let row5;
         if (this._canceledDueToError) {
           return;
         }
         try {
-          row4 = this._result.parseRow(msg.fields);
+          row5 = this._result.parseRow(msg.fields);
         } catch (err) {
           this._canceledDueToError = err;
           return;
         }
-        this.emit("row", row4, this._result);
+        this.emit("row", row5, this._result);
         if (this._accumulateRows) {
-          this._result.addRow(row4);
+          this._result.addRow(row5);
         }
       }
       handleCommandComplete(msg, connection) {
@@ -38169,13 +38169,13 @@ var require_query2 = __commonJS({
         if (self2._emitRowEvents) {
           if (results.length > 1) {
             rows.forEach((rowOfRows, i) => {
-              rowOfRows.forEach((row4) => {
-                self2.emit("row", row4, results[i]);
+              rowOfRows.forEach((row5) => {
+                self2.emit("row", row5, results[i]);
               });
             });
           } else {
-            rows.forEach(function(row4) {
-              self2.emit("row", row4, results);
+            rows.forEach(function(row5) {
+              self2.emit("row", row5, results);
             });
           }
         }
@@ -56467,7 +56467,7 @@ var init_autoTeeGen = __esm({
 });
 
 // src/app.ts
-var import_express24 = __toESM(require_express2(), 1);
+var import_express25 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
@@ -57392,11 +57392,11 @@ function parsePathRewriteRules(rewriteConfig) {
 var debug4 = Debug.extend("router");
 async function getTarget(req, res, config) {
   let newTarget;
-  const router24 = config.router;
-  if (isPlainObject(router24)) {
-    newTarget = getTargetFromProxyTable(req, router24);
-  } else if (typeof router24 === "function") {
-    newTarget = await router24(req, res, config);
+  const router25 = config.router;
+  if (isPlainObject(router25)) {
+    newTarget = getTargetFromProxyTable(req, router25);
+  } else if (typeof router25 === "function") {
+    newTarget = await router25(req, res, config);
   }
   return newTarget;
 }
@@ -57643,7 +57643,7 @@ function createProxyMiddleware(options) {
 var debug6 = Debug.extend("response-interceptor");
 
 // src/routes/index.ts
-var import_express23 = __toESM(require_express2(), 1);
+var import_express24 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -76427,36 +76427,335 @@ router22.get("/knockout/my-active-matches", async (req, res) => {
 });
 var knockout_default = router22;
 
-// src/routes/index.ts
+// src/routes/scoring.ts
+var import_express23 = __toESM(require_express2(), 1);
+init_pg();
 var router23 = (0, import_express23.Router)();
-router23.use(health_default);
-router23.use(auth_default);
-router23.use(geofencing_default);
-router23.use(clubs_default);
-router23.use(bookings_default);
-router23.use(friends_default);
-router23.use(ads_default);
-router23.use(messages_default);
-router23.use(vouchers_default);
-router23.use(cancellationVouchers_default);
-router23.use(admin_default);
-router23.use(notifications_default);
-router23.use(events_default);
-router23.use(portal_default);
-router23.use(storage_default);
-router23.use(payments_default);
-router23.use(settings_default);
-router23.use(map_default);
-router23.use(hnaVerification_default);
-router23.use(moderation_default);
-router23.use(bans_default);
-router23.use(knockout_default);
-var routes_default = router23;
+function getHA(strokeIndex, playingHcp) {
+  if (playingHcp <= 0) return 0;
+  if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
+  return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
+}
+function calcPoints(gross, par, ha) {
+  return Math.max(0, par + 2 - (gross - ha));
+}
+function defaultScorecard() {
+  return Array.from({ length: 18 }, (_, i) => ({
+    number: i + 1,
+    par: i % 3 === 0 ? 3 : i % 3 === 1 ? 4 : 5,
+    stroke_index: i + 1,
+    distance_m: i % 3 === 0 ? 160 : i % 3 === 1 ? 350 : 490
+  }));
+}
+router23.get("/scoring/clubs/:clubId/scorecard", async (req, res) => {
+  try {
+    const clubId = parseInt(req.params.clubId);
+    if (!clubId) {
+      res.status(400).json({ message: "Invalid club id" });
+      return;
+    }
+    const rows = await query(
+      "SELECT holes, tee_colors FROM club_scorecards WHERE club_id = ?",
+      [clubId]
+    );
+    if (rows.length === 0) {
+      res.json({ holes: defaultScorecard(), tee_colors: [] });
+      return;
+    }
+    res.json({ holes: rows[0].holes, tee_colors: rows[0].tee_colors });
+  } catch (err) {
+    req.log?.error({ err }, "scorecard error");
+    res.status(500).json({ message: "Failed to load scorecard" });
+  }
+});
+router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
+  try {
+    await getUser(req);
+    const clubId = parseInt(req.params.clubId);
+    if (!clubId) {
+      res.status(400).json({ message: "Invalid club id" });
+      return;
+    }
+    const tournaments = await query(`
+      SELECT id, name, event_date, end_date, format, format2, format_custom
+      FROM golf_events
+      WHERE club_id = ?
+        AND event_date >= CURRENT_DATE - INTERVAL '1 day'
+      ORDER BY event_date ASC
+      LIMIT 20
+    `, [clubId]);
+    res.json({ tournaments });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "tournaments error");
+    res.status(500).json({ message: "Failed to load tournaments" });
+  }
+});
+router23.get("/scoring/rounds", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const rounds = await query(`
+      SELECT r.id, r.club_id, r.tee_color, r.format, r.course_handicap,
+             r.playing_handicap, r.allowance_pct, r.status, r.holes_played,
+             r.total_gross, r.total_net, r.total_points,
+             r.started_at, r.completed_at, r.tournament_id,
+             c.name  AS club_name,
+             c.location AS club_location,
+             c.logo_url AS club_logo_url,
+             e.name  AS tournament_name
+      FROM scoring_rounds r
+      JOIN clubs c ON r.club_id = c.id
+      LEFT JOIN golf_events e ON r.tournament_id = e.id
+      WHERE r.user_id = ?
+      ORDER BY r.started_at DESC
+      LIMIT 30
+    `, [user.id]);
+    res.json({ rounds });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to load rounds" });
+  }
+});
+router23.post("/scoring/rounds", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const {
+      clubId,
+      teeColor = "white",
+      format = "individual_stableford",
+      courseHandicap = 0,
+      playingHandicap = 0,
+      allowancePct = 100,
+      tournamentId = null
+    } = req.body;
+    if (!clubId) {
+      res.status(400).json({ message: "clubId is required" });
+      return;
+    }
+    await run(
+      "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
+      [user.id]
+    );
+    const [{ id }] = await query(`
+      INSERT INTO scoring_rounds
+        (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct, tournament_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      RETURNING id
+    `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct, tournamentId]);
+    res.json({ id });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "start round error");
+    res.status(500).json({ message: "Failed to start round" });
+  }
+});
+router23.get("/scoring/rounds/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const roundId = parseInt(req.params.id);
+    const rounds = await query(`
+      SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
+             e.name AS tournament_name
+      FROM scoring_rounds r
+      JOIN clubs c ON r.club_id = c.id
+      LEFT JOIN golf_events e ON r.tournament_id = e.id
+      WHERE r.id = ? AND r.user_id = ?
+    `, [roundId, user.id]);
+    if (rounds.length === 0) {
+      res.status(404).json({ message: "Round not found" });
+      return;
+    }
+    const round = rounds[0];
+    const scRows = await query(
+      "SELECT holes, tee_colors FROM club_scorecards WHERE club_id = ?",
+      [round.club_id]
+    );
+    const scorecard = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const holeRows = await query(
+      "SELECT * FROM scoring_holes WHERE round_id = ? ORDER BY hole_number",
+      [roundId]
+    );
+    const holes = {};
+    for (const h of holeRows) holes[h.hole_number] = h;
+    const playerRows = await query(
+      "SELECT * FROM scoring_player_holes WHERE round_id = ? ORDER BY player_index, hole_number",
+      [roundId]
+    );
+    const playerHoles = {};
+    for (const p of playerRows) playerHoles[`${p.player_index}_${p.hole_number}`] = p;
+    res.json({ ...round, scorecard, holes, playerHoles });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "get round error");
+    res.status(500).json({ message: "Failed to load round" });
+  }
+});
+router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const roundId = parseInt(req.params.id);
+    const holeNum = parseInt(req.params.holeNum);
+    const rounds = await query(
+      "SELECT playing_handicap FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) {
+      res.status(404).json({ message: "Active round not found" });
+      return;
+    }
+    const { playing_handicap } = rounds[0];
+    const { par, strokeIndex, grossScore, isNr = false, players } = req.body;
+    if (!par || !strokeIndex) {
+      res.status(400).json({ message: "par and strokeIndex required" });
+      return;
+    }
+    if (isNr || grossScore == null) {
+      await exec(`
+        INSERT INTO scoring_holes (round_id, hole_number, par, stroke_index, gross_score, net_score, stableford_points, is_nr)
+        VALUES (?, ?, ?, ?, NULL, NULL, 0, 1)
+        ON CONFLICT (round_id, hole_number) DO UPDATE
+          SET gross_score = NULL, net_score = NULL, stableford_points = 0, is_nr = 1
+      `, [roundId, holeNum, par, strokeIndex]);
+    } else {
+      const ha = getHA(strokeIndex, playing_handicap);
+      const netScore = grossScore - ha;
+      const pts = calcPoints(grossScore, par, ha);
+      await exec(`
+        INSERT INTO scoring_holes (round_id, hole_number, par, stroke_index, gross_score, net_score, stableford_points, is_nr)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
+        ON CONFLICT (round_id, hole_number) DO UPDATE
+          SET gross_score = EXCLUDED.gross_score,
+              net_score = EXCLUDED.net_score,
+              stableford_points = EXCLUDED.stableford_points,
+              is_nr = 0
+      `, [roundId, holeNum, par, strokeIndex, grossScore, netScore, pts]);
+    }
+    if (Array.isArray(players)) {
+      for (let i = 0; i < players.length; i++) {
+        const p = players[i];
+        await exec(`
+          INSERT INTO scoring_player_holes (round_id, player_index, player_name, hole_number, gross_score, is_nr)
+          VALUES (?, ?, ?, ?, ?, ?)
+          ON CONFLICT (round_id, player_index, hole_number) DO UPDATE
+            SET gross_score = EXCLUDED.gross_score, is_nr = EXCLUDED.is_nr, player_name = EXCLUDED.player_name
+        `, [roundId, i, p.name ?? null, holeNum, p.grossScore ?? null, p.isNr ? 1 : 0]);
+      }
+    }
+    await run(`
+      UPDATE scoring_rounds
+      SET holes_played = (SELECT COUNT(*) FROM scoring_holes WHERE round_id = ?)
+      WHERE id = ?
+    `, [roundId, roundId]);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "save hole error");
+    res.status(500).json({ message: "Failed to save hole score" });
+  }
+});
+router23.post("/scoring/rounds/:id/complete", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const roundId = parseInt(req.params.id);
+    const rounds = await query(
+      "SELECT id FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) {
+      res.status(404).json({ message: "Active round not found" });
+      return;
+    }
+    const holeRows = await query(
+      "SELECT gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",
+      [roundId]
+    );
+    let totalGross = 0, totalNet = 0, totalPoints = 0;
+    for (const h of holeRows) {
+      if (!h.is_nr && h.gross_score != null) {
+        totalGross += h.gross_score;
+        totalNet += h.net_score ?? 0;
+        totalPoints += h.stableford_points ?? 0;
+      }
+    }
+    await run(`
+      UPDATE scoring_rounds
+      SET status = 'complete', completed_at = NOW(),
+          total_gross = ?, total_net = ?, total_points = ?,
+          holes_played = ?
+      WHERE id = ?
+    `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
+    res.json({ ok: true, totalGross, totalNet, totalPoints, holesPlayed: holeRows.length });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "complete round error");
+    res.status(500).json({ message: "Failed to complete round" });
+  }
+});
+router23.delete("/scoring/rounds/:id", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    const roundId = parseInt(req.params.id);
+    await run("DELETE FROM scoring_rounds WHERE id = ? AND user_id = ?", [roundId, user.id]);
+    res.json({ ok: true });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to delete round" });
+  }
+});
+var scoring_default = router23;
+
+// src/routes/index.ts
+var router24 = (0, import_express24.Router)();
+router24.use(health_default);
+router24.use(auth_default);
+router24.use(geofencing_default);
+router24.use(clubs_default);
+router24.use(bookings_default);
+router24.use(friends_default);
+router24.use(ads_default);
+router24.use(messages_default);
+router24.use(vouchers_default);
+router24.use(cancellationVouchers_default);
+router24.use(admin_default);
+router24.use(notifications_default);
+router24.use(events_default);
+router24.use(portal_default);
+router24.use(storage_default);
+router24.use(payments_default);
+router24.use(settings_default);
+router24.use(map_default);
+router24.use(hnaVerification_default);
+router24.use(moderation_default);
+router24.use(bans_default);
+router24.use(knockout_default);
+router24.use(scoring_default);
+var routes_default = router24;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path3.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express24.default)();
+var app = (0, import_express25.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -76477,11 +76776,11 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express24.default.raw({ type: "*/*" }));
-app.use(import_express24.default.json());
-app.use(import_express24.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express25.default.raw({ type: "*/*" }));
+app.use(import_express25.default.json());
+app.use(import_express25.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express24.default.static(logosDir));
+app.use("/api/logos", import_express25.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
@@ -76506,7 +76805,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express24.default.static(clientDir));
+  app.use(import_express25.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path3.join(clientDir, "index.html"));
   });
@@ -77918,6 +78217,56 @@ async function applyLateAlters() {
       course_ratings JSONB NOT NULL DEFAULT '[]',
       footer_notes   TEXT,
       updated_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_rounds (
+      id               SERIAL PRIMARY KEY,
+      user_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      club_id          INT NOT NULL REFERENCES clubs(id),
+      tournament_id    INT REFERENCES golf_events(id),
+      tee_color        VARCHAR(20) NOT NULL DEFAULT 'white',
+      format           VARCHAR(50) NOT NULL DEFAULT 'individual_stableford',
+      course_handicap  INT NOT NULL DEFAULT 0,
+      playing_handicap INT NOT NULL DEFAULT 0,
+      allowance_pct    INT NOT NULL DEFAULT 100,
+      status           VARCHAR(20) NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('active','complete','abandoned')),
+      holes_played     INT NOT NULL DEFAULT 0,
+      total_gross      INT,
+      total_net        INT,
+      total_points     INT,
+      started_at       TIMESTAMP DEFAULT NOW(),
+      completed_at     TIMESTAMP,
+      notes            TEXT
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_holes (
+      id                SERIAL PRIMARY KEY,
+      round_id          INT NOT NULL REFERENCES scoring_rounds(id) ON DELETE CASCADE,
+      hole_number       INT NOT NULL CHECK (hole_number BETWEEN 1 AND 18),
+      par               INT NOT NULL,
+      stroke_index      INT NOT NULL,
+      gross_score       INT,
+      net_score         INT,
+      stableford_points INT,
+      is_nr             SMALLINT NOT NULL DEFAULT 0,
+      created_at        TIMESTAMP DEFAULT NOW(),
+      UNIQUE(round_id, hole_number)
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_player_holes (
+      id           SERIAL PRIMARY KEY,
+      round_id     INT NOT NULL REFERENCES scoring_rounds(id) ON DELETE CASCADE,
+      player_index INT NOT NULL DEFAULT 0,
+      player_name  VARCHAR(100),
+      hole_number  INT NOT NULL,
+      gross_score  INT,
+      is_nr        SMALLINT NOT NULL DEFAULT 0,
+      UNIQUE(round_id, player_index, hole_number)
     )
   `);
 }

@@ -1610,6 +1610,60 @@ async function applyLateAlters() {
       updated_at     TIMESTAMP DEFAULT NOW()
     )
   `);
+
+  // ── Scoring ───────────────────────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_rounds (
+      id               SERIAL PRIMARY KEY,
+      user_id          INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      club_id          INT NOT NULL REFERENCES clubs(id),
+      tournament_id    INT REFERENCES golf_events(id),
+      tee_color        VARCHAR(20) NOT NULL DEFAULT 'white',
+      format           VARCHAR(50) NOT NULL DEFAULT 'individual_stableford',
+      course_handicap  INT NOT NULL DEFAULT 0,
+      playing_handicap INT NOT NULL DEFAULT 0,
+      allowance_pct    INT NOT NULL DEFAULT 100,
+      status           VARCHAR(20) NOT NULL DEFAULT 'active'
+                         CHECK (status IN ('active','complete','abandoned')),
+      holes_played     INT NOT NULL DEFAULT 0,
+      total_gross      INT,
+      total_net        INT,
+      total_points     INT,
+      started_at       TIMESTAMP DEFAULT NOW(),
+      completed_at     TIMESTAMP,
+      notes            TEXT
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_holes (
+      id                SERIAL PRIMARY KEY,
+      round_id          INT NOT NULL REFERENCES scoring_rounds(id) ON DELETE CASCADE,
+      hole_number       INT NOT NULL CHECK (hole_number BETWEEN 1 AND 18),
+      par               INT NOT NULL,
+      stroke_index      INT NOT NULL,
+      gross_score       INT,
+      net_score         INT,
+      stableford_points INT,
+      is_nr             SMALLINT NOT NULL DEFAULT 0,
+      created_at        TIMESTAMP DEFAULT NOW(),
+      UNIQUE(round_id, hole_number)
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS scoring_player_holes (
+      id           SERIAL PRIMARY KEY,
+      round_id     INT NOT NULL REFERENCES scoring_rounds(id) ON DELETE CASCADE,
+      player_index INT NOT NULL DEFAULT 0,
+      player_name  VARCHAR(100),
+      hole_number  INT NOT NULL,
+      gross_score  INT,
+      is_nr        SMALLINT NOT NULL DEFAULT 0,
+      UNIQUE(round_id, player_index, hole_number)
+    )
+  `);
 }
 
 async function seedAdOfferings(): Promise<void> {

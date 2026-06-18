@@ -134,7 +134,7 @@ export default function HoleEntryScreen() {
 
   if (loading || !round) {
     return (
-      <View style={{ flex: 1, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }}>
+      <View style={{ flex: 1, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center", paddingTop: insets.top }}>
         <ActivityIndicator color={GOLD} size="large" />
       </View>
     );

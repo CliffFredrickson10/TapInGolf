@@ -91,7 +91,6 @@ export default function HoleEntryScreen() {
   const [holeIdx, setHoleIdx] = useState(0);
   const [gross, setGross] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
-  const [finishing, setFinishing] = useState(false);
   const holeStripRef = useRef<ScrollView>(null);
 
   const loadRound = useCallback(async () => {
@@ -190,28 +189,8 @@ export default function HoleEntryScreen() {
     }
   };
 
-  const doFinishRound = async () => {
-    if (finishing) return;
-    setFinishing(true);
-    try {
-      await apiFetch(`/scoring/rounds/${id}/complete`, token, { method: "POST" });
-      router.replace(`/scoring/${id}/complete`);
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to complete round");
-    } finally {
-      setFinishing(false);
-    }
-  };
-
   const confirmAndFinish = () => {
-    Alert.alert(
-      "Finish Round?",
-      "This will end the round. Any unscored holes will be recorded as No Return.",
-      [
-        { text: "Cancel", style: "cancel" },
-        { text: "Finish Round", onPress: doFinishRound },
-      ]
-    );
+    router.replace(`/scoring/${id}/complete`);
   };
 
   const isLastHole = holeIdx === scorecard.length - 1;
@@ -229,8 +208,7 @@ export default function HoleEntryScreen() {
         <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
         <TouchableOpacity
           onPress={confirmAndFinish}
-          disabled={finishing}
-          style={[styles.topActionBtn, { borderColor: "#f87171" + "55", opacity: finishing ? 0.5 : 1 }]}
+          style={[styles.topActionBtn, { borderColor: "#f87171" + "55" }]}
         >
           <Ionicons name="flag" size={13} color="#f87171" />
           <Text style={[styles.topActionText, { color: "#f87171" }]}>End Round</Text>
@@ -373,7 +351,7 @@ export default function HoleEntryScreen() {
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
         <TouchableOpacity
           onPress={() => saveAndNext(true)}
-          disabled={saving || finishing}
+          disabled={saving}
           style={[styles.nrBtn, { borderColor: BORDER }]}
         >
           <Text style={[styles.nrBtnText, { color: MUTED_FG }]}>NR / Pickup</Text>
@@ -381,10 +359,10 @@ export default function HoleEntryScreen() {
         {isLastHole ? (
           <TouchableOpacity
             onPress={() => gross != null ? saveAndNext(false) : confirmAndFinish()}
-            disabled={saving || finishing}
-            style={[styles.nextBtn, { backgroundColor: GREEN, opacity: (saving || finishing) ? 0.7 : 1 }]}
+            disabled={saving}
+            style={[styles.nextBtn, { backgroundColor: GREEN, opacity: saving ? 0.7 : 1 }]}
           >
-            {(saving || finishing)
+            {saving
               ? <ActivityIndicator color="#fff" />
               : <Text style={styles.nextBtnText}>Finish Round 🏁</Text>
             }

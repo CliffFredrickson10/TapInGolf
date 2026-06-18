@@ -301,7 +301,7 @@ export default function HoleEntryScreen() {
       </View>
 
       {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
-      <View style={{ height: 40, overflow: "hidden", marginTop: 14, marginBottom: 6 }}>
+      <View style={{ height: 40, overflow: "hidden", marginTop: 10, marginBottom: 6 }}>
       <ScrollView
         ref={holeStripRef}
         horizontal
@@ -455,7 +455,10 @@ export default function HoleEntryScreen() {
         {/* ── OPPONENT score section (matchplay only) ────────────── */}
         {isMatchPlay && (
           <>
-            <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
+            </View>
+            <View style={[styles.scoringSectionHeader, { paddingTop: 2, paddingBottom: 2 }]}>
               <View style={[styles.sectionDot, { backgroundColor: "#a78bfa" }]} />
               <Text style={[styles.sectionLabel, { color: "#a78bfa" }]}>
                 {(round.opponent_name ?? "OPPONENT").toUpperCase()}

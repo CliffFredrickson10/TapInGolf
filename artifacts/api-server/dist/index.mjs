@@ -76513,6 +76513,8 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
     const teamId = teamReg?.team_id ?? null;
     const m = await row(`
       SELECT km.id,
+             km.player1_id,
+             km.player2_id,
              km.status,
              kr.label  AS round_label,
              CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
@@ -76539,10 +76541,32 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
       res.json({ match: null });
       return;
     }
+    let opp2Name = null;
+    if (teamId) {
+      const p1OnMyTeam = await row(
+        "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
+        [m.player1_id, teamId, tournamentId]
+      );
+      const oppRepId = p1OnMyTeam ? m.player2_id : m.player1_id;
+      if (oppRepId) {
+        const oppTeam = await row(
+          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          [oppRepId, tournamentId]
+        );
+        if (oppTeam?.team_id) {
+          const opp2 = await row(
+            "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+            [oppTeam.team_id, oppRepId, tournamentId]
+          );
+          opp2Name = opp2?.name ?? null;
+        }
+      }
+    }
     res.json({
       match: {
         matchId: m.id,
         opponentName: m.opponent_name ?? "TBD",
+        opp2Name,
         opponentHandicap: m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
         roundLabel: m.round_label ?? null,
         status: m.status,
@@ -76614,6 +76638,7 @@ router23.post("/scoring/rounds", async (req, res) => {
     let opponentName = req.body.opponentName ?? null;
     let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
     let partnerName = null;
+    let opponent2Name = null;
     if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
       const teamReg = await row(
         "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
@@ -76628,7 +76653,7 @@ router23.post("/scoring/rounds", async (req, res) => {
         partnerName = ptnr?.name ?? null;
       }
       const m = await row(`
-        SELECT km.id,
+        SELECT km.id, km.player1_id, km.player2_id,
           CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
                THEN u2.name  ELSE u1.name  END AS opp_name,
           CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
@@ -76649,6 +76674,26 @@ router23.post("/scoring/rounds", async (req, res) => {
         matchId = m.id;
         opponentName = m.opp_name ?? null;
         opponentPlayingHcp = m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0;
+        if (teamId) {
+          const p1OnMyTeam = await row(
+            "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
+            [m.player1_id, teamId, tournamentId]
+          );
+          const oppRepId = p1OnMyTeam ? m.player2_id : m.player1_id;
+          if (oppRepId) {
+            const oppTeam = await row(
+              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+              [oppRepId, tournamentId]
+            );
+            if (oppTeam?.team_id) {
+              const opp2 = await row(
+                "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+                [oppTeam.team_id, oppRepId, tournamentId]
+              );
+              opponent2Name = opp2?.name ?? null;
+            }
+          }
+        }
       }
     }
     await run(
@@ -76658,8 +76703,8 @@ router23.post("/scoring/rounds", async (req, res) => {
     const [{ id }] = await query(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name, opponent2_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -76673,7 +76718,8 @@ router23.post("/scoring/rounds", async (req, res) => {
       matchId,
       opponentName,
       opponentPlayingHcp,
-      partnerName
+      partnerName,
+      opponent2Name
     ]);
     res.json({ id });
   } catch (err) {
@@ -76695,10 +76741,14 @@ router23.get("/scoring/rounds/:id", async (req, res) => {
     const roundId = parseInt(req.params.id);
     const rounds = await query(`
       SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
-             e.name AS tournament_name
+             e.name AS tournament_name,
+             km.status      AS match_status,
+             km.dispute     AS match_dispute,
+             km.winner_id   AS match_winner_id
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
+      LEFT JOIN knockout_matches km ON km.id = r.match_id
       WHERE r.id = ? AND r.user_id = ?
     `, [roundId, user.id]);
     if (rounds.length === 0) {
@@ -76856,52 +76906,131 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
       try {
         const match = await row("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
         if (match && match.status !== "complete" && match.status !== "bye") {
-          const oppRows = await query(
-            "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
-            [roundId]
-          );
-          const oppHoleMap = {};
-          for (const p of oppRows) oppHoleMap[p.hole_number] = p;
           let won = 0, lost = 0, halved = 0;
-          for (const h of holeRows) {
-            const opp = oppHoleMap[h.hole_number];
-            if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
-            const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
-            const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
-            if (myNet < oppNet) won++;
-            else if (myNet > oppNet) lost++;
-            else halved++;
+          if (round.format === "singles_match_play") {
+            const oppRows = await query(
+              "SELECT hole_number, gross_score, is_nr, stroke_index FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+              [roundId]
+            );
+            const oppMap = {};
+            for (const p of oppRows) oppMap[p.hole_number] = p;
+            for (const h of holeRows) {
+              const opp = oppMap[h.hole_number];
+              if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
+              const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+              const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+              if (myNet < oppNet) won++;
+              else if (myNet > oppNet) lost++;
+              else halved++;
+            }
+          } else {
+            const pRows = await query(
+              "SELECT hole_number, gross_score, is_nr, stroke_index, player_index FROM scoring_player_holes WHERE round_id = ?",
+              [roundId]
+            );
+            const partnerMap = {};
+            const opp1Map = {};
+            const opp2Map = {};
+            for (const p of pRows) {
+              if (p.player_index === 0) partnerMap[p.hole_number] = p;
+              else if (p.player_index === 1) opp1Map[p.hole_number] = p;
+              else if (p.player_index === 2) opp2Map[p.hole_number] = p;
+            }
+            for (const h of holeRows) {
+              if (h.is_nr || h.gross_score == null) continue;
+              const opp1 = opp1Map[h.hole_number];
+              const opp2 = opp2Map[h.hole_number];
+              if (!opp1 && !opp2) continue;
+              const partner = partnerMap[h.hole_number];
+              const myHA = getHALocal(h.stroke_index, round.playing_handicap);
+              const myNet = h.gross_score - myHA;
+              const partNet = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - myHA : null;
+              const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
+              const oppHA = getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+              const opp1Net = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
+              const opp2Net = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
+              const oppBest = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : opp1Net ?? opp2Net;
+              if (oppBest == null) continue;
+              if (teamBest < oppBest) won++;
+              else if (teamBest > oppBest) lost++;
+              else halved++;
+            }
           }
           const holesUp = won - lost;
-          const holesRemaining = 18 - holeRows.length;
-          if (holesUp !== 0) {
-            const winnerId = holesUp > 0 ? user.id : match.player1_id === user.id ? match.player2_id : match.player1_id;
-            const margin = Math.abs(holesUp);
-            const scoreStr = holesRemaining > 0 ? `${margin}&${holesRemaining}` : `${margin} UP`;
-            const p1Result = match.player1_id === user.id ? holesUp > 0 ? "won" : "lost" : holesUp < 0 ? "won" : "lost";
-            const p2Result = p1Result === "won" ? "lost" : "won";
-            await run(
-              `UPDATE knockout_matches
-               SET winner_id = ?, score = ?, status = 'complete',
-                   player1_result = ?, player2_result = ?, dispute = FALSE
-               WHERE id = ?`,
-              [winnerId, scoreStr, p1Result, p2Result, match.id]
-            );
-            if (match.next_match_id) {
-              const nxt = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
-              if (nxt) {
-                const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
-                await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+          const holesRem = 18 - holeRows.length;
+          const myResult = won + lost + halved === 0 ? null : holesUp > 0 ? "won" : holesUp < 0 ? "lost" : "halved";
+          if (myResult) {
+            await run("UPDATE scoring_rounds SET match_result = ? WHERE id = ?", [myResult, roundId]);
+          }
+          const oppRound = myResult ? await row(
+            `SELECT id, match_result FROM scoring_rounds
+             WHERE match_id = ? AND user_id != ? AND status = 'complete' AND match_result IS NOT NULL
+             ORDER BY completed_at DESC LIMIT 1`,
+            [round.match_id, user.id]
+          ) : null;
+          if (oppRound && myResult) {
+            const theirResult = oppRound.match_result;
+            const agree = myResult === "won" && theirResult === "lost" || myResult === "lost" && theirResult === "won" || myResult === "halved" && theirResult === "halved";
+            if (agree) {
+              if (myResult === "halved") {
+                await run(
+                  `UPDATE knockout_matches
+                   SET winner_id = NULL, score = 'Halved', status = 'complete', dispute = FALSE
+                   WHERE id = ?`,
+                  [match.id]
+                );
+              } else {
+                let isPlayer1 = match.player1_id === user.id;
+                if (!isPlayer1 && match.player2_id !== user.id && round.tournament_id) {
+                  const myTeam = await row(
+                    "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+                    [user.id, round.tournament_id]
+                  );
+                  if (myTeam?.team_id) {
+                    const p1Same = await row(
+                      "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? LIMIT 1",
+                      [match.player1_id, myTeam.team_id]
+                    );
+                    isPlayer1 = !!p1Same;
+                  }
+                }
+                const winnerId = myResult === "won" ? isPlayer1 ? match.player1_id : match.player2_id : isPlayer1 ? match.player2_id : match.player1_id;
+                const margin = Math.abs(holesUp);
+                const scoreStr = holesRem > 0 && margin > holesRem ? `${margin}&${holesRem}` : `${margin} UP`;
+                const p1Result = match.player1_id === winnerId ? "won" : "lost";
+                const p2Result = p1Result === "won" ? "lost" : "won";
+                await run(
+                  `UPDATE knockout_matches
+                   SET winner_id = ?, score = ?, status = 'complete',
+                       player1_result = ?, player2_result = ?, dispute = FALSE
+                   WHERE id = ?`,
+                  [winnerId, scoreStr, p1Result, p2Result, match.id]
+                );
+                if (match.next_match_id) {
+                  const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+                  await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+                }
+                const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+                if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
+                  await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+                }
               }
-            }
-            const roundMatches = await query("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
-            if (roundMatches.every((m) => m.status === "complete" || m.status === "bye")) {
-              await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+            } else {
+              const p1Result = match.player1_id === user.id ? myResult : theirResult;
+              const p2Result = match.player1_id === user.id ? theirResult : myResult;
+              await run(
+                `UPDATE knockout_matches
+                 SET dispute = TRUE,
+                     player1_result = NULLIF(?, 'halved'),
+                     player2_result = NULLIF(?, 'halved')
+                 WHERE id = ?`,
+                [p1Result, p2Result, match.id]
+              );
             }
           }
         }
       } catch (matchErr) {
-        req.log?.error({ matchErr }, "matchplay auto-resolve error (non-fatal)");
+        req.log?.error({ matchErr }, "matchplay verify error (non-fatal)");
       }
     }
     res.json({ ok: true, totalGross, totalNet, totalPoints, holesPlayed: holeRows.length });
@@ -78500,6 +78629,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_name VARCHAR(100)");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_name VARCHAR(100)");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_name VARCHAR(100)");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_result VARCHAR(10) CHECK (match_result IN ('won','lost','halved'))");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

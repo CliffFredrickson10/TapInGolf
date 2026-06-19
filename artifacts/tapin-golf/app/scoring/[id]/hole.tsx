@@ -53,6 +53,7 @@ type Round = {
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
   partner_name?: string | null;
+  opp2_name?: string | null;
   playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
@@ -370,13 +371,13 @@ export default function HoleEntryScreen() {
 
   // Inline compact player stepper used for partner + opp2 in betterball
   const BbPlayerInput = ({
-    label, color, bgColor, gross: g, setGross: sg, ha: playerHA, isBest,
+    label, color, bgColor, gross: g, setGross: sg, ha: playerHA, isBest, flat,
   }: {
     label: string; color: string; bgColor: string;
     gross: number | null; setGross: (v: number | null) => void;
-    ha: number; isBest?: boolean;
+    ha: number; isBest?: boolean; flat?: boolean;
   }) => (
-    <View style={[styles.oppStepperSection, { backgroundColor: bgColor, marginHorizontal: 12, paddingVertical: 8 }]}>
+    <View style={[styles.oppStepperSection, { backgroundColor: bgColor, paddingVertical: 8 }, flat ? { marginHorizontal: 0, borderRadius: 0 } : { marginHorizontal: 12 }]}>
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <View style={[styles.sectionDot, { backgroundColor: color }]} />
         <Text style={[styles.sectionLabel, { color }]}>{label.toUpperCase()}</Text>
@@ -545,89 +546,81 @@ export default function HoleEntryScreen() {
           </View>
         )}
 
-        <View style={styles.stepperSection}>
-          <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
-            {gross != null && (
-              <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
-                <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
-                  {scoreName(gross, hole.par)}
-                </Text>
-              </View>
-            )}
-          </View>
-
-          <View style={styles.stepper}>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-              style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
-            >
-              <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG, fontSize: isAnyMatch ? 24 : 30 }]}>−</Text>
-            </TouchableOpacity>
-            <View style={styles.scoreDisplay}>
-              {gross != null ? (
-                <>
-                  <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>{gross}</Text>
-                  <Text style={styles.scoreNet}>Net {gross - ha}{!isBetterball ? ` · ${pts}pts` : ""}</Text>
-                </>
-              ) : (
-                <Text style={[styles.scoreValue, { color: SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>
-              )}
-            </View>
-            <TouchableOpacity
-              onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-              style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
-            >
-              <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isAnyMatch ? 24 : 30 }]}>+</Text>
-            </TouchableOpacity>
-          </View>
-
-          <ScrollView
-            ref={quickRowRef}
-            horizontal
-            showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.quickRow}
-          >
-            {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
-              const val = hole.par + offset;
-              const active = gross === val;
-              const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-              const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
-              return (
-                <TouchableOpacity
-                  key={offset}
-                  onPress={() => { Haptics.selectionAsync(); setGross(val); }}
-                  style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
-                >
-                  <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                  <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </ScrollView>
-        </View>
-
-        {/* ── PARTNER section (betterball only) ──────────────────── */}
-        {isBetterball && (
-          <>
-            <View style={[styles.scoringSectionHeader, { paddingTop: 4, paddingBottom: 0 }]}>
-              <View style={[styles.sectionDot, { backgroundColor: "#a855f7" }]} />
-              <Text style={[styles.sectionLabel, { color: "#a855f7" }]}>
-                {(round.partner_name ?? "PARTNER").toUpperCase()}
-              </Text>
-              {bbTeamWinner === 1 && partnerGross != null && (
-                <View style={[styles.scoreBadge, { backgroundColor: GOLD + "22", borderColor: GOLD + "50", paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6 }]}>
-                  <Text style={[styles.scoreBadgeText, { color: GOLD, fontSize: 10 }]}>Best Ball ⭐</Text>
+        <View style={isBetterball ? styles.teamGroupBox : undefined}>
+          <View style={styles.stepperSection}>
+            <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
+              {gross != null && (
+                <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
+                  <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
+                    {scoreName(gross, hole.par)}
+                  </Text>
                 </View>
               )}
             </View>
-            <BbPlayerInput
-              label={round.partner_name ?? "Partner"}
-              color="#a855f7" bgColor="#1a0d2e"
-              gross={partnerGross} setGross={setPartnerGross}
-              ha={partnerHA} isBest={bbTeamWinner === 1}
-            />
-          </>
-        )}
+
+            <View style={styles.stepper}>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
+                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+              >
+                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG, fontSize: isAnyMatch ? 24 : 30 }]}>−</Text>
+              </TouchableOpacity>
+              <View style={styles.scoreDisplay}>
+                {gross != null ? (
+                  <>
+                    <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>{gross}</Text>
+                    <Text style={styles.scoreNet}>Net {gross - ha}{!isBetterball ? ` · ${pts}pts` : ""}</Text>
+                  </>
+                ) : (
+                  <Text style={[styles.scoreValue, { color: SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>
+                )}
+              </View>
+              <TouchableOpacity
+                onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
+                style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+              >
+                <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isAnyMatch ? 24 : 30 }]}>+</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView
+              ref={quickRowRef}
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={styles.quickRow}
+            >
+              {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+                const val = hole.par + offset;
+                const active = gross === val;
+                const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+                const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                return (
+                  <TouchableOpacity
+                    key={offset}
+                    onPress={() => { Haptics.selectionAsync(); setGross(val); }}
+                    style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
+                  >
+                    <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                    <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+          </View>
+
+          {/* ── PARTNER (betterball only, inside team box) ─────── */}
+          {isBetterball && (
+            <>
+              <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 8 }} />
+              <BbPlayerInput flat
+                label={round.partner_name ?? "Partner"}
+                color="#a855f7" bgColor="#1a0d2e"
+                gross={partnerGross} setGross={setPartnerGross}
+                ha={partnerHA} isBest={bbTeamWinner === 1}
+              />
+            </>
+          )}
+        </View>
 
         {/* Points summary — non-matchplay only */}
         {pts != null && !isAnyMatch && (
@@ -655,14 +648,23 @@ export default function HoleEntryScreen() {
               )}
             </View>
 
-            {/* For betterball, opp1 uses BbPlayerInput; for singles use the existing larger stepper */}
+            {/* For betterball, group both opps in oppGroupBox; for singles use the large stepper */}
             {isBetterball ? (
-              <BbPlayerInput
-                label={round.opponent_name ?? "Opp 1"}
-                color="#ef4444" bgColor="#1a0e2e"
-                gross={oppGross} setGross={setOppGross}
-                ha={oppHA} isBest={bbOppWinner === 0}
-              />
+              <View style={styles.oppGroupBox}>
+                <BbPlayerInput flat
+                  label={round.opponent_name ?? "Opp 1"}
+                  color="#ef4444" bgColor="#1a0e2e"
+                  gross={oppGross} setGross={setOppGross}
+                  ha={oppHA} isBest={bbOppWinner === 0}
+                />
+                <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
+                <BbPlayerInput flat
+                  label={round.opp2_name ?? "Opp 2"}
+                  color="#fb923c" bgColor="#1a1005"
+                  gross={opp2Gross} setGross={setOpp2Gross}
+                  ha={opp2HA} isBest={bbOppWinner === 1}
+                />
+              </View>
             ) : (
               <View style={[styles.stepperSection, styles.oppStepperSection]}>
                 <View style={{ height: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
@@ -723,27 +725,6 @@ export default function HoleEntryScreen() {
                   })}
                 </ScrollView>
               </View>
-            )}
-
-            {/* ── OPP 2 section (betterball only) ──────────────────── */}
-            {isBetterball && (
-              <>
-                <View style={[styles.scoringSectionHeader, { paddingTop: 4, paddingBottom: 0 }]}>
-                  <View style={[styles.sectionDot, { backgroundColor: "#fb923c" }]} />
-                  <Text style={[styles.sectionLabel, { color: "#fb923c" }]}>OPP 2</Text>
-                  {bbOppWinner === 1 && opp2Gross != null && (
-                    <View style={[styles.scoreBadge, { backgroundColor: GOLD + "22", borderColor: GOLD + "50", paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6 }]}>
-                      <Text style={[styles.scoreBadgeText, { color: GOLD, fontSize: 10 }]}>Best Ball ⭐</Text>
-                    </View>
-                  )}
-                </View>
-                <BbPlayerInput
-                  label="Opp 2"
-                  color="#fb923c" bgColor="#1a1005"
-                  gross={opp2Gross} setGross={setOpp2Gross}
-                  ha={opp2HA} isBest={bbOppWinner === 1}
-                />
-              </>
             )}
           </>
         )}
@@ -895,6 +876,21 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     marginHorizontal: 12,
     paddingVertical: 8,
+  },
+  teamGroupBox: {
+    borderWidth: 1,
+    borderColor: "#1a5c3860",
+    borderRadius: 16,
+    marginHorizontal: 12,
+    marginBottom: 4,
+    overflow: "hidden",
+  },
+  oppGroupBox: {
+    borderWidth: 1,
+    borderColor: "#a78bfa40",
+    borderRadius: 16,
+    marginHorizontal: 12,
+    overflow: "hidden",
   },
   actions: {
     flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12,

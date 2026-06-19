@@ -22,7 +22,7 @@ import { AppHeader } from "@/components/AppHeader";
 
 type Club = { id: number; name: string; location: string; province: string };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
-type MatchOpponent = { matchId: number; opponentName: string; opponentHandicap: number | null; roundLabel: string | null };
+type MatchOpponent = { matchId: number; opponentName: string; opp2Name?: string | null; opponentHandicap: number | null; roundLabel: string | null };
 
 type FormatEntry = { key: string; label: string };
 type FormatGroup = { group: string; formats: FormatEntry[] };
@@ -337,7 +337,7 @@ export default function StartRoundScreen() {
                                 {format === "betterball_match_play" ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
                               </Text>
                               <Text style={[styles.opponentName, { color: colors.foreground }]}>
-                                {matchOpponent.opponentName}
+                                {matchOpponent.opponentName}{matchOpponent.opp2Name ? ` & ${matchOpponent.opp2Name}` : ""}
                               </Text>
                               {matchOpponent.roundLabel && (
                                 <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>

@@ -92,6 +92,8 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
     // Find the match — either directly (singles) or via team membership (betterball)
     const m = await row<any>(`
       SELECT km.id,
+             km.player1_id,
+             km.player2_id,
              km.status,
              kr.label  AS round_label,
              CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
@@ -117,10 +119,34 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
 
     if (!m) { res.json({ match: null }); return; }
 
+    // Find opponent's partner (betterball only — when teamId exists)
+    let opp2Name: string | null = null;
+    if (teamId) {
+      const p1OnMyTeam = await row<any>(
+        "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
+        [m.player1_id, teamId, tournamentId]
+      );
+      const oppRepId: number = p1OnMyTeam ? m.player2_id : m.player1_id;
+      if (oppRepId) {
+        const oppTeam = await row<any>(
+          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          [oppRepId, tournamentId]
+        );
+        if (oppTeam?.team_id) {
+          const opp2 = await row<any>(
+            "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+            [oppTeam.team_id, oppRepId, tournamentId]
+          );
+          opp2Name = opp2?.name ?? null;
+        }
+      }
+    }
+
     res.json({
       match: {
         matchId:           m.id,
         opponentName:      m.opponent_name  ?? "TBD",
+        opp2Name,
         opponentHandicap:  m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
         roundLabel:        m.round_label    ?? null,
         status:            m.status,
@@ -183,6 +209,7 @@ router.post("/scoring/rounds", async (req, res) => {
     let opponentName: string | null = req.body.opponentName ?? null;
     let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
     let partnerName: string | null = null;
+    let opponent2Name: string | null = null;
 
     if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
       // For betterball, also look up the user's team and partner
@@ -201,7 +228,7 @@ router.post("/scoring/rounds", async (req, res) => {
       }
 
       const m = await row<any>(`
-        SELECT km.id,
+        SELECT km.id, km.player1_id, km.player2_id,
           CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
                THEN u2.name  ELSE u1.name  END AS opp_name,
           CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
@@ -224,6 +251,27 @@ router.post("/scoring/rounds", async (req, res) => {
         opponentPlayingHcp = m.opp_hcp
           ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100))
           : 0;
+        // Find opponent's partner for betterball
+        if (teamId) {
+          const p1OnMyTeam = await row<any>(
+            "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
+            [m.player1_id, teamId, tournamentId]
+          );
+          const oppRepId: number = p1OnMyTeam ? m.player2_id : m.player1_id;
+          if (oppRepId) {
+            const oppTeam = await row<any>(
+              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+              [oppRepId, tournamentId]
+            );
+            if (oppTeam?.team_id) {
+              const opp2 = await row<any>(
+                "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+                [oppTeam.team_id, oppRepId, tournamentId]
+              );
+              opponent2Name = opp2?.name ?? null;
+            }
+          }
+        }
       }
     }
 
@@ -236,11 +284,11 @@ router.post("/scoring/rounds", async (req, res) => {
     const [{ id }] = await query<{ id: number }>(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name, opponent2_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
-        tournamentId, matchId, opponentName, opponentPlayingHcp, partnerName]);
+        tournamentId, matchId, opponentName, opponentPlayingHcp, partnerName, opponent2Name]);
 
     res.json({ id });
   } catch (err: any) {

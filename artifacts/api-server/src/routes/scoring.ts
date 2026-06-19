@@ -260,10 +260,14 @@ router.get("/scoring/rounds/:id", async (req, res) => {
 
     const rounds = await query<any>(`
       SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
-             e.name AS tournament_name
+             e.name AS tournament_name,
+             km.status      AS match_status,
+             km.dispute     AS match_dispute,
+             km.winner_id   AS match_winner_id
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
+      LEFT JOIN knockout_matches km ON km.id = r.match_id
       WHERE r.id = ? AND r.user_id = ?
     `, [roundId, user.id]);
 
@@ -422,67 +426,168 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
 
-    // Auto-resolve knockout match for matchplay formats
+    // ─── Matchplay two-phase score verification ──────────────────────────────
     if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play")) {
       try {
         const match = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
         if (match && match.status !== "complete" && match.status !== "bye") {
-          const oppRows = await query<any>(
-            "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
-            [roundId]
-          );
-          const oppHoleMap: Record<number, any> = {};
-          for (const p of oppRows) oppHoleMap[p.hole_number] = p;
 
+          // ── Step 1: calculate this player's result from their own scores ──
           let won = 0, lost = 0, halved = 0;
-          for (const h of holeRows) {
-            const opp = oppHoleMap[h.hole_number];
-            if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
-            const myNet  = h.gross_score  - getHALocal(h.stroke_index, round.playing_handicap);
-            const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
-            if      (myNet < oppNet) won++;
-            else if (myNet > oppNet) lost++;
-            else                     halved++;
+
+          if (round.format === "singles_match_play") {
+            // Opponent scores live in scoring_player_holes at player_index = 0
+            const oppRows = await query<any>(
+              "SELECT hole_number, gross_score, is_nr, stroke_index FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+              [roundId]
+            );
+            const oppMap: Record<number, any> = {};
+            for (const p of oppRows) oppMap[p.hole_number] = p;
+            for (const h of holeRows) {
+              const opp = oppMap[h.hole_number];
+              if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
+              const myNet  = h.gross_score  - getHALocal(h.stroke_index, round.playing_handicap);
+              const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+              if      (myNet < oppNet) won++;
+              else if (myNet > oppNet) lost++;
+              else                     halved++;
+            }
+          } else {
+            // betterball: partner = index 0, opp1 = index 1, opp2 = index 2
+            const pRows = await query<any>(
+              "SELECT hole_number, gross_score, is_nr, stroke_index, player_index FROM scoring_player_holes WHERE round_id = ?",
+              [roundId]
+            );
+            const partnerMap: Record<number, any> = {};
+            const opp1Map: Record<number, any> = {};
+            const opp2Map: Record<number, any> = {};
+            for (const p of pRows) {
+              if      (p.player_index === 0) partnerMap[p.hole_number] = p;
+              else if (p.player_index === 1) opp1Map[p.hole_number]    = p;
+              else if (p.player_index === 2) opp2Map[p.hole_number]    = p;
+            }
+            for (const h of holeRows) {
+              if (h.is_nr || h.gross_score == null) continue;
+              const opp1 = opp1Map[h.hole_number];
+              const opp2 = opp2Map[h.hole_number];
+              if (!opp1 && !opp2) continue;
+              const partner   = partnerMap[h.hole_number];
+              const myHA      = getHALocal(h.stroke_index, round.playing_handicap);
+              const myNet     = h.gross_score - myHA;
+              const partNet   = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - myHA : null;
+              const teamBest  = partNet != null ? Math.min(myNet, partNet) : myNet;
+              const oppHA     = getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+              const opp1Net   = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
+              const opp2Net   = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
+              const oppBest   = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : (opp1Net ?? opp2Net);
+              if (oppBest == null) continue;
+              if      (teamBest < oppBest) won++;
+              else if (teamBest > oppBest) lost++;
+              else                         halved++;
+            }
           }
 
-          const holesUp       = won - lost;
-          const holesRemaining = 18 - holeRows.length;
+          const holesUp  = won - lost;
+          const holesRem = 18 - holeRows.length;
+          const myResult: "won" | "lost" | "halved" | null =
+            (won + lost + halved) === 0 ? null :
+            holesUp > 0 ? "won" :
+            holesUp < 0 ? "lost" :
+                          "halved";
 
-          if (holesUp !== 0) {
-            const winnerId = holesUp > 0
-              ? user.id
-              : (match.player1_id === user.id ? match.player2_id : match.player1_id);
-            const margin    = Math.abs(holesUp);
-            const scoreStr  = holesRemaining > 0 ? `${margin}&${holesRemaining}` : `${margin} UP`;
-            const p1Result  = match.player1_id === user.id
-              ? (holesUp > 0 ? "won" : "lost")
-              : (holesUp < 0 ? "won" : "lost");
-            const p2Result  = p1Result === "won" ? "lost" : "won";
+          // ── Step 2: persist this player's result ─────────────────────────
+          if (myResult) {
+            await run("UPDATE scoring_rounds SET match_result = ? WHERE id = ?", [myResult, roundId]);
+          }
 
-            await run(
-              `UPDATE knockout_matches
-               SET winner_id = ?, score = ?, status = 'complete',
-                   player1_result = ?, player2_result = ?, dispute = FALSE
-               WHERE id = ?`,
-              [winnerId, scoreStr, p1Result, p2Result, match.id]
-            );
+          // ── Step 3: check if opponent has also finished ───────────────────
+          const oppRound = myResult ? await row<any>(
+            `SELECT id, match_result FROM scoring_rounds
+             WHERE match_id = ? AND user_id != ? AND status = 'complete' AND match_result IS NOT NULL
+             ORDER BY completed_at DESC LIMIT 1`,
+            [round.match_id, user.id]
+          ) : null;
 
-            if (match.next_match_id) {
-              const nxt = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.next_match_id]);
-              if (nxt) {
-                const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
-                await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+          if (oppRound && myResult) {
+            const theirResult = oppRound.match_result as string;
+
+            // Results agree when they're complementary (I won + they lost, or both halved)
+            const agree =
+              (myResult === "won"    && theirResult === "lost")   ||
+              (myResult === "lost"   && theirResult === "won")    ||
+              (myResult === "halved" && theirResult === "halved");
+
+            if (agree) {
+              if (myResult === "halved") {
+                // Halved — no winner
+                await run(
+                  `UPDATE knockout_matches
+                   SET winner_id = NULL, score = 'Halved', status = 'complete', dispute = FALSE
+                   WHERE id = ?`,
+                  [match.id]
+                );
+              } else {
+                // Determine winner — figure out which side of the match this user is on
+                let isPlayer1 = match.player1_id === user.id;
+                if (!isPlayer1 && match.player2_id !== user.id && round.tournament_id) {
+                  // Betterball: user may be the non-representative team member
+                  const myTeam = await row<any>(
+                    "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+                    [user.id, round.tournament_id]
+                  );
+                  if (myTeam?.team_id) {
+                    const p1Same = await row<any>(
+                      "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? LIMIT 1",
+                      [match.player1_id, myTeam.team_id]
+                    );
+                    isPlayer1 = !!p1Same;
+                  }
+                }
+                const winnerId  = myResult === "won"
+                  ? (isPlayer1 ? match.player1_id : match.player2_id)
+                  : (isPlayer1 ? match.player2_id : match.player1_id);
+                const margin    = Math.abs(holesUp);
+                const scoreStr  = (holesRem > 0 && margin > holesRem) ? `${margin}&${holesRem}` : `${margin} UP`;
+                const p1Result  = match.player1_id === winnerId ? "won" : "lost";
+                const p2Result  = p1Result === "won" ? "lost" : "won";
+
+                await run(
+                  `UPDATE knockout_matches
+                   SET winner_id = ?, score = ?, status = 'complete',
+                       player1_result = ?, player2_result = ?, dispute = FALSE
+                   WHERE id = ?`,
+                  [winnerId, scoreStr, p1Result, p2Result, match.id]
+                );
+
+                // Advance winner into next match
+                if (match.next_match_id) {
+                  const field = match.slot_position === "bottom" ? "player2_id" : "player1_id";
+                  await run(`UPDATE knockout_matches SET ${field} = ? WHERE id = ?`, [winnerId, match.next_match_id]);
+                }
+
+                // Mark knockout round complete if all matches are done
+                const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
+                if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
+                  await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+                }
               }
-            }
-
-            const roundMatches = await query<any>("SELECT status FROM knockout_matches WHERE round_id = ?", [match.round_id]);
-            if (roundMatches.every((m: any) => m.status === "complete" || m.status === "bye")) {
-              await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [match.round_id]);
+            } else {
+              // Dispute — store both results and flag for club adjudication
+              const p1Result = match.player1_id === user.id ? myResult       : theirResult;
+              const p2Result = match.player1_id === user.id ? theirResult    : myResult;
+              await run(
+                `UPDATE knockout_matches
+                 SET dispute = TRUE,
+                     player1_result = NULLIF(?, 'halved'),
+                     player2_result = NULLIF(?, 'halved')
+                 WHERE id = ?`,
+                [p1Result, p2Result, match.id]
+              );
             }
           }
         }
       } catch (matchErr: any) {
-        req.log?.error({ matchErr }, "matchplay auto-resolve error (non-fatal)");
+        req.log?.error({ matchErr }, "matchplay verify error (non-fatal)");
       }
     }
 

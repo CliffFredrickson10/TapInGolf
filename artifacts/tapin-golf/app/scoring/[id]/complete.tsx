@@ -36,7 +36,12 @@ type Round = {
   holes: Record<number, SavedHole>;
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
+  partner_name?: string | null;
   match_id?: number | null;
+  match_result?: string | null;
+  match_status?: string | null;
+  match_dispute?: boolean;
+  match_winner_id?: number | null;
   playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
@@ -51,6 +56,15 @@ const FORMAT_LABELS: Record<string, string> = {
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
 function calcPts(gross: number, par: number, ha: number) { return Math.max(0,par+2-(gross-ha)); }
+
+function buildMatchLabel(holesUp: number, holesPlayed: number, holesRemaining: number, won: number, lost: number, halved: number) {
+  if (holesPlayed === 0) return { label: "No scores recorded", color: "#a3e4bc" };
+  if (holesUp > holesRemaining) return { label: `Won ${holesUp}&${holesRemaining}`, color: "#22c55e" };
+  if (-holesUp > holesRemaining) return { label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
+  if (holesUp === 0) return { label: "All Square", color: GOLD };
+  if (holesUp > 0)  return { label: `${holesUp} UP`,   color: "#22c55e" };
+  return                  { label: `${-holesUp} DOWN`, color: "#f87171" };
+}
 
 function calcMatchResult(
   sc: ScorecardHole[],
@@ -73,12 +87,41 @@ function calcMatchResult(
   const holesPlayed    = won + lost + halved;
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
-  if (holesPlayed === 0) return { holesUp: 0, holesPlayed: 0, holesRemaining: sc.length, won: 0, lost: 0, halved: 0, label: "No scores recorded", color: "#a3e4bc" };
-  if (holesPlayed > 0 && holesUp > holesRemaining) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `Won ${holesUp}&${holesRemaining}`, color: "#22c55e" };
-  if (holesPlayed > 0 && -holesUp > holesRemaining) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
-  if (holesUp === 0) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: "All Square", color: GOLD };
-  if (holesUp > 0) return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `${holesUp} UP`, color: "#22c55e" };
-  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, label: `${-holesUp} DOWN`, color: "#f87171" };
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
+}
+
+function calcBBMatchResult(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine    = myHoles[h.number];
+    if (!mine || mine.is_nr || mine.gross_score == null) continue;
+    const opp1 = playerHoles[`1_${h.number}`];
+    const opp2 = playerHoles[`2_${h.number}`];
+    if (!opp1 && !opp2) continue;
+    const partner  = playerHoles[`0_${h.number}`];
+    const ha       = getHA(h.stroke_index, myHcp);
+    const oppHA    = getHA(h.stroke_index, oppHcp);
+    const myNet    = mine.gross_score - ha;
+    const partNet  = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - ha : null;
+    const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
+    const opp1Net  = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
+    const opp2Net  = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
+    const oppBest  = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : (opp1Net ?? opp2Net);
+    if (oppBest == null) continue;
+    if      (teamBest < oppBest) won++;
+    else if (teamBest > oppBest) lost++;
+    else                         halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
 }
 
 function scoreLabel(d: number): string {
@@ -181,10 +224,19 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
-  const isMatchPlay = round.format === "singles_match_play";
-  const matchResult = (isMatchPlay && round.playerHoles)
+  const isMatchPlay  = round.format === "singles_match_play";
+  const isBetterball = round.format === "betterball_match_play";
+  const isAnyMatch   = isMatchPlay || isBetterball;
+  const matchResult  = isMatchPlay && round.playerHoles
     ? calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    : isBetterball && round.playerHoles
+    ? calcBBMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
     : null;
+
+  // Verification status
+  const matchConfirmed = round.match_status === "complete" && !round.match_dispute;
+  const matchDisputed  = !!round.match_dispute;
+  const matchPending   = isAnyMatch && round.match_id && !matchConfirmed && !matchDisputed;
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -228,12 +280,13 @@ export default function RoundCompleteScreen() {
         </View>
 
         {/* Matchplay result card */}
-        {isMatchPlay && matchResult && (
+        {isAnyMatch && matchResult && (
           <View style={[styles.matchCard, { backgroundColor: matchResult.color + "14", borderColor: matchResult.color + "55" }]}>
             <View style={{ flex: 1 }}>
               <Text style={[styles.matchCardLabel, { color: matchResult.color }]}>{matchResult.label}</Text>
               <Text style={[styles.matchCardOpp, { color: colors.mutedForeground }]}>
                 vs {round.opponent_name ?? "Opponent"}
+                {isBetterball && round.partner_name ? ` · Partner: ${round.partner_name}` : ""}
               </Text>
               <Text style={[styles.matchCardDetail, { color: colors.mutedForeground }]}>
                 {matchResult.won}W · {matchResult.lost}L · {matchResult.halved}H  ·  {matchResult.holesPlayed} holes scored
@@ -244,6 +297,42 @@ export default function RoundCompleteScreen() {
               size={36}
               color={matchResult.color}
             />
+          </View>
+        )}
+
+        {/* Match verification status */}
+        {isAnyMatch && round.match_id && !isActive && (
+          <View style={[styles.verifyCard, {
+            backgroundColor: matchDisputed ? "#fef2f2" : matchConfirmed ? "#f0faf4" : colors.card,
+            borderColor:     matchDisputed ? "#ef444455" : matchConfirmed ? "#16a34a55" : colors.border,
+          }]}>
+            <Ionicons
+              name={matchDisputed ? "warning" : matchConfirmed ? "checkmark-circle" : "time-outline"}
+              size={20}
+              color={matchDisputed ? "#ef4444" : matchConfirmed ? "#16a34a" : colors.mutedForeground}
+            />
+            <View style={{ flex: 1 }}>
+              <Text style={[styles.verifyTitle, {
+                color: matchDisputed ? "#ef4444" : matchConfirmed ? "#16a34a" : colors.foreground,
+              }]}>
+                {matchDisputed
+                  ? "Result Disputed"
+                  : matchConfirmed
+                  ? "Result Confirmed ✓"
+                  : round.match_result
+                  ? "Waiting for opponent to submit"
+                  : "Score not yet submitted"}
+              </Text>
+              <Text style={[styles.verifyDetail, { color: colors.mutedForeground }]}>
+                {matchDisputed
+                  ? "The club will adjudicate — check the tournament bracket."
+                  : matchConfirmed
+                  ? "Both players agreed on the result."
+                  : round.match_result
+                  ? "Your result is recorded. Pending your opponent completing their round."
+                  : "Finish your round to record the match result."}
+              </Text>
+            </View>
           </View>
         )}
 
@@ -416,6 +505,13 @@ const styles = StyleSheet.create({
   matchCardLabel: { fontSize: 24, fontFamily: "Inter_700Bold" },
   matchCardOpp: { fontSize: 13, fontFamily: "Inter_400Regular", marginTop: 3 },
   matchCardDetail: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 4 },
+  verifyCard: {
+    flexDirection: "row", alignItems: "flex-start", gap: 10,
+    marginHorizontal: 16, marginTop: 4, marginBottom: 4,
+    borderRadius: 14, borderWidth: 1, padding: 14,
+  },
+  verifyTitle: { fontSize: 13, fontFamily: "Inter_700Bold" },
+  verifyDetail: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 3, lineHeight: 16 },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 16, paddingVertical: 15 },
   footerBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },

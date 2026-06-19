@@ -150,7 +150,8 @@ export default function StartRoundScreen() {
 
   // Fetch opponent when a matchplay knockout tournament is linked
   useEffect(() => {
-    if (!linkedTournamentId || !token || format !== "singles_match_play") {
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+    if (!linkedTournamentId || !token || !isKnockoutMatch) {
       setMatchOpponent(null);
       return;
     }
@@ -321,18 +322,20 @@ export default function StartRoundScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Matchplay opponent preview */}
-                    {format === "singles_match_play" && (
+                    {/* Matchplay opponent preview — singles and betterball */}
+                    {(format === "singles_match_play" || format === "betterball_match_play") && (
                       <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
                         {matchOpponentLoading ? (
                           <ActivityIndicator size="small" color="#7c3aed" />
                         ) : matchOpponent ? (
                           <>
                             <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
-                              <Ionicons name="person" size={14} color="#fff" />
+                              <Ionicons name={format === "betterball_match_play" ? "people" : "person"} size={14} color="#fff" />
                             </View>
                             <View style={{ flex: 1 }}>
-                              <Text style={styles.opponentVsLabel}>YOUR OPPONENT</Text>
+                              <Text style={styles.opponentVsLabel}>
+                                {format === "betterball_match_play" ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
+                              </Text>
                               <Text style={[styles.opponentName, { color: colors.foreground }]}>
                                 {matchOpponent.opponentName}
                               </Text>

@@ -17,6 +17,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
+import { AppHeader } from "@/components/AppHeader";
 
 const DARK_BG  = "#0d1f14";
 const SURFACE  = "#162a1e";
@@ -35,6 +36,9 @@ type Round = {
   scorecard: ScorecardHole[];
   holes: Record<number, SavedHole>;
   playerHoles: Record<string, any>;
+  opponent_name: string | null;
+  partner_name: string | null;
+  match_id: number | null;
 };
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
@@ -46,6 +50,7 @@ export default function BetterballHoleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { user } = useAuth();
   const token = user?.token;
+  const myName = user?.name ?? "You";
   const insets = useSafeAreaInsets();
 
   const [round, setRound] = useState<Round | null>(null);
@@ -109,6 +114,7 @@ export default function BetterballHoleScreen() {
   const saveAndNext = async (isNr = false) => {
     setSaving(true);
     try {
+      const partnerName = round.partner_name ?? "Partner";
       await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, {
         method: "PUT",
         body: JSON.stringify({
@@ -116,8 +122,8 @@ export default function BetterballHoleScreen() {
           grossScore: isNr ? null : (bbPts != null ? (pts0 != null && (pts1 == null || pts0 >= (pts1??0)) ? g0 : g1) : null),
           isNr,
           players: [
-            { grossScore: isNr ? null : g0, isNr, name: "Player 1" },
-            { grossScore: isNr ? null : g1, isNr, name: "Player 2" },
+            { grossScore: isNr ? null : g0, isNr, name: myName },
+            { grossScore: isNr ? null : g1, isNr, name: partnerName },
           ],
         }),
       });
@@ -152,18 +158,18 @@ export default function BetterballHoleScreen() {
     } catch (err: any) { Alert.alert("Error", err.message || "Failed to complete"); }
   };
 
-  const PlayerCard = ({ g, setG, ha, pts, isWinner, idx }: { g: number|null; setG: (v: number|null)=>void; ha: number; pts: number|null; isWinner: boolean; idx: number }) => {
+  const PlayerCard = ({ g, setG, ha, pts, isWinner, idx, name }: { g: number|null; setG: (v: number|null)=>void; ha: number; pts: number|null; isWinner: boolean; idx: number; name: string }) => {
     const color = PLAYER_COLORS[idx];
-    const names = ["Player 1", "Player 2"];
+    const initials = name.split(" ").slice(0,2).map(w=>w[0]?.toUpperCase()??"").join("");
     return (
       <View style={[styles.playerCard, { borderColor: isWinner && pts!=null ? color+"60" : BORDER, backgroundColor: isWinner && pts!=null ? color+"12" : SURFACE }]}>
         <View style={styles.playerHeader}>
           <View style={styles.playerRow}>
             <View style={[styles.playerAvatar, { backgroundColor: color }]}>
-              <Text style={styles.playerInitials}>{names[idx][0]+names[idx].split(" ")[1][0]}</Text>
+              <Text style={styles.playerInitials}>{initials}</Text>
             </View>
             <View>
-              <Text style={styles.playerName}>{names[idx]}</Text>
+              <Text style={styles.playerName}>{name}</Text>
               <Text style={styles.playerMeta}>PH {idx===0?ph:Math.round(ph*0.9)} · {ha>0?`+${ha} stroke`:"no stroke"}</Text>
             </View>
           </View>
@@ -205,9 +211,12 @@ export default function BetterballHoleScreen() {
     );
   };
 
+  const partnerName = round.partner_name ?? "Partner";
+  const isKnockout  = !!round.match_id;
+
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
-      <View style={{ height: insets.top }} />
+      <AppHeader />
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
@@ -218,6 +227,22 @@ export default function BetterballHoleScreen() {
           <Ionicons name="list" size={18} color={GOLD} />
         </TouchableOpacity>
       </View>
+
+      {/* VS / opponent banner for knockout matches */}
+      {isKnockout && round.opponent_name && (
+        <View style={styles.vsBanner}>
+          <View style={styles.vsTeam}>
+            <View style={[styles.vsAvatar, { backgroundColor: PLAYER_COLORS[0] }]}><Text style={styles.vsAvatarText}>{myName[0]?.toUpperCase()}</Text></View>
+            <View style={[styles.vsAvatar, { backgroundColor: PLAYER_COLORS[1], marginLeft: -10 }]}><Text style={styles.vsAvatarText}>{partnerName[0]?.toUpperCase()}</Text></View>
+            <Text style={styles.vsTeamName} numberOfLines={1}>{myName} & {partnerName}</Text>
+          </View>
+          <Text style={styles.vsLabel}>VS</Text>
+          <View style={[styles.vsTeam, { justifyContent: "flex-end" }]}>
+            <Text style={[styles.vsTeamName, { textAlign: "right" }]} numberOfLines={1}>{round.opponent_name}</Text>
+            <View style={[styles.vsAvatar, { backgroundColor: "#ef4444" }]}><Text style={styles.vsAvatarText}>{round.opponent_name[0]?.toUpperCase()}</Text></View>
+          </View>
+        </View>
+      )}
 
       {/* Hole strip */}
       <ScrollView ref={stripRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.holeStrip}>
@@ -250,8 +275,8 @@ export default function BetterballHoleScreen() {
       </View>
 
       <ScrollView contentContainerStyle={{ paddingHorizontal: 12, gap: 10, paddingBottom: insets.bottom+100 }} showsVerticalScrollIndicator={false}>
-        <PlayerCard g={g0} setG={setG0} ha={ha0} pts={pts0} isWinner={bbWinner===0} idx={0} />
-        <PlayerCard g={g1} setG={setG1} ha={ha1} pts={pts1} isWinner={bbWinner===1} idx={1} />
+        <PlayerCard g={g0} setG={setG0} ha={ha0} pts={pts0} isWinner={bbWinner===0} idx={0} name={myName} />
+        <PlayerCard g={g1} setG={setG1} ha={ha1} pts={pts1} isWinner={bbWinner===1} idx={1} name={partnerName} />
 
         {bbPts != null && (
           <View style={[styles.bbSummary, { backgroundColor: SURFACE, borderColor: BORDER }]}>
@@ -280,6 +305,12 @@ export default function BetterballHoleScreen() {
 }
 
 const styles = StyleSheet.create({
+  vsBanner: { flexDirection:"row",alignItems:"center",justifyContent:"space-between",paddingHorizontal:16,paddingVertical:8,backgroundColor:SURFACE,borderBottomWidth:1,borderBottomColor:BORDER },
+  vsTeam: { flex:1,flexDirection:"row",alignItems:"center",gap:6 },
+  vsAvatar: { width:24,height:24,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:DARK_BG },
+  vsAvatarText: { fontSize:10,fontFamily:"Inter_700Bold",color:"#fff" },
+  vsTeamName: { flex:1,fontSize:12,fontFamily:"Inter_600SemiBold",color:"#fff" },
+  vsLabel: { fontSize:11,fontFamily:"Inter_700Bold",color:GOLD,paddingHorizontal:8 },
   topBar: { flexDirection:"row",alignItems:"center",paddingHorizontal:16,paddingVertical:8,gap:10 },
   backBtn: { width:36,height:36,borderRadius:10,backgroundColor:SURFACE,alignItems:"center",justifyContent:"center" },
   topBarClub: { flex:1,fontSize:13,fontFamily:"Inter_600SemiBold",color:"#a3e4bc",textAlign:"center" },

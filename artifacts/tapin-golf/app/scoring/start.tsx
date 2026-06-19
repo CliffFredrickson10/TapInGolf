@@ -184,9 +184,8 @@ export default function StartRoundScreen() {
       // Singles knockout → always matchplay scoring
       mappedFormat = "singles_match_play";
     } else if (t.knockout_type === "team") {
-      // Betterball knockout → derive from scoring format
-      const raw = t.knockout_scoring_format ?? "fourball";
-      mappedFormat = TOURNAMENT_FORMAT_MAP[raw] ?? "fourball_stableford";
+      // Team knockout is always betterball matchplay — triggers opponent/partner lookup
+      mappedFormat = "betterball_match_play";
     } else {
       // Regular stroke/stableford event
       const raw = t.format ?? "stableford";

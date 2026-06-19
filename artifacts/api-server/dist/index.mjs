@@ -76506,21 +76506,35 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
       return;
     }
     const tournamentId = parseInt(req.params.tournamentId);
+    const teamReg = await row(
+      "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+      [user.id, tournamentId]
+    );
+    const teamId = teamReg?.team_id ?? null;
     const m = await row(`
       SELECT km.id,
              km.status,
              kr.label  AS round_label,
-             CASE WHEN km.player1_id = ? THEN u2.name     ELSE u1.name     END AS opponent_name,
-             CASE WHEN km.player1_id = ? THEN u2.handicap ELSE u1.handicap END AS opponent_handicap
+             CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
+                  THEN u2.name     ELSE u1.name     END AS opponent_name,
+             CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
+                  THEN u2.handicap ELSE u1.handicap END AS opponent_handicap,
+             pu.name AS partner_name
       FROM knockout_matches km
       JOIN knockout_rounds  kr ON kr.id = km.round_id
       LEFT JOIN users u1 ON u1.id = km.player1_id
       LEFT JOIN users u2 ON u2.id = km.player2_id
-      WHERE km.event_id = ? AND (km.player1_id = ? OR km.player2_id = ?)
+      LEFT JOIN event_registrations ptnr_er
+             ON ptnr_er.team_id = ? AND ptnr_er.user_id != ? AND ptnr_er.event_id = ?
+      LEFT JOIN users pu ON pu.id = ptnr_er.user_id
+      WHERE km.event_id = ?
+        AND (km.player1_id = ? OR km.player2_id = ?
+             OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?)
+             OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player2_id AND er.team_id = ?))
         AND km.status NOT IN ('complete','bye')
       ORDER BY kr.round_number ASC
       LIMIT 1
-    `, [user.id, user.id, tournamentId, user.id, user.id]);
+    `, [user.id, teamId, user.id, teamId, teamId, user.id, tournamentId, tournamentId, user.id, user.id, teamId, teamId]);
     if (!m) {
       res.json({ match: null });
       return;
@@ -76531,7 +76545,8 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
         opponentName: m.opponent_name ?? "TBD",
         opponentHandicap: m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
         roundLabel: m.round_label ?? null,
-        status: m.status
+        status: m.status,
+        partnerName: m.partner_name ?? null
       }
     });
   } catch (err) {
@@ -76598,20 +76613,38 @@ router23.post("/scoring/rounds", async (req, res) => {
     let matchId = req.body.matchId ?? null;
     let opponentName = req.body.opponentName ?? null;
     let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
+    let partnerName = null;
     if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
+      const teamReg = await row(
+        "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+        [user.id, tournamentId]
+      );
+      const teamId = teamReg?.team_id ?? null;
+      if (teamId) {
+        const ptnr = await row(
+          "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+          [teamId, user.id, tournamentId]
+        );
+        partnerName = ptnr?.name ?? null;
+      }
       const m = await row(`
         SELECT km.id,
-          CASE WHEN km.player1_id = ? THEN u2.name  ELSE u1.name  END AS opp_name,
-          CASE WHEN km.player1_id = ? THEN u2.handicap ELSE u1.handicap END AS opp_hcp
+          CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
+               THEN u2.name  ELSE u1.name  END AS opp_name,
+          CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
+               THEN u2.handicap ELSE u1.handicap END AS opp_hcp
         FROM knockout_matches km
         JOIN knockout_rounds  kr ON kr.id = km.round_id
         LEFT JOIN users u1 ON u1.id = km.player1_id
         LEFT JOIN users u2 ON u2.id = km.player2_id
-        WHERE km.event_id = ? AND (km.player1_id = ? OR km.player2_id = ?)
+        WHERE km.event_id = ?
+          AND (km.player1_id = ? OR km.player2_id = ?
+               OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?)
+               OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player2_id AND er.team_id = ?))
           AND km.status NOT IN ('complete','bye')
         ORDER BY kr.round_number ASC
         LIMIT 1
-      `, [user.id, user.id, tournamentId, user.id, user.id]);
+      `, [user.id, teamId, user.id, teamId, tournamentId, user.id, user.id, teamId, teamId]);
       if (m) {
         matchId = m.id;
         opponentName = m.opp_name ?? null;
@@ -76625,8 +76658,8 @@ router23.post("/scoring/rounds", async (req, res) => {
     const [{ id }] = await query(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -76639,7 +76672,8 @@ router23.post("/scoring/rounds", async (req, res) => {
       tournamentId,
       matchId,
       opponentName,
-      opponentPlayingHcp
+      opponentPlayingHcp,
+      partnerName
     ]);
     res.json({ id });
   } catch (err) {
@@ -78465,6 +78499,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_name VARCHAR(100)");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_playing_hcp INT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_name VARCHAR(100)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

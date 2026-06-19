@@ -214,7 +214,7 @@ export default function StartRoundScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(isBetterball
+      router.replace(isBetterball && format !== "betterball_match_play"
         ? `/scoring/${data.id}/betterball`
         : `/scoring/${data.id}/hole`
       );

@@ -76542,15 +76542,17 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
       return;
     }
     let opp2Name = null;
-    if (teamId) {
-      const p1OnMyTeam = await row(
-        "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
-        [m.player1_id, teamId, tournamentId]
+    {
+      const onP1Side = user.id === m.player1_id || !!await row(
+        `SELECT 1 FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er2.user_id = ? AND er1.event_id = ? AND er1.team_id IS NOT NULL LIMIT 1`,
+        [user.id, m.player1_id, tournamentId]
       );
-      const oppRepId = p1OnMyTeam ? m.player2_id : m.player1_id;
+      const oppRepId = onP1Side ? m.player2_id : m.player1_id;
       if (oppRepId) {
         const oppTeam = await row(
-          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? AND team_id IS NOT NULL LIMIT 1",
           [oppRepId, tournamentId]
         );
         if (oppTeam?.team_id) {
@@ -76674,15 +76676,17 @@ router23.post("/scoring/rounds", async (req, res) => {
         matchId = m.id;
         opponentName = m.opp_name ?? null;
         opponentPlayingHcp = m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0;
-        if (teamId) {
-          const p1OnMyTeam = await row(
-            "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
-            [m.player1_id, teamId, tournamentId]
+        {
+          const onP1Side = user.id === m.player1_id || !!await row(
+            `SELECT 1 FROM event_registrations er1
+             JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.event_id = er1.event_id
+             WHERE er1.user_id = ? AND er2.user_id = ? AND er1.event_id = ? AND er1.team_id IS NOT NULL LIMIT 1`,
+            [user.id, m.player1_id, tournamentId]
           );
-          const oppRepId = p1OnMyTeam ? m.player2_id : m.player1_id;
+          const oppRepId = onP1Side ? m.player2_id : m.player1_id;
           if (oppRepId) {
             const oppTeam = await row(
-              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? AND team_id IS NOT NULL LIMIT 1",
               [oppRepId, tournamentId]
             );
             if (oppTeam?.team_id) {

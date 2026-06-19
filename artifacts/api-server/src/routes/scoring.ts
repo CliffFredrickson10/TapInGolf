@@ -119,17 +119,20 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
 
     if (!m) { res.json({ match: null }); return; }
 
-    // Find opponent's partner (betterball only — when teamId exists)
+    // Find opponent's partner — works for both singles and betterball (no teamId needed)
     let opp2Name: string | null = null;
-    if (teamId) {
-      const p1OnMyTeam = await row<any>(
-        "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
-        [m.player1_id, teamId, tournamentId]
-      );
-      const oppRepId: number = p1OnMyTeam ? m.player2_id : m.player1_id;
+    {
+      // Determine which side the user is on: directly player1, or in player1's team
+      const onP1Side = user.id === m.player1_id || !!(await row<any>(
+        `SELECT 1 FROM event_registrations er1
+         JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.event_id = er1.event_id
+         WHERE er1.user_id = ? AND er2.user_id = ? AND er1.event_id = ? AND er1.team_id IS NOT NULL LIMIT 1`,
+        [user.id, m.player1_id, tournamentId]
+      ));
+      const oppRepId: number = onP1Side ? m.player2_id : m.player1_id;
       if (oppRepId) {
         const oppTeam = await row<any>(
-          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? AND team_id IS NOT NULL LIMIT 1",
           [oppRepId, tournamentId]
         );
         if (oppTeam?.team_id) {
@@ -251,16 +254,18 @@ router.post("/scoring/rounds", async (req, res) => {
         opponentPlayingHcp = m.opp_hcp
           ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100))
           : 0;
-        // Find opponent's partner for betterball
-        if (teamId) {
-          const p1OnMyTeam = await row<any>(
-            "SELECT 1 FROM event_registrations WHERE user_id = ? AND team_id = ? AND event_id = ? LIMIT 1",
-            [m.player1_id, teamId, tournamentId]
-          );
-          const oppRepId: number = p1OnMyTeam ? m.player2_id : m.player1_id;
+        // Find opponent's partner (team-agnostic — works whether teamId is set or not)
+        {
+          const onP1Side = user.id === m.player1_id || !!(await row<any>(
+            `SELECT 1 FROM event_registrations er1
+             JOIN event_registrations er2 ON er2.team_id = er1.team_id AND er2.event_id = er1.event_id
+             WHERE er1.user_id = ? AND er2.user_id = ? AND er1.event_id = ? AND er1.team_id IS NOT NULL LIMIT 1`,
+            [user.id, m.player1_id, tournamentId]
+          ));
+          const oppRepId: number = onP1Side ? m.player2_id : m.player1_id;
           if (oppRepId) {
             const oppTeam = await row<any>(
-              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+              "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? AND team_id IS NOT NULL LIMIT 1",
               [oppRepId, tournamentId]
             );
             if (oppTeam?.team_id) {

@@ -1,5 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
+import * as Location from "expo-location";
 import { router, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
@@ -20,7 +21,7 @@ import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 import { AppHeader } from "@/components/AppHeader";
 
-type Club = { id: number; name: string; location: string; province: string };
+type Club = { id: number; name: string; location: string; province: string; distance_km?: number | null };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
 type MatchOpponent = { matchId: number; opponentName: string; opp2Name?: string | null; opponentHandicap: number | null; roundLabel: string | null };
 
@@ -107,6 +108,33 @@ export default function StartRoundScreen() {
     params.clubId ? { id: parseInt(params.clubId), name: params.clubName ?? "", location: "", province: "" } : null
   );
 
+  // Location + nearby clubs
+  const [userLat, setUserLat] = useState<number | null>(null);
+  const [userLng, setUserLng] = useState<number | null>(null);
+  const [nearbyClubs, setNearbyClubs] = useState<Club[]>([]);
+  const [nearbyLoading, setNearbyLoading] = useState(false);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") return;
+        setNearbyLoading(true);
+        const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+        const lat = pos.coords.latitude;
+        const lng = pos.coords.longitude;
+        setUserLat(lat);
+        setUserLng(lng);
+        const data = await apiFetch(`/clubs?lat=${lat}&lng=${lng}&limit=12`);
+        setNearbyClubs(data.clubs ?? []);
+      } catch {
+        // location denied or unavailable — nearby list stays empty
+      } finally {
+        setNearbyLoading(false);
+      }
+    })();
+  }, []);
+
   // Tournament
   const [tournaments, setTournaments] = useState<Tournament[]>([]);
   const [linkedTournamentId, setLinkedTournamentId] = useState<number | null>(null);
@@ -129,11 +157,12 @@ export default function StartRoundScreen() {
     if (q.length < 2) { setClubs([]); return; }
     setClubsLoading(true);
     try {
-      const data = await apiFetch(`/clubs?search=${encodeURIComponent(q)}&limit=10`);
+      const locParam = userLat != null && userLng != null ? `&lat=${userLat}&lng=${userLng}` : "";
+      const data = await apiFetch(`/clubs?q=${encodeURIComponent(q)}${locParam}&limit=12`);
       setClubs(data.clubs ?? []);
     } catch { setClubs([]); }
     finally { setClubsLoading(false); }
-  }, []);
+  }, [userLat, userLng]);
 
   useEffect(() => {
     const t = setTimeout(() => searchClubs(clubSearch), 300);
@@ -282,9 +311,17 @@ export default function StartRoundScreen() {
                     style={[styles.searchInput, { color: colors.foreground }]}
                     autoFocus
                   />
-                  {clubsLoading && <ActivityIndicator size="small" color={colors.primary} />}
+                  {(clubSearch.length < 2 ? nearbyLoading : clubsLoading) && (
+                    <ActivityIndicator size="small" color={colors.primary} />
+                  )}
                 </View>
-                {clubs.map(c => (
+                {clubSearch.length < 2 && nearbyClubs.length > 0 && (
+                  <View style={[styles.nearbyHeader, { borderBottomColor: colors.border }]}>
+                    <Ionicons name="location" size={13} color={colors.primary} />
+                    <Text style={[styles.nearbyLabel, { color: colors.primary }]}>Nearest clubs</Text>
+                  </View>
+                )}
+                {(clubSearch.length < 2 ? nearbyClubs : clubs).map(c => (
                   <TouchableOpacity
                     key={c.id}
                     onPress={() => { setSelectedClub(c); setClubSearch(""); setClubs([]); }}
@@ -294,9 +331,16 @@ export default function StartRoundScreen() {
                       <Text style={[styles.clubName, { color: colors.foreground }]}>{c.name}</Text>
                       <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>{c.location}, {c.province}</Text>
                     </View>
-                    <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                    {c.distance_km != null ? (
+                      <Text style={[styles.distanceBadge, { color: colors.primary }]}>{c.distance_km} km</Text>
+                    ) : (
+                      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                    )}
                   </TouchableOpacity>
                 ))}
+                {clubSearch.length >= 2 && clubs.length === 0 && !clubsLoading && (
+                  <Text style={[styles.noResults, { color: colors.mutedForeground }]}>No clubs found</Text>
+                )}
               </View>
             )}
           </Section>
@@ -624,6 +668,13 @@ const styles = StyleSheet.create({
   clubRow: {
     flexDirection: "row", alignItems: "center", paddingVertical: 12, borderBottomWidth: 1,
   },
+  nearbyHeader: {
+    flexDirection: "row", alignItems: "center", gap: 5,
+    paddingVertical: 6, borderBottomWidth: 1, marginBottom: 2,
+  },
+  nearbyLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold", letterSpacing: 0.3 },
+  distanceBadge: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginLeft: 8 },
+  noResults: { fontSize: 14, fontFamily: "Inter_400Regular", textAlign: "center", paddingVertical: 16 },
   linkedTournament: {
     flexDirection: "row", alignItems: "center", gap: 12,
     borderRadius: 12, borderWidth: 1.5, padding: 12,

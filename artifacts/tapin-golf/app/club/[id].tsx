@@ -685,84 +685,43 @@ export default function ClubDetailScreen() {
                 key={slot.id}
                 slot={slot}
                 selected={selectedSlot?.id === slot.id}
-                onPress={() => { Haptics.selectionAsync(); setSelectedSlot(slot); }}
+                onPress={() => {
+                  if (!user) { router.push("/(auth)/login"); return; }
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                  setSelectedSlot(slot);
+                  router.push({
+                    pathname: "/booking/new",
+                    params: {
+                      club_id: club.id,
+                      club_name: club.name,
+                      tee_time_id: slot.id,
+                      time: slot.time,
+                      date: formatDate(DAYS[selectedDay]),
+                      price: slot.price,
+                      price_9: slot.price_9 != null ? String(slot.price_9) : "",
+                      promo_price: slot.promotional_price ?? "",
+                      available: slot.available_slots,
+                      total_slots: slot.total_slots,
+                      cart_available:      club.cart_available  ? "1" : "0",
+                      cart_compulsory:     club.cart_compulsory ? "1" : "0",
+                      cart_price:          club.cart_price ? String(club.cart_price) : "",
+                      range_balls_enabled: (club as any).range_balls_enabled ? "1" : "0",
+                      range_balls_price:   (club as any).range_balls_price ? String((club as any).range_balls_price) : "",
+                      club_hire_enabled:   (club as any).club_hire_enabled ? "1" : "0",
+                      club_hire_price:     (club as any).club_hire_price ? String((club as any).club_hire_price) : "",
+                      stitch_enabled:      (club as any).stitch_enabled  === false ? "0" : "1",
+                      prepaid_enabled:     (club as any).prepaid_enabled === false ? "0" : "1",
+                      voucher_enabled:     (club as any).voucher_enabled  === false ? "0" : "1",
+                      pay_at_club_enabled: (club as any).pay_at_club_enabled ? "1" : "0",
+                      event_id:            slot.event_id ? String(slot.event_id) : "",
+                      event_name:          slot.event_name ?? "",
+                      event_holes:         eventHolesParam ?? "",
+                    },
+                  });
+                }}
               />
             ))}
           </ScrollView>
-        )}
-
-        {/* Who's joining panel — shown when slot has existing players */}
-        {selectedSlot && (selectedSlot.existing_players?.length ?? 0) > 0 && (
-          <View style={[styles.joiningCard, { backgroundColor: colors.card, borderColor: colors.accent }]}>
-            <View style={styles.joiningHeader}>
-              <Ionicons name="people" size={16} color={colors.accent} />
-              <Text style={[styles.joiningTitle, { color: colors.foreground }]}>
-                Already booked this slot
-              </Text>
-              <View style={[styles.spotsChip, { backgroundColor: colors.accent + "22" }]}>
-                <Text style={[styles.spotsChipText, { color: colors.accent }]}>
-                  {selectedSlot.total_slots - selectedSlot.available_slots}/{selectedSlot.total_slots} spots taken
-                </Text>
-              </View>
-            </View>
-            {selectedSlot.existing_players!.map((p, i) => (
-              <View key={i} style={[styles.joiningRow, i > 0 && { borderTopWidth: 1, borderTopColor: colors.border }]}>
-                <View style={[styles.joiningAvatar, { backgroundColor: colors.accent }]}>
-                  <Text style={styles.joiningAvatarText}>{p.name[0].toUpperCase()}</Text>
-                </View>
-                <Text style={[styles.joiningName, { color: colors.foreground }]}>{p.name}</Text>
-                <View style={[styles.joiningBadge, { backgroundColor: colors.muted }]}>
-                  <Text style={[styles.joiningBadgeText, { color: colors.mutedForeground }]}>
-                    {p.players} {p.players === 1 ? "player" : "players"}
-                  </Text>
-                </View>
-              </View>
-            ))}
-          </View>
-        )}
-
-        {/* Book button */}
-        {selectedSlot && (
-          <TouchableOpacity
-            style={[styles.bookBtn, { backgroundColor: colors.primary }]}
-            onPress={() => {
-              if (!user) { router.push("/(auth)/login"); return; }
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-              router.push({
-                pathname: "/booking/new",
-                params: {
-                  club_id: club.id,
-                  club_name: club.name,
-                  tee_time_id: selectedSlot.id,
-                  time: selectedSlot.time,
-                  date: formatDate(DAYS[selectedDay]),
-                  price: selectedSlot.price,
-                  price_9: selectedSlot.price_9 != null ? String(selectedSlot.price_9) : "",
-                  promo_price: selectedSlot.promotional_price ?? "",
-                  available: selectedSlot.available_slots,
-                  total_slots: selectedSlot.total_slots,
-                  cart_available:      club.cart_available  ? "1" : "0",
-                  cart_compulsory:     club.cart_compulsory ? "1" : "0",
-                  cart_price:          club.cart_price ? String(club.cart_price) : "",
-                  range_balls_enabled: (club as any).range_balls_enabled ? "1" : "0",
-                  range_balls_price:   (club as any).range_balls_price ? String((club as any).range_balls_price) : "",
-                  club_hire_enabled:   (club as any).club_hire_enabled ? "1" : "0",
-                  club_hire_price:     (club as any).club_hire_price ? String((club as any).club_hire_price) : "",
-                  stitch_enabled:      (club as any).stitch_enabled  === false ? "0" : "1",
-                  prepaid_enabled:     (club as any).prepaid_enabled === false ? "0" : "1",
-                  voucher_enabled:     (club as any).voucher_enabled  === false ? "0" : "1",
-                  pay_at_club_enabled: (club as any).pay_at_club_enabled ? "1" : "0",
-                  event_id:            selectedSlot.event_id ? String(selectedSlot.event_id) : "",
-                  event_name:          selectedSlot.event_name ?? "",
-                  event_holes:         eventHolesParam ?? "",
-                },
-              });
-            }}
-            activeOpacity={0.85}
-          >
-            <Text style={styles.bookBtnText}>Book {selectedSlot.time}</Text>
-            <Ionicons name="arrow-forward-circle" size={28} color="#fff" />
-          </TouchableOpacity>
         )}
 
         {/* Ads */}

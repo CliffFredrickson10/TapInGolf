@@ -50,6 +50,7 @@ type OpenGame = {
 };
 
 type ClubGroup = {
+  key: string;
   club_id: number;
   club_name: string;
   club_location: string;
@@ -348,7 +349,7 @@ export default function JoinGameScreen() {
   const [loading,       setLoading]       = useState(true);
   const [refreshing,    setRefreshing]    = useState(false);
   const [error,         setError]         = useState<string | null>(null);
-  const [expandedClubId, setExpandedClubId] = useState<number | null>(null);
+  const [expandedClubId, setExpandedClubId] = useState<string | null>(null);
   // Tracks whether we've auto-expanded the first club for the current result set,
   // so it fires once per fetch and never fights a manual collapse.
   const autoExpandedRef = useRef(false);
@@ -492,15 +493,17 @@ export default function JoinGameScreen() {
   const sortByDistance = hasLocation && province === "All";
 
   const clubGroups = useMemo<ClubGroup[]>(() => {
-    const map = new Map<number, ClubGroup>();
+    const map = new Map<string, ClubGroup>();
     for (const g of games) {
-      let grp = map.get(g.club_id);
+      const groupKey = `${g.club_id}-${g.game_type}`;
+      let grp = map.get(groupKey);
       if (!grp) {
         let distKm: number | null = null;
         if (hasLocation && g.latitude !== null && g.longitude !== null) {
           distKm = haversineKm(userLat!, userLon!, g.latitude, g.longitude);
         }
         grp = {
+          key:            groupKey,
           club_id:        g.club_id,
           club_name:      g.club_name,
           club_location:  g.club_location,
@@ -513,7 +516,7 @@ export default function JoinGameScreen() {
           maxPrice:       -Infinity,
           totalAvailable: 0,
         };
-        map.set(g.club_id, grp);
+        map.set(groupKey, grp);
       }
       grp.games.push(g);
       const p = g.promotional_price ?? g.price;
@@ -539,7 +542,7 @@ export default function JoinGameScreen() {
   // so the user lands directly on a joinable tee time without tapping.
   useEffect(() => {
     if (!loading && !autoExpandedRef.current && clubGroups.length > 0) {
-      setExpandedClubId(clubGroups[0].club_id);
+      setExpandedClubId(clubGroups[0].key);
       autoExpandedRef.current = true;
     }
   }, [loading, clubGroups]);
@@ -590,7 +593,7 @@ export default function JoinGameScreen() {
 
       <FlatList
         data={showList ? clubGroups : []}
-        keyExtractor={(item) => item.club_id.toString()}
+        keyExtractor={(item) => item.key}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.primary} />
         }
@@ -808,10 +811,10 @@ export default function JoinGameScreen() {
           <View style={styles.cardWrap}>
             <ClubGameCard
               group={group}
-              expanded={expandedClubId === group.club_id}
+              expanded={expandedClubId === group.key}
               onToggle={() => {
                 Haptics.selectionAsync();
-                setExpandedClubId(expandedClubId === group.club_id ? null : group.club_id);
+                setExpandedClubId(expandedClubId === group.key ? null : group.key);
               }}
               onJoinGame={onJoinGame}
               colors={colors}

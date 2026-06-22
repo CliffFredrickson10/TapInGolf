@@ -217,8 +217,8 @@ export default function HoleEntryScreen() {
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
       opp1QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
-    }, 50);
-  }, [holeIdx]);
+    }, 80);
+  }, [holeIdx, round]);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -544,9 +544,9 @@ export default function HoleEntryScreen() {
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
-          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#0e2218" }]}>
+          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#163020" }]}>
             {isBetterball && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
                 <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
                 <Text style={[styles.sectionLabel, { color: GREEN }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>

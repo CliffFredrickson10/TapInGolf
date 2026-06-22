@@ -707,6 +707,25 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
 
 // ─── Abandon / delete round ───────────────────────────────────────────────────
 
+router.post("/scoring/rounds/:id/abandon", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    const roundId = parseInt(req.params.id);
+    const result = await run(
+      "UPDATE scoring_rounds SET status = 'abandoned' WHERE id = ? AND user_id = ? AND status = 'active'",
+      [roundId, user.id]
+    );
+    if ((result as any).affectedRows === 0) {
+      res.status(404).json({ message: "Round not found or already finished" }); return;
+    }
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    res.status(500).json({ message: "Failed to abandon round" });
+  }
+});
+
 router.delete("/scoring/rounds/:id", async (req, res) => {
   try {
     const user = await getUser(req);

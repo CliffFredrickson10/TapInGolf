@@ -491,6 +491,26 @@ export default function HoleEntryScreen() {
     router.replace(`/scoring/${id}/complete`);
   };
 
+  const onAbandon = () => {
+    Alert.alert(
+      "Abandon Round?",
+      "The round will be marked as abandoned with no result recorded. This cannot be undone.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Abandon Round",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiFetch(`/scoring/rounds/${id}/abandon`, token, { method: "POST" });
+            } catch {}
+            router.replace("/(tabs)/scoring");
+          },
+        },
+      ]
+    );
+  };
+
   const isLastHole   = holeIdx === scorecard.length - 1;
   const isMatchPlay  = round.format === "singles_match_play";
   const isBetterball = round.format === "betterball_match_play";
@@ -521,6 +541,13 @@ export default function HoleEntryScreen() {
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
         <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
+        <TouchableOpacity
+          onPress={onAbandon}
+          style={[styles.topActionBtn, { borderColor: "rgba(255,255,255,0.2)" }]}
+        >
+          <Ionicons name="close-circle-outline" size={13} color="rgba(255,255,255,0.55)" />
+          <Text style={[styles.topActionText, { color: "rgba(255,255,255,0.55)" }]}>Abandon</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           onPress={confirmAndFinish}
           style={[styles.topActionBtn, { borderColor: "#f87171" + "55" }]}

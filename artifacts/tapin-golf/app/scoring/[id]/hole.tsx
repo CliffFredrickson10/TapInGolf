@@ -230,6 +230,18 @@ function BbPlayerInput({
             </TouchableOpacity>
           );
         })}
+        {/* Pickup — max Stableford score (par + 2 + ha = 0 pts) */}
+        {(() => {
+          const pickupVal = par + 2 + playerHA;
+          const active = g === pickupVal;
+          return (
+            <TouchableOpacity key="pickup" onPress={() => { Haptics.selectionAsync(); sg(pickupVal); }}
+              style={[styles.quickBtn, { backgroundColor: active ? MUTED_FG + "33" : SURFACE, borderColor: active ? MUTED_FG : BORDER, width: 80 }]}>
+              <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{pickupVal}</Text>
+              <Text style={[styles.quickBtnLabel, { color: active ? "#fff" : MUTED_FG }]}>Pickup</Text>
+            </TouchableOpacity>
+          );
+        })()}
       </ScrollView>
     </View>
   );
@@ -614,6 +626,21 @@ export default function HoleEntryScreen() {
                   </TouchableOpacity>
                 );
               })}
+              {/* Pickup — sets gross to max Stableford score (par + 2 + ha = 0 pts) */}
+              {(() => {
+                const pickupVal = hole.par + 2 + ha;
+                const active = gross === pickupVal;
+                return (
+                  <TouchableOpacity
+                    key="pickup"
+                    onPress={() => { Haptics.selectionAsync(); setGross(pickupVal); }}
+                    style={[styles.quickBtn, { backgroundColor: active ? MUTED_FG + "33" : SURFACE, borderColor: active ? MUTED_FG : BORDER, width: 80 }]}
+                  >
+                    <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{pickupVal}</Text>
+                    <Text style={[styles.quickBtnLabel, { color: active ? "#fff" : MUTED_FG }]}>Pickup</Text>
+                  </TouchableOpacity>
+                );
+              })()}
             </ScrollView>
           </View>
 
@@ -739,13 +766,6 @@ export default function HoleEntryScreen() {
 
       {/* Action buttons — fixed at bottom */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
-        <TouchableOpacity
-          onPress={() => saveAndNext(true)}
-          disabled={saving}
-          style={[styles.nrBtn, { borderColor: BORDER }]}
-        >
-          <Text style={[styles.nrBtnText, { color: MUTED_FG }]}>NR / Pickup</Text>
-        </TouchableOpacity>
         {isAnyMatch && matchSt?.decided ? (
           <TouchableOpacity
             onPress={confirmAndFinish}
@@ -902,12 +922,8 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12,
   },
-  nrBtn: {
-    flex: 1, paddingVertical: 15, borderRadius: 16, borderWidth: 1.5, alignItems: "center",
-  },
-  nrBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   nextBtn: {
-    flex: 3, paddingVertical: 15, borderRadius: 16, alignItems: "center",
+    flex: 1, paddingVertical: 15, borderRadius: 16, alignItems: "center",
   },
   nextBtnText: { fontSize: 16, fontFamily: "Inter_700Bold", color: "#fff" },
   matchBanner: {

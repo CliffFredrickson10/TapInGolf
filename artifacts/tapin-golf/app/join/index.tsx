@@ -493,7 +493,7 @@ export default function JoinGameScreen() {
   const clubGroups = useMemo<ClubGroup[]>(() => {
     const map = new Map<string, ClubGroup>();
     for (const g of games) {
-      const groupKey = `${g.club_id}-${g.game_type}`;
+      const groupKey = String(g.club_id);
       let grp = map.get(groupKey);
       if (!grp) {
         let distKm: number | null = null;

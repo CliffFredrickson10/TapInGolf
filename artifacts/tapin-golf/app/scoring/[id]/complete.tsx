@@ -481,117 +481,118 @@ export default function RoundCompleteScreen() {
               const resColor = (r: "W"|"L"|"H"|null) =>
                 r === "W" ? "#16a34a" : r === "L" ? "#dc2626" : r === "H" ? GOLD : colors.mutedForeground;
 
+              // Sub-col helper: Score | Result side-by-side under one player name
+              const playerPair = (
+                gross: number | null, pts: number | null, nr: boolean, isBest: boolean,
+                isLastInTeam: boolean
+              ) => {
+                const ptColor = pts == null ? colors.mutedForeground
+                  : pts >= 3 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 1 ? "#ea580c" : "#dc2626";
+                const grossTxt = nr ? "NR" : gross != null ? String(gross) : "—";
+                const ptsTxt   = pts != null ? String(pts) : "—";
+                const bg       = isBest ? "#16a34a18" : "transparent";
+                const rightBorder = isLastInTeam
+                  ? { borderRightWidth: 1.5, borderRightColor: bdr }
+                  : { borderRightWidth: HW, borderRightColor: bdr };
+                return (
+                  <View style={[{ flex: 2, flexDirection: "row", backgroundColor: bg }, rightBorder]}>
+                    {/* Score sub-col */}
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                      borderRightWidth: HW, borderRightColor: bdr }}>
+                      <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                        color: isBest ? "#16a34a" : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
+                        {grossTxt}
+                      </Text>
+                    </View>
+                    {/* Result sub-col */}
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                        color: isBest ? "#16a34a" : ptColor }}>
+                        {ptsTxt}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              };
+
               return (
                 <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
-                  {/* ── Header: hole/par labels + player names ── */}
-                  <View style={{ flexDirection: "row", backgroundColor: pBg }}>
-                    {/* H + Par fixed cols */}
-                    <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 8, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+
+                  {/* ── Header row 1: H | Par | player names (each spanning Score+Result) ── */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 7 }}>
+                    <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>H</Text>
                     </View>
-                    <View style={{ width: 26, alignItems: "center", justifyContent: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
+                    <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
                     </View>
-                    {/* Your team */}
-                    <View style={{ flex: 1, flexDirection: "row" }}>
-                      {[meLabel, prtLabel].map((lbl, i) => (
-                        <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
-                          borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)",
-                          backgroundColor: "rgba(255,255,255,0.06)" }}>
-                          <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{lbl}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    {/* Divider */}
-                    <View style={{ width: 1.5, backgroundColor: "rgba(255,255,255,0.4)" }} />
-                    {/* Opponents */}
-                    <View style={{ flex: 1, flexDirection: "row" }}>
-                      {[opp1Label, opp2Label].map((lbl, i) => (
-                        <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
-                          borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)",
-                          backgroundColor: "rgba(255,255,255,0.03)" }}>
-                          <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{lbl}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    {/* Res */}
+                    {/* Each player name spans flex:2 (Score + Result cols beneath) */}
+                    {[
+                      { lbl: meLabel,   color: "#a3e4bc", rightBorder: HW },
+                      { lbl: prtLabel,  color: "#a3e4bc", rightBorder: 1.5 },
+                      { lbl: opp1Label, color: "#fca5a5", rightBorder: HW },
+                      { lbl: opp2Label, color: "#fca5a5", rightBorder: HW },
+                    ].map(({ lbl, color, rightBorder }, i) => (
+                      <View key={i} style={{ flex: 2, alignItems: "center", justifyContent: "center",
+                        borderRightWidth: rightBorder, borderRightColor: "rgba(255,255,255,0.3)" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color }}>{lbl}</Text>
+                      </View>
+                    ))}
                     <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Res</Text>
                     </View>
                   </View>
 
-                  {/* ── Sub-header: Score / Result labels ── */}
-                  <View style={{ flexDirection: "row", backgroundColor: pBg + "dd", borderBottomWidth: 1.5, borderBottomColor: bdr }}>
+                  {/* ── Header row 2: Score / Result sub-labels ── */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg + "cc",
+                    borderBottomWidth: 1.5, borderBottomColor: bdr }}>
                     <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
-                    <View style={{ width: 26, borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.25)" }} />
-                    <View style={{ flex: 2, flexDirection: "column" }}>
-                      {["SCORE", "RESULT"].map((lbl, ri) => (
-                        <View key={ri} style={{ flex: 1, alignItems: "flex-start", justifyContent: "center",
-                          paddingLeft: 6, paddingVertical: 3,
-                          borderBottomWidth: ri === 0 ? HW : 0, borderBottomColor: "rgba(255,255,255,0.15)" }}>
-                          <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.5)", letterSpacing: 0.5 }}>{lbl}</Text>
-                        </View>
-                      ))}
-                    </View>
-                    <View style={{ width: 1.5 }} />
-                    <View style={{ flex: 2, flexDirection: "column" }}>
-                      {["SCORE", "RESULT"].map((lbl, ri) => (
-                        <View key={ri} style={{ flex: 1, alignItems: "flex-start", justifyContent: "center",
-                          paddingLeft: 6, paddingVertical: 3,
-                          borderBottomWidth: ri === 0 ? HW : 0, borderBottomColor: "rgba(255,255,255,0.15)" }}>
-                          <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.5)", letterSpacing: 0.5 }}>{lbl}</Text>
-                        </View>
-                      ))}
-                    </View>
+                    <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    {[
+                      { rb: HW },   // Me Score
+                      { rb: 1.5 },  // Me Result (end of Me pair)
+                      { rb: HW },   // Ptnr Score
+                      { rb: 1.5 },  // Ptnr Result (team divider)
+                      { rb: HW },   // Opp1 Score
+                      { rb: HW },   // Opp1 Result
+                      { rb: HW },   // Opp2 Score
+                      { rb: HW },   // Opp2 Result
+                    ].map(({ rb }, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
+                        borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
+                          color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
+                          {i % 2 === 0 ? "Score" : "Res"}
+                        </Text>
+                      </View>
+                    ))}
                     <View style={{ width: 32 }} />
                   </View>
 
-                  {/* ── Hole rows ── */}
+                  {/* ── Hole rows: one single row per hole ── */}
                   {holeData.map(({ h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
                                    myBest, prtBest, o1Best, o2Best, res,
                                    mySaved, prtSaved, opp1Saved, opp2Saved }, idx) => {
-                    const rowBg = idx % 2 === 0 ? colors.card : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f8faf9" : colors.background);
+                    const rowBg = idx % 2 === 0 ? colors.card
+                      : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
                     const rc = resColor(res);
                     return (
                       <View key={h.number} style={{ flexDirection: "row", backgroundColor: rowBg,
                         borderBottomWidth: HW, borderBottomColor: bdr }}>
-                        {/* H — spans both sub-rows */}
                         <View style={{ width: 28, alignItems: "center", justifyContent: "center",
                           borderRightWidth: HW, borderRightColor: bdr }}>
                           <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.number}</Text>
                         </View>
-                        {/* Par — spans both sub-rows */}
                         <View style={{ width: 26, alignItems: "center", justifyContent: "center",
-                          borderRightWidth: 1.5, borderRightColor: bdr }}>
+                          borderRightWidth: HW, borderRightColor: bdr }}>
                           <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
                         </View>
-                        {/* Your team: 2 sub-rows stacked */}
-                        <View style={{ flex: 1, flexDirection: "column" }}>
-                          {/* Score row */}
-                          <View style={{ flexDirection: "row", borderBottomWidth: HW, borderBottomColor: bdr }}>
-                            {scoreCell(mySaved?.is_nr ? "NR" : myG, myBest, !!mySaved?.is_nr)}
-                            {scoreCell(prtSaved?.is_nr ? "NR" : prtG, prtBest, !!prtSaved?.is_nr)}
-                          </View>
-                          {/* Result row */}
-                          <View style={{ flexDirection: "row" }}>
-                            {resultCell(myP, myBest)}
-                            {resultCell(prtP, prtBest)}
-                          </View>
-                        </View>
-                        {/* Team divider */}
-                        <View style={{ width: 1.5, backgroundColor: bdr }} />
-                        {/* Opponents: 2 sub-rows stacked */}
-                        <View style={{ flex: 1, flexDirection: "column" }}>
-                          <View style={{ flexDirection: "row", borderBottomWidth: HW, borderBottomColor: bdr }}>
-                            {scoreCell(opp1Saved?.is_nr ? "NR" : opp1G, o1Best, !!opp1Saved?.is_nr)}
-                            {scoreCell(opp2Saved?.is_nr ? "NR" : opp2G, o2Best, !!opp2Saved?.is_nr)}
-                          </View>
-                          <View style={{ flexDirection: "row" }}>
-                            {resultCell(o1P, o1Best)}
-                            {resultCell(o2P, o2Best)}
-                          </View>
-                        </View>
-                        {/* Result */}
+                        {playerPair(myG,   myP,   !!mySaved?.is_nr,   myBest,   false)}
+                        {playerPair(prtG,  prtP,  !!prtSaved?.is_nr,  prtBest,  true)}
+                        {playerPair(opp1G, o1P,   !!opp1Saved?.is_nr, o1Best,   false)}
+                        {playerPair(opp2G, o2P,   !!opp2Saved?.is_nr, o2Best,   false)}
                         <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                           <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
                         </View>

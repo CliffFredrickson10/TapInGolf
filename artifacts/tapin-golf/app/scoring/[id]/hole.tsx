@@ -324,6 +324,44 @@ export default function HoleEntryScreen() {
 
   useEffect(() => { loadRound(); }, [loadRound]);
 
+  // ── Offline queue — hooks MUST live before any early return ──────────────
+  const QUEUE_KEY = `scoring_queue_${id}`;
+
+  const readQueue = useCallback(async (): Promise<Array<{ holeNumber: number; body: Record<string, unknown> }>> => {
+    try { return JSON.parse((await AsyncStorage.getItem(QUEUE_KEY)) ?? "[]"); } catch { return []; }
+  }, [QUEUE_KEY]);
+
+  const queueScore = useCallback(async (holeNumber: number, body: Record<string, unknown>) => {
+    const queue = await readQueue();
+    const filtered = queue.filter(q => q.holeNumber !== holeNumber);
+    filtered.push({ holeNumber, body });
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+    setPendingCount(filtered.length);
+  }, [QUEUE_KEY, readQueue]);
+
+  const flushQueue = useCallback(async () => {
+    if (!token) return;
+    const queue = await readQueue();
+    if (queue.length === 0) return;
+    const remaining: typeof queue = [];
+    for (const item of queue) {
+      try {
+        await apiFetch(`/scoring/rounds/${id}/holes/${item.holeNumber}`, token, {
+          method: "PUT", body: JSON.stringify(item.body),
+        });
+      } catch {
+        remaining.push(item);
+      }
+    }
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+    setPendingCount(remaining.length);
+  }, [QUEUE_KEY, id, token, readQueue]);
+
+  useEffect(() => {
+    readQueue().then(q => setPendingCount(q.length));
+    flushQueue();
+  }, [flushQueue, readQueue]);
+
   if (loading || !round) {
     const { width: sw, height: sh } = Dimensions.get("window");
     return (
@@ -366,48 +404,9 @@ export default function HoleEntryScreen() {
     mainScrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
-  // ── Offline queue helpers ────────────────────────────────────────────────
-  const QUEUE_KEY = `scoring_queue_${id}`;
-
   const isNetworkError = (err: any) =>
     err instanceof TypeError ||
     /network request failed|failed to fetch|networkerror|no internet/i.test(err?.message ?? "");
-
-  const readQueue = useCallback(async (): Promise<Array<{ holeNumber: number; body: Record<string, unknown> }>> => {
-    try { return JSON.parse((await AsyncStorage.getItem(QUEUE_KEY)) ?? "[]"); } catch { return []; }
-  }, [QUEUE_KEY]);
-
-  const queueScore = useCallback(async (holeNumber: number, body: Record<string, unknown>) => {
-    const queue = await readQueue();
-    const filtered = queue.filter(q => q.holeNumber !== holeNumber); // replace any existing entry for this hole
-    filtered.push({ holeNumber, body });
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
-    setPendingCount(filtered.length);
-  }, [QUEUE_KEY, readQueue]);
-
-  const flushQueue = useCallback(async () => {
-    if (!token) return;
-    const queue = await readQueue();
-    if (queue.length === 0) return;
-    const remaining: typeof queue = [];
-    for (const item of queue) {
-      try {
-        await apiFetch(`/scoring/rounds/${id}/holes/${item.holeNumber}`, token, {
-          method: "PUT", body: JSON.stringify(item.body),
-        });
-      } catch {
-        remaining.push(item); // keep if still failing
-      }
-    }
-    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
-    setPendingCount(remaining.length);
-  }, [QUEUE_KEY, id, token, readQueue]);
-
-  // Load pending count on mount + try to flush
-  useEffect(() => {
-    readQueue().then(q => setPendingCount(q.length));
-    flushQueue();
-  }, [flushQueue, readQueue]);
 
   // ── Save current hole and advance ────────────────────────────────────────
   const saveAndNext = async (isNr = false) => {

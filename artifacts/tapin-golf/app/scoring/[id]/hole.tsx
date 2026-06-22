@@ -192,6 +192,9 @@ export default function HoleEntryScreen() {
   const [opp2Gross, setOpp2Gross]       = useState<number | null>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
+  const partnerQuickRef = useRef<ScrollView>(null);
+  const opp1QuickRef = useRef<ScrollView>(null);
+  const opp2QuickRef = useRef<ScrollView>(null);
 
   // Centre the Par button in the quick-tap row whenever the hole changes.
   // stepperSection has paddingHorizontal:20, so the ScrollView viewport is
@@ -206,7 +209,15 @@ export default function HoleEntryScreen() {
     const viewportWidth = screenWidth - SECTION_PAD * 2;
     const parCenter = ROW_PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
     const scrollX = Math.max(0, parCenter - viewportWidth / 2);
-    setTimeout(() => quickRowRef.current?.scrollTo({ x: scrollX, animated: false }), 50);
+    // BbPlayerInput boxes: group box marginHorizontal:12 × 2 + borderWidth:1 × 2 = 26px narrower
+    const bbViewportWidth = screenWidth - 26;
+    const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
+    setTimeout(() => {
+      quickRowRef.current?.scrollTo({ x: scrollX, animated: false });
+      partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+      opp1QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+      opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+    }, 50);
   }, [holeIdx]);
 
   const loadRound = useCallback(async () => {
@@ -371,14 +382,15 @@ export default function HoleEntryScreen() {
 
   // Inline compact player stepper used for partner + opp2 in betterball
   const BbPlayerInput = ({
-    label, color, bgColor, gross: g, setGross: sg, ha: playerHA, isBest, flat,
+    label, color, bgColor, gross: g, setGross: sg, ha: playerHA, isBest, flat, quickRef,
   }: {
     label: string; color: string; bgColor: string;
     gross: number | null; setGross: (v: number | null) => void;
     ha: number; isBest?: boolean; flat?: boolean;
+    quickRef?: React.RefObject<ScrollView>;
   }) => (
     <View style={[styles.oppStepperSection, { backgroundColor: bgColor, paddingVertical: 8 }, flat ? { marginHorizontal: 0, borderRadius: 0 } : { marginHorizontal: 12 }]}>
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
         <View style={[styles.sectionDot, { backgroundColor: color }]} />
         <Text style={[styles.sectionLabel, { color }]}>{label.toUpperCase()}</Text>
       </View>
@@ -406,17 +418,17 @@ export default function HoleEntryScreen() {
           <Text style={[styles.stepBtnText, { color, fontSize: 24 }]}>+</Text>
         </TouchableOpacity>
       </View>
-      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
-        {[-1, 0, 1, 2, 3].map(offset => {
+      <ScrollView ref={quickRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
+        {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
           const val = hole.par + offset;
           const active = g === val;
           const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-          const lbl = (["Birdie", "Par", "Bogey", "Double", "+3"] as string[])[offset + 1];
+          const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
           return (
             <TouchableOpacity key={offset} onPress={() => { Haptics.selectionAsync(); sg(val); }}
               style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}>
               <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-              <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{lbl}</Text>
+              <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
             </TouchableOpacity>
           );
         })}
@@ -528,16 +540,17 @@ export default function HoleEntryScreen() {
             <Text style={[styles.sectionLabel, { color: GREEN }]}>
               {isBetterball ? "YOUR TEAM" : "YOUR SCORE"}
             </Text>
-            {isBetterball && (
-              <Text style={[styles.sectionLabel, { color: MUTED_FG, marginLeft: 4, letterSpacing: 0.5 }]}>
-                · {user?.name ?? "You"}
-              </Text>
-            )}
           </View>
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
           <View style={styles.stepperSection}>
+            {isBetterball && (
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 0 }}>
+                <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
+                <Text style={[styles.sectionLabel, { color: GREEN }]}>{(user?.name ?? "You").toUpperCase()}</Text>
+              </View>
+            )}
             <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
               {gross != null && !isBetterball && (
                 <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
@@ -604,9 +617,10 @@ export default function HoleEntryScreen() {
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 8 }} />
               <BbPlayerInput flat
                 label={round.partner_name ?? "Partner"}
-                color="#a855f7" bgColor="#1a0d2e"
+                color="#c8a84b" bgColor="#17130a"
                 gross={partnerGross} setGross={setPartnerGross}
                 ha={partnerHA} isBest={bbTeamWinner === 1}
+                quickRef={partnerQuickRef}
               />
             </>
           )}
@@ -627,8 +641,8 @@ export default function HoleEntryScreen() {
               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
             </View>
             <View style={[styles.scoringSectionHeader, { paddingTop: 2, paddingBottom: 2 }]}>
-              <View style={[styles.sectionDot, { backgroundColor: "#a78bfa" }]} />
-              <Text style={[styles.sectionLabel, { color: "#a78bfa" }]}>
+              <View style={[styles.sectionDot, { backgroundColor: "#ef4444" }]} />
+              <Text style={[styles.sectionLabel, { color: "#ef4444" }]}>
                 {isBetterball ? "OPPONENTS" : (round.opponent_name ?? "OPPONENT").toUpperCase()}
               </Text>
             </View>
@@ -638,16 +652,18 @@ export default function HoleEntryScreen() {
               <View style={styles.oppGroupBox}>
                 <BbPlayerInput flat
                   label={round.opponent_name ?? "Opp 1"}
-                  color="#ef4444" bgColor="#1a0e2e"
+                  color="#ef4444" bgColor="#180606"
                   gross={oppGross} setGross={setOppGross}
                   ha={oppHA} isBest={bbOppWinner === 0}
+                  quickRef={opp1QuickRef}
                 />
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
                 <BbPlayerInput flat
                   label={round.opponent2_name ?? "Opp 2"}
-                  color="#fb923c" bgColor="#1a1005"
+                  color="#60a5fa" bgColor="#060f18"
                   gross={opp2Gross} setGross={setOpp2Gross}
                   ha={opp2HA} isBest={bbOppWinner === 1}
+                  quickRef={opp2QuickRef}
                 />
               </View>
             ) : (
@@ -872,7 +888,7 @@ const styles = StyleSheet.create({
   },
   oppGroupBox: {
     borderWidth: 1,
-    borderColor: "#a78bfa40",
+    borderColor: "#ef444440",
     borderRadius: 16,
     marginHorizontal: 12,
     overflow: "hidden",

@@ -456,6 +456,8 @@ export default function ClubDetailScreen() {
           </TouchableOpacity>
         </View>
 
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+
         {/* Features */}
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 8 }}>
           {[...(club.cart_available ? ["Golf carts"] : []), `${club.holes ?? 18} holes`, ...(club.facilities ?? [])].map((f) => (
@@ -464,6 +466,8 @@ export default function ClubDetailScreen() {
             </View>
           ))}
         </ScrollView>
+
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* Info dropdowns — About / Scorecard / Local Rules */}
         <View style={{ gap: 6 }}>
@@ -562,7 +566,9 @@ export default function ClubDetailScreen() {
 
         {/* Photo Gallery */}
         {photos.length > 0 && (
-          <View>
+          <>
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+            <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Photos</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10 }}>
               {photos.map((photo) => (
@@ -586,14 +592,15 @@ export default function ClubDetailScreen() {
                 </TouchableOpacity>
               ))}
             </ScrollView>
-          </View>
+            </View>
+          </>
         )}
-
-
 
         {/* Upcoming Events */}
         {events.length > 0 && (
-          <View>
+          <>
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+            <View>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Upcoming Events</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 10, paddingBottom: 4 }}>
               {events.map((ev) => {
@@ -637,8 +644,11 @@ export default function ClubDetailScreen() {
                 );
               })}
             </ScrollView>
-          </View>
+            </View>
+          </>
         )}
+
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* Day selector */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Select Date</Text>
@@ -664,6 +674,8 @@ export default function ClubDetailScreen() {
             </TouchableOpacity>
           ))}
         </ScrollView>
+
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* Tee times */}
         <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Available Tee Times</Text>
@@ -726,13 +738,18 @@ export default function ClubDetailScreen() {
 
         {/* Ads */}
         {ads.length > 0 && (
-          <View style={{ marginTop: 12, gap: 10 }}>
+          <>
+            <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
+            <View style={{ gap: 10 }}>
             <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Club Advertisements</Text>
             {ads.map((ad) => (
               <AdBanner key={ad.id} ad={ad} />
             ))}
-          </View>
+            </View>
+          </>
         )}
+
+        <View style={[styles.sectionDivider, { backgroundColor: colors.border }]} />
 
         {/* Reviews section */}
         <View style={styles.reviewsHeader}>
@@ -942,6 +959,7 @@ const styles = StyleSheet.create({
   priceValue: { fontSize: 22, fontFamily: "Inter_700Bold" },
   priceNote: { fontSize: 13, fontFamily: "Inter_400Regular" },
   sectionTitle: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  sectionDivider: { height: StyleSheet.hairlineWidth, marginHorizontal: -20 },
   descriptionCard: { borderRadius: 14, borderWidth: 1, padding: 16, gap: 8 },
   descriptionText: { fontSize: 14, fontFamily: "Inter_400Regular", lineHeight: 22 },
   dayBtn: { borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 10, alignItems: "center", minWidth: 70 },

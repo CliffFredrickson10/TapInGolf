@@ -160,12 +160,6 @@ export function MenuDrawer({
           onPress: () => navigate("/help"),
         },
         {
-          icon: "star-outline",
-          label: "Rate TapIn Golf",
-          sub: "Love the app? Leave us a review",
-          onPress: () => {},
-        },
-        {
           icon: "logo-facebook",
           label: "Facebook",
           sub: "facebook.com/tapingolf",

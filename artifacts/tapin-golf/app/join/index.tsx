@@ -247,7 +247,7 @@ function ClubGameCard({
     ]}>
       {/* Tap header to expand/collapse */}
       <TouchableOpacity style={styles.cardHeader} onPress={onToggle} activeOpacity={0.82}>
-        <View style={{ flex: 1 }}>
+        <View style={styles.cardHeaderLeft}>
           <View style={styles.cardTitleRow}>
             <Text style={[styles.cardClub, { color: colors.foreground }]} numberOfLines={1}>
               {group.club_name}
@@ -924,13 +924,15 @@ const styles = StyleSheet.create({
   cardHeader: {
     flexDirection:    "row",
     alignItems:       "center",
-    padding:          14,
+    paddingHorizontal: 14,
+    paddingVertical:  16,
     gap:              10,
   },
+  cardHeaderLeft: { flex: 1, gap: 7 },
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
-  cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 4 },
+  cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   compTypeRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -938,8 +940,7 @@ const styles = StyleSheet.create({
     alignSelf: "flex-start",
     borderRadius: 20,
     paddingHorizontal: 9,
-    paddingVertical: 4,
-    marginTop: 6,
+    paddingVertical: 5,
   },
   compTypeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
   gameTypeBadge: {

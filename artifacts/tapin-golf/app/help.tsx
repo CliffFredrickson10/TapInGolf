@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useColors } from "@/hooks/useColors";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 const SUBJECTS = [
   "Booking issue",
@@ -28,21 +29,21 @@ const SUBJECTS = [
 
 export default function HelpScreen() {
   const colors = useColors();
-  const insets = useSafeAreaInsets();
+  const { bottom } = useSafeAreaInsets();
   const { user } = useAuth();
 
-  const [name,    setName]    = useState(user?.name  ?? "");
-  const [email,   setEmail]   = useState(user?.email ?? "");
-  const [subject, setSubject] = useState(SUBJECTS[0]);
-  const [message, setMessage] = useState("");
+  const [name,         setName]         = useState(user?.name  ?? "");
+  const [email,        setEmail]        = useState(user?.email ?? "");
+  const [subject,      setSubject]      = useState(SUBJECTS[0]);
+  const [message,      setMessage]      = useState("");
   const [showSubjects, setShowSubjects] = useState(false);
-  const [sending, setSending] = useState(false);
-  const [sent,    setSent]    = useState(false);
-  const [error,   setError]   = useState("");
+  const [sending,      setSending]      = useState(false);
+  const [sent,         setSent]         = useState(false);
+  const [error,        setError]        = useState("");
 
   async function handleSend() {
     setError("");
-    if (!email.trim()) { setError("Please enter your email address."); return; }
+    if (!email.trim())   { setError("Please enter your email address."); return; }
     if (!message.trim()) { setError("Please describe your issue."); return; }
 
     setSending(true);
@@ -62,13 +63,15 @@ export default function HelpScreen() {
   const s = styles(colors);
 
   return (
-    <View style={[s.root, { paddingTop: insets.top }]}>
-      {/* Header */}
-      <View style={s.header}>
+    <View style={s.root}>
+      <AppHeader />
+
+      {/* Sub-header: back button + page title */}
+      <View style={s.subHeader}>
         <TouchableOpacity style={s.backBtn} onPress={() => router.back()}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>
-        <Text style={s.headerTitle}>Contact Us</Text>
+        <Text style={s.subHeaderTitle}>Contact Us</Text>
         <View style={{ width: 38 }} />
       </View>
 
@@ -78,7 +81,7 @@ export default function HelpScreen() {
         keyboardVerticalOffset={0}
       >
         <ScrollView
-          contentContainerStyle={[s.scroll, { paddingBottom: insets.bottom + 32 }]}
+          contentContainerStyle={[s.scroll, { paddingBottom: bottom + 32 }]}
           keyboardShouldPersistTaps="handled"
         >
           {sent ? (
@@ -197,21 +200,21 @@ export default function HelpScreen() {
 const styles = (c: ReturnType<typeof useColors>) =>
   StyleSheet.create({
     root: { flex: 1, backgroundColor: c.background },
-    header: {
+    subHeader: {
       backgroundColor: c.primary,
       flexDirection: "row",
       alignItems: "center",
       justifyContent: "space-between",
       paddingHorizontal: 16,
-      paddingTop: 12,
-      paddingBottom: 16,
+      paddingTop: 8,
+      paddingBottom: 14,
     },
     backBtn: {
       width: 38, height: 38, borderRadius: 19,
       backgroundColor: "rgba(255,255,255,0.15)",
       alignItems: "center", justifyContent: "center",
     },
-    headerTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
+    subHeaderTitle: { color: "#fff", fontSize: 17, fontFamily: "Inter_700Bold" },
     scroll: { padding: 20, gap: 4 },
     intro: {
       fontSize: 14,

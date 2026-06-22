@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(255,255,255,0.15)",
     borderTopLeftRadius: 12, borderTopRightRadius: 12,
     borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
-    paddingVertical: 16,
+    paddingVertical: 16, paddingHorizontal: 20,
     marginHorizontal: -20, marginBottom: -20, marginTop: 8,
   },
   continueBtnText: {

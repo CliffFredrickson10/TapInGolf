@@ -64063,7 +64063,10 @@ router4.get("/bookings/open", async (req, res) => {
        c.cart_price,
        CASE WHEN pts.event_id IS NOT NULL THEN 'tournament' ELSE 'open' END AS game_type,
        COALESCE(ge.shotgun_start, 0)                                        AS is_shotgun,
+       COALESCE(ge.shotgun_double_tee, 0)                                   AS is_double_tee,
        ge.name                                                               AS event_name,
+       ge.format                                                             AS event_format,
+       ge.format_custom                                                      AS event_format_custom,
        (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players
@@ -64117,7 +64120,10 @@ router4.get("/bookings/open", async (req, res) => {
       existing_players: existingPlayers,
       game_type: r.game_type ?? "open",
       is_shotgun: !!parseInt(r.is_shotgun ?? "0"),
-      event_name: r.event_name ?? null
+      is_double_tee: !!parseInt(r.is_double_tee ?? "0"),
+      event_name: r.event_name ?? null,
+      event_format: r.event_format ?? null,
+      event_format_custom: r.event_format_custom ?? null
     };
   });
   res.json({ games });

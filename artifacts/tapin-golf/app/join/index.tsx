@@ -43,7 +43,10 @@ type OpenGame = {
   existing_players: { name: string; players: number }[];
   game_type: "open" | "tournament";
   is_shotgun: boolean;
+  is_double_tee: boolean;
   event_name: string | null;
+  event_format: string | null;
+  event_format_custom: string | null;
 };
 
 type ClubGroup = {
@@ -199,10 +202,36 @@ function ClubGameCard({
   const hasTournament = group.games.some((g) => g.game_type === "tournament");
   const hasOpen       = group.games.some((g) => g.game_type === "open");
   const hasShotgun    = group.games.some((g) => g.is_shotgun);
+  const hasDoubleTee  = group.games.some((g) => g.is_double_tee);
   const isMixed       = hasTournament && hasOpen;
-  const eventName     = group.games.find((g) => g.event_name)?.event_name ?? null;
+  const eventGame     = group.games.find((g) => g.game_type === "tournament");
+  const eventName     = eventGame?.event_name ?? null;
 
-  const gameTypeLabel = isMixed ? "Mixed" : hasTournament ? "Tournament" : "Open Game";
+  // Build a human-readable comp type label for tournament slots
+  const FORMAT_LABELS: Record<string, string> = {
+    stroke_play: "Stroke Play", gross_stroke_play: "Stroke Play (Gross)",
+    net_stroke_play: "Stroke Play (Net)", stableford: "Stableford",
+    individual_stableford: "Stableford", modified_stableford: "Modified Stableford",
+    match_play: "Match Play", betterball: "Betterball", fourball: "Fourball",
+    scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",
+    fourball_gross_betterball: "Four-Ball Betterball",
+    fourball_net_betterball: "Four-Ball Betterball (Net)",
+    betterball_match_play: "Betterball Match Play",
+    fourball_stableford: "Betterball Stableford",
+    shamble: "Shamble", best_ball_aggregate: "Best Ball Aggregate",
+    high_low: "High/Low", daytona: "Daytona",
+    betterball_bonus_bogey: "Betterball Bonus Bogey",
+  };
+  const rawFormat   = eventGame?.event_format ?? null;
+  const formatLabel = rawFormat === "other"
+    ? (eventGame?.event_format_custom ?? "Tournament")
+    : (rawFormat ? (FORMAT_LABELS[rawFormat] ?? rawFormat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())) : null);
+  const startLabel  = hasDoubleTee ? "Double Tee Shotgun" : hasShotgun ? "Shotgun Start" : null;
+  const compLabel   = startLabel && formatLabel
+    ? `${startLabel} · ${formatLabel}`
+    : startLabel ?? formatLabel ?? (hasTournament ? "Tournament" : null);
+
+  const gameTypeLabel = isMixed ? "Mixed" : compLabel ?? "Open Game";
   const gameTypeColor = hasTournament ? "#7c3aed" : colors.primary;
   const gameTypeBg    = hasTournament ? "#7c3aed18" : colors.primary + "18";
   const gameTypeIcon  = hasTournament ? "trophy-outline" : "golf-outline";

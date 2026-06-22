@@ -231,7 +231,7 @@ function ClubGameCard({
     ? `${startLabel} · ${formatLabel}`
     : startLabel ?? formatLabel ?? (hasTournament ? "Tournament" : null);
 
-  const gameTypeLabel = isMixed ? "Mixed" : compLabel ?? "Open Game";
+  const gameTypeLabel = isMixed ? "Mixed" : hasTournament ? "Tournament" : "Open Game";
   const gameTypeColor = hasTournament ? "#7c3aed" : colors.primary;
   const gameTypeBg    = hasTournament ? "#7c3aed18" : colors.primary + "18";
   const gameTypeIcon  = hasTournament ? "trophy-outline" : "golf-outline";
@@ -258,9 +258,17 @@ function ClubGameCard({
             </View>
           </View>
           {hasTournament && eventName && (
-            <Text style={[styles.eventNameText, { color: colors.mutedForeground }]} numberOfLines={1}>
+            <Text style={[styles.eventNameText, { color: colors.foreground }]} numberOfLines={1}>
               {eventName}
             </Text>
+          )}
+          {hasTournament && compLabel && (
+            <View style={styles.compTypeRow}>
+              <Ionicons name="flag-outline" size={11} color={gameTypeColor} />
+              <Text style={[styles.compTypeText, { color: gameTypeColor }]} numberOfLines={1}>
+                {compLabel}
+              </Text>
+            </View>
           )}
           <Text style={[styles.cardLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
             <Ionicons name="location-outline" size={11} color={colors.mutedForeground} />
@@ -922,7 +930,9 @@ const styles = StyleSheet.create({
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
   cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  eventNameText: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 1 },
+  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 1 },
+  compTypeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
+  compTypeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   gameTypeBadge: {
     flexDirection: "row",
     alignItems: "center",

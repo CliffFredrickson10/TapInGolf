@@ -64061,11 +64061,15 @@ router4.get("/bookings/open", async (req, res) => {
        c.cart_available,
        c.cart_compulsory,
        c.cart_price,
+       CASE WHEN pts.event_id IS NOT NULL THEN 'tournament' ELSE 'open' END AS game_type,
+       COALESCE(ge.shotgun_start, 0)                                        AS is_shotgun,
+       ge.name                                                               AS event_name,
        (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE ${where.join(" AND ")}
      ORDER BY pts.date ASC, pts.tee_time ASC
      LIMIT 100`,
@@ -64110,7 +64114,10 @@ router4.get("/bookings/open", async (req, res) => {
       cart_available: !!r.cart_available,
       cart_compulsory: !!r.cart_compulsory,
       cart_price: r.cart_price != null ? parseFloat(r.cart_price) : 0,
-      existing_players: existingPlayers
+      existing_players: existingPlayers,
+      game_type: r.game_type ?? "open",
+      is_shotgun: !!parseInt(r.is_shotgun ?? "0"),
+      event_name: r.event_name ?? null
     };
   });
   res.json({ games });

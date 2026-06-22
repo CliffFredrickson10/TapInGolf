@@ -41,6 +41,9 @@ type OpenGame = {
   cart_compulsory: boolean;
   cart_price: number;
   existing_players: { name: string; players: number }[];
+  game_type: "open" | "tournament";
+  is_shotgun: boolean;
+  event_name: string | null;
 };
 
 type ClubGroup = {
@@ -116,6 +119,8 @@ function SlotRow({
 }) {
   const displayPrice = game.promotional_price ?? game.price;
   const spotsLeft = game.available;
+  const isTournament = game.game_type === "tournament";
+  const isShotgun = game.is_shotgun;
 
   return (
     <View style={[styles.slotRow, { borderTopColor: colors.border }]}>
@@ -135,6 +140,12 @@ function SlotRow({
           <Text style={[styles.slotPlayers, { color: colors.mutedForeground }]} numberOfLines={1}>
             {game.existing_players.map((p) => p.name).join(", ")}
           </Text>
+        )}
+        {isTournament && isShotgun && (
+          <View style={[styles.drawBadge, { backgroundColor: "#c8a84b22" }]}>
+            <Ionicons name="shuffle-outline" size={12} color="#c8a84b" />
+            <Text style={[styles.drawBadgeText, { color: "#c8a84b" }]}>Draw pending — hole assigned after entry</Text>
+          </View>
         )}
       </View>
       <View style={styles.slotRight}>
@@ -184,6 +195,18 @@ function ClubGameCard({
   const timeLast  = group.games[group.games.length - 1].time;
   const timeLabel = group.games.length === 1 ? timeFirst : `${timeFirst} – ${timeLast}`;
 
+  // Derive game type info from the slots in this group
+  const hasTournament = group.games.some((g) => g.game_type === "tournament");
+  const hasOpen       = group.games.some((g) => g.game_type === "open");
+  const hasShotgun    = group.games.some((g) => g.is_shotgun);
+  const isMixed       = hasTournament && hasOpen;
+  const eventName     = group.games.find((g) => g.event_name)?.event_name ?? null;
+
+  const gameTypeLabel = isMixed ? "Mixed" : hasTournament ? "Tournament" : "Open Game";
+  const gameTypeColor = hasTournament ? "#7c3aed" : colors.primary;
+  const gameTypeBg    = hasTournament ? "#7c3aed18" : colors.primary + "18";
+  const gameTypeIcon  = hasTournament ? "trophy-outline" : "golf-outline";
+
   return (
     <View style={[
       styles.card,
@@ -196,9 +219,20 @@ function ClubGameCard({
       {/* Tap header to expand/collapse */}
       <TouchableOpacity style={styles.cardHeader} onPress={onToggle} activeOpacity={0.82}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.cardClub, { color: colors.foreground }]} numberOfLines={1}>
-            {group.club_name}
-          </Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={[styles.cardClub, { color: colors.foreground }]} numberOfLines={1}>
+              {group.club_name}
+            </Text>
+            <View style={[styles.gameTypeBadge, { backgroundColor: gameTypeBg }]}>
+              <Ionicons name={gameTypeIcon as any} size={11} color={gameTypeColor} />
+              <Text style={[styles.gameTypeText, { color: gameTypeColor }]}>{gameTypeLabel}</Text>
+            </View>
+          </View>
+          {hasTournament && eventName && (
+            <Text style={[styles.eventNameText, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {eventName}
+            </Text>
+          )}
           <Text style={[styles.cardLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
             <Ionicons name="location-outline" size={11} color={colors.mutedForeground} />
             {"  "}{group.club_location}
@@ -220,6 +254,15 @@ function ClubGameCard({
           />
         </View>
       </TouchableOpacity>
+      {/* Shotgun draw notice — shown at card level so it's visible before expanding */}
+      {hasTournament && hasShotgun && !expanded && (
+        <View style={[styles.shotgunBanner, { backgroundColor: "#c8a84b15", borderTopColor: colors.border }]}>
+          <Ionicons name="shuffle-outline" size={13} color="#c8a84b" />
+          <Text style={[styles.shotgunBannerText, { color: "#c8a84b" }]}>
+            Shotgun start — starting hole assigned after draw
+          </Text>
+        </View>
+      )}
 
       {/* Summary row — always visible */}
       <View style={[styles.cardSummary, { borderTopColor: colors.border }]}>
@@ -847,8 +890,28 @@ const styles = StyleSheet.create({
     padding:          14,
     gap:              10,
   },
-  cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold" },
+  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
+  cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
   cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
+  eventNameText: { fontSize: 12, fontFamily: "Inter_600SemiBold", marginTop: 1 },
+  gameTypeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 20,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+  },
+  gameTypeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  shotgunBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  shotgunBannerText: { fontSize: 12, fontFamily: "Inter_500Medium" },
   cardRight: {
     flexDirection: "row",
     alignItems:    "center",
@@ -898,6 +961,15 @@ const styles = StyleSheet.create({
   slotTimeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   slotTime:    { fontSize: 15, fontFamily: "Inter_700Bold" },
   slotPlayers: { fontSize: 11, fontFamily: "Inter_400Regular" },
+  drawBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    borderRadius: 6,
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+  },
+  drawBadgeText: { fontSize: 11, fontFamily: "Inter_600SemiBold" },
   slotPriceRow: { flexDirection: "row", alignItems: "baseline", gap: 2 },
   slotPriceOld: { fontSize: 11, fontFamily: "Inter_400Regular", textDecorationLine: "line-through" },
   slotPrice:    { fontSize: 16, fontFamily: "Inter_700Bold" },

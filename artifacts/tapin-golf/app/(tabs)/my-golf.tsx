@@ -494,16 +494,16 @@ const styles = StyleSheet.create({
   pageTitle:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
 
   choiceWrap: {
-    flex: 1, padding: 20, gap: 14,
+    padding: 20, gap: 14,
   },
   choicePrompt: {
     fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 4,
   },
   choiceCard: {
-    flex: 1,
+    height: 100,
     flexDirection: "row", alignItems: "center", gap: 16,
     borderRadius: 16, borderWidth: 1.5,
-    paddingHorizontal: 18, paddingVertical: 20,
+    paddingHorizontal: 18,
   },
   choiceIcon: {
     width: 56, height: 56, borderRadius: 16,

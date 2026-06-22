@@ -12,7 +12,6 @@ import {
   Text,
   TextInput,
   TouchableOpacity,
-  useWindowDimensions,
   View,
 } from "react-native";
 import GolfBallLoader from "@/components/GolfBallLoader";
@@ -154,9 +153,7 @@ function ScorecardSection({
   onToggle: () => void;
   colors: ReturnType<typeof useColors>;
 }) {
-  const { width: screenW } = useWindowDimensions();
-  const LABEL_W = 56; const SUB_W = 36; const ROW_H = 28;
-  const HOLE_W = Math.floor((screenW - 158) / 9);
+  const LABEL_W = 60; const CELL_W = 36; const SUB_W = 48; const ROW_H = 32;
   const enabledTees = scorecard.tee_colors.filter(t => t.enabled);
   const front = scorecard.holes.slice(0, 9);
   const back  = scorecard.holes.slice(9, 18);
@@ -175,50 +172,52 @@ function ScorecardSection({
 
   const renderTable = (holes: HoleRow[], subtotalLabel: string) => (
     <View style={{ marginTop: 6 }}>
-      <View style={[scStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {rows.map((row, ri) => {
-          const isHole   = row.key === "number";
-          const isTee    = enabledTees.some(t => t.key === row.key);
-          const subtotal = (isTee || row.key === "par") ? sumHoles(holes, row.key) : null;
-          return (
-            <View
-              key={row.key}
-              style={[
-                scStyles.row,
-                { height: ROW_H, borderBottomWidth: ri < rows.length - 1 ? 1 : 0, borderBottomColor: colors.border + "60" },
-                isHole && { backgroundColor: colors.primary + "18" },
-              ]}
-            >
-              <View style={[scStyles.labelCell, { width: LABEL_W, borderRightColor: colors.border }]}>
-                {isTee ? (
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
-                    <View style={[scStyles.teeDot, { backgroundColor: row.color }]} />
-                    <Text style={[scStyles.label, { color: colors.foreground }]}>{row.label}</Text>
-                  </View>
-                ) : (
-                  <Text style={[scStyles.label, row.bold && scStyles.bold, { color: row.color }]}>{row.label}</Text>
-                )}
-              </View>
-              {holes.map((h, hi) => (
-                <Text
-                  key={h.number}
-                  style={[
-                    scStyles.cell,
-                    { width: HOLE_W, color: isHole ? colors.primary : isTee ? colors.foreground : colors.mutedForeground },
-                    (isHole || row.bold) && scStyles.bold,
-                    hi % 2 === 1 && { backgroundColor: colors.primary + "06" },
-                  ]}
-                >
-                  {h[row.key] != null ? String(h[row.key]) : "—"}
+      <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+        <View style={[scStyles.wrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {rows.map((row, ri) => {
+            const isHole   = row.key === "number";
+            const isTee    = enabledTees.some(t => t.key === row.key);
+            const subtotal = (isTee || row.key === "par") ? sumHoles(holes, row.key) : null;
+            return (
+              <View
+                key={row.key}
+                style={[
+                  scStyles.row,
+                  { height: ROW_H, borderBottomWidth: ri < rows.length - 1 ? 1 : 0, borderBottomColor: colors.border + "60" },
+                  isHole && { backgroundColor: colors.primary + "18" },
+                ]}
+              >
+                <View style={[scStyles.labelCell, { width: LABEL_W, borderRightColor: colors.border }]}>
+                  {isTee ? (
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                      <View style={[scStyles.teeDot, { backgroundColor: row.color }]} />
+                      <Text style={[scStyles.label, { color: colors.foreground }]}>{row.label}</Text>
+                    </View>
+                  ) : (
+                    <Text style={[scStyles.label, row.bold && scStyles.bold, { color: row.color }]}>{row.label}</Text>
+                  )}
+                </View>
+                {holes.map((h, hi) => (
+                  <Text
+                    key={h.number}
+                    style={[
+                      scStyles.cell,
+                      { width: CELL_W, color: isHole ? colors.primary : isTee ? colors.foreground : colors.mutedForeground },
+                      (isHole || row.bold) && scStyles.bold,
+                      hi % 2 === 1 && { backgroundColor: colors.primary + "06" },
+                    ]}
+                  >
+                    {h[row.key] != null ? String(h[row.key]) : "—"}
+                  </Text>
+                ))}
+                <Text style={[scStyles.cell, scStyles.bold, { width: SUB_W, color: colors.primary, borderLeftWidth: 1, borderLeftColor: colors.border }]}>
+                  {isHole ? subtotalLabel : subtotal != null ? String(subtotal) : "—"}
                 </Text>
-              ))}
-              <Text style={[scStyles.cell, scStyles.bold, { width: SUB_W, color: colors.primary, borderLeftWidth: 1, borderLeftColor: colors.border }]}>
-                {isHole ? subtotalLabel : subtotal != null ? String(subtotal) : "—"}
-              </Text>
-            </View>
-          );
-        })}
-      </View>
+              </View>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 

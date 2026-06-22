@@ -193,9 +193,9 @@ export default function StartRoundScreen() {
         const m = d.match ?? null;
         setMatchOpponent(m);
         if (m) {
-          if (m.opponentHandicap != null) setOppHcp(String(m.opponentHandicap));
-          if (m.partnerHandicap  != null) setPartnerHcp(String(m.partnerHandicap));
-          if (m.opp2Handicap     != null) setOpp2Hcp(String(m.opp2Handicap));
+          if (m.opponentHandicap != null) setOppHcp(String(Math.round(m.opponentHandicap)));
+          if (m.partnerHandicap  != null) setPartnerHcp(String(Math.round(m.partnerHandicap)));
+          if (m.opp2Handicap     != null) setOpp2Hcp(String(Math.round(m.opp2Handicap)));
         }
       })
       .catch(() => setMatchOpponent(null))
@@ -239,10 +239,34 @@ export default function StartRoundScreen() {
 
   const onStartRound = async () => {
     if (!selectedClub) { Alert.alert("Select a club", "Please choose a golf club first."); return; }
-    const ch = parseInt(courseHcp) || 0;
+
+    // Validate all visible handicap fields are whole numbers
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+    const ch = parseInt(courseHcp, 10);
+    if (isNaN(ch) || String(ch) !== courseHcp.trim()) {
+      Alert.alert("Handicap Required", "Please enter your Course Handicap as a whole number before starting."); return;
+    }
+    if (isKnockoutMatch && matchOpponent) {
+      const opp = parseInt(oppHcp, 10);
+      if (isNaN(opp) || String(opp) !== oppHcp.trim()) {
+        Alert.alert("Handicap Required", `Please confirm ${matchOpponent.opponentName ?? "Opponent"}'s Course Handicap as a whole number.`); return;
+      }
+      if (format === "betterball_match_play" && matchOpponent.partnerName) {
+        const prt = parseInt(partnerHcp, 10);
+        if (isNaN(prt) || String(prt) !== partnerHcp.trim()) {
+          Alert.alert("Handicap Required", `Please confirm ${matchOpponent.partnerName}'s Course Handicap as a whole number.`); return;
+        }
+      }
+      if (format === "betterball_match_play" && matchOpponent.opp2Name) {
+        const o2 = parseInt(opp2Hcp, 10);
+        if (isNaN(o2) || String(o2) !== opp2Hcp.trim()) {
+          Alert.alert("Handicap Required", `Please confirm ${matchOpponent.opp2Name ?? "Opponent 2"}'s Course Handicap as a whole number.`); return;
+        }
+      }
+    }
+
     setSubmitting(true);
     try {
-      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
       const data = await apiFetch("/scoring/rounds", token, {
         method: "POST",
         body: JSON.stringify({
@@ -261,10 +285,7 @@ export default function StartRoundScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(isBetterball && format !== "betterball_match_play"
-        ? `/scoring/${data.id}/betterball`
-        : `/scoring/${data.id}/hole`
-      );
+      router.replace(`/scoring/${data.id}/hole`);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to start round");
     } finally {
@@ -595,10 +616,10 @@ export default function StartRoundScreen() {
                 <View style={{ gap: 14 }}>
                   {/* Helper to render a stepper row */}
                   {([
-                    { label: "Your Course Handicap", hint: "From HNA app", value: courseHcp, set: setCourseHcp, show: true },
-                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Pre-filled · editable", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName) },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Pre-filled · editable", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent },
-                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Pre-filled · editable", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name },
+                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — confirm value", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName) },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Required — confirm value", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Required — confirm value", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name },
                   ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean }[])
                     .filter(r => r.show)
                     .map(r => (

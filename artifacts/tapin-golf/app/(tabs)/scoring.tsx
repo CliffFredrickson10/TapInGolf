@@ -115,11 +115,7 @@ export default function ScoringScreen() {
   const onContinue = () => {
     if (!activeRound) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const isBetterball = BETTERBALL_FORMATS.has(activeRound.format);
-    router.push(isBetterball
-      ? `/scoring/${activeRound.id}/betterball`
-      : `/scoring/${activeRound.id}/hole`
-    );
+    router.push(`/scoring/${activeRound.id}/hole`);
   };
 
   const onStart = () => {

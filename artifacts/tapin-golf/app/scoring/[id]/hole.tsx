@@ -551,15 +551,17 @@ export default function HoleEntryScreen() {
                 <Text style={[styles.sectionLabel, { color: GREEN }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>
             )}
-            <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
-              {gross != null && !isBetterball && (
-                <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
-                  <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
-                    {scoreName(gross, hole.par)}
-                  </Text>
-                </View>
-              )}
-            </View>
+            {!isBetterball && (
+              <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
+                {gross != null && (
+                  <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
+                    <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
+                      {scoreName(gross, hole.par)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             <View style={styles.stepper}>
               <TouchableOpacity

@@ -317,26 +317,6 @@ function ClubGameCard({
         />
       </TouchableOpacity>
 
-      {/* ── Zone 2: Stats bar ───────────────────────────────────────── */}
-      <View style={[styles.statsBar, { borderTopColor: colors.border }]}>
-        <View style={styles.statItem}>
-          <Ionicons name="time-outline" size={14} color={colors.primary} />
-          <Text style={[styles.statValue, { color: colors.foreground }]}>{timeLabel}</Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Ionicons name="people-outline" size={14} color={colors.primary} />
-          <Text style={[styles.statValue, { color: colors.foreground }]}>
-            {group.totalAvailable} {group.totalAvailable === 1 ? "spot" : "spots"}
-          </Text>
-        </View>
-        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
-        <View style={styles.statItem}>
-          <Ionicons name="cash-outline" size={14} color={colors.primary} />
-          <Text style={[styles.statValue, { color: colors.foreground }]}>{priceLabel}<Text style={[styles.statSub, { color: colors.mutedForeground }]}>/pp</Text></Text>
-        </View>
-      </View>
-
       {/* ── Expanded: individual tee-time slots ─────────────────────── */}
       {expanded && (
         <View style={styles.slotsContainer}>

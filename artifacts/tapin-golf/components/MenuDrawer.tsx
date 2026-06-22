@@ -128,29 +128,6 @@ export function MenuDrawer({
       ],
     },
     {
-      title: "Discover",
-      items: [
-        {
-          icon: "search-outline",
-          label: "Explore clubs",
-          sub: "Browse all 506 South African golf clubs",
-          onPress: () => navigate("/(tabs)/explore"),
-        },
-        {
-          icon: "golf-outline",
-          label: "Find a game",
-          sub: "Join open tee times near you",
-          onPress: () => navigate("/join"),
-        },
-        {
-          icon: "map-outline",
-          label: "Club map",
-          sub: "View clubs on an interactive map",
-          onPress: () => navigate("/club-map"),
-        },
-      ],
-    },
-    {
       title: "Support",
       items: [
         {

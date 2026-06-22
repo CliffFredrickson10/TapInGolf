@@ -245,81 +245,80 @@ function ClubGameCard({
         borderWidth: expanded ? 1.5 : 1,
       },
     ]}>
-      {/* Tap header to expand/collapse */}
+
+      {/* ── Zone 1: Identity — club name + location ─────────────────── */}
       <TouchableOpacity style={styles.cardHeader} onPress={onToggle} activeOpacity={0.82}>
-        <View style={styles.cardHeaderLeft}>
-          <View style={styles.cardTitleRow}>
-            <Text style={[styles.cardClub, { color: colors.foreground }]} numberOfLines={1}>
-              {group.club_name}
+        <View style={{ flex: 1 }}>
+          <Text style={[styles.cardClub, { color: colors.foreground }]} numberOfLines={1}>
+            {group.club_name}
+          </Text>
+          <View style={styles.locationRow}>
+            <Ionicons name="location-outline" size={12} color={colors.mutedForeground} />
+            <Text style={[styles.cardLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
+              {group.club_location}
+              {group.distKm !== null
+                ? `  ·  ${group.distKm < 1 ? "<1 km" : `${Math.round(group.distKm)} km away`}`
+                : ""}
             </Text>
-            <View style={[styles.gameTypeBadge, { backgroundColor: gameTypeBg }]}>
-              <Ionicons name={gameTypeIcon as any} size={11} color={gameTypeColor} />
-              <Text style={[styles.gameTypeText, { color: gameTypeColor }]}>{gameTypeLabel}</Text>
-            </View>
           </View>
-          {hasTournament && eventName && (
-            <Text style={[styles.eventNameText, { color: colors.foreground }]} numberOfLines={1}>
-              {eventName}
-            </Text>
-          )}
-          {hasTournament && compLabel && (
-            <View style={[styles.compTypeRow, { backgroundColor: gameTypeBg }]}>
-              <Ionicons name="flag-outline" size={12} color={gameTypeColor} />
-              <Text style={[styles.compTypeText, { color: gameTypeColor }]} numberOfLines={1}>
+        </View>
+        <Ionicons
+          name={expanded ? "chevron-up" : "chevron-down"}
+          size={20}
+          color={colors.mutedForeground}
+        />
+      </TouchableOpacity>
+
+      {/* ── Zone 2: Type strip ──────────────────────────────────────── */}
+      <View style={[styles.typeStrip, { backgroundColor: gameTypeBg, borderTopColor: colors.border }]}>
+        {/* Badge row: type pill + game count */}
+        <View style={styles.typeStripRow}>
+          <View style={[styles.typePill, { backgroundColor: gameTypeColor + "22", borderColor: gameTypeColor + "40" }]}>
+            <Ionicons name={gameTypeIcon as any} size={12} color={gameTypeColor} />
+            <Text style={[styles.typePillText, { color: gameTypeColor }]}>{gameTypeLabel}</Text>
+          </View>
+          {compLabel && hasTournament && (
+            <>
+              <Text style={[styles.typeStripDot, { color: gameTypeColor + "80" }]}>·</Text>
+              <Text style={[styles.compTypeInline, { color: gameTypeColor }]} numberOfLines={1}>
                 {compLabel}
               </Text>
-            </View>
+            </>
           )}
-          <Text style={[styles.cardLocation, { color: colors.mutedForeground }]} numberOfLines={1}>
-            <Ionicons name="location-outline" size={11} color={colors.mutedForeground} />
-            {"  "}{group.club_location}
-            {group.distKm !== null
-              ? `  ·  ${group.distKm < 1 ? "<1 km" : `${Math.round(group.distKm)} km away`}`
-              : ""}
+          <View style={{ flex: 1 }} />
+          <Text style={[styles.gameCount, { color: colors.mutedForeground }]}>
+            {group.games.length} {group.games.length === 1 ? "game" : "games"}
           </Text>
         </View>
-        <View style={styles.cardRight}>
-          <View style={[styles.gameCountBadge, { backgroundColor: colors.primary + "15" }]}>
-            <Text style={[styles.gameCountText, { color: colors.primary }]}>
-              {group.games.length} game{group.games.length !== 1 ? "s" : ""}
-            </Text>
-          </View>
-          <Ionicons
-            name={expanded ? "chevron-up" : "chevron-down"}
-            size={18}
-            color={colors.mutedForeground}
-          />
-        </View>
-      </TouchableOpacity>
-      {/* Shotgun draw notice — shown at card level so it's visible before expanding */}
-      {hasTournament && hasShotgun && !expanded && (
-        <View style={[styles.shotgunBanner, { backgroundColor: "#c8a84b15", borderTopColor: colors.border }]}>
-          <Ionicons name="shuffle-outline" size={13} color="#c8a84b" />
-          <Text style={[styles.shotgunBannerText, { color: "#c8a84b" }]}>
-            Shotgun start — starting hole assigned after draw
+        {/* Event name — second line, only if present */}
+        {hasTournament && eventName && (
+          <Text style={[styles.eventName, { color: colors.foreground }]} numberOfLines={1}>
+            {eventName}
           </Text>
-        </View>
-      )}
+        )}
+      </View>
 
-      {/* Summary row — always visible */}
-      <View style={[styles.cardSummary, { borderTopColor: colors.border }]}>
-        <View style={styles.metaChip}>
-          <Ionicons name="time-outline" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{timeLabel}</Text>
+      {/* ── Zone 3: Stats bar ───────────────────────────────────────── */}
+      <View style={[styles.statsBar, { borderTopColor: colors.border }]}>
+        <View style={styles.statItem}>
+          <Ionicons name="time-outline" size={14} color={colors.primary} />
+          <Text style={[styles.statValue, { color: colors.foreground }]}>{timeLabel}</Text>
         </View>
-        <View style={styles.metaChip}>
-          <Ionicons name="people-outline" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>
-            {group.totalAvailable} spot{group.totalAvailable !== 1 ? "s" : ""} open
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Ionicons name="people-outline" size={14} color={colors.primary} />
+          <Text style={[styles.statValue, { color: colors.foreground }]}>
+            {group.totalAvailable} {group.totalAvailable === 1 ? "spot" : "spots"}
           </Text>
         </View>
-        <View style={styles.metaChip}>
-          <Ionicons name="cash-outline" size={12} color={colors.mutedForeground} />
-          <Text style={[styles.metaText, { color: colors.mutedForeground }]}>{priceLabel}/pp</Text>
+        <View style={[styles.statDivider, { backgroundColor: colors.border }]} />
+        <View style={styles.statItem}>
+          <Ionicons name="cash-outline" size={14} color={colors.primary} />
+          <Text style={[styles.statValue, { color: colors.foreground }]}>{priceLabel}<Text style={[styles.statSub, { color: colors.mutedForeground }]}>/pp</Text></Text>
         </View>
       </View>
 
-      {/* Expanded: individual tee-time slots */}
+      {/* ── Expanded: individual tee-time slots ─────────────────────── */}
       {expanded && (
         <View style={styles.slotsContainer}>
           <Text style={[styles.slotsHeader, { color: colors.mutedForeground, borderBottomColor: colors.border }]}>
@@ -917,73 +916,56 @@ const styles = StyleSheet.create({
 
   // Club card
   cardWrap: { paddingHorizontal: 16, marginBottom: 12 },
-  card: {
-    borderRadius: 16,
-    overflow:     "hidden",
-  },
+  card: { borderRadius: 16, overflow: "hidden" },
+
+  // Zone 1 — Identity
   cardHeader: {
     flexDirection:    "row",
     alignItems:       "center",
-    paddingHorizontal: 14,
-    paddingVertical:  16,
+    paddingHorizontal: 16,
+    paddingVertical:  14,
     gap:              10,
   },
-  cardHeaderLeft: { flex: 1, gap: 7 },
-  cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
-  cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
-  cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular" },
-  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  compTypeRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-    alignSelf: "flex-start",
-    borderRadius: 20,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
-  },
-  compTypeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  gameTypeBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: 20,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-  },
-  gameTypeText: { fontSize: 11, fontFamily: "Inter_700Bold" },
-  shotgunBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  shotgunBannerText: { fontSize: 12, fontFamily: "Inter_500Medium" },
-  cardRight: {
-    flexDirection: "row",
-    alignItems:    "center",
-    gap:           6,
-    flexShrink:    0,
-  },
-  gameCountBadge: {
-    borderRadius:     20,
-    paddingHorizontal: 10,
-    paddingVertical:  4,
-  },
-  gameCountText: { fontSize: 12, fontFamily: "Inter_700Bold" },
-  cardSummary: {
-    flexDirection:    "row",
-    alignItems:       "center",
-    gap:              14,
-    paddingHorizontal: 14,
+  cardClub:     { fontSize: 17, fontFamily: "Inter_700Bold", marginBottom: 4 },
+  locationRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
+  cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular", flex: 1 },
+
+  // Zone 2 — Type strip
+  typeStrip: {
+    paddingHorizontal: 16,
     paddingVertical:  10,
     borderTopWidth:   StyleSheet.hairlineWidth,
-    flexWrap:         "wrap",
+    gap:              6,
   },
-  metaChip: { flexDirection: "row", alignItems: "center", gap: 4 },
-  metaText:  { fontSize: 12, fontFamily: "Inter_400Regular" },
+  typeStripRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  typePill: {
+    flexDirection:    "row",
+    alignItems:       "center",
+    gap:              5,
+    borderRadius:     20,
+    borderWidth:      1,
+    paddingHorizontal: 9,
+    paddingVertical:  4,
+  },
+  typePillText:    { fontSize: 12, fontFamily: "Inter_700Bold" },
+  typeStripDot:    { fontSize: 14, fontFamily: "Inter_700Bold" },
+  compTypeInline:  { fontSize: 12, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
+  gameCount:       { fontSize: 12, fontFamily: "Inter_400Regular" },
+  eventName:       { fontSize: 14, fontFamily: "Inter_600SemiBold", marginTop: 2 },
+
+  // Zone 3 — Stats bar
+  statsBar: {
+    flexDirection:    "row",
+    alignItems:       "center",
+    paddingHorizontal: 16,
+    paddingVertical:  12,
+    borderTopWidth:   StyleSheet.hairlineWidth,
+    gap:              0,
+  },
+  statItem:    { flexDirection: "row", alignItems: "center", gap: 5, flex: 1, justifyContent: "center" },
+  statValue:   { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  statSub:     { fontSize: 11, fontFamily: "Inter_400Regular" },
+  statDivider: { width: 1, height: 18, marginHorizontal: 4 },
 
   // Slots (expanded)
   slotsContainer: {},

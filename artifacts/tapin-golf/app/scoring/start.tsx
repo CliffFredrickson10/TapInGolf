@@ -23,7 +23,7 @@ import { AppHeader } from "@/components/AppHeader";
 
 type Club = { id: number; name: string; location: string; province: string; distance_km?: number | null };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
-type MatchOpponent = { matchId: number; opponentName: string; opp2Name?: string | null; opponentHandicap: number | null; roundLabel: string | null };
+type MatchOpponent = { matchId: number; opponentName: string; opp2Name?: string | null; opponentHandicap: number | null; opp2Handicap?: number | null; roundLabel: string | null; partnerName?: string | null; partnerHandicap?: number | null };
 
 type FormatEntry = { key: string; label: string };
 type FormatGroup = { group: string; formats: FormatEntry[] };
@@ -145,6 +145,9 @@ export default function StartRoundScreen() {
   const [teeColor, setTeeColor] = useState("white");
   const [format, setFormat] = useState("individual_stableford");
   const [courseHcp, setCourseHcp] = useState("0");
+  const [oppHcp, setOppHcp] = useState("0");
+  const [partnerHcp, setPartnerHcp] = useState("0");
+  const [opp2Hcp, setOpp2Hcp] = useState("0");
   const [expandedGroup, setExpandedGroup] = useState("Individual");
   const [submitting, setSubmitting] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
@@ -186,7 +189,15 @@ export default function StartRoundScreen() {
     }
     setMatchOpponentLoading(true);
     apiFetch(`/scoring/tournaments/${linkedTournamentId}/my-match`, token)
-      .then(d => setMatchOpponent(d.match ?? null))
+      .then(d => {
+        const m = d.match ?? null;
+        setMatchOpponent(m);
+        if (m) {
+          if (m.opponentHandicap != null) setOppHcp(String(m.opponentHandicap));
+          if (m.partnerHandicap  != null) setPartnerHcp(String(m.partnerHandicap));
+          if (m.opp2Handicap     != null) setOpp2Hcp(String(m.opp2Handicap));
+        }
+      })
       .catch(() => setMatchOpponent(null))
       .finally(() => setMatchOpponentLoading(false));
   }, [linkedTournamentId, format, token]);
@@ -231,6 +242,7 @@ export default function StartRoundScreen() {
     const ch = parseInt(courseHcp) || 0;
     setSubmitting(true);
     try {
+      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
       const data = await apiFetch("/scoring/rounds", token, {
         method: "POST",
         body: JSON.stringify({
@@ -241,6 +253,11 @@ export default function StartRoundScreen() {
           playingHandicap: ch,
           allowancePct: 100,
           tournamentId: linkedTournamentId,
+          ...(isKnockoutMatch && matchOpponent ? {
+            opponentPlayingHcp:  parseInt(oppHcp)     || 0,
+            partnerPlayingHcp:   parseInt(partnerHcp)  || 0,
+            opponent2PlayingHcp: parseInt(opp2Hcp)    || 0,
+          } : {}),
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -576,38 +593,47 @@ export default function StartRoundScreen() {
               {/* Handicap */}
               <Section title="HANDICAP">
                 <View style={{ gap: 14 }}>
-                  {/* Course HCP */}
-                  <View>
-                    <View style={styles.hcpLabelRow}>
-                      <Text style={[styles.fieldLabel, { color: colors.foreground }]}>Course Handicap</Text>
-                      <View style={[styles.hintChip, { backgroundColor: colors.muted }]}>
-                        <Text style={[styles.hintText, { color: colors.mutedForeground }]}>From HNA app</Text>
+                  {/* Helper to render a stepper row */}
+                  {([
+                    { label: "Your Course Handicap", hint: "From HNA app", value: courseHcp, set: setCourseHcp, show: true },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Pre-filled · editable", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName) },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Pre-filled · editable", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Pre-filled · editable", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name },
+                  ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean }[])
+                    .filter(r => r.show)
+                    .map(r => (
+                      <View key={r.label}>
+                        <View style={styles.hcpLabelRow}>
+                          <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{r.label}</Text>
+                          <View style={[styles.hintChip, { backgroundColor: colors.muted }]}>
+                            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>{r.hint}</Text>
+                          </View>
+                        </View>
+                        <View style={[styles.stepperRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <TouchableOpacity
+                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.max(0, parseInt(v || "0") - 1))); }}
+                            style={[styles.stepperBtn, { borderColor: colors.border }]}
+                          >
+                            <Text style={[styles.stepperBtnText, { color: colors.foreground }]}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            value={r.value}
+                            onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) r.set(String(n)); }}
+                            style={[styles.stepperValue, { color: colors.primary }]}
+                            keyboardType="number-pad"
+                            textAlign="center"
+                            maxLength={2}
+                          />
+                          <TouchableOpacity
+                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.min(54, parseInt(v || "0") + 1))); }}
+                            style={[styles.stepperBtn, { borderColor: colors.primary, backgroundColor: colors.primary }]}
+                          >
+                            <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
                       </View>
-                    </View>
-                    <View style={[styles.stepperRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                      <TouchableOpacity
-                        onPress={() => { Haptics.selectionAsync(); setCourseHcp(v => String(Math.max(0, parseInt(v || "0") - 1))); }}
-                        style={[styles.stepperBtn, { borderColor: colors.border }]}
-                      >
-                        <Text style={[styles.stepperBtnText, { color: colors.foreground }]}>−</Text>
-                      </TouchableOpacity>
-                      <TextInput
-                        value={courseHcp}
-                        onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCourseHcp(String(n)); }}
-                        style={[styles.stepperValue, { color: colors.primary }]}
-                        keyboardType="number-pad"
-                        textAlign="center"
-                        maxLength={2}
-                      />
-                      <TouchableOpacity
-                        onPress={() => { Haptics.selectionAsync(); setCourseHcp(v => String(Math.min(54, parseInt(v || "0") + 1))); }}
-                        style={[styles.stepperBtn, { borderColor: colors.primary, backgroundColor: colors.primary }]}
-                      >
-                        <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-
+                    ))
+                  }
                 </View>
               </Section>
             </>

@@ -100,7 +100,8 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
                   THEN u2.name     ELSE u1.name     END AS opponent_name,
              CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
                   THEN u2.handicap ELSE u1.handicap END AS opponent_handicap,
-             pu.name AS partner_name
+             pu.name     AS partner_name,
+             pu.handicap AS partner_handicap
       FROM knockout_matches km
       JOIN knockout_rounds  kr ON kr.id = km.round_id
       LEFT JOIN users u1 ON u1.id = km.player1_id
@@ -121,6 +122,7 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
 
     // Find opponent's partner — works for both singles and betterball (no teamId needed)
     let opp2Name: string | null = null;
+    let opp2Handicap: number | null = null;
     {
       // Determine which side the user is on: directly player1, or in player1's team
       const onP1Side = user.id === m.player1_id || !!(await row<any>(
@@ -137,10 +139,11 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
         );
         if (oppTeam?.team_id) {
           const opp2 = await row<any>(
-            "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+            "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
             [oppTeam.team_id, oppRepId, tournamentId]
           );
           opp2Name = opp2?.name ?? null;
+          opp2Handicap = opp2?.handicap != null ? Number(opp2.handicap) : null;
         }
       }
     }
@@ -151,9 +154,11 @@ router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
         opponentName:      m.opponent_name  ?? "TBD",
         opp2Name,
         opponentHandicap:  m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
+        opp2Handicap,
         roundLabel:        m.round_label    ?? null,
         status:            m.status,
         partnerName:       m.partner_name   ?? null,
+        partnerHandicap:   m.partner_handicap != null ? Number(m.partner_handicap) : null,
       },
     });
   } catch (err: any) {
@@ -210,7 +215,8 @@ router.post("/scoring/rounds", async (req, res) => {
     // For matchplay formats, auto-lookup the user's current knockout match
     let matchId: number | null = req.body.matchId ?? null;
     let opponentName: string | null = req.body.opponentName ?? null;
-    let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
+    // DB auto-lookup sets these; body values override when explicitly provided (not null)
+    let opponentPlayingHcp = 0;
     let partnerName: string | null = null;
     let partnerPlayingHcp = 0;
     let opponent2Name: string | null = null;
@@ -230,9 +236,9 @@ router.post("/scoring/rounds", async (req, res) => {
           [teamId, user.id, tournamentId]
         );
         partnerName = ptnr?.name ?? null;
-        partnerPlayingHcp = ptnr?.handicap != null
-          ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100))
-          : 0;
+        partnerPlayingHcp = req.body.partnerPlayingHcp != null
+          ? Number(req.body.partnerPlayingHcp)
+          : (ptnr?.handicap != null ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100)) : 0);
       }
 
       const m = await row<any>(`
@@ -256,9 +262,10 @@ router.post("/scoring/rounds", async (req, res) => {
       if (m) {
         matchId          = m.id;
         opponentName     = m.opp_name ?? null;
-        opponentPlayingHcp = m.opp_hcp
-          ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100))
-          : 0;
+        // Use body override if explicitly provided; otherwise fall back to DB profile handicap
+        opponentPlayingHcp = req.body.opponentPlayingHcp != null
+          ? Number(req.body.opponentPlayingHcp)
+          : (m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0);
         // Find opponent's partner (team-agnostic — works whether teamId is set or not)
         {
           const onP1Side = user.id === m.player1_id || !!(await row<any>(
@@ -279,9 +286,9 @@ router.post("/scoring/rounds", async (req, res) => {
                 [oppTeam.team_id, oppRepId, tournamentId]
               );
               opponent2Name = opp2?.name ?? null;
-              opponent2PlayingHcp = opp2?.handicap != null
-                ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100))
-                : 0;
+              opponent2PlayingHcp = req.body.opponent2PlayingHcp != null
+                ? Number(req.body.opponent2PlayingHcp)
+                : (opp2?.handicap != null ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100)) : 0);
             }
           }
         }

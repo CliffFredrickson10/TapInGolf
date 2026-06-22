@@ -76521,7 +76521,8 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
                   THEN u2.name     ELSE u1.name     END AS opponent_name,
              CASE WHEN (km.player1_id = ? OR EXISTS (SELECT 1 FROM event_registrations er WHERE er.user_id = km.player1_id AND er.team_id = ?))
                   THEN u2.handicap ELSE u1.handicap END AS opponent_handicap,
-             pu.name AS partner_name
+             pu.name     AS partner_name,
+             pu.handicap AS partner_handicap
       FROM knockout_matches km
       JOIN knockout_rounds  kr ON kr.id = km.round_id
       LEFT JOIN users u1 ON u1.id = km.player1_id
@@ -76542,6 +76543,7 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
       return;
     }
     let opp2Name = null;
+    let opp2Handicap = null;
     {
       const onP1Side = user.id === m.player1_id || !!await row(
         `SELECT 1 FROM event_registrations er1
@@ -76557,10 +76559,11 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
         );
         if (oppTeam?.team_id) {
           const opp2 = await row(
-            "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+            "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
             [oppTeam.team_id, oppRepId, tournamentId]
           );
           opp2Name = opp2?.name ?? null;
+          opp2Handicap = opp2?.handicap != null ? Number(opp2.handicap) : null;
         }
       }
     }
@@ -76570,9 +76573,11 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
         opponentName: m.opponent_name ?? "TBD",
         opp2Name,
         opponentHandicap: m.opponent_handicap != null ? Number(m.opponent_handicap) : null,
+        opp2Handicap,
         roundLabel: m.round_label ?? null,
         status: m.status,
-        partnerName: m.partner_name ?? null
+        partnerName: m.partner_name ?? null,
+        partnerHandicap: m.partner_handicap != null ? Number(m.partner_handicap) : null
       }
     });
   } catch (err) {
@@ -76638,7 +76643,7 @@ router23.post("/scoring/rounds", async (req, res) => {
     }
     let matchId = req.body.matchId ?? null;
     let opponentName = req.body.opponentName ?? null;
-    let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
+    let opponentPlayingHcp = 0;
     let partnerName = null;
     let partnerPlayingHcp = 0;
     let opponent2Name = null;
@@ -76655,7 +76660,7 @@ router23.post("/scoring/rounds", async (req, res) => {
           [teamId, user.id, tournamentId]
         );
         partnerName = ptnr?.name ?? null;
-        partnerPlayingHcp = ptnr?.handicap != null ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100)) : 0;
+        partnerPlayingHcp = req.body.partnerPlayingHcp != null ? Number(req.body.partnerPlayingHcp) : ptnr?.handicap != null ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100)) : 0;
       }
       const m = await row(`
         SELECT km.id, km.player1_id, km.player2_id,
@@ -76678,7 +76683,7 @@ router23.post("/scoring/rounds", async (req, res) => {
       if (m) {
         matchId = m.id;
         opponentName = m.opp_name ?? null;
-        opponentPlayingHcp = m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0;
+        opponentPlayingHcp = req.body.opponentPlayingHcp != null ? Number(req.body.opponentPlayingHcp) : m.opp_hcp ? Math.round(Number(m.opp_hcp) * (Number(allowancePct) / 100)) : 0;
         {
           const onP1Side = user.id === m.player1_id || !!await row(
             `SELECT 1 FROM event_registrations er1
@@ -76698,7 +76703,7 @@ router23.post("/scoring/rounds", async (req, res) => {
                 [oppTeam.team_id, oppRepId, tournamentId]
               );
               opponent2Name = opp2?.name ?? null;
-              opponent2PlayingHcp = opp2?.handicap != null ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100)) : 0;
+              opponent2PlayingHcp = req.body.opponent2PlayingHcp != null ? Number(req.body.opponent2PlayingHcp) : opp2?.handicap != null ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100)) : 0;
             }
           }
         }

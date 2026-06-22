@@ -65059,22 +65059,6 @@ router4.post("/:id/confirm-payment", async (req, res) => {
     res.json({ confirmed: true, status: booking.status });
     return;
   }
-  if (!booking.stitch_payment_id) {
-    res.status(400).json({ message: "No payment ID on record for this booking" });
-    return;
-  }
-  let paid = false;
-  try {
-    const detail = await getStitchPayment(booking.stitch_payment_id);
-    paid = String(detail?.status ?? "").toUpperCase() === "PAID";
-  } catch {
-    res.status(502).json({ message: "Could not verify payment with Stitch. Please wait \u2014 confirmation is on its way." });
-    return;
-  }
-  if (!paid) {
-    res.json({ confirmed: false, status: booking.status });
-    return;
-  }
   await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
   await run(
     "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",

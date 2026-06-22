@@ -65032,7 +65032,7 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
     contact_phone: club?.cancel_contact_phone ?? null
   });
 });
-router4.post("/:id/confirm-payment", async (req, res) => {
+router4.post("/bookings/:id/confirm-payment", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
     res.status(401).json({ message: "Unauthorized" });

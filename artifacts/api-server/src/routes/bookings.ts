@@ -1233,7 +1233,7 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
 // Confirm a Stitch booking payment by polling Stitch directly.
 // Called by the app when the WebView lands on the success redirect URL —
 // more reliable than waiting for the webhook in dev (where the domain rotates).
-router.post("/:id/confirm-payment", async (req, res): Promise<void> => {
+router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
   const bookingId = parseInt(req.params.id, 10);

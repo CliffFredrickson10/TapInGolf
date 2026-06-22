@@ -405,24 +405,24 @@ export default function MyGolfScreen() {
         <Text style={[styles.pageTitle, { color: colors.foreground }]}>My Golf</Text>
       </View>
 
-      {/* Top segment: Bookings | Tournaments */}
-      <View style={[styles.mainSegRow, { borderBottomColor: colors.border }]}>
+      {/* Pill selector: Bookings | Tournaments */}
+      <View style={[styles.pillWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
         {([
-          { key: "bookings",    label: "Bookings",    icon: "calendar-outline"  },
-          { key: "tournaments", label: "Tournaments", icon: "trophy-outline"    },
+          { key: "bookings",    label: "Bookings",    icon: "calendar-outline" },
+          { key: "tournaments", label: "Tournaments", icon: "trophy-outline"   },
         ] as { key: MainTab; label: string; icon: any }[]).map(({ key, label, icon }) => (
           <TouchableOpacity
             key={key}
-            style={[styles.mainSegBtn, activeTab === key && { borderBottomColor: colors.primary, borderBottomWidth: 2.5 }]}
+            style={[styles.pillBtn, activeTab === key && { backgroundColor: colors.primary }]}
             onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
-            activeOpacity={0.75}
+            activeOpacity={0.8}
           >
             <Ionicons
               name={activeTab === key ? icon.replace("-outline", "") : icon}
-              size={16}
-              color={activeTab === key ? colors.primary : colors.mutedForeground}
+              size={15}
+              color={activeTab === key ? "#fff" : colors.mutedForeground}
             />
-            <Text style={[styles.mainSegText, { color: activeTab === key ? colors.primary : colors.mutedForeground }]}>
+            <Text style={[styles.pillText, { color: activeTab === key ? "#fff" : colors.mutedForeground }]}>
               {label}
             </Text>
           </TouchableOpacity>
@@ -444,17 +444,20 @@ const styles = StyleSheet.create({
   pageHeader: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 },
   pageTitle:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
 
-  mainSegRow: {
+  pillWrap: {
     flexDirection: "row",
-    borderBottomWidth: 1,
-    marginBottom: 4,
+    marginHorizontal: 16,
+    marginTop: 12,
+    marginBottom: 8,
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 4,
   },
-  mainSegBtn: {
+  pillBtn: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 12,
-    borderBottomWidth: 2.5, borderBottomColor: "transparent",
+    gap: 6, paddingVertical: 10, borderRadius: 9,
   },
-  mainSegText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  pillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
 
   segRow: {
     flexDirection: "row",

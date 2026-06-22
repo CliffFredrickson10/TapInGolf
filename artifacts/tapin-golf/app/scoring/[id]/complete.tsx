@@ -386,6 +386,12 @@ export default function RoundCompleteScreen() {
               let teamWon = 0, teamLost = 0, teamHalved = 0;
               let myTotG = 0, prtTotG = 0, o1TotG = 0, o2TotG = 0;
               let myTotP = 0, prtTotP = 0, o1TotP = 0, o2TotP = 0;
+              let myF9G = 0, prtF9G = 0, o1F9G = 0, o2F9G = 0;
+              let myF9P = 0, prtF9P = 0, o1F9P = 0, o2F9P = 0;
+              let myB9G = 0, prtB9G = 0, o1B9G = 0, o2B9G = 0;
+              let myB9P = 0, prtB9P = 0, o1B9P = 0, o2B9P = 0;
+              let f9Won = 0, f9Lost = 0, f9Halved = 0;
+              let b9Won = 0, b9Lost = 0, b9Halved = 0;
 
               const HW = StyleSheet.hairlineWidth;
               const bdr = colors.border;
@@ -464,14 +470,18 @@ export default function RoundCompleteScreen() {
                   else                                      { res = "H"; teamHalved++; }
                 }
 
-                if (myG   != null) myTotG   += myG;
-                if (prtG  != null) prtTotG  += prtG;
-                if (opp1G != null) o1TotG   += opp1G;
-                if (opp2G != null) o2TotG   += opp2G;
-                if (myP   != null) myTotP   += myP;
-                if (prtP  != null) prtTotP  += prtP;
-                if (o1P   != null) o1TotP   += o1P;
-                if (o2P   != null) o2TotP   += o2P;
+                const isFront = h.number <= 9;
+                if (myG   != null) { myTotG   += myG;   if (isFront) myF9G   += myG;   else myB9G   += myG;   }
+                if (prtG  != null) { prtTotG  += prtG;  if (isFront) prtF9G  += prtG;  else prtB9G  += prtG;  }
+                if (opp1G != null) { o1TotG   += opp1G; if (isFront) o1F9G   += opp1G; else o1B9G   += opp1G; }
+                if (opp2G != null) { o2TotG   += opp2G; if (isFront) o2F9G   += opp2G; else o2B9G   += opp2G; }
+                if (myP   != null) { myTotP   += myP;   if (isFront) myF9P   += myP;   else myB9P   += myP;   }
+                if (prtP  != null) { prtTotP  += prtP;  if (isFront) prtF9P  += prtP;  else prtB9P  += prtP;  }
+                if (o1P   != null) { o1TotP   += o1P;   if (isFront) o1F9P   += o1P;   else o1B9P   += o1P;   }
+                if (o2P   != null) { o2TotP   += o2P;   if (isFront) o2F9P   += o2P;   else o2B9P   += o2P;   }
+                if (res === "W") { if (isFront) f9Won++;    else b9Won++;    }
+                if (res === "L") { if (isFront) f9Lost++;   else b9Lost++;   }
+                if (res === "H") { if (isFront) f9Halved++; else b9Halved++; }
 
                 return { h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
                          myBest, prtBest, o1Best, o2Best, res,
@@ -600,62 +610,85 @@ export default function RoundCompleteScreen() {
                     );
                   })}
 
-                  {/* ── Totals row ── */}
-                  <View style={{ flexDirection: "row", backgroundColor: pBg }}>
-                    <View style={{ width: 28, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)", paddingVertical: 7 }}>
-                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#fff" }}>TOT</Text>
-                    </View>
-                    <View style={{ width: 26, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.3)" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{sc.reduce((s,h)=>s+h.par,0)}</Text>
-                    </View>
-                    {/* Your team totals */}
-                    <View style={{ flex: 1, flexDirection: "column" }}>
-                      <View style={{ flexDirection: "row", borderBottomWidth: HW, borderBottomColor: "rgba(255,255,255,0.2)" }}>
-                        {[myTotG, prtTotG].map((v, i) => (
-                          <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 4,
+                  {/* ── Totals rows: OUT / IN / TOTAL ── */}
+                  {(() => {
+                    const f9Par = sc.filter(h => h.number <= 9).reduce((s,h) => s + h.par, 0);
+                    const b9Par = sc.filter(h => h.number > 9).reduce((s,h) => s + h.par, 0);
+                    const totPar = f9Par + b9Par;
+
+                    // Renders one totals row matching the side-by-side Score|Result layout
+                    const TotRow = ({
+                      label, par, isLast,
+                      mg, mp, pg, pp, o1g, o1p, o2g, o2p,
+                      w, l, hv,
+                    }: {
+                      label: string; par: number; isLast: boolean;
+                      mg: number; mp: number; pg: number; pp: number;
+                      o1g: number; o1p: number; o2g: number; o2p: number;
+                      w: number; l: number; hv: number;
+                    }) => {
+                      const TotPair = (g: number, p: number, lastInTeam: boolean) => (
+                        <View style={[{ flex: 2, flexDirection: "row" },
+                          lastInTeam
+                            ? { borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.35)" }
+                            : { borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }]}>
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
                             borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{v || "—"}</Text>
+                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                              {g > 0 ? String(g) : "—"}
+                            </Text>
                           </View>
-                        ))}
-                      </View>
-                      <View style={{ flexDirection: "row" }}>
-                        {[myTotP, prtTotP].map((v, i) => (
-                          <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 4,
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
+                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>
+                              {p > 0 ? String(p) : "—"}
+                            </Text>
+                          </View>
+                        </View>
+                      );
+                      return (
+                        <View style={{ flexDirection: "row", backgroundColor: isLast ? pBg : pBg + "e0",
+                          borderTopWidth: isLast ? 1.5 : HW,
+                          borderTopColor: isLast ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                          <View style={{ width: 28, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>{v || "—"}</Text>
+                            <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: isLast ? GOLD : "rgba(255,255,255,0.8)" }}>
+                              {label}
+                            </Text>
                           </View>
-                        ))}
-                      </View>
-                    </View>
-                    <View style={{ width: 1.5, backgroundColor: "rgba(255,255,255,0.3)" }} />
-                    {/* Opponents totals */}
-                    <View style={{ flex: 1, flexDirection: "column" }}>
-                      <View style={{ flexDirection: "row", borderBottomWidth: HW, borderBottomColor: "rgba(255,255,255,0.2)" }}>
-                        {[o1TotG, o2TotG].map((v, i) => (
-                          <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 4,
+                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{v || "—"}</Text>
+                            <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
                           </View>
-                        ))}
-                      </View>
-                      <View style={{ flexDirection: "row" }}>
-                        {[o1TotP, o2TotP].map((v, i) => (
-                          <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 4,
-                            borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>{v || "—"}</Text>
+                          {TotPair(mg, mp, false)}
+                          {TotPair(pg, pp, true)}
+                          {TotPair(o1g, o1p, false)}
+                          {TotPair(o2g, o2p, false)}
+                          <View style={{ width: 32, alignItems: "center", justifyContent: "center", gap: 1 }}>
+                            <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#4ade80" }}>{w}W</Text>
+                            <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#f87171" }}>{l}L</Text>
+                            <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: GOLD }}>{hv}H</Text>
                           </View>
-                        ))}
-                      </View>
-                    </View>
-                    {/* Match summary */}
-                    <View style={{ width: 32, alignItems: "center", justifyContent: "center", gap: 1 }}>
-                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#22c55e" }}>{teamWon}W</Text>
-                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#f87171" }}>{teamLost}L</Text>
-                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: GOLD }}>{teamHalved}H</Text>
-                    </View>
-                  </View>
+                        </View>
+                      );
+                    };
+
+                    return (
+                      <>
+                        <TotRow label="OUT" par={f9Par} isLast={false}
+                          mg={myF9G} mp={myF9P} pg={prtF9G} pp={prtF9P}
+                          o1g={o1F9G} o1p={o1F9P} o2g={o2F9G} o2p={o2F9P}
+                          w={f9Won} l={f9Lost} hv={f9Halved} />
+                        <TotRow label="IN" par={b9Par} isLast={false}
+                          mg={myB9G} mp={myB9P} pg={prtB9G} pp={prtB9P}
+                          o1g={o1B9G} o1p={o1B9P} o2g={o2B9G} o2p={o2B9P}
+                          w={b9Won} l={b9Lost} hv={b9Halved} />
+                        <TotRow label="TOT" par={totPar} isLast
+                          mg={myTotG} mp={myTotP} pg={prtTotG} pp={prtTotP}
+                          o1g={o1TotG} o1p={o1TotP} o2g={o2TotG} o2p={o2TotP}
+                          w={teamWon} l={teamLost} hv={teamHalved} />
+                      </>
+                    );
+                  })()}
                 </View>
               );
             })()

@@ -938,7 +938,7 @@ const styles = StyleSheet.create({
   prevBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 16, borderWidth: 1.5, alignItems: "center",
   },
-  prevBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  prevBtnText: { fontSize: 16, fontFamily: "Inter_700Bold" },
   nextBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 16, alignItems: "center",
   },

@@ -263,8 +263,8 @@ function ClubGameCard({
             </Text>
           )}
           {hasTournament && compLabel && (
-            <View style={styles.compTypeRow}>
-              <Ionicons name="flag-outline" size={11} color={gameTypeColor} />
+            <View style={[styles.compTypeRow, { backgroundColor: gameTypeBg }]}>
+              <Ionicons name="flag-outline" size={12} color={gameTypeColor} />
               <Text style={[styles.compTypeText, { color: gameTypeColor }]} numberOfLines={1}>
                 {compLabel}
               </Text>
@@ -930,9 +930,18 @@ const styles = StyleSheet.create({
   cardTitleRow: { flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap" },
   cardClub:     { fontSize: 16, fontFamily: "Inter_700Bold", flexShrink: 1 },
   cardLocation: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 2 },
-  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 1 },
-  compTypeRow: { flexDirection: "row", alignItems: "center", gap: 4, marginTop: 2 },
-  compTypeText: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
+  eventNameText: { fontSize: 13, fontFamily: "Inter_600SemiBold", marginTop: 4 },
+  compTypeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+    alignSelf: "flex-start",
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    marginTop: 6,
+  },
+  compTypeText: { fontSize: 12, fontFamily: "Inter_700Bold" },
   gameTypeBadge: {
     flexDirection: "row",
     alignItems: "center",

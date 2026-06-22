@@ -183,9 +183,9 @@ export default function ScoringScreen() {
                 {activeRound.tournament_name ? ` · ${activeRound.tournament_name}` : ""}
               </Text>
               <View style={[styles.continueBtn]}>
-                <Ionicons name="golf" size={18} color={colors.primary} />
-                <Text style={[styles.continueBtnText, { color: colors.primary }]}>Continue Round</Text>
-                <Ionicons name="arrow-forward" size={16} color={colors.primary} />
+                <Ionicons name="golf" size={18} color="#fff" />
+                <Text style={styles.continueBtnText}>Continue Round</Text>
+                <Ionicons name="arrow-forward" size={16} color="#fff" />
               </View>
             </TouchableOpacity>
           )}
@@ -299,10 +299,10 @@ const styles = StyleSheet.create({
   },
   continueBtn: {
     flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center",
-    backgroundColor: "#fff", borderRadius: 14, paddingVertical: 14, marginTop: 4,
+    backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 14, paddingVertical: 14, marginTop: 4,
   },
   continueBtnText: {
-    fontSize: 15, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center",
+    fontSize: 15, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center", color: "#fff",
   },
   startBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center",

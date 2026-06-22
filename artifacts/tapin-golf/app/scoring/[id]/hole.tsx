@@ -776,7 +776,7 @@ export default function HoleEntryScreen() {
             disabled={saving}
             style={[styles.prevBtn, { borderColor: BORDER }]}
           >
-            <Text style={[styles.prevBtnText, { color: MUTED_FG }]}>← Prev</Text>
+            <Text style={[styles.prevBtnText, { color: MUTED_FG }]}>← Previous Hole</Text>
           </TouchableOpacity>
         )}
         {isAnyMatch && matchSt?.decided ? (

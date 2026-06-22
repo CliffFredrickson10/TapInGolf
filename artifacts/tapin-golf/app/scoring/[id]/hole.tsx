@@ -262,6 +262,7 @@ export default function HoleEntryScreen() {
   const [oppGross, setOppGross]       = useState<number | null>(null);
   const [partnerGross, setPartnerGross] = useState<number | null>(null);
   const [opp2Gross, setOpp2Gross]       = useState<number | null>(null);
+  const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
   const partnerQuickRef = useRef<ScrollView>(null);
@@ -360,6 +361,7 @@ export default function HoleEntryScreen() {
       setOppGross(round.playerHoles?.[`0_${scorecard[idx].number}`]?.gross_score ?? null);
     }
     holeStripRef.current?.scrollTo({ x: Math.max(0, (idx - 3) * 42), animated: true });
+    mainScrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
   const saveAndNext = async (isNr = false) => {
@@ -509,6 +511,7 @@ export default function HoleEntryScreen() {
 
       {/* Scrollable scoring content */}
       <ScrollView
+        ref={mainScrollRef}
         style={{ flex: 1 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -766,6 +769,16 @@ export default function HoleEntryScreen() {
 
       {/* Action buttons — fixed at bottom */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
+        {/* Previous Hole — hidden on hole 1 */}
+        {holeIdx > 0 && (
+          <TouchableOpacity
+            onPress={() => goToHole(holeIdx - 1)}
+            disabled={saving}
+            style={[styles.prevBtn, { borderColor: BORDER }]}
+          >
+            <Text style={[styles.prevBtnText, { color: MUTED_FG }]}>← Prev</Text>
+          </TouchableOpacity>
+        )}
         {isAnyMatch && matchSt?.decided ? (
           <TouchableOpacity
             onPress={confirmAndFinish}
@@ -793,7 +806,7 @@ export default function HoleEntryScreen() {
           >
             {saving
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.nextBtnText}>Save · Next →</Text>
+              : <Text style={styles.nextBtnText}>Next Hole →</Text>
             }
           </TouchableOpacity>
         )}
@@ -922,6 +935,10 @@ const styles = StyleSheet.create({
   actions: {
     flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12,
   },
+  prevBtn: {
+    paddingVertical: 15, paddingHorizontal: 20, borderRadius: 16, borderWidth: 1.5, alignItems: "center",
+  },
+  prevBtnText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   nextBtn: {
     flex: 1, paddingVertical: 15, borderRadius: 16, alignItems: "center",
   },

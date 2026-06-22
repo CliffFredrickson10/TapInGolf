@@ -112,6 +112,21 @@ function buildDateOptions(): DateOption[] {
 }
 
 // ─── Slot Row (individual tee-time inside an expanded club) ───────────────────
+const SLOT_FORMAT_LABELS: Record<string, string> = {
+  stroke_play: "Stroke Play", gross_stroke_play: "Stroke Play (Gross)",
+  net_stroke_play: "Stroke Play (Net)", stableford: "Stableford",
+  individual_stableford: "Stableford", modified_stableford: "Modified Stableford",
+  match_play: "Match Play", betterball: "Betterball", fourball: "Fourball",
+  scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",
+  fourball_gross_betterball: "Four-Ball Betterball",
+  fourball_net_betterball: "Four-Ball Betterball (Net)",
+  betterball_match_play: "Betterball Match Play",
+  fourball_stableford: "Betterball Stableford",
+  shamble: "Shamble", best_ball_aggregate: "Best Ball Aggregate",
+  high_low: "High/Low", daytona: "Daytona",
+  betterball_bonus_bogey: "Betterball Bonus Bogey",
+};
+
 function SlotRow({
   game,
   onJoin,
@@ -125,10 +140,42 @@ function SlotRow({
   const spotsLeft = game.available;
   const isTournament = game.game_type === "tournament";
   const isShotgun = game.is_shotgun;
+  const isDoubleTee = game.is_double_tee;
+
+  const typeColor = isTournament ? "#7c3aed" : colors.primary;
+  const typeBg    = isTournament ? "#7c3aed15" : colors.primary + "12";
+  const typeIcon  = isTournament ? "trophy-outline" : "golf-outline";
+  const typeLabel = isTournament ? "Tournament" : "Open Game";
+
+  const rawFormat   = game.event_format;
+  const formatLabel = rawFormat === "other"
+    ? (game.event_format_custom ?? null)
+    : rawFormat ? (SLOT_FORMAT_LABELS[rawFormat] ?? rawFormat.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase())) : null;
+  const startLabel  = isDoubleTee ? "Double Tee Shotgun" : isShotgun ? "Shotgun Start" : null;
+  const compLabel   = startLabel && formatLabel ? `${startLabel} · ${formatLabel}` : startLabel ?? formatLabel;
 
   return (
     <View style={[styles.slotRow, { borderTopColor: colors.border }]}>
       <View style={styles.slotLeft}>
+        {/* Type badge + comp type */}
+        <View style={styles.slotTypeRow}>
+          <View style={[styles.slotTypePill, { backgroundColor: typeBg }]}>
+            <Ionicons name={typeIcon as any} size={11} color={typeColor} />
+            <Text style={[styles.slotTypePillText, { color: typeColor }]}>{typeLabel}</Text>
+          </View>
+          {compLabel && (
+            <Text style={[styles.slotCompLabel, { color: typeColor }]} numberOfLines={1}>
+              {compLabel}
+            </Text>
+          )}
+        </View>
+        {/* Event name */}
+        {isTournament && game.event_name && (
+          <Text style={[styles.slotEventName, { color: colors.foreground }]} numberOfLines={1}>
+            {game.event_name}
+          </Text>
+        )}
+        {/* Time + spots */}
         <View style={styles.slotTimeRow}>
           <Ionicons name="time-outline" size={14} color={colors.mutedForeground} />
           <Text style={[styles.slotTime, { color: colors.foreground }]}>{game.time}</Text>
@@ -270,36 +317,7 @@ function ClubGameCard({
         />
       </TouchableOpacity>
 
-      {/* ── Zone 2: Type strip ──────────────────────────────────────── */}
-      <View style={[styles.typeStrip, { backgroundColor: gameTypeBg, borderTopColor: colors.border }]}>
-        {/* Badge row: type pill + game count */}
-        <View style={styles.typeStripRow}>
-          <View style={[styles.typePill, { backgroundColor: gameTypeColor + "22", borderColor: gameTypeColor + "40" }]}>
-            <Ionicons name={gameTypeIcon as any} size={12} color={gameTypeColor} />
-            <Text style={[styles.typePillText, { color: gameTypeColor }]}>{gameTypeLabel}</Text>
-          </View>
-          {compLabel && hasTournament && (
-            <>
-              <Text style={[styles.typeStripDot, { color: gameTypeColor + "80" }]}>·</Text>
-              <Text style={[styles.compTypeInline, { color: gameTypeColor }]} numberOfLines={1}>
-                {compLabel}
-              </Text>
-            </>
-          )}
-          <View style={{ flex: 1 }} />
-          <Text style={[styles.gameCount, { color: colors.mutedForeground }]}>
-            {group.games.length} {group.games.length === 1 ? "game" : "games"}
-          </Text>
-        </View>
-        {/* Event name — second line, only if present */}
-        {hasTournament && eventName && (
-          <Text style={[styles.eventName, { color: colors.foreground }]} numberOfLines={1}>
-            {eventName}
-          </Text>
-        )}
-      </View>
-
-      {/* ── Zone 3: Stats bar ───────────────────────────────────────── */}
+      {/* ── Zone 2: Stats bar ───────────────────────────────────────── */}
       <View style={[styles.statsBar, { borderTopColor: colors.border }]}>
         <View style={styles.statItem}>
           <Ionicons name="time-outline" size={14} color={colors.primary} />
@@ -990,7 +1008,15 @@ const styles = StyleSheet.create({
     borderTopWidth:   StyleSheet.hairlineWidth,
     gap:              12,
   },
-  slotLeft:    { flex: 1, gap: 4 },
+  slotLeft:    { flex: 1, gap: 6 },
+  slotTypeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
+  slotTypePill: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  slotTypePillText: { fontSize: 11, fontFamily: "Inter_700Bold" },
+  slotCompLabel:    { fontSize: 11, fontFamily: "Inter_600SemiBold", flexShrink: 1 },
+  slotEventName:    { fontSize: 12, fontFamily: "Inter_600SemiBold" },
   slotRight:   { alignItems: "flex-end", gap: 6, flexShrink: 0 },
   slotTimeRow: { flexDirection: "row", alignItems: "center", gap: 6 },
   slotTime:    { fontSize: 15, fontFamily: "Inter_700Bold" },

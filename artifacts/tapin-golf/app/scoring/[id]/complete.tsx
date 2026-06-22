@@ -392,8 +392,10 @@ export default function RoundCompleteScreen() {
 
                   {/* Header row */}
                   <View style={[bbStyles.headerRow, { backgroundColor: colors.primary }]}>
-                    {["H", "Par", meLabel, prtLabel, "Best", opp1Label, opp2Label, "Best", "Res"].map((lbl, i) => (
-                      <Text key={i} style={[bbStyles.hCell, i === 0 ? { flex: 0.6 } : i === 8 ? { flex: 0.8 } : {}]}>{lbl}</Text>
+                    {["H", "Par", meLabel, prtLabel, "Result", opp1Label, opp2Label, "Result", "Res"].map((lbl, i) => (
+                      <View key={i} style={[bbStyles.cellWrap, i === 0 ? { flex: 0.6 } : i === 8 ? { flex: 0.7 } : {}]}>
+                        <Text style={bbStyles.hCell}>{lbl}</Text>
+                      </View>
                     ))}
                   </View>
 
@@ -432,9 +434,9 @@ export default function RoundCompleteScreen() {
 
                     const resColor = res === "W" ? "#22c55e" : res === "L" ? "#f87171" : res === "H" ? GOLD : colors.mutedForeground;
 
-                    const cell = (val: number | null, nr: number | undefined, isBest: boolean) => (
-                      <View style={[bbStyles.cell, isBest ? { backgroundColor: "#16a34a30", borderRadius: 5 } : {}]}>
-                        <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular", color: isBest ? "#22c55e" : val != null ? colors.foreground : colors.mutedForeground }}>
+                    const C = ({ val, nr, isBest, flex, bold, color }: { val?: string | number | null; nr?: number; isBest?: boolean; flex?: number; bold?: boolean; color?: string }) => (
+                      <View style={[bbStyles.cellWrap, flex != null ? { flex } : {}, isBest ? { backgroundColor: "#16a34a30", borderRadius: 5 } : {}]}>
+                        <Text style={{ fontSize: 11, textAlign: "center", fontFamily: (bold || isBest) ? "Inter_700Bold" : "Inter_400Regular", color: isBest ? "#22c55e" : color ?? (val != null ? colors.foreground : colors.mutedForeground) }}>
                           {nr ? "NR" : val != null ? String(val) : "—"}
                         </Text>
                       </View>
@@ -442,36 +444,36 @@ export default function RoundCompleteScreen() {
 
                     return (
                       <View key={h.number} style={[bbStyles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <Text style={[bbStyles.cell, { flex: 0.6, fontFamily: "Inter_700Bold", color: colors.foreground, fontSize: 11 }]}>{h.number}</Text>
-                        <Text style={[bbStyles.cell, { color: colors.mutedForeground, fontSize: 11 }]}>{h.par}</Text>
-                        {cell(myGross,   mySaved?.is_nr,   myIsBest)}
-                        {cell(prtGross,  prtSaved?.is_nr,  prtIsBest)}
-                        <Text style={[bbStyles.cell, { fontFamily: "Inter_700Bold", color: teamBest != null ? "#16a34a" : colors.mutedForeground, fontSize: 11 }]}>
-                          {teamBest != null ? String(teamBest) : "—"}
-                        </Text>
-                        {cell(opp1Gross, opp1Saved?.is_nr, o1IsBest)}
-                        {cell(opp2Gross, opp2Saved?.is_nr, o2IsBest)}
-                        <Text style={[bbStyles.cell, { fontFamily: "Inter_700Bold", color: oppBest != null ? "#ef4444" : colors.mutedForeground, fontSize: 11 }]}>
-                          {oppBest != null ? String(oppBest) : "—"}
-                        </Text>
-                        <Text style={[bbStyles.cell, { flex: 0.8, fontFamily: "Inter_700Bold", color: resColor, fontSize: 11 }]}>
-                          {res ?? "—"}
-                        </Text>
+                        <C val={h.number}   flex={0.6} bold />
+                        <C val={h.par}      color={colors.mutedForeground} />
+                        <C val={myGross}    nr={mySaved?.is_nr}   isBest={myIsBest} />
+                        <C val={prtGross}   nr={prtSaved?.is_nr}  isBest={prtIsBest} />
+                        <C val={teamBest != null ? String(teamBest) : null} bold color={teamBest != null ? "#16a34a" : colors.mutedForeground} />
+                        <C val={opp1Gross}  nr={opp1Saved?.is_nr} isBest={o1IsBest} />
+                        <C val={opp2Gross}  nr={opp2Saved?.is_nr} isBest={o2IsBest} />
+                        <C val={oppBest != null ? String(oppBest) : null} bold color={oppBest != null ? "#ef4444" : colors.mutedForeground} />
+                        <C val={res} flex={0.7} bold color={resColor} />
                       </View>
                     );
                   })}
 
                   {/* BB Totals */}
                   <View style={[bbStyles.totalsRow, { backgroundColor: colors.primary }]}>
-                    <Text style={[bbStyles.totalCell, { flex: 0.6 }]}>TOT</Text>
-                    <Text style={bbStyles.totalCell}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
-                    <Text style={bbStyles.totalCell}>—</Text>
-                    <Text style={bbStyles.totalCell}>—</Text>
-                    <Text style={[bbStyles.totalCell, { color: "#22c55e" }]}>{teamWon}W</Text>
-                    <Text style={bbStyles.totalCell}>—</Text>
-                    <Text style={bbStyles.totalCell}>—</Text>
-                    <Text style={[bbStyles.totalCell, { color: "#f87171" }]}>{teamLost}L</Text>
-                    <Text style={[bbStyles.totalCell, { flex: 0.8, color: GOLD }]}>{teamHalved}H</Text>
+                    {[
+                      { v: "TOT",              flex: 0.6, color: "#fff" },
+                      { v: sc.reduce((s,h)=>s+h.par,0), color: "#fff" },
+                      { v: "—",                color: "rgba(255,255,255,0.5)" },
+                      { v: "—",                color: "rgba(255,255,255,0.5)" },
+                      { v: `${teamWon}W`,      color: "#22c55e" },
+                      { v: "—",                color: "rgba(255,255,255,0.5)" },
+                      { v: "—",                color: "rgba(255,255,255,0.5)" },
+                      { v: `${teamLost}L`,     color: "#f87171" },
+                      { v: `${teamHalved}H`,   flex: 0.7, color: GOLD },
+                    ].map((cell, i) => (
+                      <View key={i} style={[bbStyles.cellWrap, cell.flex != null ? { flex: cell.flex } : {}]}>
+                        <Text style={[bbStyles.totalCell, { color: cell.color }]}>{String(cell.v)}</Text>
+                      </View>
+                    ))}
                   </View>
                 </>
               );
@@ -594,11 +596,11 @@ export default function RoundCompleteScreen() {
 const GOLD = "#c8a84b";
 
 const bbStyles = StyleSheet.create({
-  headerRow: { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 7, borderRadius: 10, marginBottom: 2 },
-  hCell:     { flex: 1, fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
-  row:       { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, marginBottom: 2 },
-  cell:      { flex: 1, alignItems: "center", justifyContent: "center" },
-  totalsRow: { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10, marginTop: 2 },
+  headerRow: { flexDirection: "row", paddingHorizontal: 6, paddingVertical: 7, borderRadius: 10, marginBottom: 2 },
+  hCell:     { fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
+  row:       { flexDirection: "row", paddingHorizontal: 6, paddingVertical: 6, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, marginBottom: 2 },
+  cellWrap:  { flex: 1, alignItems: "center", justifyContent: "center" },
+  totalsRow: { flexDirection: "row", paddingHorizontal: 6, paddingVertical: 8, borderRadius: 10, marginTop: 2 },
   totalCell: { flex: 1, fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
 });
 

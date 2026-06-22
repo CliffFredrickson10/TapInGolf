@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -264,6 +265,8 @@ export default function HoleEntryScreen() {
   const [partnerGross, setPartnerGross] = useState<number | null>(null);
   const [opp2Gross, setOpp2Gross]       = useState<number | null>(null);
   const [pendingCount, setPendingCount] = useState(0);
+  const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
+  const [abandoning, setAbandoning] = useState(false);
   const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
@@ -491,24 +494,16 @@ export default function HoleEntryScreen() {
     router.replace(`/scoring/${id}/complete`);
   };
 
-  const onAbandon = () => {
-    Alert.alert(
-      "Abandon Round?",
-      "The round will be marked as abandoned with no result recorded. This cannot be undone.",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Abandon Round",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiFetch(`/scoring/rounds/${id}/abandon`, token, { method: "POST" });
-            } catch {}
-            router.replace("/(tabs)/scoring");
-          },
-        },
-      ]
-    );
+  const onAbandon = () => setShowAbandonConfirm(true);
+
+  const doAbandon = async () => {
+    setAbandoning(true);
+    try {
+      await apiFetch(`/scoring/rounds/${id}/abandon`, token, { method: "POST" });
+    } catch {}
+    setAbandoning(false);
+    setShowAbandonConfirm(false);
+    router.replace("/(tabs)/scoring");
   };
 
   const isLastHole   = holeIdx === scorecard.length - 1;
@@ -909,6 +904,40 @@ export default function HoleEntryScreen() {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* ── Abandon confirmation overlay ── */}
+      <Modal
+        visible={showAbandonConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowAbandonConfirm(false)}
+      >
+        <View style={styles.abandonOverlay}>
+          <View style={styles.abandonCard}>
+            <Ionicons name="cloud-offline-outline" size={36} color="rgba(255,255,255,0.4)" style={{ marginBottom: 12 }} />
+            <Text style={styles.abandonTitle}>Abandon Round?</Text>
+            <Text style={styles.abandonBody}>
+              The round will be marked as abandoned with no result recorded. This cannot be undone.
+            </Text>
+            <TouchableOpacity
+              onPress={doAbandon}
+              disabled={abandoning}
+              style={styles.abandonConfirmBtn}
+            >
+              {abandoning
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.abandonConfirmText}>Abandon Round</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowAbandonConfirm(false)}
+              style={styles.abandonCancelBtn}
+            >
+              <Text style={styles.abandonCancelText}>Keep Playing</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -1048,4 +1077,30 @@ const styles = StyleSheet.create({
   },
   matchBannerLabel: { fontSize: 20, fontFamily: "Inter_700Bold" },
   matchBannerSub: { fontSize: 11, fontFamily: "Inter_400Regular", color: MUTED_FG, marginTop: 2 },
+  abandonOverlay: {
+    flex: 1, backgroundColor: "rgba(0,0,0,0.75)",
+    alignItems: "center", justifyContent: "center", padding: 32,
+  },
+  abandonCard: {
+    width: "100%", backgroundColor: SURFACE, borderRadius: 20,
+    borderWidth: 1, borderColor: BORDER,
+    padding: 28, alignItems: "center",
+  },
+  abandonTitle: {
+    fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 10,
+  },
+  abandonBody: {
+    fontSize: 14, fontFamily: "Inter_400Regular", color: MUTED_FG,
+    textAlign: "center", lineHeight: 20, marginBottom: 24,
+  },
+  abandonConfirmBtn: {
+    width: "100%", backgroundColor: "#7f1d1d", borderRadius: 14,
+    paddingVertical: 14, alignItems: "center", marginBottom: 10,
+  },
+  abandonConfirmText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fca5a5" },
+  abandonCancelBtn: {
+    width: "100%", backgroundColor: GREEN, borderRadius: 14,
+    paddingVertical: 14, alignItems: "center",
+  },
+  abandonCancelText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
 });

@@ -554,11 +554,20 @@ export default function StartRoundScreen() {
                 ) : (
                   // Editable
                   <View>
-                <View style={[styles.selectedFormatChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40" }]}>
-                  <Ionicons name="golf" size={14} color={colors.primary} />
-                  <Text style={[styles.selectedFormatText, { color: colors.primary }]}>{selectedFormatLabel}</Text>
-                </View>
-                <View style={{ gap: 6, marginTop: 8 }}>
+                {format ? (
+                  <View style={[styles.selectedFormatChip, { backgroundColor: colors.primary + "15", borderColor: colors.primary + "40", marginBottom: 8 }]}>
+                    <Ionicons name="golf" size={14} color={colors.primary} />
+                    <Text style={[styles.selectedFormatText, { color: colors.primary }]}>{selectedFormatLabel}</Text>
+                  </View>
+                ) : (
+                  <View style={[styles.infoBanner, { backgroundColor: "#fef3f2", borderColor: "#fca5a5", marginBottom: 8 }]}>
+                    <Ionicons name="alert-circle-outline" size={14} color="#b91c1c" />
+                    <Text style={[styles.infoText, { color: "#b91c1c" }]}>
+                      A format is required — tap a category below to choose one.
+                    </Text>
+                  </View>
+                )}
+                <View style={{ gap: 6 }}>
                   {FORMAT_GROUPS.map(g => {
                     const isOpen = expandedGroup === g.group;
                     const hasSelected = g.formats.some(f => f.key === format);

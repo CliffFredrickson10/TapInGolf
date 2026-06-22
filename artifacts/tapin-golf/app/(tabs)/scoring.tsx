@@ -299,7 +299,11 @@ const styles = StyleSheet.create({
   },
   continueBtn: {
     flexDirection: "row", alignItems: "center", gap: 8, justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.15)", borderRadius: 14, paddingVertical: 14, marginTop: 4,
+    backgroundColor: "rgba(255,255,255,0.15)",
+    borderTopLeftRadius: 12, borderTopRightRadius: 12,
+    borderBottomLeftRadius: 20, borderBottomRightRadius: 20,
+    paddingVertical: 16,
+    marginHorizontal: -20, marginBottom: -20, marginTop: 8,
   },
   continueBtnText: {
     fontSize: 15, fontFamily: "Inter_700Bold", flex: 1, textAlign: "center", color: "#fff",

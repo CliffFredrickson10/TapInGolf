@@ -53,7 +53,7 @@ type Round = {
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
   partner_name?: string | null;
-  opp2_name?: string | null;
+  opponent2_name?: string | null;
   playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
@@ -298,7 +298,7 @@ export default function HoleEntryScreen() {
         body.players = [
           { name: round.partner_name ?? "Partner", grossScore: isNr ? null : partnerGross },
           { name: round.opponent_name ?? "Opp 1",  grossScore: isNr ? null : oppGross    },
-          { name: "Opp 2",                         grossScore: isNr ? null : opp2Gross   },
+          { name: round.opponent2_name ?? "Opp 2",  grossScore: isNr ? null : opp2Gross   },
         ];
       }
       await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, {
@@ -381,13 +381,8 @@ export default function HoleEntryScreen() {
       <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
         <View style={[styles.sectionDot, { backgroundColor: color }]} />
         <Text style={[styles.sectionLabel, { color }]}>{label.toUpperCase()}</Text>
-        {isBest && g != null && (
-          <View style={[styles.scoreBadge, { backgroundColor: GOLD + "22", borderColor: GOLD + "50", paddingHorizontal: 8, paddingVertical: 2, marginLeft: 4 }]}>
-            <Text style={[styles.scoreBadgeText, { color: GOLD, fontSize: 10 }]}>Best Ball ⭐</Text>
-          </View>
-        )}
       </View>
-      <View style={styles.stepper}>
+      <View style={[styles.stepper, { paddingHorizontal: 16 }]}>
         <TouchableOpacity
           onPress={() => { Haptics.selectionAsync(); sg(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
           style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: g != null && g > 1 ? "#f87171" : BORDER, width: 52, height: 52, borderRadius: 26 }]}
@@ -538,18 +533,13 @@ export default function HoleEntryScreen() {
                 · {user?.name ?? "You"}
               </Text>
             )}
-            {isBetterball && bbTeamWinner === 0 && gross != null && (
-              <View style={[styles.scoreBadge, { backgroundColor: GOLD + "22", borderColor: GOLD + "50", paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6 }]}>
-                <Text style={[styles.scoreBadgeText, { color: GOLD, fontSize: 10 }]}>Best Ball ⭐</Text>
-              </View>
-            )}
           </View>
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
           <View style={styles.stepperSection}>
             <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
-              {gross != null && (
+              {gross != null && !isBetterball && (
                 <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
                   <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
                     {scoreName(gross, hole.par)}
@@ -641,11 +631,6 @@ export default function HoleEntryScreen() {
               <Text style={[styles.sectionLabel, { color: "#a78bfa" }]}>
                 {isBetterball ? "OPPONENTS" : (round.opponent_name ?? "OPPONENT").toUpperCase()}
               </Text>
-              {isBetterball && bbOppWinner === 0 && oppGross != null && (
-                <View style={[styles.scoreBadge, { backgroundColor: GOLD + "22", borderColor: GOLD + "50", paddingHorizontal: 8, paddingVertical: 2, marginLeft: 6 }]}>
-                  <Text style={[styles.scoreBadgeText, { color: GOLD, fontSize: 10 }]}>Best Ball ⭐</Text>
-                </View>
-              )}
             </View>
 
             {/* For betterball, group both opps in oppGroupBox; for singles use the large stepper */}
@@ -659,7 +644,7 @@ export default function HoleEntryScreen() {
                 />
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
                 <BbPlayerInput flat
-                  label={round.opp2_name ?? "Opp 2"}
+                  label={round.opponent2_name ?? "Opp 2"}
                   color="#fb923c" bgColor="#1a1005"
                   gross={opp2Gross} setGross={setOpp2Gross}
                   ha={opp2HA} isBest={bbOppWinner === 1}

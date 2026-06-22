@@ -153,7 +153,6 @@ export default function RoundCompleteScreen() {
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -172,24 +171,15 @@ export default function RoundCompleteScreen() {
     setCompleting(true);
     try {
       await apiFetch(`/scoring/rounds/${id}/complete`, token, { method: "POST" });
+      // Auto-submit score immediately after completing
+      try {
+        await apiFetch(`/scoring/rounds/${id}/submit`, token, { method: "POST" });
+      } catch {}
       await loadRound();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to complete round");
     } finally {
       setCompleting(false);
-    }
-  };
-
-  const onSubmitToClub = async () => {
-    if (!round || submitting) return;
-    setSubmitting(true);
-    try {
-      await apiFetch(`/scoring/rounds/${id}/submit`, token, { method: "POST" });
-      await loadRound();
-    } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to submit score");
-    } finally {
-      setSubmitting(false);
     }
   };
 
@@ -772,26 +762,11 @@ export default function RoundCompleteScreen() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            {round.tournament_id && (
-              round.score_submitted ? (
-                <View style={[styles.footerBtn, { backgroundColor: "#16a34a22", borderWidth: 1.5, borderColor: "#16a34a60" }]}>
-                  <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
-                  <Text style={[styles.footerBtnText, { color: "#16a34a" }]}>Score Submitted to Club ✓</Text>
-                </View>
-              ) : (
-                <TouchableOpacity
-                  onPress={onSubmitToClub}
-                  disabled={submitting}
-                  style={[styles.footerBtn, { backgroundColor: GOLD, opacity: submitting ? 0.6 : 1 }]}
-                >
-                  {submitting
-                    ? <ActivityIndicator color="#fff" size="small" />
-                    : <Ionicons name="trophy" size={18} color="#fff" />}
-                  <Text style={[styles.footerBtnText, { color: "#fff" }]}>
-                    {submitting ? "Submitting…" : `Submit to ${round.tournament_name ?? "Club"}`}
-                  </Text>
-                </TouchableOpacity>
-              )
+            {round.tournament_id && round.score_submitted && (
+              <View style={[styles.footerBtn, { backgroundColor: "#16a34a22", borderWidth: 1.5, borderColor: "#16a34a60" }]}>
+                <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
+                <Text style={[styles.footerBtnText, { color: "#16a34a" }]}>Score Submitted to Club ✓</Text>
+              </View>
             )}
             <TouchableOpacity
               onPress={() => router.replace("/(tabs)/scoring")}

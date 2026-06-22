@@ -212,7 +212,9 @@ router.post("/scoring/rounds", async (req, res) => {
     let opponentName: string | null = req.body.opponentName ?? null;
     let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
     let partnerName: string | null = null;
+    let partnerPlayingHcp = 0;
     let opponent2Name: string | null = null;
+    let opponent2PlayingHcp = 0;
 
     if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
       // For betterball, also look up the user's team and partner
@@ -224,10 +226,13 @@ router.post("/scoring/rounds", async (req, res) => {
 
       if (teamId) {
         const ptnr = await row<any>(
-          "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+          "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
           [teamId, user.id, tournamentId]
         );
         partnerName = ptnr?.name ?? null;
+        partnerPlayingHcp = ptnr?.handicap != null
+          ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100))
+          : 0;
       }
 
       const m = await row<any>(`
@@ -270,10 +275,13 @@ router.post("/scoring/rounds", async (req, res) => {
             );
             if (oppTeam?.team_id) {
               const opp2 = await row<any>(
-                "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+                "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
                 [oppTeam.team_id, oppRepId, tournamentId]
               );
               opponent2Name = opp2?.name ?? null;
+              opponent2PlayingHcp = opp2?.handicap != null
+                ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100))
+                : 0;
             }
           }
         }
@@ -289,11 +297,13 @@ router.post("/scoring/rounds", async (req, res) => {
     const [{ id }] = await query<{ id: number }>(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name, opponent2_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp,
+         partner_name, partner_playing_hcp, opponent2_name, opponent2_playing_hcp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
-        tournamentId, matchId, opponentName, opponentPlayingHcp, partnerName, opponent2Name]);
+        tournamentId, matchId, opponentName, opponentPlayingHcp,
+        partnerName, partnerPlayingHcp, opponent2Name, opponent2PlayingHcp]);
 
     res.json({ id });
   } catch (err: any) {
@@ -491,7 +501,7 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
           if (round.format === "singles_match_play") {
             // Opponent scores live in scoring_player_holes at player_index = 0
             const oppRows = await query<any>(
-              "SELECT hole_number, gross_score, is_nr, stroke_index FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+              "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
               [roundId]
             );
             const oppMap: Record<number, any> = {};
@@ -508,7 +518,7 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
           } else {
             // betterball: partner = index 0, opp1 = index 1, opp2 = index 2
             const pRows = await query<any>(
-              "SELECT hole_number, gross_score, is_nr, stroke_index, player_index FROM scoring_player_holes WHERE round_id = ?",
+              "SELECT hole_number, gross_score, is_nr, player_index FROM scoring_player_holes WHERE round_id = ?",
               [roundId]
             );
             const partnerMap: Record<number, any> = {};
@@ -519,20 +529,25 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
               else if (p.player_index === 1) opp1Map[p.hole_number]    = p;
               else if (p.player_index === 2) opp2Map[p.hole_number]    = p;
             }
+            // Use stored per-player playing handicaps (stored at round start from users.handicap)
+            const partnerHcp  = round.partner_playing_hcp  ?? 0;
+            const opp1Hcp     = round.opponent_playing_hcp ?? 0;
+            const opp2Hcp     = round.opponent2_playing_hcp ?? opp1Hcp; // fallback for old rounds
             for (const h of holeRows) {
               if (h.is_nr || h.gross_score == null) continue;
               const opp1 = opp1Map[h.hole_number];
               const opp2 = opp2Map[h.hole_number];
               if (!opp1 && !opp2) continue;
-              const partner   = partnerMap[h.hole_number];
-              const myHA      = getHALocal(h.stroke_index, round.playing_handicap);
-              const myNet     = h.gross_score - myHA;
-              const partNet   = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - myHA : null;
-              const teamBest  = partNet != null ? Math.min(myNet, partNet) : myNet;
-              const oppHA     = getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
-              const opp1Net   = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
-              const opp2Net   = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
-              const oppBest   = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : (opp1Net ?? opp2Net);
+              const partner  = partnerMap[h.hole_number];
+              const myNet    = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+              const partNet  = partner?.gross_score != null && !partner.is_nr
+                ? partner.gross_score - getHALocal(h.stroke_index, partnerHcp) : null;
+              const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
+              const opp1Net  = opp1?.gross_score != null && !opp1.is_nr
+                ? opp1.gross_score - getHALocal(h.stroke_index, opp1Hcp) : null;
+              const opp2Net  = opp2?.gross_score != null && !opp2.is_nr
+                ? opp2.gross_score - getHALocal(h.stroke_index, opp2Hcp) : null;
+              const oppBest  = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : (opp1Net ?? opp2Net);
               if (oppBest == null) continue;
               if      (teamBest < oppBest) won++;
               else if (teamBest > oppBest) lost++;

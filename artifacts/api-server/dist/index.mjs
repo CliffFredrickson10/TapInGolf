@@ -76640,7 +76640,9 @@ router23.post("/scoring/rounds", async (req, res) => {
     let opponentName = req.body.opponentName ?? null;
     let opponentPlayingHcp = Number(req.body.opponentPlayingHcp ?? 0);
     let partnerName = null;
+    let partnerPlayingHcp = 0;
     let opponent2Name = null;
+    let opponent2PlayingHcp = 0;
     if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
       const teamReg = await row(
         "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
@@ -76649,10 +76651,11 @@ router23.post("/scoring/rounds", async (req, res) => {
       const teamId = teamReg?.team_id ?? null;
       if (teamId) {
         const ptnr = await row(
-          "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+          "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
           [teamId, user.id, tournamentId]
         );
         partnerName = ptnr?.name ?? null;
+        partnerPlayingHcp = ptnr?.handicap != null ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100)) : 0;
       }
       const m = await row(`
         SELECT km.id, km.player1_id, km.player2_id,
@@ -76691,10 +76694,11 @@ router23.post("/scoring/rounds", async (req, res) => {
             );
             if (oppTeam?.team_id) {
               const opp2 = await row(
-                "SELECT u.name FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
+                "SELECT u.name, u.handicap FROM event_registrations er JOIN users u ON u.id = er.user_id WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1",
                 [oppTeam.team_id, oppRepId, tournamentId]
               );
               opponent2Name = opp2?.name ?? null;
+              opponent2PlayingHcp = opp2?.handicap != null ? Math.round(Number(opp2.handicap) * (Number(allowancePct) / 100)) : 0;
             }
           }
         }
@@ -76707,8 +76711,9 @@ router23.post("/scoring/rounds", async (req, res) => {
     const [{ id }] = await query(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp, partner_name, opponent2_name)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp,
+         partner_name, partner_playing_hcp, opponent2_name, opponent2_playing_hcp)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -76723,7 +76728,9 @@ router23.post("/scoring/rounds", async (req, res) => {
       opponentName,
       opponentPlayingHcp,
       partnerName,
-      opponent2Name
+      partnerPlayingHcp,
+      opponent2Name,
+      opponent2PlayingHcp
     ]);
     res.json({ id });
   } catch (err) {
@@ -76913,7 +76920,7 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
           let won = 0, lost = 0, halved = 0;
           if (round.format === "singles_match_play") {
             const oppRows = await query(
-              "SELECT hole_number, gross_score, is_nr, stroke_index FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
+              "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
               [roundId]
             );
             const oppMap = {};
@@ -76929,7 +76936,7 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
             }
           } else {
             const pRows = await query(
-              "SELECT hole_number, gross_score, is_nr, stroke_index, player_index FROM scoring_player_holes WHERE round_id = ?",
+              "SELECT hole_number, gross_score, is_nr, player_index FROM scoring_player_holes WHERE round_id = ?",
               [roundId]
             );
             const partnerMap = {};
@@ -76940,19 +76947,20 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
               else if (p.player_index === 1) opp1Map[p.hole_number] = p;
               else if (p.player_index === 2) opp2Map[p.hole_number] = p;
             }
+            const partnerHcp = round.partner_playing_hcp ?? 0;
+            const opp1Hcp = round.opponent_playing_hcp ?? 0;
+            const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
             for (const h of holeRows) {
               if (h.is_nr || h.gross_score == null) continue;
               const opp1 = opp1Map[h.hole_number];
               const opp2 = opp2Map[h.hole_number];
               if (!opp1 && !opp2) continue;
               const partner = partnerMap[h.hole_number];
-              const myHA = getHALocal(h.stroke_index, round.playing_handicap);
-              const myNet = h.gross_score - myHA;
-              const partNet = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - myHA : null;
+              const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+              const partNet = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - getHALocal(h.stroke_index, partnerHcp) : null;
               const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
-              const oppHA = getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
-              const opp1Net = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
-              const opp2Net = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
+              const opp1Net = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - getHALocal(h.stroke_index, opp1Hcp) : null;
+              const opp2Net = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - getHALocal(h.stroke_index, opp2Hcp) : null;
               const oppBest = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : opp1Net ?? opp2Net;
               if (oppBest == null) continue;
               if (teamBest < oppBest) won++;
@@ -78633,7 +78641,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_name VARCHAR(100)");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_name VARCHAR(100)");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_name VARCHAR(100)");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_result VARCHAR(10) CHECK (match_result IN ('won','lost','halved'))");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`

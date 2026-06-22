@@ -37,6 +37,9 @@ type Round = {
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
   partner_name?: string | null;
+  partner_playing_hcp?: number;
+  opponent2_name?: string | null;
+  opponent2_playing_hcp?: number;
   match_id?: number | null;
   match_result?: string | null;
   match_status?: string | null;
@@ -357,54 +360,173 @@ export default function RoundCompleteScreen() {
         <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Hole by Hole</Text>
 
-          {/* Header */}
-          <View style={[styles.scHeaderRow, { backgroundColor: colors.primary, borderRadius: 10, marginBottom: 2 }]}>
-            {["Hole", "Par", "SI", "H/C", "Gross", "Net", "Pts"].map(h => (
-              <Text key={h} style={styles.scHeaderCell}>{h}</Text>
-            ))}
-          </View>
+          {isBetterball && round.playerHoles ? (
+            // ── Betterball 4-player scorecard ─────────────────────────────
+            (() => {
+              const myHcp   = round.playing_handicap;
+              const prtHcp  = round.partner_playing_hcp  ?? round.playing_handicap;
+              const opp1Hcp = round.opponent_playing_hcp ?? 0;
+              const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
 
-          {sc.map(h => {
-            const saved = holes[h.number];
-            const ha = getHA(h.stroke_index, round.playing_handicap);
-            const isNr = saved?.is_nr;
-            const gross = saved?.gross_score;
-            const net = saved?.net_score;
-            const pts = saved?.stableford_points;
-            const diff = gross != null ? gross - h.par : null;
-            const ss = diff != null ? scoreStyle(diff) : null;
+              const firstName = (n?: string | null) => (n ?? "?").split(" ")[0].slice(0, 8);
+              const meLabel   = firstName((round as any).user_name ?? "Me");
+              const prtLabel  = firstName(round.partner_name)  || "Partner";
+              const opp1Label = firstName(round.opponent_name) || "Opp 1";
+              const opp2Label = firstName(round.opponent2_name) || "Opp 2";
 
-            return (
-              <View key={h.number} style={[styles.scRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <Text style={[styles.scCell, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{h.number}</Text>
-                <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.par}</Text>
-                <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.stroke_index}</Text>
-                <Text style={[styles.scCell, { color: ha > 0 ? "#c8a84b" : colors.mutedForeground, fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular" }]}>
-                  {ha > 0 ? `+${ha}` : "0"}
-                </Text>
-                <View style={[styles.scCellWrap, ss?.border ? { borderColor: ss.border, borderWidth: 1.5, borderRadius: 6 } : {}]}>
-                  <Text style={[styles.scCell, { color: ss?.text ?? colors.mutedForeground }]}>
-                    {isNr ? "NR" : gross != null ? String(gross) : "—"}
-                  </Text>
-                </View>
-                <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{isNr ? "—" : net != null ? String(net) : "—"}</Text>
-                <Text style={[styles.scCell, { color: pts != null ? (pts >= 3 ? "#22c55e" : pts >= 2 ? "#c8a84b" : pts >= 1 ? "#fb923c" : "#f87171") : colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                  {isNr ? "0" : pts != null ? String(pts) : "—"}
-                </Text>
+              let teamWon = 0, teamLost = 0, teamHalved = 0;
+
+              return (
+                <>
+                  {/* Team labels */}
+                  <View style={{ flexDirection: "row", marginBottom: 4, gap: 4 }}>
+                    <View style={{ flex: 1, backgroundColor: "#16a34a22", borderRadius: 8, padding: 6, alignItems: "center" }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#16a34a" }}>YOUR TEAM</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{meLabel} & {prtLabel}</Text>
+                    </View>
+                    <View style={{ flex: 1, backgroundColor: "#ef444422", borderRadius: 8, padding: 6, alignItems: "center" }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#ef4444" }}>OPPONENTS</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{opp1Label} & {opp2Label}</Text>
+                    </View>
+                  </View>
+
+                  {/* Header row */}
+                  <View style={[bbStyles.headerRow, { backgroundColor: colors.primary }]}>
+                    {["H", "Par", meLabel, prtLabel, "Best", opp1Label, opp2Label, "Best", "Res"].map((lbl, i) => (
+                      <Text key={i} style={[bbStyles.hCell, i === 0 ? { flex: 0.6 } : i === 8 ? { flex: 0.8 } : {}]}>{lbl}</Text>
+                    ))}
+                  </View>
+
+                  {sc.map(h => {
+                    const mySaved   = holes[h.number];
+                    const prtSaved  = round.playerHoles![`0_${h.number}`];
+                    const opp1Saved = round.playerHoles![`1_${h.number}`];
+                    const opp2Saved = round.playerHoles![`2_${h.number}`];
+
+                    const myGross   = mySaved?.is_nr   ? null : mySaved?.gross_score  ?? null;
+                    const prtGross  = prtSaved?.is_nr  ? null : prtSaved?.gross_score  ?? null;
+                    const opp1Gross = opp1Saved?.is_nr ? null : opp1Saved?.gross_score ?? null;
+                    const opp2Gross = opp2Saved?.is_nr ? null : opp2Saved?.gross_score ?? null;
+
+                    const myNet   = myGross   != null ? myGross   - getHA(h.stroke_index, myHcp)   : null;
+                    const prtNet  = prtGross  != null ? prtGross  - getHA(h.stroke_index, prtHcp)  : null;
+                    const opp1Net = opp1Gross != null ? opp1Gross - getHA(h.stroke_index, opp1Hcp) : null;
+                    const opp2Net = opp2Gross != null ? opp2Gross - getHA(h.stroke_index, opp2Hcp) : null;
+
+                    const teamBest = myNet != null && prtNet != null ? Math.min(myNet, prtNet)
+                                   : myNet ?? prtNet;
+                    const oppBest  = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net)
+                                   : opp1Net ?? opp2Net;
+
+                    const myIsBest  = teamBest != null && myNet  === teamBest && myGross  != null;
+                    const prtIsBest = teamBest != null && prtNet === teamBest && prtGross != null && !myIsBest;
+                    const o1IsBest  = oppBest  != null && opp1Net === oppBest  && opp1Gross != null;
+                    const o2IsBest  = oppBest  != null && opp2Net === oppBest  && opp2Gross != null && !o1IsBest;
+
+                    let res: "W" | "L" | "H" | null = null;
+                    if (teamBest != null && oppBest != null) {
+                      if (teamBest < oppBest)      { res = "W"; teamWon++;    }
+                      else if (teamBest > oppBest) { res = "L"; teamLost++;   }
+                      else                         { res = "H"; teamHalved++; }
+                    }
+
+                    const resColor = res === "W" ? "#22c55e" : res === "L" ? "#f87171" : res === "H" ? GOLD : colors.mutedForeground;
+
+                    const cell = (val: number | null, nr: number | undefined, isBest: boolean) => (
+                      <View style={[bbStyles.cell, isBest ? { backgroundColor: "#16a34a30", borderRadius: 5 } : {}]}>
+                        <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular", color: isBest ? "#22c55e" : val != null ? colors.foreground : colors.mutedForeground }}>
+                          {nr ? "NR" : val != null ? String(val) : "—"}
+                        </Text>
+                      </View>
+                    );
+
+                    return (
+                      <View key={h.number} style={[bbStyles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                        <Text style={[bbStyles.cell, { flex: 0.6, fontFamily: "Inter_700Bold", color: colors.foreground, fontSize: 11 }]}>{h.number}</Text>
+                        <Text style={[bbStyles.cell, { color: colors.mutedForeground, fontSize: 11 }]}>{h.par}</Text>
+                        {cell(myGross,   mySaved?.is_nr,   myIsBest)}
+                        {cell(prtGross,  prtSaved?.is_nr,  prtIsBest)}
+                        <Text style={[bbStyles.cell, { fontFamily: "Inter_700Bold", color: teamBest != null ? "#16a34a" : colors.mutedForeground, fontSize: 11 }]}>
+                          {teamBest != null ? String(teamBest) : "—"}
+                        </Text>
+                        {cell(opp1Gross, opp1Saved?.is_nr, o1IsBest)}
+                        {cell(opp2Gross, opp2Saved?.is_nr, o2IsBest)}
+                        <Text style={[bbStyles.cell, { fontFamily: "Inter_700Bold", color: oppBest != null ? "#ef4444" : colors.mutedForeground, fontSize: 11 }]}>
+                          {oppBest != null ? String(oppBest) : "—"}
+                        </Text>
+                        <Text style={[bbStyles.cell, { flex: 0.8, fontFamily: "Inter_700Bold", color: resColor, fontSize: 11 }]}>
+                          {res ?? "—"}
+                        </Text>
+                      </View>
+                    );
+                  })}
+
+                  {/* BB Totals */}
+                  <View style={[bbStyles.totalsRow, { backgroundColor: colors.primary }]}>
+                    <Text style={[bbStyles.totalCell, { flex: 0.6 }]}>TOT</Text>
+                    <Text style={bbStyles.totalCell}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
+                    <Text style={bbStyles.totalCell}>—</Text>
+                    <Text style={bbStyles.totalCell}>—</Text>
+                    <Text style={[bbStyles.totalCell, { color: "#22c55e" }]}>{teamWon}W</Text>
+                    <Text style={bbStyles.totalCell}>—</Text>
+                    <Text style={bbStyles.totalCell}>—</Text>
+                    <Text style={[bbStyles.totalCell, { color: "#f87171" }]}>{teamLost}L</Text>
+                    <Text style={[bbStyles.totalCell, { flex: 0.8, color: GOLD }]}>{teamHalved}H</Text>
+                  </View>
+                </>
+              );
+            })()
+          ) : (
+            // ── Standard single-player scorecard ──────────────────────────
+            <>
+              <View style={[styles.scHeaderRow, { backgroundColor: colors.primary, borderRadius: 10, marginBottom: 2 }]}>
+                {["Hole", "Par", "SI", "H/C", "Gross", "Net", "Pts"].map(h => (
+                  <Text key={h} style={styles.scHeaderCell}>{h}</Text>
+                ))}
               </View>
-            );
-          })}
 
-          {/* Totals */}
-          <View style={[styles.scTotalsRow, { backgroundColor: colors.primary, borderRadius: 10, marginTop: 2 }]}>
-            <Text style={styles.scTotalLabel}>TOTAL</Text>
-            <Text style={styles.scTotalPar}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
-            <Text style={styles.scTotalBlank}>—</Text>
-            <Text style={[styles.scTotalBlank, { color: "#c8a84b" }]}>{round.playing_handicap}</Text>
-            <Text style={styles.scTotalValue}>{totalGross || "—"}</Text>
-            <Text style={styles.scTotalValue}>{totalNet || "—"}</Text>
-            <Text style={[styles.scTotalValue, { color: GOLD }]}>{totalPts}</Text>
-          </View>
+              {sc.map(h => {
+                const saved = holes[h.number];
+                const ha = getHA(h.stroke_index, round.playing_handicap);
+                const isNr = saved?.is_nr;
+                const gross = saved?.gross_score;
+                const net = saved?.net_score;
+                const pts = saved?.stableford_points;
+                const diff = gross != null ? gross - h.par : null;
+                const ss = diff != null ? scoreStyle(diff) : null;
+
+                return (
+                  <View key={h.number} style={[styles.scRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
+                    <Text style={[styles.scCell, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{h.number}</Text>
+                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.par}</Text>
+                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.stroke_index}</Text>
+                    <Text style={[styles.scCell, { color: ha > 0 ? "#c8a84b" : colors.mutedForeground, fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular" }]}>
+                      {ha > 0 ? `+${ha}` : "0"}
+                    </Text>
+                    <View style={[styles.scCellWrap, ss?.border ? { borderColor: ss.border, borderWidth: 1.5, borderRadius: 6 } : {}]}>
+                      <Text style={[styles.scCell, { color: ss?.text ?? colors.mutedForeground }]}>
+                        {isNr ? "NR" : gross != null ? String(gross) : "—"}
+                      </Text>
+                    </View>
+                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{isNr ? "—" : net != null ? String(net) : "—"}</Text>
+                    <Text style={[styles.scCell, { color: pts != null ? (pts >= 3 ? "#22c55e" : pts >= 2 ? "#c8a84b" : pts >= 1 ? "#fb923c" : "#f87171") : colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
+                      {isNr ? "0" : pts != null ? String(pts) : "—"}
+                    </Text>
+                  </View>
+                );
+              })}
+
+              <View style={[styles.scTotalsRow, { backgroundColor: colors.primary, borderRadius: 10, marginTop: 2 }]}>
+                <Text style={styles.scTotalLabel}>TOTAL</Text>
+                <Text style={styles.scTotalPar}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
+                <Text style={styles.scTotalBlank}>—</Text>
+                <Text style={[styles.scTotalBlank, { color: "#c8a84b" }]}>{round.playing_handicap}</Text>
+                <Text style={styles.scTotalValue}>{totalGross || "—"}</Text>
+                <Text style={styles.scTotalValue}>{totalNet || "—"}</Text>
+                <Text style={[styles.scTotalValue, { color: GOLD }]}>{totalPts}</Text>
+              </View>
+            </>
+          )}
         </View>
       </ScrollView>
 
@@ -470,6 +592,15 @@ export default function RoundCompleteScreen() {
 }
 
 const GOLD = "#c8a84b";
+
+const bbStyles = StyleSheet.create({
+  headerRow: { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 7, borderRadius: 10, marginBottom: 2 },
+  hCell:     { flex: 1, fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
+  row:       { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 6, borderRadius: 8, borderWidth: StyleSheet.hairlineWidth, marginBottom: 2 },
+  cell:      { flex: 1, alignItems: "center", justifyContent: "center" },
+  totalsRow: { flexDirection: "row", paddingHorizontal: 8, paddingVertical: 8, borderRadius: 10, marginTop: 2 },
+  totalCell: { flex: 1, fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff", textAlign: "center" },
+});
 
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12, paddingHorizontal: 16, paddingBottom: 16 },

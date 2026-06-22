@@ -1571,6 +1571,7 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS club_hire_price DECIMAL(10,2)");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS knockout_reminder_sent SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS stitch_payment_id VARCHAR(100)");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS bracket_ready_notified_at TIMESTAMP");
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS club_assigned SMALLINT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS singles_entry_deadline DATE");

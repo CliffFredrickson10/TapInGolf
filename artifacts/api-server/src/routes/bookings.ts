@@ -961,6 +961,9 @@ router.post("/bookings", async (req, res): Promise<void> => {
         redirectUrl:       `https://${host}/booking/success`,
       });
       paymentUrl = pr.url;
+      // Store the payment ID so the app can verify payment on return without
+      // relying solely on the webhook.
+      await exec("UPDATE bookings SET stitch_payment_id = ? WHERE id = ?", [pr.id, bookingId]);
     } catch (stitchErr: any) {
       // Stitch call failed — cancel the booking, release the reserved seats,
       // and restore any voucher value that was deducted in the booking transaction.
@@ -1225,6 +1228,58 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
     contact_email: club?.cancel_contact_email ?? null,
     contact_phone: club?.cancel_contact_phone ?? null,
   });
+});
+
+// Confirm a Stitch booking payment by polling Stitch directly.
+// Called by the app when the WebView lands on the success redirect URL —
+// more reliable than waiting for the webhook in dev (where the domain rotates).
+router.post("/:id/confirm-payment", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const bookingId = parseInt(req.params.id, 10);
+  if (isNaN(bookingId)) { res.status(400).json({ message: "Invalid booking id" }); return; }
+
+  const booking = await row<any>(
+    "SELECT id, user_id, status, stitch_payment_id FROM bookings WHERE id = ?",
+    [bookingId]
+  );
+  if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
+  if (booking.user_id !== user.id) { res.status(403).json({ message: "Forbidden" }); return; }
+
+  // Already confirmed — nothing to do
+  if (booking.status === "confirmed" || booking.status === "completed") {
+    res.json({ confirmed: true, status: booking.status });
+    return;
+  }
+
+  if (!booking.stitch_payment_id) {
+    res.status(400).json({ message: "No payment ID on record for this booking" });
+    return;
+  }
+
+  let paid = false;
+  try {
+    const detail = await getStitchPayment(booking.stitch_payment_id);
+    paid = String(detail?.status ?? "").toUpperCase() === "PAID";
+  } catch {
+    res.status(502).json({ message: "Could not verify payment with Stitch. Please wait — confirmation is on its way." });
+    return;
+  }
+
+  if (!paid) {
+    res.json({ confirmed: false, status: booking.status });
+    return;
+  }
+
+  // Payment confirmed — run the same logic the webhook would run
+  await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
+  await run(
+    "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+    [bookingId, bookingId]
+  );
+  fireInvoiceEmail(bookingId).catch(() => {});
+
+  res.json({ confirmed: true, status: "confirmed" });
 });
 
 // Stitch Express webhook — server-to-server payment notification (via Svix).

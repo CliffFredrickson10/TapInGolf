@@ -60,6 +60,14 @@ export default function PaymentScreen() {
         await apiFetch(`/bookings/${booking_id}/player-paid`, user.token, { method: "PUT" });
       } catch {}
     }
+    // Confirm the booking server-side immediately on return from the payment page.
+    // This is the most reliable path in dev (where the webhook URL may be stale)
+    // and is idempotent — the webhook can still arrive later with no harm done.
+    if (booking_id && user && !isPlayerPay) {
+      try {
+        await apiFetch(`/bookings/${booking_id}/confirm-payment`, user.token, { method: "POST" });
+      } catch {}
+    }
     router.replace({ pathname: "/booking/[id]", params: { id: booking_id } });
   };
 

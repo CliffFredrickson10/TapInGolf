@@ -544,11 +544,11 @@ export default function HoleEntryScreen() {
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
-          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#163020" }]}>
+          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#071a0e" }]}>
             {isBetterball && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
-                <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
-                <Text style={[styles.sectionLabel, { color: GREEN }]}>{(user?.name ?? "You").toUpperCase()}</Text>
+                <View style={[styles.sectionDot, { backgroundColor: "#22c55e" }]} />
+                <Text style={[styles.sectionLabel, { color: "#22c55e" }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>
             )}
             {!isBetterball && (
@@ -566,23 +566,23 @@ export default function HoleEntryScreen() {
             <View style={styles.stepper}>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e55" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
               >
-                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : MUTED_FG, fontSize: isAnyMatch ? 24 : 30 }]}>−</Text>
+                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e99" : MUTED_FG, fontSize: isAnyMatch ? 24 : 30 }]}>−</Text>
               </TouchableOpacity>
               <View style={styles.scoreDisplay}>
                 {gross != null ? (
                   <>
                     <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>{gross}</Text>
-                    <Text style={styles.scoreNet}>Net {gross - ha}{!isBetterball ? ` · ${pts}pts` : ""}</Text>
+                    <Text style={[styles.scoreNet, isBetterball && { color: "#22c55e80" }]}>Net {gross - ha}{!isBetterball ? ` · ${pts}pts` : ""}</Text>
                   </>
                 ) : (
-                  <Text style={[styles.scoreValue, { color: SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>
+                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>
                 )}
               </View>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                style={[styles.stepBtn, { borderColor: GREEN, backgroundColor: isBetterball ? GREEN + "33" : "#1a4028", width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#1a4028", width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
               >
                 <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isAnyMatch ? 24 : 30 }]}>+</Text>
               </TouchableOpacity>

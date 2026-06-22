@@ -1676,6 +1676,21 @@ async function applyLateAlters() {
       UNIQUE(round_id, player_index, hole_number)
     )
   `);
+
+  // ── Support messages ──────────────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id         SERIAL PRIMARY KEY,
+      user_id    INT REFERENCES users(id) ON DELETE SET NULL,
+      name       VARCHAR(200),
+      email      VARCHAR(200) NOT NULL,
+      subject    VARCHAR(200) NOT NULL DEFAULT 'General enquiry',
+      message    TEXT NOT NULL,
+      status     VARCHAR(30) NOT NULL DEFAULT 'open',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_support_messages_created ON support_messages (created_at DESC)");
 }
 
 async function seedAdOfferings(): Promise<void> {

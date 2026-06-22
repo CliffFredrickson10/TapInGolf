@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router25;
+    module.exports = Router26;
     module.exports.Route = Route;
-    function Router25(options) {
-      if (!(this instanceof Router25)) {
-        return new Router25(options);
+    function Router26(options) {
+      if (!(this instanceof Router26)) {
+        return new Router26(options);
       }
       const opts = options || {};
-      function router25(req, res, next) {
-        router25.handle(req, res, next);
+      function router26(req, res, next) {
+        router26.handle(req, res, next);
       }
-      Object.setPrototypeOf(router25, this);
-      router25.caseSensitive = opts.caseSensitive;
-      router25.mergeParams = opts.mergeParams;
-      router25.params = {};
-      router25.strict = opts.strict;
-      router25.stack = [];
-      return router25;
+      Object.setPrototypeOf(router26, this);
+      router26.caseSensitive = opts.caseSensitive;
+      router26.mergeParams = opts.mergeParams;
+      router26.params = {};
+      router26.strict = opts.strict;
+      router26.stack = [];
+      return router26;
     }
-    Router25.prototype = function() {
+    Router26.prototype = function() {
     };
-    Router25.prototype.param = function param(name, fn) {
+    Router26.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router25.prototype.handle = function handle(req, res, callback) {
+    Router26.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router25.prototype.use = function use(handler) {
+    Router26.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router25.prototype.route = function route(path4) {
+    Router26.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router25.prototype[method] = function(path4) {
+      Router26.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router25 = require_router();
+    var Router26 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router25 = null;
+      var router26 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router25 === null) {
-            router25 = new Router25({
+          if (router26 === null) {
+            router26 = new Router26({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router25;
+          return router26;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router25 = this.router;
+      var router26 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router25.use(path4, fn2);
+          return router26.use(path4, fn2);
         }
         debug7(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router25.use(path4, function mounted_app(req, res, next) {
+        router26.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router25 = require_router();
+    var Router26 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router25.Route;
-    exports.Router = Router25;
+    exports.Route = Router26.Route;
+    exports.Router = Router26;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -56467,7 +56467,7 @@ var init_autoTeeGen = __esm({
 });
 
 // src/app.ts
-var import_express25 = __toESM(require_express2(), 1);
+var import_express26 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
@@ -57392,11 +57392,11 @@ function parsePathRewriteRules(rewriteConfig) {
 var debug4 = Debug.extend("router");
 async function getTarget(req, res, config) {
   let newTarget;
-  const router25 = config.router;
-  if (isPlainObject(router25)) {
-    newTarget = getTargetFromProxyTable(req, router25);
-  } else if (typeof router25 === "function") {
-    newTarget = await router25(req, res, config);
+  const router26 = config.router;
+  if (isPlainObject(router26)) {
+    newTarget = getTargetFromProxyTable(req, router26);
+  } else if (typeof router26 === "function") {
+    newTarget = await router26(req, res, config);
   }
   return newTarget;
 }
@@ -57643,7 +57643,7 @@ function createProxyMiddleware(options) {
 var debug6 = Debug.extend("response-interceptor");
 
 // src/routes/index.ts
-var import_express24 = __toESM(require_express2(), 1);
+var import_express25 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -77173,37 +77173,79 @@ router23.delete("/scoring/rounds/:id", async (req, res) => {
 });
 var scoring_default = router23;
 
-// src/routes/index.ts
+// src/routes/support.ts
+var import_express24 = __toESM(require_express2(), 1);
+init_pg();
 var router24 = (0, import_express24.Router)();
-router24.use(health_default);
-router24.use(auth_default);
-router24.use(geofencing_default);
-router24.use(clubs_default);
-router24.use(bookings_default);
-router24.use(friends_default);
-router24.use(ads_default);
-router24.use(messages_default);
-router24.use(vouchers_default);
-router24.use(cancellationVouchers_default);
-router24.use(admin_default);
-router24.use(notifications_default);
-router24.use(events_default);
-router24.use(portal_default);
-router24.use(storage_default);
-router24.use(payments_default);
-router24.use(settings_default);
-router24.use(map_default);
-router24.use(hnaVerification_default);
-router24.use(moderation_default);
-router24.use(bans_default);
-router24.use(knockout_default);
-router24.use(scoring_default);
-var routes_default = router24;
+router24.post("/support/contact", async (req, res) => {
+  const user = await getUser(req);
+  const { name, email, subject, message } = req.body;
+  const resolvedName = name?.trim() || user?.name || null;
+  const resolvedEmail = email?.trim() || user?.email || null;
+  const resolvedSubj = subject?.trim() || "General enquiry";
+  const resolvedMsg = message?.trim();
+  if (!resolvedMsg) {
+    return res.status(400).json({ error: "Message is required" });
+  }
+  if (!resolvedEmail) {
+    return res.status(400).json({ error: "Email is required" });
+  }
+  const [row4] = await query(
+    `INSERT INTO support_messages (user_id, name, email, subject, message)
+     VALUES (?, ?, ?, ?, ?)
+     RETURNING id`,
+    [user?.id ?? null, resolvedName, resolvedEmail, resolvedSubj, resolvedMsg]
+  );
+  return res.status(201).json({ id: row4.id, message: "Your message has been received. We'll be in touch shortly." });
+});
+router24.get("/support/messages", async (req, res) => {
+  const user = await getUser(req);
+  if (!user || !(user.is_super_user || user.role === "club_admin")) {
+    return res.status(403).json({ error: "Forbidden" });
+  }
+  const rows = await query(
+    `SELECT id, user_id, name, email, subject, message, status, created_at
+       FROM support_messages
+      ORDER BY created_at DESC
+      LIMIT 200`,
+    []
+  );
+  return res.json(rows);
+});
+var support_default = router24;
+
+// src/routes/index.ts
+var router25 = (0, import_express25.Router)();
+router25.use(health_default);
+router25.use(auth_default);
+router25.use(geofencing_default);
+router25.use(clubs_default);
+router25.use(bookings_default);
+router25.use(friends_default);
+router25.use(ads_default);
+router25.use(messages_default);
+router25.use(vouchers_default);
+router25.use(cancellationVouchers_default);
+router25.use(admin_default);
+router25.use(notifications_default);
+router25.use(events_default);
+router25.use(portal_default);
+router25.use(storage_default);
+router25.use(payments_default);
+router25.use(settings_default);
+router25.use(map_default);
+router25.use(hnaVerification_default);
+router25.use(moderation_default);
+router25.use(bans_default);
+router25.use(knockout_default);
+router25.use(scoring_default);
+router25.use(support_default);
+var routes_default = router25;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path3.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express25.default)();
+var app = (0, import_express26.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -77224,11 +77266,11 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express25.default.raw({ type: "*/*" }));
-app.use(import_express25.default.json());
-app.use(import_express25.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express26.default.raw({ type: "*/*" }));
+app.use(import_express26.default.json());
+app.use(import_express26.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express25.default.static(logosDir));
+app.use("/api/logos", import_express26.default.static(logosDir));
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });
@@ -77253,7 +77295,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express25.default.static(clientDir));
+  app.use(import_express26.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path3.join(clientDir, "index.html"));
   });
@@ -78729,6 +78771,19 @@ async function applyLateAlters() {
       UNIQUE(round_id, player_index, hole_number)
     )
   `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS support_messages (
+      id         SERIAL PRIMARY KEY,
+      user_id    INT REFERENCES users(id) ON DELETE SET NULL,
+      name       VARCHAR(200),
+      email      VARCHAR(200) NOT NULL,
+      subject    VARCHAR(200) NOT NULL DEFAULT 'General enquiry',
+      message    TEXT NOT NULL,
+      status     VARCHAR(30) NOT NULL DEFAULT 'open',
+      created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_support_messages_created ON support_messages (created_at DESC)");
 }
 async function seedAdOfferings() {
   const [{ ocnt }] = await query("SELECT COUNT(*) AS ocnt FROM ad_offerings");

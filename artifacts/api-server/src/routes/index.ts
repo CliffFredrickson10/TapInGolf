@@ -22,6 +22,7 @@ import moderationRouter from "./moderation";
 import bansRouter from "./bans";
 import knockoutRouter from "./knockout";
 import scoringRouter from "./scoring";
+import supportRouter from "./support";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,6 @@ router.use(moderationRouter);
 router.use(bansRouter);
 router.use(knockoutRouter);
 router.use(scoringRouter);
+router.use(supportRouter);
 
 export default router;

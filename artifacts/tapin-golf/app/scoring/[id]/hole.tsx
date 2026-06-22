@@ -206,16 +206,14 @@ export default function HoleEntryScreen() {
     const ROW_PADDING = 20;   // quickRow contentContainerStyle paddingHorizontal
     const SECTION_PAD = 20;   // stepperSection paddingHorizontal (shrinks viewport)
     const screenWidth = Dimensions.get("window").width;
-    // In betterball the stepperSection sits inside teamGroupBox (marginHorizontal:12×2 + border:1×2 = 26px)
-    // so the quickRow ScrollView is 26px narrower than when standalone.
-    const viewportWidth = screenWidth - SECTION_PAD * 2 - (isBetterball ? 26 : 0);
+    const viewportWidth = screenWidth - SECTION_PAD * 2;
     const parCenter = ROW_PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
     const scrollX = Math.max(0, parCenter - viewportWidth / 2);
-    // BbPlayerInput boxes: group box marginHorizontal:12 × 2 + borderWidth:1 × 2 = 26px narrower
+    // BbPlayerInput + betterball user box: group box marginHorizontal:12×2 + borderWidth:1×2 = 26px narrower
     const bbViewportWidth = screenWidth - 26;
     const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
     setTimeout(() => {
-      quickRowRef.current?.scrollTo({ x: scrollX, animated: false });
+      quickRowRef.current?.scrollTo({ x: isBetterball ? bbScrollX : scrollX, animated: false });
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
       opp1QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
@@ -546,9 +544,9 @@ export default function HoleEntryScreen() {
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
-          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#071a0e" }]}>
+          <View style={[styles.stepperSection, isBetterball && { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#071a0e" }]}>
             {isBetterball && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
                 <View style={[styles.sectionDot, { backgroundColor: "#22c55e" }]} />
                 <Text style={[styles.sectionLabel, { color: "#22c55e" }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>
@@ -565,7 +563,7 @@ export default function HoleEntryScreen() {
               </View>
             )}
 
-            <View style={styles.stepper}>
+            <View style={[styles.stepper, isBetterball && { paddingHorizontal: 16 }]}>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
                 style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e55" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}

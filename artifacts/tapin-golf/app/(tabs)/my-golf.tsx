@@ -500,6 +500,7 @@ const styles = StyleSheet.create({
     fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 4,
   },
   choiceCard: {
+    flex: 1,
     flexDirection: "row", alignItems: "center", gap: 16,
     borderRadius: 16, borderWidth: 1.5,
     paddingHorizontal: 18, paddingVertical: 20,

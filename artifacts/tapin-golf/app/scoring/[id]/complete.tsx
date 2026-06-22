@@ -229,6 +229,7 @@ export default function RoundCompleteScreen() {
 
   const isMatchPlay  = round.format === "singles_match_play";
   const isBetterball = round.format === "betterball_match_play";
+  const isFourball   = ["betterball_match_play", "fourball_stableford", "fourball_gross_betterball"].includes(round.format);
   const isAnyMatch   = isMatchPlay || isBetterball;
   const matchResult  = isMatchPlay && round.playerHoles
     ? calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
@@ -360,13 +361,24 @@ export default function RoundCompleteScreen() {
         <View style={{ paddingHorizontal: 16, marginTop: 8 }}>
           <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Hole by Hole</Text>
 
-          {isBetterball && round.playerHoles ? (
-            // ── Betterball 4-player scorecard ─────────────────────────────
+          {isFourball && round.playerHoles ? (
+            // ── Fourball 4-player scorecard ───────────────────────────────
             (() => {
               const myHcp   = round.playing_handicap;
               const prtHcp  = round.partner_playing_hcp  ?? round.playing_handicap;
               const opp1Hcp = round.opponent_playing_hcp ?? 0;
               const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
+
+              // Which metric determines the best-ball winner
+              const metric = round.format === "fourball_stableford"      ? "stableford"
+                           : round.format === "fourball_gross_betterball" ? "gross"
+                           : "net";
+              const metricLabel = metric === "stableford" ? "Pts" : metric === "gross" ? "Grs" : "Net";
+              // Stableford: higher is better → bestOf = max; gross/net: lower is better → bestOf = min
+              const bestOf = (a: number | null, b: number | null) =>
+                a == null ? b : b == null ? a : metric === "stableford" ? Math.max(a, b) : Math.min(a, b);
+              const teamBeatsOpp = (team: number | null, opp: number | null) =>
+                team != null && opp != null && (metric === "stableford" ? team > opp : team < opp);
 
               const firstName = (n?: string | null) => (n ?? "?").split(" ")[0].slice(0, 8);
               const meLabel   = firstName((round as any).user_name ?? "Me");
@@ -376,13 +388,51 @@ export default function RoundCompleteScreen() {
 
               let teamWon = 0, teamLost = 0, teamHalved = 0;
 
+              // Player cell: shows Gross (main) + Net · Pts (sub-line)
+              const PC = ({ gross, nr, net, pts, isBest, flex }: {
+                gross?: number | null; nr?: number; net?: number | null; pts?: number | null;
+                isBest?: boolean; flex?: number;
+              }) => {
+                const hasScore = !nr && gross != null;
+                const metricVal = metric === "stableford" ? pts : metric === "gross" ? gross : net;
+                return (
+                  <View style={[bbStyles.cellWrap, flex != null ? { flex } : {}, isBest ? { backgroundColor: "#16a34a30", borderRadius: 5, paddingVertical: 2 } : { paddingVertical: 2 }]}>
+                    <Text style={{ fontSize: 11, textAlign: "center", fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular", color: isBest ? "#22c55e" : hasScore ? colors.foreground : colors.mutedForeground }}>
+                      {nr ? "NR" : gross != null ? String(gross) : "—"}
+                    </Text>
+                    {hasScore ? (
+                      <Text style={{ fontSize: 8, textAlign: "center", color: isBest ? "#22c55e99" : colors.mutedForeground, marginTop: 1 }}>
+                        {net != null ? String(net) : "—"}·{pts != null ? `${pts}p` : "—"}
+                      </Text>
+                    ) : (
+                      <Text style={{ fontSize: 8, textAlign: "center", color: colors.mutedForeground, marginTop: 1 }}>—·—</Text>
+                    )}
+                  </View>
+                );
+              };
+
+              // Simple value cell
+              const VC = ({ val, flex, bold, color }: { val?: string | number | null; flex?: number; bold?: boolean; color?: string }) => (
+                <View style={[bbStyles.cellWrap, flex != null ? { flex } : {}]}>
+                  <Text style={{ fontSize: 11, textAlign: "center", fontFamily: bold ? "Inter_700Bold" : "Inter_400Regular", color: color ?? colors.mutedForeground }}>
+                    {val != null ? String(val) : "—"}
+                  </Text>
+                </View>
+              );
+
               return (
                 <>
-                  {/* Team labels */}
+                  {/* Team labels + metric badge */}
                   <View style={{ flexDirection: "row", marginBottom: 4, gap: 4 }}>
                     <View style={{ flex: 1, backgroundColor: "#16a34a22", borderRadius: 8, padding: 6, alignItems: "center" }}>
                       <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#16a34a" }}>YOUR TEAM</Text>
                       <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{meLabel} & {prtLabel}</Text>
+                    </View>
+                    <View style={{ width: 52, alignItems: "center", justifyContent: "center" }}>
+                      <View style={{ backgroundColor: colors.primary + "30", borderRadius: 6, paddingHorizontal: 6, paddingVertical: 3 }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: colors.primary, textAlign: "center" }}>BEST</Text>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD, textAlign: "center" }}>{metricLabel}</Text>
+                      </View>
                     </View>
                     <View style={{ flex: 1, backgroundColor: "#ef444422", borderRadius: 8, padding: 6, alignItems: "center" }}>
                       <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: "#ef4444" }}>OPPONENTS</Text>
@@ -390,9 +440,22 @@ export default function RoundCompleteScreen() {
                     </View>
                   </View>
 
+                  {/* Legend: G = gross, N = net, P = stableford pts */}
+                  <View style={{ flexDirection: "row", justifyContent: "center", marginBottom: 6, gap: 12 }}>
+                    {[["G", "Gross"], ["N", "Net"], ["P", "Stableford pts"]].map(([abbr, full]) => (
+                      <View key={abbr} style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: colors.mutedForeground }}>{abbr}</Text>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>= {full}</Text>
+                      </View>
+                    ))}
+                    <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>★ wins on {metricLabel}</Text>
+                    </View>
+                  </View>
+
                   {/* Header row */}
                   <View style={[bbStyles.headerRow, { backgroundColor: colors.primary }]}>
-                    {["H", "Par", meLabel, prtLabel, "Result", opp1Label, opp2Label, "Result", "Res"].map((lbl, i) => (
+                    {["H", "Par", meLabel, prtLabel, metricLabel, opp1Label, opp2Label, metricLabel, "Res"].map((lbl, i) => (
                       <View key={i} style={[bbStyles.cellWrap, i === 0 ? { flex: 0.6 } : i === 8 ? { flex: 0.7 } : {}]}>
                         <Text style={bbStyles.hCell}>{lbl}</Text>
                       </View>
@@ -410,49 +473,54 @@ export default function RoundCompleteScreen() {
                     const opp1Gross = opp1Saved?.is_nr ? null : opp1Saved?.gross_score ?? null;
                     const opp2Gross = opp2Saved?.is_nr ? null : opp2Saved?.gross_score ?? null;
 
-                    const myNet   = myGross   != null ? myGross   - getHA(h.stroke_index, myHcp)   : null;
-                    const prtNet  = prtGross  != null ? prtGross  - getHA(h.stroke_index, prtHcp)  : null;
-                    const opp1Net = opp1Gross != null ? opp1Gross - getHA(h.stroke_index, opp1Hcp) : null;
-                    const opp2Net = opp2Gross != null ? opp2Gross - getHA(h.stroke_index, opp2Hcp) : null;
+                    const myHa   = getHA(h.stroke_index, myHcp);
+                    const prtHa  = getHA(h.stroke_index, prtHcp);
+                    const opp1Ha = getHA(h.stroke_index, opp1Hcp);
+                    const opp2Ha = getHA(h.stroke_index, opp2Hcp);
 
-                    const teamBest = myNet != null && prtNet != null ? Math.min(myNet, prtNet)
-                                   : myNet ?? prtNet;
-                    const oppBest  = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net)
-                                   : opp1Net ?? opp2Net;
+                    const myNet   = myGross   != null ? myGross   - myHa   : null;
+                    const prtNet  = prtGross  != null ? prtGross  - prtHa  : null;
+                    const opp1Net = opp1Gross != null ? opp1Gross - opp1Ha : null;
+                    const opp2Net = opp2Gross != null ? opp2Gross - opp2Ha : null;
 
-                    const myIsBest  = teamBest != null && myNet  === teamBest && myGross  != null;
-                    const prtIsBest = teamBest != null && prtNet === teamBest && prtGross != null && !myIsBest;
-                    const o1IsBest  = oppBest  != null && opp1Net === oppBest  && opp1Gross != null;
-                    const o2IsBest  = oppBest  != null && opp2Net === oppBest  && opp2Gross != null && !o1IsBest;
+                    const myPts   = myGross   != null ? calcPts(myGross,   h.par, myHa)   : null;
+                    const prtPts  = prtGross  != null ? calcPts(prtGross,  h.par, prtHa)  : null;
+                    const opp1Pts = opp1Gross != null ? calcPts(opp1Gross, h.par, opp1Ha) : null;
+                    const opp2Pts = opp2Gross != null ? calcPts(opp2Gross, h.par, opp2Ha) : null;
+
+                    // Pick each player's value for the active metric
+                    const myM    = metric === "stableford" ? myPts   : metric === "gross" ? myGross   : myNet;
+                    const prtM   = metric === "stableford" ? prtPts  : metric === "gross" ? prtGross  : prtNet;
+                    const opp1M  = metric === "stableford" ? opp1Pts : metric === "gross" ? opp1Gross : opp1Net;
+                    const opp2M  = metric === "stableford" ? opp2Pts : metric === "gross" ? opp2Gross : opp2Net;
+
+                    const teamBest = bestOf(myM, prtM);
+                    const oppBest  = bestOf(opp1M, opp2M);
+
+                    const myIsBest  = teamBest != null && myM  === teamBest && myGross  != null;
+                    const prtIsBest = teamBest != null && prtM === teamBest && prtGross != null && !myIsBest;
+                    const o1IsBest  = oppBest  != null && opp1M === oppBest  && opp1Gross != null;
+                    const o2IsBest  = oppBest  != null && opp2M === oppBest  && opp2Gross != null && !o1IsBest;
 
                     let res: "W" | "L" | "H" | null = null;
                     if (teamBest != null && oppBest != null) {
-                      if (teamBest < oppBest)      { res = "W"; teamWon++;    }
-                      else if (teamBest > oppBest) { res = "L"; teamLost++;   }
-                      else                         { res = "H"; teamHalved++; }
+                      if      (teamBeatsOpp(teamBest, oppBest)) { res = "W"; teamWon++;    }
+                      else if (teamBeatsOpp(oppBest, teamBest)) { res = "L"; teamLost++;   }
+                      else                                      { res = "H"; teamHalved++; }
                     }
-
                     const resColor = res === "W" ? "#22c55e" : res === "L" ? "#f87171" : res === "H" ? GOLD : colors.mutedForeground;
-
-                    const C = ({ val, nr, isBest, flex, bold, color }: { val?: string | number | null; nr?: number; isBest?: boolean; flex?: number; bold?: boolean; color?: string }) => (
-                      <View style={[bbStyles.cellWrap, flex != null ? { flex } : {}, isBest ? { backgroundColor: "#16a34a30", borderRadius: 5 } : {}]}>
-                        <Text style={{ fontSize: 11, textAlign: "center", fontFamily: (bold || isBest) ? "Inter_700Bold" : "Inter_400Regular", color: isBest ? "#22c55e" : color ?? (val != null ? colors.foreground : colors.mutedForeground) }}>
-                          {nr ? "NR" : val != null ? String(val) : "—"}
-                        </Text>
-                      </View>
-                    );
 
                     return (
                       <View key={h.number} style={[bbStyles.row, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                        <C val={h.number}   flex={0.6} bold />
-                        <C val={h.par}      color={colors.mutedForeground} />
-                        <C val={myGross}    nr={mySaved?.is_nr}   isBest={myIsBest} />
-                        <C val={prtGross}   nr={prtSaved?.is_nr}  isBest={prtIsBest} />
-                        <C val={teamBest != null ? String(teamBest) : null} bold color={teamBest != null ? "#16a34a" : colors.mutedForeground} />
-                        <C val={opp1Gross}  nr={opp1Saved?.is_nr} isBest={o1IsBest} />
-                        <C val={opp2Gross}  nr={opp2Saved?.is_nr} isBest={o2IsBest} />
-                        <C val={oppBest != null ? String(oppBest) : null} bold color={oppBest != null ? "#ef4444" : colors.mutedForeground} />
-                        <C val={res} flex={0.7} bold color={resColor} />
+                        <VC val={h.number}  flex={0.6} bold color={colors.foreground} />
+                        <VC val={h.par}     color={colors.mutedForeground} />
+                        <PC gross={myGross}   nr={mySaved?.is_nr}   net={myNet}   pts={myPts}   isBest={myIsBest} />
+                        <PC gross={prtGross}  nr={prtSaved?.is_nr}  net={prtNet}  pts={prtPts}  isBest={prtIsBest} />
+                        <VC val={teamBest} bold color={teamBest != null ? "#16a34a" : undefined} />
+                        <PC gross={opp1Gross} nr={opp1Saved?.is_nr} net={opp1Net} pts={opp1Pts} isBest={o1IsBest} />
+                        <PC gross={opp2Gross} nr={opp2Saved?.is_nr} net={opp2Net} pts={opp2Pts} isBest={o2IsBest} />
+                        <VC val={oppBest}  bold color={oppBest  != null ? "#ef4444" : undefined} />
+                        <VC val={res} flex={0.7} bold color={resColor} />
                       </View>
                     );
                   })}
@@ -460,15 +528,15 @@ export default function RoundCompleteScreen() {
                   {/* BB Totals */}
                   <View style={[bbStyles.totalsRow, { backgroundColor: colors.primary }]}>
                     {[
-                      { v: "TOT",              flex: 0.6, color: "#fff" },
-                      { v: sc.reduce((s,h)=>s+h.par,0), color: "#fff" },
-                      { v: "—",                color: "rgba(255,255,255,0.5)" },
-                      { v: "—",                color: "rgba(255,255,255,0.5)" },
-                      { v: `${teamWon}W`,      color: "#22c55e" },
-                      { v: "—",                color: "rgba(255,255,255,0.5)" },
-                      { v: "—",                color: "rgba(255,255,255,0.5)" },
-                      { v: `${teamLost}L`,     color: "#f87171" },
-                      { v: `${teamHalved}H`,   flex: 0.7, color: GOLD },
+                      { v: "TOT",            flex: 0.6, color: "#fff" },
+                      { v: sc.reduce((s, h) => s + h.par, 0), color: "#fff" },
+                      { v: "—", color: "rgba(255,255,255,0.4)" },
+                      { v: "—", color: "rgba(255,255,255,0.4)" },
+                      { v: `${teamWon}W`,   color: "#22c55e" },
+                      { v: "—", color: "rgba(255,255,255,0.4)" },
+                      { v: "—", color: "rgba(255,255,255,0.4)" },
+                      { v: `${teamLost}L`,  color: "#f87171" },
+                      { v: `${teamHalved}H`, flex: 0.7, color: GOLD },
                     ].map((cell, i) => (
                       <View key={i} style={[bbStyles.cellWrap, cell.flex != null ? { flex: cell.flex } : {}]}>
                         <Text style={[bbStyles.totalCell, { color: cell.color }]}>{String(cell.v)}</Text>

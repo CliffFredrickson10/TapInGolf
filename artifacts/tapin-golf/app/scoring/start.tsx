@@ -152,7 +152,7 @@ export default function StartRoundScreen() {
   const [oppWhsIdx, setOppWhsIdx] = useState<number | null>(null);
   const [partnerWhsIdx, setPartnerWhsIdx] = useState<number | null>(null);
   const [opp2WhsIdx, setOpp2WhsIdx] = useState<number | null>(null);
-  const [expandedGroup, setExpandedGroup] = useState("Individual");
+  const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
   const selectedFormatLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;

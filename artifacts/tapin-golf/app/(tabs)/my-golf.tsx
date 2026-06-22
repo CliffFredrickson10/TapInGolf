@@ -392,9 +392,26 @@ function TournamentsPanel({ colors }: { colors: ReturnType<typeof useColors> }) 
 
 type MainTab = "bookings" | "tournaments";
 
+const CHOICES: { key: MainTab; label: string; sub: string; icon: any; accent: string }[] = [
+  {
+    key:    "bookings",
+    label:  "Bookings",
+    sub:    "View your upcoming and past tee times",
+    icon:   "calendar",
+    accent: "#1a5c38",
+  },
+  {
+    key:    "tournaments",
+    label:  "Tournaments",
+    sub:    "Browse club events and competitions",
+    icon:   "trophy",
+    accent: "#c8a84b",
+  },
+];
+
 export default function MyGolfScreen() {
   const colors = useColors();
-  const [activeTab, setActiveTab] = useState<MainTab>("bookings");
+  const [activeTab, setActiveTab] = useState<MainTab | null>(null);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -405,35 +422,67 @@ export default function MyGolfScreen() {
         <Text style={[styles.pageTitle, { color: colors.foreground }]}>My Golf</Text>
       </View>
 
-      {/* Pill selector: Bookings | Tournaments */}
-      <View style={[styles.pillWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
-        {([
-          { key: "bookings",    label: "Bookings",    icon: "calendar-outline" },
-          { key: "tournaments", label: "Tournaments", icon: "trophy-outline"   },
-        ] as { key: MainTab; label: string; icon: any }[]).map(({ key, label, icon }) => (
-          <TouchableOpacity
-            key={key}
-            style={[styles.pillBtn, activeTab === key && { backgroundColor: colors.primary }]}
-            onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
-            activeOpacity={0.8}
-          >
-            <Ionicons
-              name={activeTab === key ? icon.replace("-outline", "") : icon}
-              size={15}
-              color={activeTab === key ? "#fff" : colors.mutedForeground}
-            />
-            <Text style={[styles.pillText, { color: activeTab === key ? "#fff" : colors.mutedForeground }]}>
-              {label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {activeTab === null ? (
+        /* ── Choice screen ── */
+        <View style={styles.choiceWrap}>
+          <Text style={[styles.choicePrompt, { color: colors.mutedForeground }]}>
+            What would you like to view?
+          </Text>
+          {CHOICES.map(({ key, label, sub, icon, accent }) => (
+            <TouchableOpacity
+              key={key}
+              style={[styles.choiceCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+              activeOpacity={0.82}
+              onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
+            >
+              <View style={[styles.choiceIcon, { backgroundColor: accent + "18" }]}>
+                <Ionicons name={icon} size={28} color={accent} />
+              </View>
+              <View style={styles.choiceText}>
+                <Text style={[styles.choiceLabel, { color: colors.foreground }]}>{label}</Text>
+                <Text style={[styles.choiceSub, { color: colors.mutedForeground }]}>{sub}</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+            </TouchableOpacity>
+          ))}
+        </View>
+      ) : (
+        /* ── Content screen ── */
+        <>
+          {/* Back + pill selector */}
+          <View style={[styles.pillWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <TouchableOpacity
+              style={styles.pillBack}
+              onPress={() => { Haptics.selectionAsync(); setActiveTab(null); }}
+              activeOpacity={0.75}
+            >
+              <Ionicons name="arrow-back" size={16} color={colors.mutedForeground} />
+            </TouchableOpacity>
+            {CHOICES.map(({ key, label, icon }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.pillBtn, activeTab === key && { backgroundColor: colors.primary }]}
+                onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons
+                  name={activeTab === key ? icon : `${icon}-outline` as any}
+                  size={15}
+                  color={activeTab === key ? "#fff" : colors.mutedForeground}
+                />
+                <Text style={[styles.pillText, { color: activeTab === key ? "#fff" : colors.mutedForeground }]}>
+                  {label}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
 
-      {/* Panel content */}
-      {activeTab === "bookings"
-        ? <BookingsPanel colors={colors} />
-        : <TournamentsPanel colors={colors} />
-      }
+          {activeTab === "bookings"
+            ? <BookingsPanel colors={colors} />
+            : <TournamentsPanel colors={colors} />
+          }
+        </>
+      )}
     </View>
   );
 }
@@ -444,14 +493,39 @@ const styles = StyleSheet.create({
   pageHeader: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 4 },
   pageTitle:  { fontSize: 26, fontFamily: "Inter_700Bold", letterSpacing: -0.5 },
 
+  choiceWrap: {
+    flex: 1, padding: 20, gap: 14,
+  },
+  choicePrompt: {
+    fontSize: 13, fontFamily: "Inter_500Medium", marginBottom: 4,
+  },
+  choiceCard: {
+    flexDirection: "row", alignItems: "center", gap: 16,
+    borderRadius: 16, borderWidth: 1.5,
+    paddingHorizontal: 18, paddingVertical: 20,
+  },
+  choiceIcon: {
+    width: 56, height: 56, borderRadius: 16,
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
+  },
+  choiceText: { flex: 1, gap: 3 },
+  choiceLabel: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  choiceSub:   { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
+
   pillWrap: {
     flexDirection: "row",
+    alignItems: "center",
     marginHorizontal: 16,
     marginTop: 12,
     marginBottom: 8,
     borderRadius: 12,
     borderWidth: 1,
     padding: 4,
+    gap: 2,
+  },
+  pillBack: {
+    width: 34, height: 34, borderRadius: 8,
+    alignItems: "center", justifyContent: "center",
   },
   pillBtn: {
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",

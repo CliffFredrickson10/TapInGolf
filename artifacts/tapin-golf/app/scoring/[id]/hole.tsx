@@ -544,9 +544,9 @@ export default function HoleEntryScreen() {
         )}
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
-          <View style={styles.stepperSection}>
+          <View style={[styles.stepperSection, isBetterball && { paddingVertical: 8, backgroundColor: "#0e2218" }]}>
             {isBetterball && (
-              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 0 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
                 <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
                 <Text style={[styles.sectionLabel, { color: GREEN }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>
@@ -580,7 +580,7 @@ export default function HoleEntryScreen() {
               </View>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                style={[styles.stepBtn, styles.stepBtnPlus, { borderColor: GREEN, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+                style={[styles.stepBtn, { borderColor: GREEN, backgroundColor: isBetterball ? GREEN + "33" : "#1a4028", width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
               >
                 <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isAnyMatch ? 24 : 30 }]}>+</Text>
               </TouchableOpacity>

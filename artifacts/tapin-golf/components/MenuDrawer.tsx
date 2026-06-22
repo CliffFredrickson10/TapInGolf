@@ -155,8 +155,8 @@ export function MenuDrawer({
       items: [
         {
           icon: "help-circle-outline",
-          label: "Help & FAQ",
-          sub: "Get answers to common questions",
+          label: "Contact Us",
+          sub: "Get in touch with the TapIn Golf team",
           onPress: () => navigate("/help"),
         },
         {

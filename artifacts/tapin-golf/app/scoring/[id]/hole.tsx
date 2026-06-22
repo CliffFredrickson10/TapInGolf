@@ -774,9 +774,9 @@ export default function HoleEntryScreen() {
           <TouchableOpacity
             onPress={() => goToHole(holeIdx - 1)}
             disabled={saving}
-            style={[styles.prevBtn, { borderColor: BORDER }]}
+            style={[styles.prevBtn, { backgroundColor: "#1a3d28", borderColor: "#2d6642" }]}
           >
-            <Text style={[styles.prevBtnText, { color: MUTED_FG }]}>← Previous Hole</Text>
+            <Text style={[styles.prevBtnText, { color: "#fff" }]}>← Previous Hole</Text>
           </TouchableOpacity>
         )}
         {isAnyMatch && matchSt?.decided ? (
@@ -802,7 +802,7 @@ export default function HoleEntryScreen() {
           <TouchableOpacity
             onPress={() => saveAndNext(false)}
             disabled={saving || gross == null}
-            style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : SURFACE, opacity: saving ? 0.7 : 1 }]}
+            style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : "#1a3d28", borderWidth: gross != null ? 0 : 1.5, borderColor: "#2d6642", opacity: saving ? 0.7 : 1 }]}
           >
             {saving
               ? <ActivityIndicator color="#fff" />

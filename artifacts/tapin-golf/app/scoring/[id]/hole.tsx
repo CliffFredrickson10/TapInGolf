@@ -206,7 +206,9 @@ export default function HoleEntryScreen() {
     const ROW_PADDING = 20;   // quickRow contentContainerStyle paddingHorizontal
     const SECTION_PAD = 20;   // stepperSection paddingHorizontal (shrinks viewport)
     const screenWidth = Dimensions.get("window").width;
-    const viewportWidth = screenWidth - SECTION_PAD * 2;
+    // In betterball the stepperSection sits inside teamGroupBox (marginHorizontal:12×2 + border:1×2 = 26px)
+    // so the quickRow ScrollView is 26px narrower than when standalone.
+    const viewportWidth = screenWidth - SECTION_PAD * 2 - (isBetterball ? 26 : 0);
     const parCenter = ROW_PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
     const scrollX = Math.max(0, parCenter - viewportWidth / 2);
     // BbPlayerInput boxes: group box marginHorizontal:12 × 2 + borderWidth:1 × 2 = 26px narrower

@@ -143,7 +143,7 @@ export default function StartRoundScreen() {
 
   // Form
   const [teeColor, setTeeColor] = useState("white");
-  const [format, setFormat] = useState("individual_stableford");
+  const [format, setFormat] = useState("");
   const [courseHcp, setCourseHcp] = useState("0");
   const [oppHcp, setOppHcp] = useState("0");
   const [partnerHcp, setPartnerHcp] = useState("0");
@@ -677,8 +677,8 @@ export default function StartRoundScreen() {
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16, backgroundColor: colors.background }]}>
           <TouchableOpacity
             onPress={onStartRound}
-            disabled={submitting}
-            style={[styles.startBtn, { backgroundColor: submitting ? colors.muted : colors.primary }]}
+            disabled={submitting || !format}
+            style={[styles.startBtn, { backgroundColor: (submitting || !format) ? colors.muted : colors.primary }]}
             activeOpacity={0.85}
           >
             {submitting

@@ -148,6 +148,10 @@ export default function StartRoundScreen() {
   const [oppHcp, setOppHcp] = useState("0");
   const [partnerHcp, setPartnerHcp] = useState("0");
   const [opp2Hcp, setOpp2Hcp] = useState("0");
+  // WHS Index from DB — shown as reference only, NOT used as course handicap
+  const [oppWhsIdx, setOppWhsIdx] = useState<number | null>(null);
+  const [partnerWhsIdx, setPartnerWhsIdx] = useState<number | null>(null);
+  const [opp2WhsIdx, setOpp2WhsIdx] = useState<number | null>(null);
   const [expandedGroup, setExpandedGroup] = useState("Individual");
   const [submitting, setSubmitting] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
@@ -193,9 +197,10 @@ export default function StartRoundScreen() {
         const m = d.match ?? null;
         setMatchOpponent(m);
         if (m) {
-          if (m.opponentHandicap != null) setOppHcp(String(Math.round(m.opponentHandicap)));
-          if (m.partnerHandicap  != null) setPartnerHcp(String(Math.round(m.partnerHandicap)));
-          if (m.opp2Handicap     != null) setOpp2Hcp(String(Math.round(m.opp2Handicap)));
+          // Store WHS Index for display only — user enters the whole-number course HCP manually
+          if (m.opponentHandicap != null) setOppWhsIdx(m.opponentHandicap);
+          if (m.partnerHandicap  != null) setPartnerWhsIdx(m.partnerHandicap);
+          if (m.opp2Handicap     != null) setOpp2WhsIdx(m.opp2Handicap);
         }
       })
       .catch(() => setMatchOpponent(null))
@@ -616,11 +621,11 @@ export default function StartRoundScreen() {
                 <View style={{ gap: 14 }}>
                   {/* Helper to render a stepper row */}
                   {([
-                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true },
-                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — confirm value", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName) },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Required — confirm value", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent },
-                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Required — confirm value", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name },
-                  ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean }[])
+                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName), whsIdx: partnerWhsIdx },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent, whsIdx: oppWhsIdx },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx },
+                  ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean; whsIdx: number | null }[])
                     .filter(r => r.show)
                     .map(r => (
                       <View key={r.label}>
@@ -630,6 +635,11 @@ export default function StartRoundScreen() {
                             <Text style={[styles.hintText, { color: colors.mutedForeground }]}>{r.hint}</Text>
                           </View>
                         </View>
+                        {r.whsIdx != null && (
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 6, fontFamily: "Inter_400Regular" }}>
+                            WHS Index on file: {r.whsIdx} — ask player for their course HCP from the HNA app
+                          </Text>
+                        )}
                         <View style={[styles.stepperRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
                           <TouchableOpacity
                             onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.max(0, parseInt(v || "0") - 1))); }}

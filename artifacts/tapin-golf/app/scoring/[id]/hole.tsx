@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { router, useLocalSearchParams } from "expo-router";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -262,6 +263,7 @@ export default function HoleEntryScreen() {
   const [oppGross, setOppGross]       = useState<number | null>(null);
   const [partnerGross, setPartnerGross] = useState<number | null>(null);
   const [opp2Gross, setOpp2Gross]       = useState<number | null>(null);
+  const [pendingCount, setPendingCount] = useState(0);
   const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
@@ -364,67 +366,125 @@ export default function HoleEntryScreen() {
     mainScrollRef.current?.scrollTo({ y: 0, animated: false });
   };
 
+  // ── Offline queue helpers ────────────────────────────────────────────────
+  const QUEUE_KEY = `scoring_queue_${id}`;
+
+  const isNetworkError = (err: any) =>
+    err instanceof TypeError ||
+    /network request failed|failed to fetch|networkerror|no internet/i.test(err?.message ?? "");
+
+  const readQueue = useCallback(async (): Promise<Array<{ holeNumber: number; body: Record<string, unknown> }>> => {
+    try { return JSON.parse((await AsyncStorage.getItem(QUEUE_KEY)) ?? "[]"); } catch { return []; }
+  }, [QUEUE_KEY]);
+
+  const queueScore = useCallback(async (holeNumber: number, body: Record<string, unknown>) => {
+    const queue = await readQueue();
+    const filtered = queue.filter(q => q.holeNumber !== holeNumber); // replace any existing entry for this hole
+    filtered.push({ holeNumber, body });
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(filtered));
+    setPendingCount(filtered.length);
+  }, [QUEUE_KEY, readQueue]);
+
+  const flushQueue = useCallback(async () => {
+    if (!token) return;
+    const queue = await readQueue();
+    if (queue.length === 0) return;
+    const remaining: typeof queue = [];
+    for (const item of queue) {
+      try {
+        await apiFetch(`/scoring/rounds/${id}/holes/${item.holeNumber}`, token, {
+          method: "PUT", body: JSON.stringify(item.body),
+        });
+      } catch {
+        remaining.push(item); // keep if still failing
+      }
+    }
+    await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(remaining));
+    setPendingCount(remaining.length);
+  }, [QUEUE_KEY, id, token, readQueue]);
+
+  // Load pending count on mount + try to flush
+  useEffect(() => {
+    readQueue().then(q => setPendingCount(q.length));
+    flushQueue();
+  }, [flushQueue, readQueue]);
+
+  // ── Save current hole and advance ────────────────────────────────────────
   const saveAndNext = async (isNr = false) => {
     if (!isNr && gross == null) return;
     setSaving(true);
+    const isMP = round.format === "singles_match_play";
+    const isBB = round.format === "betterball_match_play";
+    const body: Record<string, unknown> = {
+      par: hole.par,
+      strokeIndex: hole.stroke_index,
+      grossScore: isNr ? null : gross,
+      isNr,
+    };
+    if (isMP && oppGross != null) {
+      body.players = [{ name: round.opponent_name ?? "Opponent", grossScore: oppGross }];
+    }
+    if (isBB) {
+      body.players = [
+        { name: round.partner_name ?? "Partner", grossScore: isNr ? null : partnerGross },
+        { name: round.opponent_name ?? "Opp 1",  grossScore: isNr ? null : oppGross    },
+        { name: round.opponent2_name ?? "Opp 2",  grossScore: isNr ? null : opp2Gross   },
+      ];
+    }
+
+    // Update local state immediately (optimistic) so navigation feels instant
+    const updatedHoles = { ...round.holes };
+    updatedHoles[hole.number] = {
+      hole_number: hole.number,
+      gross_score: isNr ? null : gross,
+      net_score:   isNr ? null : netScore,
+      stableford_points: isNr ? null : pts,
+      is_nr: isNr ? 1 : 0,
+    };
+    const updatedPlayerHoles = { ...(round.playerHoles ?? {}) };
+    if (isMP && oppGross != null) {
+      updatedPlayerHoles[`0_${hole.number}`] = { gross_score: oppGross, is_nr: 0 };
+    }
+    if (isBB) {
+      updatedPlayerHoles[`0_${hole.number}`] = { gross_score: isNr ? null : partnerGross, is_nr: isNr ? 1 : 0 };
+      updatedPlayerHoles[`1_${hole.number}`] = { gross_score: isNr ? null : oppGross,     is_nr: isNr ? 1 : 0 };
+      updatedPlayerHoles[`2_${hole.number}`] = { gross_score: isNr ? null : opp2Gross,    is_nr: isNr ? 1 : 0 };
+    }
+    setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
+
     try {
-      const isMP = round.format === "singles_match_play";
-      const isBB = round.format === "betterball_match_play";
-      const body: Record<string, unknown> = {
-        par: hole.par,
-        strokeIndex: hole.stroke_index,
-        grossScore: isNr ? null : gross,
-        isNr,
-      };
-      if (isMP && oppGross != null) {
-        body.players = [{ name: round.opponent_name ?? "Opponent", grossScore: oppGross }];
-      }
-      if (isBB) {
-        body.players = [
-          { name: round.partner_name ?? "Partner", grossScore: isNr ? null : partnerGross },
-          { name: round.opponent_name ?? "Opp 1",  grossScore: isNr ? null : oppGross    },
-          { name: round.opponent2_name ?? "Opp 2",  grossScore: isNr ? null : opp2Gross   },
-        ];
-      }
       await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, {
         method: "PUT",
         body: JSON.stringify(body),
       });
       Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-      // Update local state
-      const updatedHoles = { ...round.holes };
-      updatedHoles[hole.number] = {
-        hole_number: hole.number,
-        gross_score: isNr ? null : gross,
-        net_score:   isNr ? null : netScore,
-        stableford_points: isNr ? null : pts,
-        is_nr: isNr ? 1 : 0,
-      };
-      const updatedPlayerHoles = { ...(round.playerHoles ?? {}) };
-      if (isMP && oppGross != null) {
-        updatedPlayerHoles[`0_${hole.number}`] = { gross_score: oppGross, is_nr: 0 };
-      }
-      if (isBB) {
-        updatedPlayerHoles[`0_${hole.number}`] = { gross_score: isNr ? null : partnerGross, is_nr: isNr ? 1 : 0 };
-        updatedPlayerHoles[`1_${hole.number}`] = { gross_score: isNr ? null : oppGross,     is_nr: isNr ? 1 : 0 };
-        updatedPlayerHoles[`2_${hole.number}`] = { gross_score: isNr ? null : opp2Gross,    is_nr: isNr ? 1 : 0 };
-      }
-      setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
-
-      if (holeIdx < scorecard.length - 1) {
-        goToHole(holeIdx + 1);
-      } else {
-        router.replace(`/scoring/${id}/complete`);
-      }
+      // Hole saved — remove from queue if it was queued previously
+      const queue = await readQueue();
+      const updated = queue.filter(q => q.holeNumber !== hole.number);
+      await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
+      setPendingCount(updated.length);
     } catch (err: any) {
       if (err?.message?.includes("404") || err?.status === 404 || err?.message?.includes("not found")) {
         router.replace(`/scoring/${id}/complete`);
+        return;
+      }
+      if (isNetworkError(err)) {
+        // No signal — queue locally and continue without blocking
+        await queueScore(hole.number, body);
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
       } else {
         Alert.alert("Error", err.message || "Failed to save score");
+        setSaving(false);
+        return;
       }
     } finally {
       setSaving(false);
+    }
+
+    if (holeIdx < scorecard.length - 1) {
+      goToHole(holeIdx + 1);
+    } else {
+      router.replace(`/scoring/${id}/complete`);
     }
   };
 
@@ -508,6 +568,18 @@ export default function HoleEntryScreen() {
       <Text style={styles.stripMeta}>
         {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
       </Text>
+      {pendingCount > 0 && (
+        <TouchableOpacity
+          onPress={flushQueue}
+          style={{ flexDirection: "row", alignItems: "center", gap: 6, backgroundColor: "#78350f", paddingVertical: 6, paddingHorizontal: 14 }}
+        >
+          <Ionicons name="cloud-offline-outline" size={14} color="#fbbf24" />
+          <Text style={{ fontSize: 12, color: "#fbbf24", fontFamily: "Inter_600SemiBold", flex: 1 }}>
+            {pendingCount} hole{pendingCount > 1 ? "s" : ""} saved offline — tap to sync
+          </Text>
+          <Ionicons name="sync-outline" size={14} color="#fbbf24" />
+        </TouchableOpacity>
+      )}
 
       {/* Scrollable scoring content */}
       <ScrollView

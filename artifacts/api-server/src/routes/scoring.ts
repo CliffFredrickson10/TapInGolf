@@ -212,6 +212,22 @@ router.post("/scoring/rounds", async (req, res) => {
 
     if (!clubId) { res.status(400).json({ message: "clubId is required" }); return; }
 
+    // Block scoring if the user's registration for this tournament is not approved
+    if (tournamentId) {
+      const reg = await row<{ status: string }>(
+        "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+        [user.id, tournamentId]
+      );
+      if (!reg) {
+        res.status(403).json({ message: "You are not registered for this tournament." });
+        return;
+      }
+      if (reg.status !== "approved") {
+        res.status(403).json({ message: "Your registration for this tournament has not been confirmed yet." });
+        return;
+      }
+    }
+
     // For matchplay formats, auto-lookup the user's current knockout match
     let matchId: number | null = req.body.matchId ?? null;
     let opponentName: string | null = req.body.opponentName ?? null;

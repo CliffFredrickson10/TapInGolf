@@ -297,7 +297,7 @@ export default function HoleEntryScreen() {
     setTimeout(() => {
       quickRowRef.current?.scrollTo({ x: isBetterball ? bbScrollX : scrollX, animated: false });
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
-      opp1QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+      opp1QuickRef.current?.scrollTo({ x: isBetterball ? bbScrollX : scrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
     }, 80);
   }, [holeIdx, round]);
@@ -839,6 +839,7 @@ export default function HoleEntryScreen() {
                 </View>
 
                 <ScrollView
+                  ref={opp1QuickRef}
                   horizontal
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.quickRow}

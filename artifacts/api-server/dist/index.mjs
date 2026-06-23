@@ -77140,8 +77140,11 @@ router23.post("/scoring/rounds", async (req, res) => {
       }
     }
     if (req.body.partnerName != null) partnerName = String(req.body.partnerName);
+    if (req.body.partnerPlayingHcp != null) partnerPlayingHcp = Number(req.body.partnerPlayingHcp);
     if (req.body.opponentName != null) opponentName = String(req.body.opponentName);
+    if (req.body.opponentPlayingHcp != null) opponentPlayingHcp = Number(req.body.opponentPlayingHcp);
     if (req.body.opponent2Name != null) opponent2Name = String(req.body.opponent2Name);
+    if (req.body.opponent2PlayingHcp != null) opponent2PlayingHcp = Number(req.body.opponent2PlayingHcp);
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]

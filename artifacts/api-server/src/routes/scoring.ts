@@ -672,10 +672,13 @@ router.post("/scoring/rounds", async (req, res) => {
       }
     }
 
-    // Body name overrides — for casual play (no tournament) player names come directly from the body
-    if (req.body.partnerName   != null) partnerName   = String(req.body.partnerName);
-    if (req.body.opponentName  != null) opponentName  = String(req.body.opponentName);
-    if (req.body.opponent2Name != null) opponent2Name = String(req.body.opponent2Name);
+    // Body overrides — for casual play (no tournament) names and HCPs come directly from the body
+    if (req.body.partnerName         != null) partnerName         = String(req.body.partnerName);
+    if (req.body.partnerPlayingHcp   != null) partnerPlayingHcp   = Number(req.body.partnerPlayingHcp);
+    if (req.body.opponentName        != null) opponentName        = String(req.body.opponentName);
+    if (req.body.opponentPlayingHcp  != null) opponentPlayingHcp  = Number(req.body.opponentPlayingHcp);
+    if (req.body.opponent2Name       != null) opponent2Name       = String(req.body.opponent2Name);
+    if (req.body.opponent2PlayingHcp != null) opponent2PlayingHcp = Number(req.body.opponent2PlayingHcp);
 
     // Abandon any existing active round
     await run(

@@ -196,27 +196,55 @@ export default function StartRoundScreen() {
       .catch(() => setTournaments([]));
   }, [selectedClub, token]);
 
-  // Fetch opponent when a matchplay knockout tournament is linked
+  // Fetch partner/opponent info whenever a tournament is linked
   useEffect(() => {
     const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
-    if (!linkedTournamentId || !token || !isKnockoutMatch) {
+    const isBetterballGroup = isBetterball && !isKnockoutMatch;
+
+    if (!linkedTournamentId || !token) { setMatchOpponent(null); return; }
+
+    if (isKnockoutMatch) {
+      setMatchOpponentLoading(true);
+      apiFetch(`/scoring/tournaments/${linkedTournamentId}/my-match`, token)
+        .then(d => {
+          const m = d.match ?? null;
+          setMatchOpponent(m);
+          if (m) {
+            if (m.opponentHandicap != null) setOppWhsIdx(m.opponentHandicap);
+            if (m.partnerHandicap  != null) setPartnerWhsIdx(m.partnerHandicap);
+            if (m.opp2Handicap     != null) setOpp2WhsIdx(m.opp2Handicap);
+          }
+        })
+        .catch(() => setMatchOpponent(null))
+        .finally(() => setMatchOpponentLoading(false));
+    } else if (isBetterballGroup) {
+      setMatchOpponentLoading(true);
+      apiFetch(`/scoring/tournaments/${linkedTournamentId}/my-betterball-group`, token)
+        .then(d => {
+          const g = d.group ?? null;
+          if (g) {
+            setMatchOpponent({
+              matchId: 0,
+              opponentName: g.opponentName ?? "",
+              opp2Name: g.opp2Name ?? null,
+              opponentHandicap: g.opponentHandicap ?? null,
+              opp2Handicap: g.opp2Handicap ?? null,
+              roundLabel: g.drawReleased ? null : "Draw not yet released",
+              partnerName: g.partnerName ?? null,
+              partnerHandicap: g.partnerHandicap ?? null,
+            });
+            if (g.partnerHandicap  != null) setPartnerWhsIdx(g.partnerHandicap);
+            if (g.opponentHandicap != null) setOppWhsIdx(g.opponentHandicap);
+            if (g.opp2Handicap     != null) setOpp2WhsIdx(g.opp2Handicap);
+          } else {
+            setMatchOpponent(null);
+          }
+        })
+        .catch(() => setMatchOpponent(null))
+        .finally(() => setMatchOpponentLoading(false));
+    } else {
       setMatchOpponent(null);
-      return;
     }
-    setMatchOpponentLoading(true);
-    apiFetch(`/scoring/tournaments/${linkedTournamentId}/my-match`, token)
-      .then(d => {
-        const m = d.match ?? null;
-        setMatchOpponent(m);
-        if (m) {
-          // Store WHS Index for display only — user enters the whole-number course HCP manually
-          if (m.opponentHandicap != null) setOppWhsIdx(m.opponentHandicap);
-          if (m.partnerHandicap  != null) setPartnerWhsIdx(m.partnerHandicap);
-          if (m.opp2Handicap     != null) setOpp2WhsIdx(m.opp2Handicap);
-        }
-      })
-      .catch(() => setMatchOpponent(null))
-      .finally(() => setMatchOpponentLoading(false));
   }, [linkedTournamentId, format, token]);
 
   // Map golf_events.format / knockout_scoring_format values → our scoring format keys
@@ -444,42 +472,101 @@ export default function StartRoundScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Matchplay opponent preview — singles and betterball */}
-                    {(format === "singles_match_play" || format === "betterball_match_play") && (
-                      <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
-                        {matchOpponentLoading ? (
-                          <ActivityIndicator size="small" color="#7c3aed" />
-                        ) : matchOpponent ? (
-                          <>
-                            <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
-                              <Ionicons name={format === "betterball_match_play" ? "people" : "person"} size={14} color="#fff" />
+                    {/* Partner / opponent preview */}
+                    {(() => {
+                      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+                      const isBetterballGroup = isBetterball && !isKnockoutMatch;
+                      if (!isKnockoutMatch && !isBetterballGroup) return null;
+
+                      if (matchOpponentLoading) {
+                        return (
+                          <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
+                            <ActivityIndicator size="small" color="#7c3aed" />
+                          </View>
+                        );
+                      }
+
+                      if (isBetterballGroup) {
+                        // Betterball stableford: show partner row + optional opponents row
+                        return (
+                          <View style={{ gap: 6, marginTop: 6 }}>
+                            {/* Partner */}
+                            <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
+                              <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
+                                <Ionicons name="person" size={14} color="#fff" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.opponentVsLabel}>YOUR PARTNER</Text>
+                                {matchOpponent?.partnerName ? (
+                                  <Text style={[styles.opponentName, { color: colors.foreground }]}>
+                                    {matchOpponent.partnerName}
+                                    {matchOpponent.partnerHandicap != null ? `  ·  HCP ${matchOpponent.partnerHandicap}` : ""}
+                                  </Text>
+                                ) : (
+                                  <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>No partner assigned yet</Text>
+                                )}
+                              </View>
+                              <Ionicons name="people-outline" size={18} color="#7c3aed" />
                             </View>
-                            <View style={{ flex: 1 }}>
-                              <Text style={styles.opponentVsLabel}>
-                                {format === "betterball_match_play" ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
-                              </Text>
-                              <Text style={[styles.opponentName, { color: colors.foreground }]}>
-                                {matchOpponent.opponentName}{matchOpponent.opp2Name ? ` & ${matchOpponent.opp2Name}` : ""}
-                              </Text>
-                              {matchOpponent.roundLabel && (
-                                <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
-                                  {matchOpponent.roundLabel}
-                                  {matchOpponent.opponentHandicap != null ? ` · HCP ${matchOpponent.opponentHandicap}` : ""}
+                            {/* Opponents — only once draw is released */}
+                            {matchOpponent?.opponentName ? (
+                              <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
+                                <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
+                                  <Ionicons name="people" size={14} color="#fff" />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={styles.opponentVsLabel}>OPPONENTS</Text>
+                                  <Text style={[styles.opponentName, { color: colors.foreground }]}>
+                                    {matchOpponent.opponentName}{matchOpponent.opp2Name ? ` & ${matchOpponent.opp2Name}` : ""}
+                                  </Text>
+                                </View>
+                                <Ionicons name="git-merge-outline" size={18} color="#7c3aed" />
+                              </View>
+                            ) : (
+                              <View style={[styles.opponentBanner, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                                <Ionicons name="time-outline" size={16} color={colors.mutedForeground} />
+                                <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>Draw not yet released</Text>
+                              </View>
+                            )}
+                          </View>
+                        );
+                      }
+
+                      // Knockout matchplay
+                      return (
+                        <View style={[styles.opponentBanner, { borderColor: "#7c3aed40", backgroundColor: "#7c3aed10" }]}>
+                          {matchOpponent ? (
+                            <>
+                              <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
+                                <Ionicons name={format === "betterball_match_play" ? "people" : "person"} size={14} color="#fff" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.opponentVsLabel}>
+                                  {format === "betterball_match_play" ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
                                 </Text>
-                              )}
-                            </View>
-                            <Ionicons name="git-merge-outline" size={20} color="#7c3aed" />
-                          </>
-                        ) : (
-                          <>
-                            <Ionicons name="help-circle-outline" size={18} color={colors.mutedForeground} />
-                            <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
-                              No match scheduled yet
-                            </Text>
-                          </>
-                        )}
-                      </View>
-                    )}
+                                <Text style={[styles.opponentName, { color: colors.foreground }]}>
+                                  {matchOpponent.opponentName}{matchOpponent.opp2Name ? ` & ${matchOpponent.opp2Name}` : ""}
+                                </Text>
+                                {matchOpponent.roundLabel && (
+                                  <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
+                                    {matchOpponent.roundLabel}
+                                    {matchOpponent.opponentHandicap != null ? ` · HCP ${matchOpponent.opponentHandicap}` : ""}
+                                  </Text>
+                                )}
+                              </View>
+                              <Ionicons name="git-merge-outline" size={20} color="#7c3aed" />
+                            </>
+                          ) : (
+                            <>
+                              <Ionicons name="help-circle-outline" size={18} color={colors.mutedForeground} />
+                              <Text style={[styles.opponentRound, { color: colors.mutedForeground }]}>
+                                No match scheduled yet
+                              </Text>
+                            </>
+                          )}
+                        </View>
+                      );
+                    })()}
                   </View>
                 ) : (
                   <View>

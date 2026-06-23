@@ -95,6 +95,83 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
   }
 });
 
+// ─── My betterball group (non-knockout betterball events) ────────────────────
+
+router.get("/scoring/tournaments/:tournamentId/my-betterball-group", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    const tournamentId = parseInt(req.params.tournamentId);
+
+    // Partner: other registration in the same team
+    const myReg = await row<any>(
+      "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+      [user.id, tournamentId]
+    );
+    const teamId = myReg?.team_id ?? null;
+
+    let partnerName: string | null = null;
+    let partnerHandicap: number | null = null;
+    if (teamId) {
+      const p = await row<any>(
+        `SELECT u.name, u.handicap FROM event_registrations er
+         JOIN users u ON u.id = er.user_id
+         WHERE er.event_id = ? AND er.team_id = ? AND er.user_id != ? LIMIT 1`,
+        [tournamentId, teamId, user.id]
+      );
+      partnerName     = p?.name ?? null;
+      partnerHandicap = p?.handicap != null ? Number(p.handicap) : null;
+    }
+
+    // Opponents: other players in the same tee-time slot (draw released)
+    const mySlot = await row<any>(`
+      SELECT b.portal_slot_id FROM bookings b
+      JOIN booking_players bp ON bp.booking_id = b.id
+      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+      WHERE bp.user_id = ? AND pts.event_id = ? AND b.status = 'confirmed'
+      LIMIT 1
+    `, [user.id, tournamentId]);
+
+    let opponentName: string | null = null;
+    let opponentHandicap: number | null = null;
+    let opp2Name: string | null = null;
+    let opp2Handicap: number | null = null;
+    const drawReleased = !!mySlot?.portal_slot_id;
+
+    if (drawReleased) {
+      // All other confirmed players in the same slot who are NOT on the user's team
+      const others = await query<any>(`
+        SELECT DISTINCT bp.user_id, u.name, u.handicap
+        FROM bookings b
+        JOIN booking_players bp ON bp.booking_id = b.id
+        JOIN users u ON u.id = bp.user_id
+        LEFT JOIN event_registrations er ON er.user_id = bp.user_id AND er.event_id = ?
+        WHERE b.portal_slot_id = ?
+          AND bp.user_id != ?
+          AND (er.team_id IS NULL OR er.team_id != ?)
+          AND b.status = 'confirmed'
+        ORDER BY bp.user_id
+        LIMIT 2
+      `, [tournamentId, mySlot.portal_slot_id, user.id, teamId ?? -1]);
+
+      if (others[0]) { opponentName = others[0].name; opponentHandicap = others[0].handicap != null ? Number(others[0].handicap) : null; }
+      if (others[1]) { opp2Name     = others[1].name; opp2Handicap     = others[1].handicap != null ? Number(others[1].handicap) : null; }
+    }
+
+    res.json({
+      group: partnerName ? {
+        partnerName, partnerHandicap,
+        opponentName, opponentHandicap,
+        opp2Name, opp2Handicap,
+        drawReleased,
+      } : null,
+    });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    res.status(500).json({ message: "Failed to load betterball group" });
+  }
+});
+
 // ─── My current match in a knockout tournament ────────────────────────────────
 
 router.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {

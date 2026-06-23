@@ -76569,6 +76569,85 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     res.status(500).json({ message: "Failed to load tournaments" });
   }
 });
+router23.get("/scoring/tournaments/:tournamentId/my-betterball-group", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const tournamentId = parseInt(req.params.tournamentId);
+    const myReg = await row(
+      "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+      [user.id, tournamentId]
+    );
+    const teamId = myReg?.team_id ?? null;
+    let partnerName = null;
+    let partnerHandicap = null;
+    if (teamId) {
+      const p = await row(
+        `SELECT u.name, u.handicap FROM event_registrations er
+         JOIN users u ON u.id = er.user_id
+         WHERE er.event_id = ? AND er.team_id = ? AND er.user_id != ? LIMIT 1`,
+        [tournamentId, teamId, user.id]
+      );
+      partnerName = p?.name ?? null;
+      partnerHandicap = p?.handicap != null ? Number(p.handicap) : null;
+    }
+    const mySlot = await row(`
+      SELECT b.portal_slot_id FROM bookings b
+      JOIN booking_players bp ON bp.booking_id = b.id
+      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+      WHERE bp.user_id = ? AND pts.event_id = ? AND b.status = 'confirmed'
+      LIMIT 1
+    `, [user.id, tournamentId]);
+    let opponentName = null;
+    let opponentHandicap = null;
+    let opp2Name = null;
+    let opp2Handicap = null;
+    const drawReleased = !!mySlot?.portal_slot_id;
+    if (drawReleased) {
+      const others = await query(`
+        SELECT DISTINCT bp.user_id, u.name, u.handicap
+        FROM bookings b
+        JOIN booking_players bp ON bp.booking_id = b.id
+        JOIN users u ON u.id = bp.user_id
+        LEFT JOIN event_registrations er ON er.user_id = bp.user_id AND er.event_id = ?
+        WHERE b.portal_slot_id = ?
+          AND bp.user_id != ?
+          AND (er.team_id IS NULL OR er.team_id != ?)
+          AND b.status = 'confirmed'
+        ORDER BY bp.user_id
+        LIMIT 2
+      `, [tournamentId, mySlot.portal_slot_id, user.id, teamId ?? -1]);
+      if (others[0]) {
+        opponentName = others[0].name;
+        opponentHandicap = others[0].handicap != null ? Number(others[0].handicap) : null;
+      }
+      if (others[1]) {
+        opp2Name = others[1].name;
+        opp2Handicap = others[1].handicap != null ? Number(others[1].handicap) : null;
+      }
+    }
+    res.json({
+      group: partnerName ? {
+        partnerName,
+        partnerHandicap,
+        opponentName,
+        opponentHandicap,
+        opp2Name,
+        opp2Handicap,
+        drawReleased
+      } : null
+    });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to load betterball group" });
+  }
+});
 router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => {
   try {
     const user = await getUser(req);

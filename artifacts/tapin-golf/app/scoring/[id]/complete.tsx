@@ -729,20 +729,20 @@ export default function RoundCompleteScreen() {
               const bdr = colors.border;
               const pBg = colors.primary;
 
-              const isStableford = round.format === "fourball_stableford";
-
               const firstName = (n?: string | null) => (n ?? "?").split(" ")[0].slice(0, 6);
               const meLabel   = "Me";
               const prtLabel  = firstName(round.partner_name)   || "Prt";
-              const opp1Label = firstName(round.opponent_name)  || "Opp1";
+              const opp1Label = firstName(round.opponent_name)  || "Opp";
               const opp2Label = firstName(round.opponent2_name) || "Opp2";
 
               let myTotG = 0, prtTotG = 0, o1TotG = 0, o2TotG = 0;
+              let myTotP = 0, prtTotP = 0, o1TotP = 0, o2TotP = 0;
+              let aBestTotP = 0, bBestTotP = 0;
               let myF9G = 0, prtF9G = 0, o1F9G = 0, o2F9G = 0;
               let myB9G = 0, prtB9G = 0, o1B9G = 0, o2B9G = 0;
-              let aBestTotG = 0, aBestTotN = 0, aBestTotP = 0;
-              let aBestF9G = 0, aBestF9N = 0, aBestF9P = 0;
-              let aBestB9G = 0, aBestB9N = 0, aBestB9P = 0;
+              let myF9P = 0, prtF9P = 0, o1F9P = 0, o2F9P = 0;
+              let myB9P = 0, prtB9P = 0, o1B9P = 0, o2B9P = 0;
+              let aBestF9P = 0, bBestF9P = 0, aBestB9P = 0, bBestB9P = 0;
               let f9Par = 0, b9Par = 0;
 
               const holeData = sc.map(h => {
@@ -756,40 +756,42 @@ export default function RoundCompleteScreen() {
                 const opp1G = opp1Saved?.is_nr ? null : opp1Saved?.gross_score ?? null;
                 const opp2G = opp2Saved?.is_nr ? null : opp2Saved?.gross_score ?? null;
 
-                const myHa   = getHA(h.stroke_index, myHcp);
-                const prtHa  = getHA(h.stroke_index, prtHcp);
-                const o1Ha   = getHA(h.stroke_index, opp1Hcp);
-                const o2Ha   = getHA(h.stroke_index, opp2Hcp);
+                const myHa  = getHA(h.stroke_index, myHcp);
+                const prtHa = getHA(h.stroke_index, prtHcp);
+                const o1Ha  = getHA(h.stroke_index, opp1Hcp);
+                const o2Ha  = getHA(h.stroke_index, opp2Hcp);
 
-                const myNet  = myG   != null ? myG   - myHa  : null;
-                const prtNet = prtG  != null ? prtG  - prtHa : null;
+                const myP  = myG   != null ? calcPts(myG,   h.par, myHa)  : null;
+                const prtP = prtG  != null ? calcPts(prtG,  h.par, prtHa) : null;
+                const o1P  = opp1G != null ? calcPts(opp1G, h.par, o1Ha)  : null;
+                const o2P  = opp2G != null ? calcPts(opp2G, h.par, o2Ha)  : null;
 
-                const myP  = myG  != null ? calcPts(myG,   h.par, myHa)  : null;
-                const prtP = prtG != null ? calcPts(prtG,  h.par, prtHa) : null;
+                // Best ball per team (stableford: higher pts wins)
+                const aBestP: number | null = myP != null && (prtP == null || myP >= prtP) ? myP
+                  : prtP ?? null;
+                const bBestP: number | null = o1P != null && (o2P == null || o1P >= o2P) ? o1P
+                  : o2P ?? null;
 
-                // Team A best ball
-                let aBestG: number | null = null, aBestN: number | null = null, aBestP: number | null = null;
-                let myBest = false, prtBest = false;
-                if (isStableford) {
-                  if (myP != null && (prtP == null || myP >= prtP)) { aBestP = myP; aBestG = myG; aBestN = myNet; myBest = true; }
-                  else if (prtP != null) { aBestP = prtP; aBestG = prtG; aBestN = prtNet; prtBest = true; }
-                } else {
-                  if (myG != null && (prtG == null || myG <= prtG)) { aBestG = myG; aBestN = myNet; myBest = true; }
-                  else if (prtG != null) { aBestG = prtG; aBestN = prtNet; prtBest = true; }
-                  aBestP = aBestG != null ? calcPts(aBestG, h.par, myBest ? myHa : prtHa) : null;
-                }
+                const myBest  = myP  != null && (prtP == null || myP  >= prtP);
+                const prtBest = prtP != null && (myP  == null || prtP >  myP);
+                const o1Best  = o1P  != null && (o2P  == null || o1P  >= o2P);
+                const o2Best  = o2P  != null && (o1P  == null || o2P  >  o1P);
 
                 const isFront = h.number <= 9;
-                if (myG   != null) { myTotG  += myG;   if (isFront) myF9G   += myG;   else myB9G   += myG;   }
-                if (prtG  != null) { prtTotG += prtG;  if (isFront) prtF9G  += prtG;  else prtB9G  += prtG;  }
-                if (opp1G != null) { o1TotG  += opp1G; if (isFront) o1F9G   += opp1G; else o1B9G   += opp1G; }
-                if (opp2G != null) { o2TotG  += opp2G; if (isFront) o2F9G   += opp2G; else o2B9G   += opp2G; }
-                if (aBestG != null) { aBestTotG += aBestG; if (isFront) aBestF9G += aBestG; else aBestB9G += aBestG; }
-                if (aBestN != null) { aBestTotN += aBestN; if (isFront) aBestF9N += aBestN; else aBestB9N += aBestN; }
+                if (myG   != null) { myTotG  += myG;   if (isFront) myF9G  += myG;   else myB9G  += myG;   }
+                if (prtG  != null) { prtTotG += prtG;  if (isFront) prtF9G += prtG;  else prtB9G += prtG;  }
+                if (opp1G != null) { o1TotG  += opp1G; if (isFront) o1F9G  += opp1G; else o1B9G  += opp1G; }
+                if (opp2G != null) { o2TotG  += opp2G; if (isFront) o2F9G  += opp2G; else o2B9G  += opp2G; }
+                if (myP   != null) { myTotP  += myP;   if (isFront) myF9P  += myP;   else myB9P  += myP;   }
+                if (prtP  != null) { prtTotP += prtP;  if (isFront) prtF9P += prtP;  else prtB9P += prtP;  }
+                if (o1P   != null) { o1TotP  += o1P;   if (isFront) o1F9P  += o1P;   else o1B9P  += o1P;   }
+                if (o2P   != null) { o2TotP  += o2P;   if (isFront) o2F9P  += o2P;   else o2B9P  += o2P;   }
                 if (aBestP != null) { aBestTotP += aBestP; if (isFront) aBestF9P += aBestP; else aBestB9P += aBestP; }
+                if (bBestP != null) { bBestTotP += bBestP; if (isFront) bBestF9P += bBestP; else bBestB9P += bBestP; }
                 if (isFront) f9Par += h.par; else b9Par += h.par;
 
-                return { h, myG, prtG, opp1G, opp2G, myBest, prtBest, myHa, aBestG, aBestN, aBestP,
+                return { h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
+                         myBest, prtBest, o1Best, o2Best, aBestP, bBestP,
                          myNr: !!mySaved?.is_nr, prtNr: !!prtSaved?.is_nr,
                          opp1Nr: !!opp1Saved?.is_nr, opp2Nr: !!opp2Saved?.is_nr };
               });
@@ -799,21 +801,42 @@ export default function RoundCompleteScreen() {
               const ptsColor = (p: number | null) =>
                 p == null ? colors.mutedForeground : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171";
 
-              const scoreCell = (gross: number | null, nr: boolean, isBest: boolean, isMyTeam: boolean) => (
-                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
-                  backgroundColor: isBest ? (isMyTeam ? "#16a34a18" : "#3b82f618") : "transparent",
-                  borderRightWidth: HW, borderRightColor: bdr }}>
-                  <Text style={{ fontSize: 11,
-                    fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                    color: isBest ? (isMyTeam ? "#22c55e" : "#60a5fa") : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
-                    {nr ? "NR" : gross != null ? String(gross) : "—"}
-                  </Text>
-                </View>
-              );
+              // Gross + Pts pair for one player
+              const playerPair = (
+                gross: number | null, pts: number | null, nr: boolean,
+                isBest: boolean, isMyTeam: boolean, lastInTeam: boolean,
+              ) => {
+                const teamColor = isMyTeam ? "#22c55e" : "#60a5fa";
+                const bg = isBest ? (isMyTeam ? "#16a34a18" : "#3b82f618") : "transparent";
+                const rb = lastInTeam
+                  ? { borderRightWidth: 1.5, borderRightColor: bdr }
+                  : { borderRightWidth: HW,  borderRightColor: bdr };
+                return (
+                  <View style={[{ flex: 2, flexDirection: "row", backgroundColor: bg }, rb]}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                      borderRightWidth: HW, borderRightColor: bdr }}>
+                      <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                        color: isBest ? teamColor : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
+                        {nr ? "NR" : gross != null ? String(gross) : "—"}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                        color: isBest ? teamColor : ptsColor(pts) }}>
+                        {pts != null ? String(pts) : "—"}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              };
 
-              const TotRow = (label: string, par: number, isLast: boolean,
-                mg: number, pg: number, o1g: number, o2g: number,
-                ag: number, an: number, ap: number) => (
+              // Totals row: each player gets Gross+Pts pair; last cols are A best pts + B best pts
+              const TotRow = (
+                label: string, par: number, isLast: boolean,
+                mg: number, mp: number, pg: number, pp: number,
+                o1g: number, o1p: number, o2g: number, o2p: number,
+                abp: number, bbp: number,
+              ) => (
                 <View key={label} style={{ flexDirection: "row",
                   backgroundColor: isLast ? pBg : pBg + "e0",
                   borderTopWidth: isLast ? 1.5 : HW,
@@ -828,23 +851,27 @@ export default function RoundCompleteScreen() {
                     <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
                   </View>
                   <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
-                  {[mg, pg, o1g, o2g].map((g, i) => (
-                    <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{g > 0 ? String(g) : "—"}</Text>
+                  {[{g:mg,p:mp,last:false,myTeam:true},{g:pg,p:pp,last:true,myTeam:true},
+                    {g:o1g,p:o1p,last:false,myTeam:false},{g:o2g,p:o2p,last:true,myTeam:false}].map(({g,p,last,myTeam},i) => (
+                    <View key={i} style={[{ flex: 2, flexDirection: "row" },
+                      last ? { borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.35)" }
+                           : { borderRightWidth: HW,  borderRightColor: "rgba(255,255,255,0.2)" }]}>
+                      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
+                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g > 0 ? String(g) : "—"}</Text>
+                      </View>
+                      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
+                          color: myTeam ? "#a3e4bc" : "#fca5a5" }}>{p > 0 ? String(p) : "—"}</Text>
+                      </View>
                     </View>
                   ))}
-                  <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{ag > 0 ? String(ag) : "—"}</Text>
-                  </View>
-                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{an !== 0 || ag > 0 ? String(an) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{abp > 0 ? String(abp) : "—"}</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>{ap > 0 || (ag > 0) ? String(ap) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{bbp > 0 ? String(bbp) : "—"}</Text>
                   </View>
                 </View>
               );
@@ -853,59 +880,70 @@ export default function RoundCompleteScreen() {
                 <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
                   {/* Header row 1: group labels */}
                   <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 6 }}>
-                    <View style={{ width: 28, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                    <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>H</Text>
                     </View>
-                    <View style={{ width: 26, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                    <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
                     </View>
-                    <View style={{ width: 24, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                    <View style={{ width: 24, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>SI</Text>
                     </View>
-                    {/* Team A */}
-                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
+                    {/* Team A spans flex:4 (2 players × flex:2) */}
+                    <View style={{ flex: 4, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Team A</Text>
                     </View>
-                    {/* Team B */}
-                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
+                    {/* Team B spans flex:4 */}
+                    <View style={{ flex: 4, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>Team B</Text>
                     </View>
-                    {/* Best Ball summary header */}
-                    <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }} />
-                    <View style={{ flex: 3, alignItems: "center" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>Best Ball</Text>
+                    {/* Best pts per team */}
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>A</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>B</Text>
                     </View>
                   </View>
-                  {/* Header row 2: player names + column labels */}
+                  {/* Header row 2: player names + Gross/Pts sub-labels */}
                   <View style={{ flexDirection: "row", backgroundColor: pBg + "cc",
                     borderBottomWidth: 1.5, borderBottomColor: bdr }}>
                     <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
-                    {[meLabel, prtLabel, opp1Label, opp2Label].map((lbl, i) => (
-                      <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
-                        borderRightWidth: i === 1 ? 1.5 : HW,
-                        borderRightColor: i === 1 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
-                          color: i < 2 ? "#a3e4bc" : "#fca5a5", letterSpacing: 0.2 }}>{lbl}</Text>
+                    {[
+                      { lbl: meLabel,   team: "A", last: false },
+                      { lbl: prtLabel,  team: "A", last: true  },
+                      { lbl: opp1Label, team: "B", last: false },
+                      { lbl: opp2Label, team: "B", last: true  },
+                    ].map(({ lbl, team, last }, i) => (
+                      <View key={i} style={{ flex: 2, alignItems: "center", paddingVertical: 3,
+                        borderRightWidth: last ? 1.5 : HW,
+                        borderRightColor: last ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold",
+                          color: team === "A" ? "#a3e4bc" : "#fca5a5" }}>{lbl}</Text>
+                        <Text style={{ fontSize: 6, color: "rgba(255,255,255,0.4)",
+                          fontFamily: "Inter_400Regular" }}>G / Pts</Text>
                       </View>
                     ))}
-                    <View style={{ width: 26, alignItems: "center", paddingVertical: 3,
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 3,
                       borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: GOLD }}>HC</Text>
+                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Pts</Text>
                     </View>
-                    {["Gross","Net","Pts"].map((lbl, i) => (
-                      <View key={lbl} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
-                        borderRightWidth: i < 2 ? HW : 0,
-                        borderRightColor: "rgba(255,255,255,0.2)" }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
-                          color: lbl === "Pts" ? GOLD : lbl === "Net" ? "#a3e4bc" : "rgba(255,255,255,0.7)" }}>{lbl}</Text>
-                      </View>
-                    ))}
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 3 }}>
+                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>Pts</Text>
+                    </View>
                   </View>
 
                   {/* Hole rows */}
-                  {holeData.map(({ h, myG, prtG, opp1G, opp2G, myBest, prtBest, myHa, aBestG, aBestN, aBestP,
+                  {holeData.map(({ h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
+                                   myBest, prtBest, o1Best, o2Best, aBestP, bBestP,
                                    myNr, prtNr, opp1Nr, opp2Nr }, idx) => {
                     const rowBg = idx % 2 === 0 ? colors.card
                       : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
@@ -925,88 +963,33 @@ export default function RoundCompleteScreen() {
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                           </View>
-                          {scoreCell(myG,   myNr,   myBest,  true)}
-                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
-                            backgroundColor: prtBest ? "#16a34a18" : "transparent",
-                            borderRightWidth: 1.5, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 11, fontFamily: prtBest ? "Inter_700Bold" : "Inter_400Regular",
-                              color: prtBest ? "#22c55e" : prtNr ? colors.mutedForeground : prtG != null ? colors.foreground : colors.mutedForeground }}>
-                              {prtNr ? "NR" : prtG != null ? String(prtG) : "—"}
-                            </Text>
-                          </View>
-                          {scoreCell(opp1G, opp1Nr, false, false)}
-                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
-                            borderRightWidth: 1.5, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                              color: opp2Nr ? colors.mutedForeground : opp2G != null ? colors.foreground : colors.mutedForeground }}>
-                              {opp2Nr ? "NR" : opp2G != null ? String(opp2G) : "—"}
-                            </Text>
-                          </View>
-                          {/* HC strokes for my hole */}
-                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
-                            borderRightWidth: HW, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 11, fontFamily: myHa > 0 ? "Inter_700Bold" : "Inter_400Regular",
-                              color: myHa > 0 ? GOLD : colors.mutedForeground }}>
-                              {myHa > 0 ? `+${myHa}` : "0"}
-                            </Text>
-                          </View>
-                          {/* Best Gross */}
+                          {playerPair(myG,   myP,  myNr,   myBest,  true,  false)}
+                          {playerPair(prtG,  prtP, prtNr,  prtBest, true,  true)}
+                          {playerPair(opp1G, o1P,  opp1Nr, o1Best,  false, false)}
+                          {playerPair(opp2G, o2P,  opp2Nr, o2Best,  false, true)}
+                          {/* Team A best pts */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                              color: aBestG != null ? colors.foreground : colors.mutedForeground }}>
-                              {aBestG != null ? String(aBestG) : "—"}
-                            </Text>
-                          </View>
-                          {/* Best Net */}
-                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                            borderRightWidth: HW, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                              color: aBestN != null ? colors.primary : colors.mutedForeground }}>
-                              {aBestN != null ? String(aBestN) : "—"}
-                            </Text>
-                          </View>
-                          {/* Best Pts */}
-                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
-                              color: ptsColor(aBestP) }}>
+                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: ptsColor(aBestP) }}>
                               {aBestP != null ? String(aBestP) : "—"}
+                            </Text>
+                          </View>
+                          {/* Team B best pts */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: ptsColor(bBestP) }}>
+                              {bBestP != null ? String(bBestP) : "—"}
                             </Text>
                           </View>
                         </View>
                         {h.number === 9 && TotRow("OUT", f9Par, false,
-                          myF9G, prtF9G, o1F9G, o2F9G, aBestF9G, aBestF9N, aBestF9P)}
+                          myF9G, myF9P, prtF9G, prtF9P,
+                          o1F9G, o1F9P, o2F9G, o2F9P,
+                          aBestF9P, bBestF9P)}
                       </React.Fragment>
                     );
                   })}
-                  {TotRow("IN",  b9Par, false, myB9G, prtB9G, o1B9G, o2B9G, aBestB9G, aBestB9N, aBestB9P)}
-                  {TotRow("TOT", totPar, true, myTotG, prtTotG, o1TotG, o2TotG, aBestTotG, aBestTotN, aBestTotP)}
-                  {[
-                    { label: "HCAP", vals: [myHcp, prtHcp, opp1Hcp, opp2Hcp], fmt: (v: number) => String(v) },
-                    { label: "NETT", vals: [myTotG - myHcp, prtTotG - prtHcp, o1TotG - opp1Hcp, o2TotG - opp2Hcp], fmt: (v: number, i: number) => ([myTotG, prtTotG, o1TotG, o2TotG][i] > 0 ? String(v) : "—") },
-                  ].map(({ label, vals, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
-                      borderTopWidth: HW, borderTopColor: bdr }}>
-                      <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
-                      </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
-                      {vals.map((v, i) => (
-                        <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                          borderRightWidth: i === 1 ? 1.5 : i < 3 ? HW : 0,
-                          borderRightColor: bdr }}>
-                          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
-                            color: i < 2 ? colors.primary : "#b91c1c" }}>{fmt(v, i)}</Text>
-                        </View>
-                      ))}
-                      {/* HC + Best Ball cols: empty */}
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
-                      <View style={{ flex: 3 }} />
-                    </View>
-                  ))}
+                  {TotRow("IN",  b9Par, false, myB9G, myB9P, prtB9G, prtB9P, o1B9G, o1B9P, o2B9G, o2B9P, aBestB9P, bBestB9P)}
+                  {TotRow("TOT", totPar, true,  myTotG, myTotP, prtTotG, prtTotP, o1TotG, o1TotP, o2TotG, o2TotP, aBestTotP, bBestTotP)}
                 </View>
               );
             })()

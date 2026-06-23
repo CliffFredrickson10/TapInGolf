@@ -99,7 +99,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : "Mkr3";
   const dHcp   = o2Hcp;
 
-  const showTeam = isBBFmt;
+  const showTeam = true;
   const showRes  = true;
 
   /* ── Individual result per player per hole ────────────────── */

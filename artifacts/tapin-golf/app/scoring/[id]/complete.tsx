@@ -1362,12 +1362,12 @@ export default function RoundCompleteScreen() {
               const showPts        = !isGross && !isNetOnly;
 
               const isMarkerRound = !!round.opponent_name && !!round.playerHoles;
-              const mkrLabel = isMarkerRound
-                ? (round.opponent_name!.split(" ")[0].slice(0, 5))
-                : "Mkr";
+              const hasOpp2       = isMarkerRound && !!round.opponent2_name;
+              const mkrLabel  = isMarkerRound ? round.opponent_name!.split(" ")[0].slice(0, 6)  : "Mkr";
+              const mkr2Label = hasOpp2       ? round.opponent2_name!.split(" ")[0].slice(0, 6) : "Mkr2";
 
               let f9G = 0, b9G = 0, f9N = 0, b9N = 0, f9P = 0, b9P = 0;
-              let f9Mkr = 0, b9Mkr = 0;
+              let f9Mkr = 0, b9Mkr = 0, f9Mkr2 = 0, b9Mkr2 = 0;
               let f9Par = 0, b9Par = 0;
 
               const holeData = sc.map(h => {
@@ -1385,16 +1385,19 @@ export default function RoundCompleteScreen() {
                 if (pts   != null && !nr) { if (isFront) f9P += pts; else b9P += pts; }
                 if (isFront) f9Par += h.par; else b9Par += h.par;
 
-                const mkrSaved = isMarkerRound ? round.playerHoles![`0_${h.number}`] : undefined;
-                const mkrGross = mkrSaved?.is_nr ? null : (mkrSaved?.gross_score ?? null);
-                if (mkrGross != null) { if (isFront) f9Mkr += mkrGross; else b9Mkr += mkrGross; }
-                return { h, ha, nr, gross, net, pts, diff, mkrGross };
+                const mkrSaved  = isMarkerRound ? round.playerHoles![`0_${h.number}`] : undefined;
+                const mkr2Saved = hasOpp2       ? round.playerHoles![`1_${h.number}`] : undefined;
+                const mkrGross  = mkrSaved?.is_nr  ? null : (mkrSaved?.gross_score  ?? null);
+                const mkr2Gross = mkr2Saved?.is_nr ? null : (mkr2Saved?.gross_score ?? null);
+                if (mkrGross  != null) { if (isFront) f9Mkr  += mkrGross;  else b9Mkr  += mkrGross;  }
+                if (mkr2Gross != null) { if (isFront) f9Mkr2 += mkr2Gross; else b9Mkr2 += mkr2Gross; }
+                return { h, ha, nr, gross, net, pts, diff, mkrGross, mkr2Gross };
               });
 
               const totPar = f9Par + b9Par;
 
 
-              const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean, mkrG?: number | null) => (
+              const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean, mkrG?: number | null, mkr2G?: number | null) => (
                 <View key={label} style={{ flexDirection: "row",
                   backgroundColor: isLast ? pBg : pBg + "e0",
                   borderTopWidth: isLast ? 1.5 : HW,
@@ -1422,12 +1425,21 @@ export default function RoundCompleteScreen() {
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                     <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g || "—"}</Text>
                   </View>
-                  {/* Mkr */}
+                  {/* Mkr1 */}
                   {isMarkerRound && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.7)" }}>
+                        {mkrG != null && mkrG > 0 ? mkrG : "—"}
+                      </Text>
+                    </View>
+                  )}
+                  {/* Mkr2 */}
+                  {hasOpp2 && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                       borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                       <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.7)" }}>
-                        {mkrG != null && mkrG > 0 ? mkrG : "—"}
+                        {mkr2G != null && mkr2G > 0 ? mkr2G : "—"}
                       </Text>
                     </View>
                   )}
@@ -1480,8 +1492,13 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
                     </View>
                     {isMarkerRound && (
-                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                         <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkrLabel}</Text>
+                      </View>
+                    )}
+                    {hasOpp2 && (
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkr2Label}</Text>
                       </View>
                     )}
                     {!isGross && (
@@ -1538,13 +1555,23 @@ export default function RoundCompleteScreen() {
                               {nr ? "NR" : gross != null ? String(gross) : "—"}
                             </Text>
                           </View>
-                          {/* Mkr */}
+                          {/* Mkr1 */}
                           {isMarkerRound && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                              borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr }}>
+                              borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
                                 color: mkrGross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
                                 {mkrGross != null ? String(mkrGross) : "—"}
+                              </Text>
+                            </View>
+                          )}
+                          {/* Mkr2 */}
+                          {hasOpp2 && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                              borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                                color: mkr2Gross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
+                                {mkr2Gross != null ? String(mkr2Gross) : "—"}
                               </Text>
                             </View>
                           )}
@@ -1579,12 +1606,12 @@ export default function RoundCompleteScreen() {
                             </View>
                           )}
                         </View>
-                        {h.number === 9 && TotRow("OUT", f9Par, f9G, f9N, f9P, false, f9Mkr || null)}
+                        {h.number === 9 && TotRow("OUT", f9Par, f9G, f9N, f9P, false, f9Mkr || null, f9Mkr2 || null)}
                       </React.Fragment>
                     );
                   })}
-                  {TotRow("IN",  b9Par, b9G, b9N, b9P, false, b9Mkr || null)}
-                  {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true, (f9Mkr + b9Mkr) || null)}
+                  {TotRow("IN",  b9Par, b9G, b9N, b9P, false, b9Mkr || null, b9Mkr2 || null)}
+                  {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true, (f9Mkr + b9Mkr) || null, (f9Mkr2 + b9Mkr2) || null)}
                 </View>
               );
             })()

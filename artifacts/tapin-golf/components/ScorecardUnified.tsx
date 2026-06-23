@@ -60,10 +60,11 @@ export default function ScorecardUnified({ round, colors }: Props) {
                    "fourball_stableford_match_play"].includes(fmt);
   const isBBStb = fmt === "fourball_stableford" || fmt === "fourball_stableford_match_play";
   const isBBGrs = fmt === "fourball_gross_betterball" || fmt === "betterball_gross_match_play";
-  const isGrOnly= fmt === "gross_stroke_play";
-  const isNetOny= fmt === "net_stroke_play" || fmt === "chairman";
-  const isPar   = ["par_bogey","individual_par","individual_bogey","individual_bonus_bogey"].includes(fmt);
-  const isMod   = fmt === "modified_stableford";
+  const isGrOnly  = fmt === "gross_stroke_play";
+  const isNetOny  = fmt === "net_stroke_play" || fmt === "chairman";
+  const isPar     = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
+  const isBonusB  = fmt === "individual_bonus_bogey";
+  const isMod     = fmt === "modified_stableford";
   const isMaxSc = fmt === "maximum_score";
   const hasPH   = !!round.playerHoles;
 
@@ -99,10 +100,18 @@ export default function ScorecardUnified({ round, colors }: Props) {
 
   /* ── Individual result per player per hole ────────────────── */
   function calcR(g: number, par: number, ha: number): number {
-    if (isNetOny) return g - ha;
-    if (isMaxSc)  return Math.min(g, par + 2 + ha) - ha;
-    if (isPar)    { const n = g - ha; return n < par ? 1 : n === par ? 0 : -1; }
-    if (isMod)    { const d = g - ha - par; return d <= -2 ? 3 : d === -1 ? 1 : d === 0 ? 0 : d === 1 ? -1 : -3; }
+    if (isNetOny)  return g - ha;
+    if (isMaxSc)   return Math.min(g, par + 2 + ha) - ha;
+    if (isPar)     { const n = g - ha; return n < par ? 1 : n === par ? 0 : -1; }
+    if (isMod)     { const d = g - ha - par; return d <= -2 ? 3 : d === -1 ? 1 : d === 0 ? 0 : d === 1 ? -1 : -3; }
+    if (isBonusB)  {
+      const d = g - ha - par;
+      if (d <= -2) return 4;
+      if (d === -1) return 3;
+      if (d <= 1)  return 2; // par or bogey
+      if (d === 2) return 1;
+      return 0;
+    }
     return Math.max(0, par + 2 - (g - ha));  // stableford default
   }
 
@@ -217,7 +226,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const totBBWHL = net2whl(f9bbW + b9bbW, f9bbL + b9bbL);
 
   /* ── Display helpers ──────────────────────────────────────── */
-  const resLbl = isNetOny || isMaxSc ? "Net" : isPar ? "Res" : isMod ? "Pts" : isMP ? "Res" : "Pts";
+  const resLbl = isNetOny || isMaxSc ? "Net" : isPar ? "Res" : isMP ? "Res" : "Pts";
   const whlC = (w: "W"|"H"|"L"|null) => !w ? MFG : w === "W" ? "#22c55e" : w === "H" ? GOLD : "#f87171";
 
   const rTxt = (r: number|null, nr: boolean): string => {
@@ -230,7 +239,10 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (nr || r == null) return MFG;
     if (isPar || isMP) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : GOLD;
     if (isMod) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : FG;
-    return FG;
+    // Bonus bogey: 4/3 pts = green, 2 pts = gold, 1 pt = orange, 0 pts = red
+    if (isBonusB) return r >= 3 ? "#22c55e" : r === 2 ? GOLD : r === 1 ? "#fb923c" : "#f87171";
+    // Standard stableford
+    return r >= 3 ? "#22c55e" : r >= 2 ? GOLD : r >= 1 ? "#fb923c" : "#f87171";
   };
 
   /* ── Layout constants ─────────────────────────────────────── */

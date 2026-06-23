@@ -49,18 +49,37 @@ type Round = {
 };
 
 const FORMAT_LABELS: Record<string, string> = {
-  individual_stableford: "Individual Stableford",
-  gross_stroke_play: "Gross Stroke Play",
-  net_stroke_play: "Net Stroke Play",
-  fourball_stableford: "Betterball Stableford",
-  fourball_gross_betterball: "Four-Ball Gross Betterball",
-  american_scramble: "American Scramble",
-  singles_match_play: "Singles Match Play",
+  individual_stableford:       "Individual Stableford",
+  gross_stroke_play:           "Gross Stroke Play",
+  net_stroke_play:             "Net Stroke Play",
+  par_bogey:                   "Par / Bogey Competition",
+  individual_par:              "Individual Par Competition",
+  individual_bogey:            "Individual Bogey Competition",
+  modified_stableford:         "Modified Stableford",
+  individual_bonus_bogey:      "Individual Bonus Bogey",
+  chairman:                    "Chairman (The Perch)",
+  maximum_score:               "Maximum Score",
+  eclectic:                    "Eclectic",
+  fourball_stableford:         "Betterball Stableford",
+  fourball_gross_betterball:   "Four-Ball Gross Betterball",
+  fourball_net_betterball:     "Four-Ball Net Betterball",
+  shamble:                     "Shamble",
+  best_ball_aggregate:         "Best Ball Aggregate",
+  high_low:                    "High-Low",
+  daytona:                     "Daytona (Las Vegas)",
+  low_ball_total:              "Low Ball / Total Score",
+  the_ghost:                   "The Ghost",
+  betterball_bonus_bogey:      "Betterball Bonus Bogey",
+  pinehurst_points:            "Betterball (Pinehurst)",
+  alliance:                    "Alliance",
+  american_scramble:           "American Scramble",
+  singles_match_play:          "Singles Match Play",
   singles_stableford_match_play: "Singles Stableford Match Play",
-  singles_gross_match_play: "Singles Gross Match Play",
-  betterball_match_play: "Betterball Match Play",
+  singles_gross_match_play:    "Singles Gross Match Play",
+  betterball_match_play:       "Betterball Match Play",
   betterball_gross_match_play: "Betterball Gross Match Play",
   fourball_stableford_match_play: "Betterball Stableford Match Play",
+  other:                       "Other / Custom",
 };
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
@@ -1334,8 +1353,13 @@ export default function RoundCompleteScreen() {
               const bdr = colors.border;
               const pBg = colors.primary;
 
-              const isStableford = round.format === "individual_stableford";
-              const isGross      = round.format === "gross_stroke_play";
+              const isGross        = round.format === "gross_stroke_play";
+              const isNetOnly      = round.format === "net_stroke_play" || round.format === "chairman";
+              const isParComp      = round.format === "par_bogey" || round.format === "individual_par";
+              const isBogeyComp    = round.format === "individual_bogey";
+              const isParOrBogey   = isParComp || isBogeyComp;
+              const isModStableford = round.format === "modified_stableford";
+              const showPts        = !isGross && !isNetOnly;
 
               let f9G = 0, b9G = 0, f9N = 0, b9N = 0, f9P = 0, b9P = 0;
               let f9Par = 0, b9Par = 0;
@@ -1392,14 +1416,18 @@ export default function RoundCompleteScreen() {
                   {/* Net */}
                   {!isGross && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      borderRightWidth: showPts ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
                       <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{n || "—"}</Text>
                     </View>
                   )}
-                  {/* Pts */}
-                  {!isGross && (
+                  {/* Pts / Res */}
+                  {showPts && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{p}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                        {isParOrBogey
+                          ? (p > 0 ? `+${p}` : p < 0 ? `${p}` : "A/S")
+                          : p}
+                      </Text>
                     </View>
                   )}
                 </View>
@@ -1407,6 +1435,10 @@ export default function RoundCompleteScreen() {
 
               const cols = isGross
                 ? ["Hole","Par","SI","H/C","Gross"]
+                : !showPts
+                ? ["Hole","Par","SI","H/C","Gross","Net"]
+                : isParOrBogey
+                ? ["Hole","Par","SI","H/C","Gross","Net","Res"]
                 : ["Hole","Par","SI","H/C","Gross","Net","Pts"];
 
               return (
@@ -1430,13 +1462,15 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
                     </View>
                     {!isGross && (
-                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: showPts ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
                         <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Net</Text>
                       </View>
                     )}
-                    {!isGross && (
+                    {showPts && (
                       <View style={{ flex: 1, alignItems: "center" }}>
-                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Pts</Text>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                          {isParOrBogey ? "Res" : "Pts"}
+                        </Text>
                       </View>
                     )}
                   </View>
@@ -1484,19 +1518,30 @@ export default function RoundCompleteScreen() {
                           {/* Net */}
                           {!isGross && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                              borderRightWidth: HW, borderRightColor: bdr }}>
+                              borderRightWidth: showPts ? HW : 0, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
                                 color: net != null && !nr ? colors.foreground : colors.mutedForeground }}>
                                 {nr ? "—" : net != null ? String(net) : "—"}
                               </Text>
                             </View>
                           )}
-                          {/* Pts */}
-                          {!isGross && (
+                          {/* Pts / Res */}
+                          {showPts && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
-                                color: pts != null && !nr ? colors.foreground : colors.mutedForeground }}>
-                                {nr ? "0" : pts != null ? String(pts) : "—"}
+                                color: pts != null && !nr
+                                  ? (isParOrBogey
+                                      ? (pts === 1 ? "#22c55e" : pts === 0 ? "#c8a84b" : "#f87171")
+                                      : isModStableford
+                                      ? (pts > 0 ? "#22c55e" : pts < 0 ? "#f87171" : colors.foreground)
+                                      : colors.foreground)
+                                  : colors.mutedForeground }}>
+                                {nr ? "—"
+                                  : pts != null
+                                  ? (isParOrBogey
+                                      ? (pts === 1 ? "W" : pts === 0 ? "H" : "L")
+                                      : String(pts))
+                                  : "—"}
                               </Text>
                             </View>
                           )}

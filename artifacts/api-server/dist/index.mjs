@@ -76493,8 +76493,33 @@ function getHA(strokeIndex, playingHcp) {
   if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
   return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
 }
-function calcPoints(gross, par, ha) {
-  return Math.max(0, par + 2 - (gross - ha));
+function calcFormatPts(fmt, gross, par, ha) {
+  const netVsPar = gross - ha - par;
+  switch (fmt) {
+    case "modified_stableford":
+      if (netVsPar <= -2) return 4;
+      if (netVsPar === -1) return 2;
+      if (netVsPar === 0) return 0;
+      if (netVsPar === 1) return -1;
+      return -3;
+    case "individual_bonus_bogey":
+      if (netVsPar <= -2) return 4;
+      if (netVsPar === -1) return 3;
+      if (netVsPar === 0) return 2;
+      if (netVsPar === 1) return 2;
+      if (netVsPar === 2) return 1;
+      return 0;
+    case "par_bogey":
+    case "individual_par":
+      return netVsPar < 0 ? 1 : netVsPar === 0 ? 0 : -1;
+    case "individual_bogey":
+      return netVsPar <= 0 ? 1 : netVsPar === 1 ? 0 : -1;
+    case "net_stroke_play":
+    case "chairman":
+      return 0;
+    default:
+      return Math.max(0, par + 2 - (gross - ha));
+  }
 }
 function defaultScorecard() {
   return Array.from({ length: 18 }, (_, i) => ({
@@ -77193,14 +77218,14 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
     const roundId = parseInt(req.params.id);
     const holeNum = parseInt(req.params.holeNum);
     const rounds = await query(
-      "SELECT playing_handicap FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      "SELECT playing_handicap, format FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
       [roundId, user.id]
     );
     if (rounds.length === 0) {
       res.status(404).json({ message: "Active round not found" });
       return;
     }
-    const { playing_handicap } = rounds[0];
+    const { playing_handicap, format: roundFormat } = rounds[0];
     const { par, strokeIndex, grossScore, isNr = false, players } = req.body;
     if (!par || !strokeIndex) {
       res.status(400).json({ message: "par and strokeIndex required" });
@@ -77215,8 +77240,9 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
       `, [roundId, holeNum, par, strokeIndex]);
     } else {
       const ha = getHA(strokeIndex, playing_handicap);
-      const netScore = grossScore - ha;
-      const pts = calcPoints(grossScore, par, ha);
+      const effectiveGross = roundFormat === "maximum_score" ? Math.min(grossScore, par + 2 + ha) : grossScore;
+      const netScore = effectiveGross - ha;
+      const pts = calcFormatPts(roundFormat ?? "individual_stableford", effectiveGross, par, ha);
       await exec(`
         INSERT INTO scoring_holes (round_id, hole_number, par, stroke_index, gross_score, net_score, stableford_points, is_nr)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
@@ -77225,7 +77251,7 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
               net_score = EXCLUDED.net_score,
               stableford_points = EXCLUDED.stableford_points,
               is_nr = 0
-      `, [roundId, holeNum, par, strokeIndex, grossScore, netScore, pts]);
+      `, [roundId, holeNum, par, strokeIndex, effectiveGross, netScore, pts]);
     }
     if (Array.isArray(players)) {
       for (let i = 0; i < players.length; i++) {

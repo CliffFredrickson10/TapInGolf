@@ -75,6 +75,42 @@ function getHA(si: number, ph: number): number {
 function calcPoints(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));
 }
+function calcFormatPts(fmt: string, gross: number, par: number, ha: number): number {
+  const netVsPar = (gross - ha) - par;
+  switch (fmt) {
+    case "modified_stableford":
+      if (netVsPar <= -2) return 4;
+      if (netVsPar === -1) return 2;
+      if (netVsPar === 0) return 0;
+      if (netVsPar === 1) return -1;
+      return -3;
+    case "individual_bonus_bogey":
+      if (netVsPar <= -2) return 4;
+      if (netVsPar === -1) return 3;
+      if (netVsPar === 0) return 2;
+      if (netVsPar === 1) return 2;
+      if (netVsPar === 2) return 1;
+      return 0;
+    case "par_bogey":
+    case "individual_par":
+      return netVsPar < 0 ? 1 : netVsPar === 0 ? 0 : -1;
+    case "individual_bogey":
+      return netVsPar <= 0 ? 1 : netVsPar === 1 ? 0 : -1;
+    case "net_stroke_play":
+    case "chairman":
+      return 0;
+    default:
+      return Math.max(0, par + 2 - (gross - ha));
+  }
+}
+function dotColorForFormat(fmt: string, pts: number | null, GOLD: string): string {
+  if (pts == null) return "#f87171";
+  if (fmt === "par_bogey" || fmt === "individual_par" || fmt === "individual_bogey")
+    return pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171";
+  if (fmt === "modified_stableford")
+    return pts >= 4 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 0 ? "#fb923c" : "#f87171";
+  return pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171";
+}
 function scoreName(gross: number, par: number): string {
   if (gross === 1) return "Hole-in-one";
   const d = gross - par;
@@ -556,8 +592,11 @@ export default function HoleEntryScreen() {
   const ph = round.playing_handicap;
   const ha = getHA(hole.stroke_index, ph);
   const oppHA = getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0);
-  const pts = gross != null ? calcPoints(gross, hole.par, ha) : null;
-  const netScore = gross != null ? gross - ha : null;
+  const isParOrBogeyFormat = round.format === "par_bogey" || round.format === "individual_par" || round.format === "individual_bogey";
+  const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman";
+  const effectiveGross     = round.format === "maximum_score" && gross != null ? Math.min(gross, hole.par + 2 + ha) : gross;
+  const pts      = effectiveGross != null ? calcFormatPts(round.format ?? "individual_stableford", effectiveGross, hole.par, ha) : null;
+  const netScore = effectiveGross != null ? effectiveGross - ha : null;
 
   const totalPts = scorecard.reduce((sum, h) => {
     const saved = round.holes[h.number];
@@ -789,7 +828,7 @@ export default function HoleEntryScreen() {
           const played = saved != null;
           const p = played && !saved.is_nr ? (saved.stableford_points ?? 0) : null;
           const dotBg = active ? "#fff"
-            : played ? (p == null ? "#f87171" : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171")
+            : played ? dotColorForFormat(round.format ?? "", p, GOLD)
             : SURFACE;
           return (
             <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: active ? 36 : 28 }]}>
@@ -802,7 +841,10 @@ export default function HoleEntryScreen() {
       </ScrollView>
       </View>
       <Text style={styles.stripMeta}>
-        {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored · {totalPts} pts total
+        {scorecard.filter(h => round.holes[h.number] != null).length} / {scorecard.length} scored ·{" "}
+        {isParOrBogeyFormat
+          ? (totalPts > 0 ? `${totalPts} UP` : totalPts < 0 ? `${Math.abs(totalPts)} DOWN` : "All Square")
+          : `${totalPts} pts`}
       </Text>
       {pendingCount > 0 && (
         <TouchableOpacity
@@ -901,7 +943,14 @@ export default function HoleEntryScreen() {
                 {gross != null ? (
                   <>
                     <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>{gross}</Text>
-                    <Text style={[styles.scoreNet, isBetterball && { color: "#22c55e80" }]}>Net {gross - ha}{!isBetterball ? ` · ${pts}pts` : ""}</Text>
+                    <Text style={[styles.scoreNet, isBetterball && { color: "#22c55e80" }]}>
+                      {`Net ${netScore ?? "—"}`}
+                      {!isBetterball && !isNetOnlyFormat && (
+                        isParOrBogeyFormat
+                          ? ` · ${pts === 1 ? "WIN" : pts === 0 ? "HALVE" : "LOSS"}`
+                          : ` · ${pts}pts`
+                      )}
+                    </Text>
                   </>
                 ) : (
                   <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>

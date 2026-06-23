@@ -871,9 +871,8 @@ export default function HoleEntryScreen() {
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         {/* Hole identity */}
-        <View style={[styles.holeHeader, hasOpponents && { paddingTop: 20, paddingBottom: 4 }]}>
-          {!hasOpponents && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
-          <Text style={[styles.holeName, hasOpponents && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
+        <View style={[styles.holeHeader, { paddingTop: 20, paddingBottom: 4 }]}>
+          <Text style={[styles.holeName, { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <View style={styles.hcpChip}>
             <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
           </View>
@@ -906,14 +905,12 @@ export default function HoleEntryScreen() {
         )}
 
         {/* ── YOUR SCORE / YOUR TEAM section ─────────────────────── */}
-        {hasOpponents && (
-          <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
-            <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
-            <Text style={[styles.sectionLabel, { color: GREEN }]}>
-              {isBetterball ? "YOUR TEAM" : "YOUR SCORE"}
-            </Text>
-          </View>
-        )}
+        <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
+          <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
+          <Text style={[styles.sectionLabel, { color: GREEN }]}>
+            {isBetterball ? "YOUR TEAM" : "YOUR SCORE"}
+          </Text>
+        </View>
 
         <View style={isBetterball ? styles.teamGroupBox : undefined}>
           <View style={[styles.stepperSection, isBetterball && { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#071a0e" }]}>
@@ -924,7 +921,7 @@ export default function HoleEntryScreen() {
               </View>
             )}
             {!isBetterball && (
-              <View style={{ height: isAnyMatch ? 24 : 32, alignItems: "center", justifyContent: "center", marginBottom: isAnyMatch ? 4 : 8 }}>
+              <View style={{ height: 24, alignItems: "center", justifyContent: "center", marginBottom: 4 }}>
                 {gross != null && (
                   <View style={[styles.scoreBadge, { backgroundColor: scoreColor(gross, hole.par) + "22", borderColor: scoreColor(gross, hole.par) + "60" }]}>
                     <Text style={[styles.scoreBadgeText, { color: scoreColor(gross, hole.par) }]}>
@@ -938,14 +935,14 @@ export default function HoleEntryScreen() {
             <View style={[styles.stepper, isBetterball && { paddingHorizontal: 16 }]}>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e55" : BORDER, width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e55" : BORDER, width: 52, height: 52, borderRadius: 26 }]}
               >
-                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e99" : MUTED_FG, fontSize: isAnyMatch ? 24 : 30 }]}>−</Text>
+                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e99" : MUTED_FG, fontSize: 24 }]}>−</Text>
               </TouchableOpacity>
               <View style={styles.scoreDisplay}>
                 {gross != null ? (
                   <>
-                    <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>{gross}</Text>
+                    <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: 60, lineHeight: 64 }]}>{gross}</Text>
                     <Text style={[styles.scoreNet, isBetterball && { color: "#22c55e80" }]}>
                       {`Net ${netScore ?? "—"}`}
                       {!isBetterball && !isNetOnlyFormat && (
@@ -956,14 +953,14 @@ export default function HoleEntryScreen() {
                     </Text>
                   </>
                 ) : (
-                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : SURFACE, fontSize: isAnyMatch ? 60 : 84, lineHeight: isAnyMatch ? 64 : 88 }]}>—</Text>
+                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : SURFACE, fontSize: 60, lineHeight: 64 }]}>—</Text>
                 )}
               </View>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#1a4028", width: isAnyMatch ? 52 : 64, height: isAnyMatch ? 52 : 64, borderRadius: isAnyMatch ? 26 : 32 }]}
+                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#1a4028", width: 52, height: 52, borderRadius: 26 }]}
               >
-                <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: isAnyMatch ? 24 : 30 }]}>+</Text>
+                <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: 24 }]}>+</Text>
               </TouchableOpacity>
             </View>
 
@@ -1046,7 +1043,10 @@ export default function HoleEntryScreen() {
         {/* ── MARKER section — individual tournament rounds ─────── */}
         {isMarkerRound && (
           <>
-            <View style={[styles.scoringSectionHeader, { paddingTop: 10, paddingBottom: 2 }]}>
+            <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
+              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
+            </View>
+            <View style={[styles.scoringSectionHeader, { paddingTop: 2, paddingBottom: 2 }]}>
               <View style={[styles.sectionDot, { backgroundColor: "#60a5fa" }]} />
               <Text style={[styles.sectionLabel, { color: "#60a5fa" }]}>MARKING FOR</Text>
             </View>

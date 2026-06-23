@@ -60,6 +60,7 @@ const FORMAT_LABELS: Record<string, string> = {
   singles_gross_match_play: "Singles Gross Match Play",
   betterball_match_play: "Betterball Match Play",
   betterball_gross_match_play: "Betterball Gross Match Play",
+  fourball_stableford_match_play: "Betterball Stableford Match Play",
 };
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
@@ -206,6 +207,40 @@ function calcBBGrossMatchResult(
   return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
 }
 
+function calcBBStablefordMatchResult(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    if (!mine || mine.is_nr || mine.gross_score == null) continue;
+    const opp1    = playerHoles[`1_${h.number}`];
+    const opp2    = playerHoles[`2_${h.number}`];
+    if (!opp1 && !opp2) continue;
+    const partner  = playerHoles[`0_${h.number}`];
+    const ha       = getHA(h.stroke_index, myHcp);
+    const oppHA    = getHA(h.stroke_index, oppHcp);
+    const myPts    = calcPts(mine.gross_score, h.par, ha);
+    const partPts  = partner?.gross_score != null && !partner.is_nr ? calcPts(partner.gross_score, h.par, ha) : null;
+    const teamBest = partPts != null ? Math.max(myPts, partPts) : myPts;
+    const opp1Pts  = opp1?.gross_score != null && !opp1.is_nr ? calcPts(opp1.gross_score, h.par, oppHA) : null;
+    const opp2Pts  = opp2?.gross_score != null && !opp2.is_nr ? calcPts(opp2.gross_score, h.par, oppHA) : null;
+    const oppBest  = opp1Pts != null && opp2Pts != null ? Math.max(opp1Pts, opp2Pts) : (opp1Pts ?? opp2Pts);
+    if (oppBest == null) continue;
+    if      (teamBest > oppBest) won++;
+    else if (teamBest < oppBest) lost++;
+    else                         halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
+}
+
 function scoreLabel(d: number): string {
   if (d <= -3) return "ALB";
   if (d === -2) return "EGL";
@@ -298,8 +333,8 @@ export default function RoundCompleteScreen() {
 
   const isMatchPlay       = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
   const singleMetric      = round.format === "singles_stableford_match_play" ? "stableford" : round.format === "singles_gross_match_play" ? "gross" : "net";
-  const isBetterball      = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play";
-  const isFourball        = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play";
+  const isBetterball      = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play";
+  const isFourball        = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play";
   const isFourballNonMatch = ["fourball_stableford", "fourball_gross_betterball"].includes(round.format);
   const isAnyMatch   = isMatchPlay || isBetterball;
   const matchResult  = isMatchPlay && round.playerHoles
@@ -311,6 +346,8 @@ export default function RoundCompleteScreen() {
     : isBetterball && round.playerHoles
     ? (round.format === "betterball_gross_match_play"
         ? calcBBGrossMatchResult(sc, holes, round.playerHoles)
+        : round.format === "fourball_stableford_match_play"
+        ? calcBBStablefordMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
         : calcBBMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : null;
 
@@ -446,7 +483,7 @@ export default function RoundCompleteScreen() {
               const opp1Hcp = round.opponent_playing_hcp ?? 0;
               const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
 
-              const metric = round.format === "fourball_stableford"      ? "stableford"
+              const metric = (round.format === "fourball_stableford" || round.format === "fourball_stableford_match_play") ? "stableford"
                            : (round.format === "fourball_gross_betterball" || round.format === "betterball_gross_match_play") ? "gross"
                            : "net";
               const bestOf = (a: number | null, b: number | null) =>
@@ -467,6 +504,9 @@ export default function RoundCompleteScreen() {
               let myF9N = 0, prtF9N = 0, o1F9N = 0, o2F9N = 0;
               let myB9G = 0, prtB9G = 0, o1B9G = 0, o2B9G = 0;
               let myB9N = 0, prtB9N = 0, o1B9N = 0, o2B9N = 0;
+              let myTotP = 0, prtTotP = 0, o1TotP = 0, o2TotP = 0;
+              let myF9P = 0, prtF9P = 0, o1F9P = 0, o2F9P = 0;
+              let myB9P = 0, prtB9P = 0, o1B9P = 0, o2B9P = 0;
               let f9Won = 0, f9Lost = 0, f9Halved = 0;
               let b9Won = 0, b9Lost = 0, b9Halved = 0;
 
@@ -554,7 +594,13 @@ export default function RoundCompleteScreen() {
                 if (res === "L") { if (isFront) f9Lost++;   else b9Lost++;   }
                 if (res === "H") { if (isFront) f9Halved++; else b9Halved++; }
 
+                if (myP   != null) { myTotP  += myP;   if (isFront) myF9P  += myP;  else myB9P  += myP;  }
+                if (prtP  != null) { prtTotP += prtP;  if (isFront) prtF9P += prtP; else prtB9P += prtP; }
+                if (o1P   != null) { o1TotP  += o1P;   if (isFront) o1F9P  += o1P;  else o1B9P  += o1P;  }
+                if (o2P   != null) { o2TotP  += o2P;   if (isFront) o2F9P  += o2P;  else o2B9P  += o2P;  }
+
                 return { h, myG, prtG, opp1G, opp2G, myNet, prtNet, o1Net, o2Net,
+                         myM, prtM, o1M, o2M,
                          myBest, prtBest, o1Best, o2Best, res,
                          mySaved, prtSaved, opp1Saved, opp2Saved };
               });
@@ -714,6 +760,7 @@ export default function RoundCompleteScreen() {
                     return (
                       <>
                         {holeData.map(({ h, myG, prtG, opp1G, opp2G, myNet, prtNet, o1Net, o2Net,
+                                         myM, prtM, o1M, o2M,
                                          myBest, prtBest, o1Best, o2Best, res,
                                          mySaved, prtSaved, opp1Saved, opp2Saved }, idx) => {
                           const rowBg = idx % 2 === 0 ? colors.card
@@ -735,10 +782,10 @@ export default function RoundCompleteScreen() {
                                   borderRightWidth: HW, borderRightColor: bdr }}>
                                   <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                                 </View>
-                                {playerPair(myG,   myNet,  !!mySaved?.is_nr,   myBest,   false)}
-                                {playerPair(prtG,  prtNet, !!prtSaved?.is_nr,  prtBest,  true)}
-                                {playerPair(opp1G, o1Net,  !!opp1Saved?.is_nr, o1Best,   false)}
-                                {playerPair(opp2G, o2Net,  !!opp2Saved?.is_nr, o2Best,   false)}
+                                {playerPair(myG,   myM,  !!mySaved?.is_nr,   myBest,   false)}
+                                {playerPair(prtG,  prtM, !!prtSaved?.is_nr,  prtBest,  true)}
+                                {playerPair(opp1G, o1M,  !!opp1Saved?.is_nr, o1Best,   false)}
+                                {playerPair(opp2G, o2M,  !!opp2Saved?.is_nr, o2Best,   false)}
                                 <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                                   <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
                                 </View>
@@ -746,8 +793,10 @@ export default function RoundCompleteScreen() {
                               {/* OUT totals after hole 9 */}
                               {h.number === 9 && TotRow(
                                 "OUT", f9Par, false,
-                                myF9G, myF9N, prtF9G, prtF9N,
-                                o1F9G, o1F9N, o2F9G, o2F9N,
+                                myF9G,  metric==="stableford"?myF9P :metric==="gross"?myF9G :myF9N,
+                                prtF9G, metric==="stableford"?prtF9P:metric==="gross"?prtF9G:prtF9N,
+                                o1F9G,  metric==="stableford"?o1F9P :metric==="gross"?o1F9G :o1F9N,
+                                o2F9G,  metric==="stableford"?o2F9P :metric==="gross"?o2F9G :o2F9N,
                                 f9Won, f9Lost, f9Halved,
                               )}
                             </React.Fragment>
@@ -755,14 +804,18 @@ export default function RoundCompleteScreen() {
                         })}
                         {TotRow(
                           "IN", b9Par, false,
-                          myB9G, myB9N, prtB9G, prtB9N,
-                          o1B9G, o1B9N, o2B9G, o2B9N,
+                          myB9G,  metric==="stableford"?myB9P :metric==="gross"?myB9G :myB9N,
+                          prtB9G, metric==="stableford"?prtB9P:metric==="gross"?prtB9G:prtB9N,
+                          o1B9G,  metric==="stableford"?o1B9P :metric==="gross"?o1B9G :o1B9N,
+                          o2B9G,  metric==="stableford"?o2B9P :metric==="gross"?o2B9G :o2B9N,
                           b9Won, b9Lost, b9Halved,
                         )}
                         {TotRow(
                           "TOT", totPar, true,
-                          myTotG, myTotN, prtTotG, prtTotN,
-                          o1TotG, o1TotN, o2TotG, o2TotN,
+                          myTotG,  metric==="stableford"?myTotP :metric==="gross"?myTotG :myTotN,
+                          prtTotG, metric==="stableford"?prtTotP:metric==="gross"?prtTotG:prtTotN,
+                          o1TotG,  metric==="stableford"?o1TotP :metric==="gross"?o1TotG :o1TotN,
+                          o2TotG,  metric==="stableford"?o2TotP :metric==="gross"?o2TotG :o2TotN,
                           teamWon, teamLost, teamHalved,
                         )}
                       </>

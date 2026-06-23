@@ -242,7 +242,7 @@ export default function StartRoundScreen() {
 
   // Fetch partner/opponent/marker info whenever a tournament is linked
   useEffect(() => {
-    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play";
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play";
     const isBetterballGroup = isBetterball && !isKnockoutMatch;
     const isIndividualTournament = !isBetterball && !isKnockoutMatch;
 
@@ -339,19 +339,22 @@ export default function StartRoundScreen() {
     if (t.knockout_type === "individual") {
       // "stableford" is the legacy stored value; "individual_stableford" and
       // "modified_stableford" are the new full format keys from the portal dropdown.
-      const indivStableford = new Set(["stableford", "individual_stableford", "modified_stableford"]);
-      const indivGross      = new Set(["gross_stroke_play", "maximum_score", "chairman"]);
+      // Only pure Stableford pts formats get pts comparison; all others (including
+      // modified_stableford, par_bogey, maximum_score, chairman, bonus_bogey, etc.)
+      // use net comparison — hole winner is identical for those formats.
+      const indivStableford = new Set(["stableford", "individual_stableford"]);
+      const indivGross      = new Set(["gross_stroke_play"]);
       mappedFormat = indivStableford.has(t.knockout_scoring_format)
         ? "singles_stableford_match_play"
         : indivGross.has(t.knockout_scoring_format)
         ? "singles_gross_match_play"
         : "singles_match_play";
     } else if (t.knockout_type === "team") {
-      // "stableford" is legacy; "fourball_stableford" is the explicit new key.
+      // fourball_stableford → pts comparison (match play); daytona is gross-based.
       const teamStableford = new Set(["stableford", "fourball_stableford"]);
-      const teamGross      = new Set(["fourball_gross_betterball"]);
+      const teamGross      = new Set(["fourball_gross_betterball", "daytona"]);
       mappedFormat = teamStableford.has(t.knockout_scoring_format)
-        ? "fourball_stableford"
+        ? "fourball_stableford_match_play"
         : teamGross.has(t.knockout_scoring_format)
         ? "betterball_gross_match_play"
         : "betterball_match_play";
@@ -369,7 +372,7 @@ export default function StartRoundScreen() {
     if (!selectedClub) { Alert.alert("Select a club", "Please choose a golf club first."); return; }
 
     // Validate all visible handicap fields are whole numbers
-    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play";
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play";
     const ch = parseInt(courseHcp, 10);
     if (isNaN(ch) || String(ch) !== courseHcp.trim()) {
       Alert.alert("Handicap Required", "Please enter your Course Handicap as a whole number before starting."); return;
@@ -562,7 +565,7 @@ export default function StartRoundScreen() {
 
                     {/* Partner / opponent preview */}
                     {(() => {
-                      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play";
+                      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play";
                       const isBetterballGroup = isBetterball && !isKnockoutMatch;
                       if (!isKnockoutMatch && !isBetterballGroup) return null;
 
@@ -626,11 +629,11 @@ export default function StartRoundScreen() {
                           {matchOpponent ? (
                             <>
                               <View style={[styles.opponentAvatar, { backgroundColor: "#7c3aed" }]}>
-                                <Ionicons name={(format === "betterball_match_play" || format === "betterball_gross_match_play") ? "people" : "person"} size={14} color="#fff" />
+                                <Ionicons name={(format === "betterball_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play") ? "people" : "person"} size={14} color="#fff" />
                               </View>
                               <View style={{ flex: 1 }}>
                                 <Text style={styles.opponentVsLabel}>
-                                  {(format === "betterball_match_play" || format === "betterball_gross_match_play") ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
+                                  {(format === "betterball_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play") ? "YOUR OPPONENTS" : "YOUR OPPONENT"}
                                 </Text>
                                 <Text style={[styles.opponentName, { color: colors.foreground }]}>
                                   {matchOpponent.opponentName}{matchOpponent.opp2Name ? ` & ${matchOpponent.opp2Name}` : ""}

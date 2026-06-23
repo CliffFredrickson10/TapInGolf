@@ -77297,7 +77297,7 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
           holes_played = ?
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
-    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play" || round.format === "betterball_gross_match_play")) {
+    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play")) {
       try {
         const match = await row("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
         if (match && match.status !== "complete" && match.status !== "bye") {
@@ -77359,6 +77359,20 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
                 if (oppBest == null) continue;
                 if (teamBest < oppBest) won++;
                 else if (teamBest > oppBest) lost++;
+                else halved++;
+              } else if (round.format === "fourball_stableford_match_play") {
+                const partnerHcp = round.partner_playing_hcp ?? 0;
+                const opp1Hcp = round.opponent_playing_hcp ?? 0;
+                const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
+                const myPts = getStablefordPts(h.gross_score, h.par, getHALocal(h.stroke_index, round.playing_handicap));
+                const partPts = partner?.gross_score != null && !partner.is_nr ? getStablefordPts(partner.gross_score, h.par, getHALocal(h.stroke_index, partnerHcp)) : null;
+                const teamBest = partPts != null ? Math.max(myPts, partPts) : myPts;
+                const opp1Pts = opp1?.gross_score != null && !opp1.is_nr ? getStablefordPts(opp1.gross_score, h.par, getHALocal(h.stroke_index, opp1Hcp)) : null;
+                const opp2Pts = opp2?.gross_score != null && !opp2.is_nr ? getStablefordPts(opp2.gross_score, h.par, getHALocal(h.stroke_index, opp2Hcp)) : null;
+                const oppBest = opp1Pts != null && opp2Pts != null ? Math.max(opp1Pts, opp2Pts) : opp1Pts ?? opp2Pts;
+                if (oppBest == null) continue;
+                if (teamBest > oppBest) won++;
+                else if (teamBest < oppBest) lost++;
                 else halved++;
               } else {
                 const partnerHcp = round.partner_playing_hcp ?? 0;

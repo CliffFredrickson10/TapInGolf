@@ -298,6 +298,53 @@ function calcBetterballGrossMatchStatus(
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
+function calcBetterballStablefordMatchStatus(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+): MatchStatus {
+  const calcPtsLocal = (gross: number, par: number, ha: number) => Math.max(0, par + 2 - (gross - ha));
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine    = myHoles[h.number];
+    const partner = playerHoles[`0_${h.number}`];
+    const opp1    = playerHoles[`1_${h.number}`];
+    const opp2    = playerHoles[`2_${h.number}`];
+    if (!mine || mine.gross_score == null || mine.is_nr) continue;
+    if (!opp1 && !opp2) continue;
+    const ha       = getHA(h.stroke_index, myHcp);
+    const oppHA    = getHA(h.stroke_index, oppHcp);
+    const myPts    = calcPtsLocal(mine.gross_score, h.par, ha);
+    const partPts  = partner?.gross_score != null && !partner.is_nr ? calcPtsLocal(partner.gross_score, h.par, ha) : null;
+    const teamBest = partPts != null ? Math.max(myPts, partPts) : myPts;
+    const opp1Pts  = opp1?.gross_score != null && !opp1.is_nr ? calcPtsLocal(opp1.gross_score, h.par, oppHA) : null;
+    const opp2Pts  = opp2?.gross_score != null && !opp2.is_nr ? calcPtsLocal(opp2.gross_score, h.par, oppHA) : null;
+    const oppBest  = opp1Pts != null && opp2Pts != null ? Math.max(opp1Pts, opp2Pts) : (opp1Pts ?? opp2Pts);
+    if (oppBest == null) continue;
+    if      (teamBest > oppBest) won++;
+    else if (teamBest < oppBest) lost++;
+    else                         halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  if (holesPlayed > 0 && holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+  if (holesPlayed > 0 && -holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
+  if (holesPlayed === 0 || holesUp === 0)
+    return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
+  if (holesUp > 0 && holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+  if (holesUp < 0 && -holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
+  if (holesUp > 0)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+  return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
+}
+
 // ─── BbPlayerInput — module-level so React sees a stable component type ──────
 // (Defining this inside HoleEntryScreen would give it a new reference on every
 //  render, causing unmount/remount and resetting the ScrollView position.)
@@ -651,7 +698,7 @@ export default function HoleEntryScreen() {
 
   const isLastHole         = holeIdx === scorecard.length - 1;
   const isMatchPlay        = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
-  const isKnockoutBetterball = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play";
+  const isKnockoutBetterball = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play";
   // isBetterball = any round with 4-player input (knockout betterball OR regular betterball with group)
   const isBetterball       = hasFourPlayers(round);
   // isAnyMatch = true only for actual match-play formats (drives match-status banner / End Match button)
@@ -670,6 +717,8 @@ export default function HoleEntryScreen() {
     : isKnockoutBetterball
     ? (round.format === "betterball_gross_match_play"
         ? calcBetterballGrossMatchStatus(scorecard, round.holes, round.playerHoles ?? {})
+        : round.format === "fourball_stableford_match_play"
+        ? calcBetterballStablefordMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
         : calcBetterballMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : null;
 

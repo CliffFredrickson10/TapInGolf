@@ -168,16 +168,19 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (dG != null) { if (fr) dF9G += dG; else dB9G += dG; }
     if (dR != null) { if (fr) dF9R += dR; else dB9R += dR; }
 
-    /* Singles match play hole result (+1 = A wins, 0 = halved, -1 = A loses) */
+    /* Singles match play hole result (+1 = A wins, 0 = halved, -1 = A loses)
+       WHS standard: only the handicap DIFFERENCE is applied — lower-HCP player
+       gets 0 strokes; higher-HCP player gets (diff) strokes on lowest SI holes. */
     let mpRes: 1|0|-1|null = null;
     if (isMP && aG != null && cG != null && !aNr && !cNr) {
-      const cHa2 = getHA(h.stroke_index, cHcp);
+      const aMatchHa = getHA(h.stroke_index, Math.max(0, myHcp  - cHcp));
+      const cMatchHa = getHA(h.stroke_index, Math.max(0, cHcp - myHcp));
       const av = fmt === "singles_gross_match_play" ? aG
-        : fmt === "singles_stableford_match_play" ? -(Math.max(0, h.par + 2 - (aG - aHa)))
-        : aG - aHa;
+        : fmt === "singles_stableford_match_play" ? -(Math.max(0, h.par + 2 - (aG - aMatchHa)))
+        : aG - aMatchHa;
       const cv = fmt === "singles_gross_match_play" ? cG
-        : fmt === "singles_stableford_match_play" ? -(Math.max(0, h.par + 2 - (cG - cHa2)))
-        : cG - cHa2;
+        : fmt === "singles_stableford_match_play" ? -(Math.max(0, h.par + 2 - (cG - cMatchHa)))
+        : cG - cMatchHa;
       mpRes = av < cv ? 1 : av > cv ? -1 : 0;
       if (fr) aF9R += mpRes; else aB9R += mpRes;
     }

@@ -909,8 +909,11 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
               const opp = oppMap[h.hole_number];
               if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
               if (round.format === "singles_stableford_match_play") {
-                const myPts  = getStablefordPts(h.gross_score,  h.par, getHALocal(h.stroke_index, round.playing_handicap));
-                const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0));
+                // WHS standard: only handicap DIFFERENCE is applied
+                const myHcp  = round.playing_handicap;
+                const oppHcp = round.opponent_playing_hcp ?? 0;
+                const myPts  = getStablefordPts(h.gross_score,  h.par, getHALocal(h.stroke_index, Math.max(0, myHcp  - oppHcp)));
+                const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, Math.max(0, oppHcp - myHcp)));
                 if      (myPts > oppPts) won++;
                 else if (myPts < oppPts) lost++;
                 else                     halved++;
@@ -920,8 +923,11 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
                 else if (h.gross_score > opp.gross_score) lost++;
                 else                                      halved++;
               } else {
-                const myNet  = h.gross_score  - getHALocal(h.stroke_index, round.playing_handicap);
-                const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+                // WHS standard: only handicap DIFFERENCE is applied
+                const myHcp  = round.playing_handicap;
+                const oppHcp = round.opponent_playing_hcp ?? 0;
+                const myNet  = h.gross_score  - getHALocal(h.stroke_index, Math.max(0, myHcp  - oppHcp));
+                const oppNet = opp.gross_score - getHALocal(h.stroke_index, Math.max(0, oppHcp - myHcp));
                 if      (myNet < oppNet) won++;
                 else if (myNet > oppNet) lost++;
                 else                     halved++;

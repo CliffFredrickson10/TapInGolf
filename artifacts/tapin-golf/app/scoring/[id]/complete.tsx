@@ -107,8 +107,9 @@ function calcMatchResult(
     const mine = myHoles[h.number];
     const opp  = playerHoles[`0_${h.number}`];
     if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
-    const myNet  = mine.gross_score - getHA(h.stroke_index, myHcp);
-    const oppNet = opp.gross_score  - getHA(h.stroke_index, oppHcp);
+    // WHS standard: only handicap DIFFERENCE is applied
+    const myNet  = mine.gross_score - getHA(h.stroke_index, Math.max(0, myHcp  - oppHcp));
+    const oppNet = opp.gross_score  - getHA(h.stroke_index, Math.max(0, oppHcp - myHcp));
     if      (myNet < oppNet) won++;
     else if (myNet > oppNet) lost++;
     else                     halved++;
@@ -131,8 +132,9 @@ function calcMatchResultByPts(
     const mine = myHoles[h.number];
     const opp  = playerHoles[`0_${h.number}`];
     if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
-    const myPts  = calcPts(mine.gross_score, h.par, getHA(h.stroke_index, myHcp));
-    const oppPts = calcPts(opp.gross_score,  h.par, getHA(h.stroke_index, oppHcp));
+    // WHS standard: only handicap DIFFERENCE is applied
+    const myPts  = calcPts(mine.gross_score, h.par, getHA(h.stroke_index, Math.max(0, myHcp  - oppHcp)));
+    const oppPts = calcPts(opp.gross_score,  h.par, getHA(h.stroke_index, Math.max(0, oppHcp - myHcp)));
     if      (myPts > oppPts) won++;
     else if (myPts < oppPts) lost++;
     else                     halved++;

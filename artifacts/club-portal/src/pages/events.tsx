@@ -741,6 +741,14 @@ export default function Events() {
     setShotgunDlgOpen(true);
   }, [form.shotgun_start, wizardStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Auto-open interval tee-gen dialog when interval start is selected with no slots yet ──
+  useEffect(() => {
+    if (form.shotgun_start || wizardStep !== 4 || !form.event_date || editId) return;
+    if (eventSlots.length > 0) return;
+    setGenDialogDate("");
+    setGenDialogOpen(true);
+  }, [form.shotgun_start, wizardStep]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const handleImportExistingSlots = () => {
     const staged = existingGeneralSlots.map(s => ({
       ...s,

@@ -1516,7 +1516,7 @@ export default function RoundCompleteScreen() {
                   </View>
 
                   {/* Hole rows */}
-                  {holeData.map(({ h, ha, nr, gross, net, pts }, idx) => {
+                  {holeData.map(({ h, ha, nr, gross, net, pts, mkrGross, mkr2Gross }, idx) => {
                     const rowBg = idx % 2 === 0 ? colors.card
                       : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
                     return (

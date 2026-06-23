@@ -108,6 +108,18 @@ export default function StartRoundScreen() {
     params.clubId ? { id: parseInt(params.clubId), name: params.clubName ?? "", location: "", province: "" } : null
   );
 
+  // Home club (from user profile)
+  const [homeClub, setHomeClub] = useState<Club | null>(null);
+  useEffect(() => {
+    if (!user?.club_id) return;
+    apiFetch(`/clubs/${user.club_id}`)
+      .then(d => {
+        const c = d.club;
+        if (c) setHomeClub({ id: c.id, name: c.name, location: c.location ?? "", province: c.province ?? "" });
+      })
+      .catch(() => {});
+  }, [user?.club_id]);
+
   // Location + nearby clubs
   const [userLat, setUserLat] = useState<number | null>(null);
   const [userLng, setUserLng] = useState<number | null>(null);
@@ -344,6 +356,29 @@ export default function StartRoundScreen() {
               </View>
             ) : (
               <View>
+                {/* Home club pinned above search */}
+                {homeClub && (
+                  <TouchableOpacity
+                    onPress={() => { setSelectedClub(homeClub); setClubSearch(""); setClubs([]); }}
+                    style={[styles.clubRow, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={[styles.clubIcon, { backgroundColor: colors.primary + "20" }]}>
+                      <Ionicons name="home" size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={[styles.clubName, { color: colors.foreground }]}>{homeClub.name}</Text>
+                        <View style={{ backgroundColor: colors.primary, borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                          <Text style={{ color: "#fff", fontSize: 9, fontWeight: "700" }}>HOME</Text>
+                        </View>
+                      </View>
+                      {homeClub.location ? (
+                        <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>{homeClub.location}</Text>
+                      ) : null}
+                    </View>
+                    <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                  </TouchableOpacity>
+                )}
                 <View style={[styles.searchRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
                   <Ionicons name="search" size={18} color={colors.mutedForeground} />
                   <TextInput

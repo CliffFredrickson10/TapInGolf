@@ -157,12 +157,13 @@ function BlockEditor({
 // generation so the caller can reload its slot list.
 
 export function GenerateTeeTimesDialog({
-  open, onOpenChange, onComplete, initialDate, eventId, onStagedSlots, onConfigSnapshot, initialConfig,
+  open, onOpenChange, onComplete, initialDate, initialDateTo, eventId, onStagedSlots, onConfigSnapshot, initialConfig,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   onComplete: (dateFrom: string) => void;
   initialDate?: string;
+  initialDateTo?: string;
   eventId?: number;
   onStagedSlots?: (slots: Array<{ date: string; time: string; total_slots: number }>) => void;
   onConfigSnapshot?: (cfg: { config_type: "A" | "B"; config_data: any }) => void;
@@ -210,13 +211,13 @@ export function GenerateTeeTimesDialog({
     }
   }, [initialConfig]);
 
-  // Sync dates when initialDate changes (dialog may be re-used for different days)
+  // Sync dates when initialDate/initialDateTo changes (dialog may be re-used for different days)
   useEffect(() => {
     if (open && initialDate) {
       setDateFrom(initialDate);
-      setDateTo(initialDate);
+      setDateTo(initialDateTo ?? initialDate);
     }
-  }, [open, initialDate]);
+  }, [open, initialDate, initialDateTo]);
 
   // Fetch tournament conflicts + shotgun windows when date range changes (general schedule generation only)
   useEffect(() => {

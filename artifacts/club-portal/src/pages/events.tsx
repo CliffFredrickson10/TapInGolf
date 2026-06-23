@@ -451,6 +451,7 @@ export default function Events() {
   const [slotsLoading, setSlotsLoading]       = useState(false);
   const [genDialogOpen, setGenDialogOpen]     = useState(false);
   const [genDialogDate, setGenDialogDate]     = useState("");
+  const [genDialogDateTo, setGenDialogDateTo] = useState("");
   const [shotgunDlgOpen, setShotgunDlgOpen]   = useState(false);
   const [shotgunDlgDate, setShotgunDlgDate]   = useState("");
   const [shotgunTime, setShotgunTime]         = useState("07:30");
@@ -745,7 +746,8 @@ export default function Events() {
   useEffect(() => {
     if (form.shotgun_start !== false || wizardStep !== 4 || !form.event_date || editId) return;
     if (eventSlots.length > 0) return;
-    setGenDialogDate("");
+    setGenDialogDate(form.event_date);
+    setGenDialogDateTo(form.end_date || form.event_date);
     setGenDialogOpen(true);
   }, [form.shotgun_start, wizardStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -3389,7 +3391,7 @@ ${bodyHtml}
                               </div>
                               <Button type="button" size="sm"
                                 className="bg-[#1a5c38] hover:bg-[#164d30] text-white h-8 px-4 text-xs gap-1.5"
-                                onClick={() => { setGenDialogDate(""); setGenDialogOpen(true); }}>
+                                onClick={() => { setGenDialogDate(form.event_date); setGenDialogDateTo(form.end_date || form.event_date); setGenDialogOpen(true); }}>
                                 <Clock className="h-3.5 w-3.5" />
                                 Generate Tee Schedule
                               </Button>
@@ -3441,7 +3443,7 @@ ${bodyHtml}
                                             if (form.shotgun_start === true) {
                                               setShotgunDlgDate(date); setShotgunDlgOpen(true);
                                             } else {
-                                              setGenDialogDate(date); setGenDialogOpen(true);
+                                              setGenDialogDate(date); setGenDialogDateTo(date); setGenDialogOpen(true);
                                             }
                                           }}>
                                           <Plus className="h-3 w-3" />Generate
@@ -3505,7 +3507,7 @@ ${bodyHtml}
                           {!editId && form.shotgun_start === false && eventSlots.length > 0 && (
                             <Button type="button" variant="outline" size="sm"
                               className="w-full h-7 text-xs border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/5 gap-1.5"
-                              onClick={() => { setGenDialogDate(""); setGenDialogOpen(true); }}>
+                              onClick={() => { setGenDialogDate(form.event_date); setGenDialogDateTo(form.end_date || form.event_date); setGenDialogOpen(true); }}>
                               <Plus className="h-3 w-3" />Re-generate / Add more days
                             </Button>
                           )}
@@ -3530,7 +3532,7 @@ ${bodyHtml}
                             if (form.shotgun_start === true) {
                               setShotgunDlgDate(""); setShotgunDlgOpen(true);
                             } else {
-                              setGenDialogDate(""); setGenDialogOpen(true);
+                              setGenDialogDate(form.event_date); setGenDialogDateTo(form.end_date || form.event_date); setGenDialogOpen(true);
                             }
                           }}>
                           <Clock className="h-3.5 w-3.5 mr-1.5" />
@@ -3672,7 +3674,8 @@ ${bodyHtml}
       <GenerateTeeTimesDialog
         open={genDialogOpen}
         onOpenChange={setGenDialogOpen}
-        initialDate={genDialogDate}
+        initialDate={genDialogDate || undefined}
+        initialDateTo={genDialogDateTo || undefined}
         eventId={editId ?? undefined}
         initialConfig={pendingTeeConfig}
         onConfigSnapshot={cfg => setTeeConfigSnapshot(cfg)}

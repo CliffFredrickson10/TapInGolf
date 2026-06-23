@@ -518,7 +518,7 @@ export default function RoundCompleteScreen() {
               return (
                 <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
 
-                  {/* ── Header row 1: H | Par | player names (each spanning Score+Result) ── */}
+                  {/* ── Header row 1: H | Par | SI | player names (each spanning Score+Result) ── */}
                   <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 7 }}>
                     <View style={{ width: 28, alignItems: "center", justifyContent: "center",
                       borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
@@ -527,6 +527,10 @@ export default function RoundCompleteScreen() {
                     <View style={{ width: 26, alignItems: "center", justifyContent: "center",
                       borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
+                    </View>
+                    <View style={{ width: 24, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>SI</Text>
                     </View>
                     {/* Each player name spans flex:2 (Score + Result cols beneath) */}
                     {[
@@ -550,6 +554,7 @@ export default function RoundCompleteScreen() {
                     borderBottomWidth: 1.5, borderBottomColor: bdr }}>
                     <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     {[
                       { rb: HW },   // Me Score
                       { rb: 1.5 },  // Me Result (end of Me pair)
@@ -614,6 +619,7 @@ export default function RoundCompleteScreen() {
                           borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                           <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
                         </View>
+                        <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
                         {TotPair(mg, mp, false)}
                         {TotPair(pg, pp, true)}
                         {TotPair(o1g, o1p, false)}
@@ -645,6 +651,10 @@ export default function RoundCompleteScreen() {
                                 <View style={{ width: 26, alignItems: "center", justifyContent: "center",
                                   borderRightWidth: HW, borderRightColor: bdr }}>
                                   <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
+                                </View>
+                                <View style={{ width: 24, alignItems: "center", justifyContent: "center",
+                                  borderRightWidth: HW, borderRightColor: bdr }}>
+                                  <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                                 </View>
                                 {playerPair(myG,   myP,   !!mySaved?.is_nr,   myBest,   false)}
                                 {playerPair(prtG,  prtP,  !!prtSaved?.is_nr,  prtBest,  true)}
@@ -779,6 +789,7 @@ export default function RoundCompleteScreen() {
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                     <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
                   </View>
+                  <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
                   {/* Me gross + net */}
                   <View style={{ flex: 2, flexDirection: "row", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.35)" }}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
@@ -817,6 +828,9 @@ export default function RoundCompleteScreen() {
                     <View style={{ width: 26, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
                     </View>
+                    <View style={{ width: 24, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>SI</Text>
+                    </View>
                     <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.3)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{meLabel}</Text>
                     </View>
@@ -832,6 +846,7 @@ export default function RoundCompleteScreen() {
                     borderBottomWidth: 1.5, borderBottomColor: bdr }}>
                     <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
                     {[{rb:HW},{rb:1.5},{rb:HW},{rb:HW}].map(({rb},i) => (
                       <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
                         borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
@@ -859,6 +874,10 @@ export default function RoundCompleteScreen() {
                           <View style={{ width: 26, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
+                          </View>
+                          <View style={{ width: 24, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                           </View>
                           {playerPair(myG,  myN,  myNr,  true,  true)}
                           {playerPair(oppG, oppN, oppNr, false, false)}

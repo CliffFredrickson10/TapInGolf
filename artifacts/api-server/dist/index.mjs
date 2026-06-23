@@ -76523,7 +76523,11 @@ router23.get("/scoring/clubs/:clubId/scorecard", async (req, res) => {
 });
 router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
   try {
-    await getUser(req);
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
     const clubId = parseInt(req.params.clubId);
     if (!clubId) {
       res.status(400).json({ message: "Invalid club id" });
@@ -76532,13 +76536,25 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     const tournaments = await query(`
       SELECT id, name, event_date, end_date, format, format2, format_custom,
              knockout_type, knockout_scoring_format
-      FROM golf_events
+      FROM golf_events ge
       WHERE club_id = ?
         AND COALESCE(end_date, event_date) >= CURRENT_DATE - INTERVAL '1 day'
         AND status NOT IN ('cancelled', 'completed')
+        AND (
+          EXISTS (
+            SELECT 1 FROM event_registrations er
+            WHERE er.event_id = ge.id AND er.user_id = ? AND er.status = 'approved'
+          )
+          OR EXISTS (
+            SELECT 1 FROM bookings b
+            JOIN booking_players bp ON bp.booking_id = b.id
+            JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+            WHERE pts.event_id = ge.id AND bp.user_id = ? AND b.status = 'confirmed'
+          )
+        )
       ORDER BY event_date ASC
       LIMIT 20
-    `, [clubId]);
+    `, [clubId, user.id, user.id]);
     res.json({ tournaments });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
@@ -76691,6 +76707,28 @@ router23.post("/scoring/rounds", async (req, res) => {
     if (!clubId) {
       res.status(400).json({ message: "clubId is required" });
       return;
+    }
+    if (tournamentId) {
+      const hasReg = await row(
+        "SELECT 1 FROM event_registrations WHERE user_id = ? AND event_id = ? AND status = 'approved' LIMIT 1",
+        [user.id, tournamentId]
+      );
+      const hasBooking = !hasReg && await row(`
+        SELECT 1 FROM bookings b
+        JOIN booking_players bp ON bp.booking_id = b.id
+        JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+        WHERE pts.event_id = ? AND bp.user_id = ? AND b.status = 'confirmed'
+        LIMIT 1
+      `, [tournamentId, user.id]);
+      if (!hasReg && !hasBooking) {
+        const pendingReg = await row(
+          "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          [user.id, tournamentId]
+        );
+        const msg = pendingReg ? "Your registration for this tournament has not been confirmed yet." : "You don't have a confirmed booking for this tournament.";
+        res.status(403).json({ message: msg });
+        return;
+      }
     }
     let matchId = req.body.matchId ?? null;
     let opponentName = req.body.opponentName ?? null;

@@ -43,7 +43,7 @@ type Round = {
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
 function calcPts(gross: number, par: number, ha: number) { return Math.max(0,par+2-(gross-ha)); }
-function scoreName(g: number, p: number) { const d=g-p; if(d<=-2) return "Eagle"; if(d===-1) return "Birdie"; if(d===0) return "Par"; if(d===1) return "Bogey"; if(d===2) return "Double"; return `+${d}`; }
+function scoreName(g: number, p: number) { if(g===1) return "Hole-in-one"; const d=g-p; if(d<=-2) return "Eagle"; if(d===-1) return "Birdie"; if(d===0) return "Par"; if(d===1) return "Bogey"; if(d===2) return "Double"; return `+${d}`; }
 function scoreColor(g: number, p: number) { const d=g-p; if(d<=-2) return GOLD; if(d===-1) return "#22c55e"; if(d===0) return "#a3e4bc"; if(d===1) return "#fb923c"; return "#f87171"; }
 
 export default function BetterballHoleScreen() {

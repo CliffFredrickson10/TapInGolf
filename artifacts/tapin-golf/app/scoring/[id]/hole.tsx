@@ -69,6 +69,7 @@ function calcPoints(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));
 }
 function scoreName(gross: number, par: number): string {
+  if (gross === 1) return "Hole-in-one";
   const d = gross - par;
   if (d <= -3) return "Albatross";
   if (d === -2) return "Eagle";
@@ -224,11 +225,12 @@ function BbPlayerInput({
           const active = g === val;
           const qColor = val < par ? "#22c55e" : val === par ? GOLD : val === par + 1 ? "#fb923c" : "#f87171";
           const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+          const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
           return (
             <TouchableOpacity key={offset} onPress={() => { Haptics.selectionAsync(); sg(val); }}
               style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}>
               <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-              <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+              <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
             </TouchableOpacity>
           );
         })}
@@ -711,6 +713,7 @@ export default function HoleEntryScreen() {
                 const active = gross === val;
                 const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
                 const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                 return (
                   <TouchableOpacity
                     key={offset}
@@ -718,7 +721,7 @@ export default function HoleEntryScreen() {
                     style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                   >
                     <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                    <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+                    <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
                   </TouchableOpacity>
                 );
               })}
@@ -842,6 +845,7 @@ export default function HoleEntryScreen() {
                     const active = oppGross === val;
                     const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
                     const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                    const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                     return (
                       <TouchableOpacity
                         key={offset}
@@ -849,7 +853,7 @@ export default function HoleEntryScreen() {
                         style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                       >
                         <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
-                        <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{labelMap[offset]}</Text>
+                        <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
                       </TouchableOpacity>
                     );
                   })}

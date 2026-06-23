@@ -611,6 +611,11 @@ router.post("/scoring/rounds", async (req, res) => {
       }
     }
 
+    // Body name overrides — for casual play (no tournament) player names come directly from the body
+    if (req.body.partnerName   != null) partnerName   = String(req.body.partnerName);
+    if (req.body.opponentName  != null) opponentName  = String(req.body.opponentName);
+    if (req.body.opponent2Name != null) opponent2Name = String(req.body.opponent2Name);
+
     // Abandon any existing active round
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
@@ -1052,6 +1057,31 @@ router.delete("/scoring/rounds/:id", async (req, res) => {
   } catch (err: any) {
     if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
     res.status(500).json({ message: "Failed to delete round" });
+  }
+});
+
+// ─── Player search — used by casual-play player picker in the mobile app ─────
+
+router.get("/scoring/players/search", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    const q = String(req.query.q ?? "").trim();
+    if (q.length < 2) { res.json({ players: [] }); return; }
+    const players = await query<any>(
+      "SELECT id, name, handicap FROM users WHERE name ILIKE ? AND id != ? ORDER BY name LIMIT 10",
+      [`%${q}%`, user.id]
+    );
+    res.json({
+      players: players.map((p: any) => ({
+        id: p.id,
+        name: p.name,
+        handicap: p.handicap != null ? Number(p.handicap) : null,
+      })),
+    });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    res.status(500).json({ message: "Failed to search players" });
   }
 });
 

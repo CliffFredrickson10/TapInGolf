@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -24,6 +25,7 @@ import { AppHeader } from "@/components/AppHeader";
 type Club = { id: number; name: string; location: string; province: string; distance_km?: number | null };
 type Tournament = { id: number; name: string; event_date: string; format: string; format2: string | null };
 type MatchOpponent = { matchId: number; opponentName: string; opp2Name?: string | null; opponentHandicap: number | null; opp2Handicap?: number | null; roundLabel: string | null; partnerName?: string | null; partnerHandicap?: number | null };
+type CasualPlayer = { userId?: number; name: string; hcp: string };
 
 type FormatEntry = { key: string; label: string };
 type FormatGroup = { group: string; formats: FormatEntry[] };
@@ -171,6 +173,48 @@ export default function StartRoundScreen() {
   const linkedTournament = tournaments.find(t => t.id === linkedTournamentId) ?? null;
   const isBetterball = BETTERBALL_FORMATS.has(format);
 
+  // Casual player picker state
+  const [casualPartner, setCasualPartner] = useState<CasualPlayer | null>(null);
+  const [casualOpp1, setCasualOpp1] = useState<CasualPlayer | null>(null);
+  const [casualOpp2, setCasualOpp2] = useState<CasualPlayer | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<"partner" | "opp1" | "opp2" | null>(null);
+  const [playerSearchQ, setPlayerSearchQ] = useState("");
+  const [playerResults, setPlayerResults] = useState<Array<{ id: number; name: string; handicap: number | null }>>([]);
+  const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
+  const [guestMode, setGuestMode] = useState(false);
+  const [guestName, setGuestName] = useState("");
+  const [guestHcp, setGuestHcp] = useState("0");
+
+  // Debounced TapIn player search
+  useEffect(() => {
+    if (!playerSearchQ || playerSearchQ.length < 2 || !token) { setPlayerResults([]); return; }
+    const t = setTimeout(async () => {
+      setPlayerSearchLoading(true);
+      try {
+        const d = await apiFetch(`/scoring/players/search?q=${encodeURIComponent(playerSearchQ)}`, token);
+        setPlayerResults(d.players ?? []);
+      } catch { setPlayerResults([]); }
+      finally { setPlayerSearchLoading(false); }
+    }, 300);
+    return () => clearTimeout(t);
+  }, [playerSearchQ, token]);
+
+  const openPicker = (target: "partner" | "opp1" | "opp2") => {
+    setPickerTarget(target);
+    setPlayerSearchQ("");
+    setPlayerResults([]);
+    setGuestMode(false);
+    setGuestName("");
+    setGuestHcp("0");
+  };
+
+  const selectCasualPlayer = (p: CasualPlayer) => {
+    if (pickerTarget === "partner") setCasualPartner(p);
+    else if (pickerTarget === "opp1") setCasualOpp1(p);
+    else if (pickerTarget === "opp2") setCasualOpp2(p);
+    setPickerTarget(null);
+  };
+
   // Search clubs
   const searchClubs = useCallback(async (q: string) => {
     if (q.length < 2) { setClubs([]); return; }
@@ -290,6 +334,7 @@ export default function StartRoundScreen() {
 
   const linkTournament = (t: any) => {
     setLinkedTournamentId(t.id);
+    setCasualPartner(null); setCasualOpp1(null); setCasualOpp2(null);
     let mappedFormat: string;
     if (t.knockout_type === "individual") {
       // Singles knockout → always matchplay scoring
@@ -354,6 +399,9 @@ export default function StartRoundScreen() {
             partnerPlayingHcp:   parseInt(partnerHcp)  || 0,
             opponent2PlayingHcp: parseInt(opp2Hcp)    || 0,
           } : {}),
+          ...(!linkedTournamentId && casualPartner  ? { partnerName:   casualPartner.name,  partnerPlayingHcp:   parseInt(casualPartner.hcp)  || 0 } : {}),
+          ...(!linkedTournamentId && casualOpp1     ? { opponentName:  casualOpp1.name,     opponentPlayingHcp:  parseInt(casualOpp1.hcp)     || 0 } : {}),
+          ...(!linkedTournamentId && casualOpp2     ? { opponent2Name: casualOpp2.name,     opponent2PlayingHcp: parseInt(casualOpp2.hcp)     || 0 } : {}),
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
@@ -774,6 +822,117 @@ export default function StartRoundScreen() {
                 )}
               </Section>
 
+              {/* ── Casual Players — only shown for non-tournament rounds ── */}
+              {!linkedTournamentId && !!format && format !== "singles_match_play" && (
+                <Section title={isBetterball ? "PARTNER & OPPONENTS" : "MARKING FOR (OPTIONAL)"}>
+                  {/* Description text */}
+                  {isBetterball ? (
+                    <Text style={[styles.casualDesc, { color: colors.mutedForeground }]}>
+                      Add your partner to score together. Opponents are optional.
+                    </Text>
+                  ) : (
+                    <Text style={[styles.casualDesc, { color: colors.mutedForeground }]}>
+                      Optionally add the player(s) you are keeping score for. They mark your card on their phone.
+                    </Text>
+                  )}
+
+                  {/* Partner row (betterball only) */}
+                  {isBetterball && (
+                    <>
+                      <Text style={[styles.casualSubhead, { color: colors.mutedForeground }]}>PARTNER</Text>
+                      {casualPartner ? (
+                        <View style={[styles.casualCard, { borderColor: colors.primary + "50", backgroundColor: colors.primary + "0c" }]}>
+                          <View style={[styles.casualAvatar, { backgroundColor: colors.primary + "25" }]}>
+                            <Ionicons name="person" size={15} color={colors.primary} />
+                          </View>
+                          <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualPartner.name}</Text>
+                          {!casualPartner.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                          <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                              <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                            </TouchableOpacity>
+                            <TextInput value={casualPartner.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualPartner(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: colors.primary }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                              <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <TouchableOpacity onPress={() => setCasualPartner(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                            <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                          </TouchableOpacity>
+                        </View>
+                      ) : (
+                        <TouchableOpacity onPress={() => openPicker("partner")} style={[styles.addPlayerBtn, { borderColor: colors.primary + "60", backgroundColor: colors.primary + "08" }]}>
+                          <Ionicons name="person-add-outline" size={17} color={colors.primary} />
+                          <Text style={[styles.addPlayerTxt, { color: colors.primary }]}>Add Partner</Text>
+                        </TouchableOpacity>
+                      )}
+                      <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: colors.border, marginVertical: 12 }} />
+                      <Text style={[styles.casualSubhead, { color: colors.mutedForeground }]}>OPPONENTS (OPTIONAL)</Text>
+                    </>
+                  )}
+
+                  {/* Opp1 / Marker1 */}
+                  {casualOpp1 ? (
+                    <View style={[styles.casualCard, { borderColor: (isBetterball ? "#ea580c" : "#60a5fa") + "50", backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "0c" }]}>
+                      <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "25" }]}>
+                        <Ionicons name="person" size={15} color={isBetterball ? "#ea580c" : "#60a5fa"} />
+                      </View>
+                      <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp1.name}</Text>
+                      {!casualOpp1.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                      <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                          <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                        </TouchableOpacity>
+                        <TextInput value={casualOpp1.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp1(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#ea580c" : "#60a5fa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#ea580c" : "#60a5fa", borderColor: isBetterball ? "#ea580c" : "#60a5fa" }]}>
+                          <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity onPress={() => { setCasualOpp1(null); setCasualOpp2(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity onPress={() => openPicker("opp1")} style={[styles.addPlayerBtn, { borderColor: colors.border }]}>
+                      <Ionicons name="person-add-outline" size={17} color={colors.mutedForeground} />
+                      <Text style={[styles.addPlayerTxt, { color: colors.mutedForeground }]}>
+                        {isBetterball ? "Add Opponent" : "Add Player to Mark For"}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {/* Opp2 / Marker2 — only shown once opp1 is filled */}
+                  {casualOpp1 && (casualOpp2 ? (
+                    <View style={[styles.casualCard, { borderColor: (isBetterball ? "#dc2626" : "#a78bfa") + "50", backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "0c" }]}>
+                      <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "25" }]}>
+                        <Ionicons name="person" size={15} color={isBetterball ? "#dc2626" : "#a78bfa"} />
+                      </View>
+                      <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp2.name}</Text>
+                      {!casualOpp2.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                      <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                          <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                        </TouchableOpacity>
+                        <TextInput value={casualOpp2.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp2(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#dc2626" : "#a78bfa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#dc2626" : "#a78bfa", borderColor: isBetterball ? "#dc2626" : "#a78bfa" }]}>
+                          <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <TouchableOpacity onPress={() => setCasualOpp2(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                        <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <TouchableOpacity onPress={() => openPicker("opp2")} style={[styles.addPlayerBtn, { borderColor: colors.border }]}>
+                      <Ionicons name="person-add-outline" size={17} color={colors.mutedForeground} />
+                      <Text style={[styles.addPlayerTxt, { color: colors.mutedForeground }]}>
+                        {isBetterball ? "Add 2nd Opponent" : "Add 2nd Player to Mark For"}
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </Section>
+              )}
+
               {/* Handicap */}
               <Section title="HANDICAP">
                 <View style={{ gap: 14 }}>
@@ -849,6 +1008,130 @@ export default function StartRoundScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      {/* ── Player Picker Modal ── */}
+      <Modal
+        visible={pickerTarget != null}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setPickerTarget(null)}
+      >
+        <View style={styles.pickerOverlay}>
+          <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickerTarget(null)} />
+          <View style={[styles.pickerSheet, { backgroundColor: colors.card }]}>
+            <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
+            {/* Header */}
+            <View style={styles.pickerHeader}>
+              <Text style={[styles.pickerTitle, { color: colors.foreground }]}>
+                {guestMode ? "Add Guest" : `Add ${
+                  pickerTarget === "partner" ? "Partner"
+                  : pickerTarget === "opp1" ? (isBetterball ? "Opponent" : "Player to Mark For")
+                  : isBetterball ? "2nd Opponent" : "2nd Player to Mark For"
+                }`}
+              </Text>
+              <TouchableOpacity onPress={() => setPickerTarget(null)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                <Ionicons name="close" size={22} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            </View>
+
+            {!guestMode ? (
+              <>
+                {/* Search input */}
+                <View style={[styles.searchRow, { borderColor: colors.border, backgroundColor: colors.background, marginBottom: 4 }]}>
+                  <Ionicons name="search" size={18} color={colors.mutedForeground} />
+                  <TextInput
+                    value={playerSearchQ}
+                    onChangeText={setPlayerSearchQ}
+                    placeholder="Search by name..."
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.searchInput, { color: colors.foreground }]}
+                    autoFocus
+                    autoCorrect={false}
+                  />
+                  {playerSearchLoading && <ActivityIndicator size="small" color={colors.primary} />}
+                </View>
+
+                {/* TapIn results */}
+                {playerResults.map(p => (
+                  <TouchableOpacity
+                    key={p.id}
+                    onPress={() => selectCasualPlayer({ userId: p.id, name: p.name, hcp: String(p.handicap != null ? Math.round(Number(p.handicap)) : 0) })}
+                    style={[styles.clubRow, { borderBottomColor: colors.border }]}
+                  >
+                    <View style={[styles.clubIcon, { backgroundColor: colors.primary + "20" }]}>
+                      <Ionicons name="person" size={16} color={colors.primary} />
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.clubName, { color: colors.foreground }]}>{p.name}</Text>
+                      <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>
+                        WHS Index: {p.handicap != null ? p.handicap : "—"}
+                      </Text>
+                    </View>
+                    <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                  </TouchableOpacity>
+                ))}
+
+                {playerSearchQ.length >= 2 && !playerSearchLoading && playerResults.length === 0 && (
+                  <Text style={[styles.noResults, { color: colors.mutedForeground }]}>No TapIn players found.</Text>
+                )}
+
+                {/* Add as Guest button */}
+                <TouchableOpacity
+                  onPress={() => { setGuestMode(true); setGuestName(playerSearchQ); }}
+                  style={[styles.guestAddBtn, { borderColor: colors.border }]}
+                >
+                  <Ionicons name="person-add-outline" size={17} color={colors.mutedForeground} />
+                  <Text style={[styles.guestAddTxt, { color: colors.mutedForeground }]}>
+                    {playerSearchQ.trim() ? `Add "${playerSearchQ.trim()}" as Guest` : "Add as Guest (not on TapIn)"}
+                  </Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              /* Guest form */
+              <View style={{ gap: 14 }}>
+                <View>
+                  <Text style={[styles.fieldLabel, { color: colors.foreground, marginBottom: 8 }]}>Guest Name</Text>
+                  <TextInput
+                    value={guestName}
+                    onChangeText={setGuestName}
+                    placeholder="Full name"
+                    placeholderTextColor={colors.mutedForeground}
+                    style={[styles.guestNameInput, { borderColor: colors.border, backgroundColor: colors.background, color: colors.foreground }]}
+                    autoFocus
+                    autoCorrect={false}
+                  />
+                </View>
+                <View>
+                  <Text style={[styles.fieldLabel, { color: colors.foreground, marginBottom: 8 }]}>Course Handicap</Text>
+                  <View style={[styles.stepperRow, { borderColor: colors.border, backgroundColor: colors.background }]}>
+                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setGuestHcp(v => String(Math.max(0, parseInt(v || "0") - 1))); }} style={[styles.stepperBtn, { borderColor: colors.border }]}>
+                      <Text style={[styles.stepperBtnText, { color: colors.foreground }]}>−</Text>
+                    </TouchableOpacity>
+                    <TextInput value={guestHcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setGuestHcp(String(n)); }} style={[styles.stepperValue, { color: colors.primary }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                    <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setGuestHcp(v => String(Math.min(54, parseInt(v || "0") + 1))); }} style={[styles.stepperBtn, { borderColor: colors.primary, backgroundColor: colors.primary }]}>
+                      <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+                <View style={{ flexDirection: "row", gap: 10 }}>
+                  <TouchableOpacity onPress={() => setGuestMode(false)} style={[styles.guestCancelBtn, { borderColor: colors.border }]}>
+                    <Text style={[styles.guestCancelTxt, { color: colors.mutedForeground }]}>Back</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => {
+                      if (!guestName.trim()) { Alert.alert("Name Required", "Please enter the guest's name."); return; }
+                      selectCasualPlayer({ name: guestName.trim(), hcp: guestHcp });
+                    }}
+                    style={[styles.guestConfirmBtn, { backgroundColor: colors.primary }]}
+                  >
+                    <Text style={styles.guestConfirmTxt}>Add Guest</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -967,4 +1250,58 @@ const styles = StyleSheet.create({
     gap: 10, borderRadius: 16, paddingVertical: 16,
   },
   startBtnText: { fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff" },
+
+  // Casual players section
+  casualDesc: { fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17, marginBottom: 10 },
+  casualSubhead: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.6, marginBottom: 8, marginTop: 2 },
+  casualCard: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    borderRadius: 12, borderWidth: 1.5, padding: 10, marginBottom: 8,
+  },
+  casualAvatar: { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  casualCardName: { flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  guestBadge: { backgroundColor: "#6b728025", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 2 },
+  guestBadgeTxt: { fontSize: 9, fontFamily: "Inter_700Bold", color: "#6b7280" },
+  miniStepper: {
+    flexDirection: "row", alignItems: "center",
+    borderRadius: 8, borderWidth: 1.5, overflow: "hidden",
+  },
+  miniStepBtn: { width: 30, height: 30, alignItems: "center", justifyContent: "center" },
+  miniStepTxt: { fontSize: 18, fontFamily: "Inter_400Regular", lineHeight: 24 },
+  miniStepVal: { fontSize: 16, fontFamily: "Inter_700Bold", width: 32, textAlign: "center" },
+  addPlayerBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+    borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", paddingVertical: 12, marginBottom: 8,
+  },
+  addPlayerTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+
+  // Player picker modal
+  pickerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },
+  pickerSheet: {
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    padding: 20, paddingBottom: 36, gap: 0,
+    maxHeight: "80%",
+  },
+  pickerHandle: { width: 36, height: 4, borderRadius: 2, alignSelf: "center", marginBottom: 16 },
+  pickerHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 16 },
+  pickerTitle: { fontSize: 17, fontFamily: "Inter_700Bold" },
+  guestAddBtn: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    padding: 14, borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", marginTop: 8,
+  },
+  guestAddTxt: { fontSize: 13, fontFamily: "Inter_600SemiBold", flex: 1 },
+  guestNameInput: {
+    borderRadius: 12, borderWidth: 1.5, paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 15, fontFamily: "Inter_400Regular",
+  },
+  guestCancelBtn: {
+    flex: 1, alignItems: "center", justifyContent: "center",
+    borderRadius: 12, borderWidth: 1.5, paddingVertical: 14,
+  },
+  guestCancelTxt: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  guestConfirmBtn: {
+    flex: 2, alignItems: "center", justifyContent: "center",
+    borderRadius: 12, paddingVertical: 14,
+  },
+  guestConfirmTxt: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
 });

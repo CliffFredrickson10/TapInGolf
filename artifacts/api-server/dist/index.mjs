@@ -77082,6 +77082,9 @@ router23.post("/scoring/rounds", async (req, res) => {
         }
       }
     }
+    if (req.body.partnerName != null) partnerName = String(req.body.partnerName);
+    if (req.body.opponentName != null) opponentName = String(req.body.opponentName);
+    if (req.body.opponent2Name != null) opponent2Name = String(req.body.opponent2Name);
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]
@@ -77517,6 +77520,37 @@ router23.delete("/scoring/rounds/:id", async (req, res) => {
       return;
     }
     res.status(500).json({ message: "Failed to delete round" });
+  }
+});
+router23.get("/scoring/players/search", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const q = String(req.query.q ?? "").trim();
+    if (q.length < 2) {
+      res.json({ players: [] });
+      return;
+    }
+    const players = await query(
+      "SELECT id, name, handicap FROM users WHERE name ILIKE ? AND id != ? ORDER BY name LIMIT 10",
+      [`%${q}%`, user.id]
+    );
+    res.json({
+      players: players.map((p) => ({
+        id: p.id,
+        name: p.name,
+        handicap: p.handicap != null ? Number(p.handicap) : null
+      }))
+    });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to search players" });
   }
 });
 var scoring_default = router23;

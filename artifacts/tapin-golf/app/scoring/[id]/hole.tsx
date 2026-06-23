@@ -61,9 +61,9 @@ type Round = {
   playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
 
-// True for any format where we score all 4 players
-function hasFourPlayers(r: { format: string; partner_name?: string | null; opponent_name?: string | null }): boolean {
-  return r.format === "betterball_match_play" || (r.format !== "singles_match_play" && !!(r.partner_name || r.opponent_name));
+// True for any format where we score all 4 players (betterball team: always has a partner)
+function hasFourPlayers(r: { format: string; partner_name?: string | null }): boolean {
+  return r.format === "betterball_match_play" || !!r.partner_name;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -301,7 +301,7 @@ export default function HoleEntryScreen() {
     // BbPlayerInput + betterball user box: group box marginHorizontal:12×2 + borderWidth:1×2 = 26px narrower
     const bbViewportWidth = screenWidth - 26;
     const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
-    const isBbRound = hasFourPlayers(round ?? { format: "", partner_name: null, opponent_name: null });
+    const isBbRound = hasFourPlayers(round ?? { format: "", partner_name: null });
     setTimeout(() => {
       quickRowRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
@@ -329,6 +329,9 @@ export default function HoleEntryScreen() {
         setOpp2Gross(ph0?.[`2_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
       } else {
         setOppGross(ph0?.[`0_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
+        if (data.opponent2_name) {
+          setOpp2Gross(ph0?.[`1_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
+        }
       }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to load round");
@@ -413,6 +416,9 @@ export default function HoleEntryScreen() {
       setOpp2Gross(round.playerHoles?.[`2_${scorecard[idx].number}`]?.gross_score ?? null);
     } else {
       setOppGross(round.playerHoles?.[`0_${scorecard[idx].number}`]?.gross_score ?? null);
+      if (round.opponent2_name) {
+        setOpp2Gross(round.playerHoles?.[`1_${scorecard[idx].number}`]?.gross_score ?? null);
+      }
     }
     holeStripRef.current?.scrollTo({ x: Math.max(0, (idx - 3) * 42), animated: true });
     mainScrollRef.current?.scrollTo({ y: 0, animated: false });
@@ -428,6 +434,7 @@ export default function HoleEntryScreen() {
     setSaving(true);
     const isMP = round.format === "singles_match_play";
     const isBB = hasFourPlayers(round);
+    const isMR = !isBB && !isMP && !!round.opponent_name;
     const body: Record<string, unknown> = {
       par: hole.par,
       strokeIndex: hole.stroke_index,
@@ -442,6 +449,12 @@ export default function HoleEntryScreen() {
         { name: round.partner_name ?? "Partner", grossScore: isNr ? null : partnerGross },
         { name: round.opponent_name ?? "Opp 1",  grossScore: isNr ? null : oppGross    },
         { name: round.opponent2_name ?? "Opp 2", grossScore: isNr ? null : opp2Gross   },
+      ];
+    }
+    if (isMR && oppGross != null) {
+      body.players = [
+        { name: round.opponent_name ?? "Marker", grossScore: isNr ? null : oppGross },
+        ...(round.opponent2_name ? [{ name: round.opponent2_name, grossScore: isNr ? null : opp2Gross }] : []),
       ];
     }
 
@@ -462,6 +475,12 @@ export default function HoleEntryScreen() {
       updatedPlayerHoles[`0_${hole.number}`] = { gross_score: isNr ? null : partnerGross, is_nr: isNr ? 1 : 0 };
       updatedPlayerHoles[`1_${hole.number}`] = { gross_score: isNr ? null : oppGross,     is_nr: isNr ? 1 : 0 };
       updatedPlayerHoles[`2_${hole.number}`] = { gross_score: isNr ? null : opp2Gross,    is_nr: isNr ? 1 : 0 };
+    }
+    if (isMR) {
+      updatedPlayerHoles[`0_${hole.number}`] = { gross_score: isNr ? null : oppGross, is_nr: isNr ? 1 : 0 };
+      if (round.opponent2_name) {
+        updatedPlayerHoles[`1_${hole.number}`] = { gross_score: isNr ? null : opp2Gross, is_nr: isNr ? 1 : 0 };
+      }
     }
     setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
 
@@ -524,8 +543,10 @@ export default function HoleEntryScreen() {
   const isBetterball       = hasFourPlayers(round);
   // isAnyMatch = true only for actual match-play formats (drives match-status banner / End Match button)
   const isAnyMatch         = isMatchPlay || isKnockoutBetterball;
-  // hasOpponents = show opponent inputs (match play + any betterball with opponents)
-  const hasOpponents       = isAnyMatch || isBetterball;
+  // isMarkerRound = individual tournament: player records their own score + their marker's score for validation
+  const isMarkerRound      = !isBetterball && !isAnyMatch && !!round.opponent_name;
+  // hasOpponents = show any additional score inputs (match play + betterball + marker)
+  const hasOpponents       = isAnyMatch || isBetterball || isMarkerRound;
 
   const matchSt: MatchStatus | null = isMatchPlay
     ? calcMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
@@ -783,8 +804,8 @@ export default function HoleEntryScreen() {
           )}
         </View>
 
-        {/* Points summary — individual non-betterball non-matchplay only */}
-        {pts != null && !hasOpponents && (
+        {/* Points summary — individual (including marker rounds; NOT matchplay / betterball) */}
+        {pts != null && (!hasOpponents || isMarkerRound) && (
           <View style={styles.ptsSummary}>
             <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
             <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
@@ -802,8 +823,39 @@ export default function HoleEntryScreen() {
           </View>
         )}
 
+        {/* ── MARKER section — individual tournament rounds ─────── */}
+        {isMarkerRound && (
+          <>
+            <View style={[styles.scoringSectionHeader, { paddingTop: 10, paddingBottom: 2 }]}>
+              <View style={[styles.sectionDot, { backgroundColor: "#60a5fa" }]} />
+              <Text style={[styles.sectionLabel, { color: "#60a5fa" }]}>MARKING FOR</Text>
+            </View>
+            <View style={styles.oppGroupBox}>
+              <BbPlayerInput flat
+                label={round.opponent_name ?? "Marker"}
+                color="#60a5fa" bgColor="#060e1a"
+                gross={oppGross} setGross={setOppGross}
+                ha={oppHA} par={hole.par}
+                quickRef={opp1QuickRef}
+              />
+              {round.opponent2_name && (
+                <>
+                  <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
+                  <BbPlayerInput flat
+                    label={round.opponent2_name}
+                    color="#a78bfa" bgColor="#0d0819"
+                    gross={opp2Gross} setGross={setOpp2Gross}
+                    ha={opp2HA} par={hole.par}
+                    quickRef={opp2QuickRef}
+                  />
+                </>
+              )}
+            </View>
+          </>
+        )}
+
         {/* ── OPPONENT score section (matchplay + betterball) ─────── */}
-        {hasOpponents && (
+        {(isAnyMatch || isBetterball) && (
           <>
             <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>

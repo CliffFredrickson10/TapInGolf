@@ -76743,6 +76743,74 @@ router23.get("/scoring/tournaments/:tournamentId/my-match", async (req, res) => 
     res.status(500).json({ message: "Failed to load match" });
   }
 });
+router23.get("/scoring/tournaments/:tournamentId/my-marker", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const tournamentId = parseInt(req.params.tournamentId);
+    const mySlot = await row(`
+      SELECT b.portal_slot_id FROM bookings b
+      JOIN booking_players bp ON bp.booking_id = b.id
+      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+      WHERE bp.user_id = ? AND pts.event_id = ? AND b.status = 'confirmed'
+      LIMIT 1
+    `, [user.id, tournamentId]);
+    if (!mySlot?.portal_slot_id) {
+      res.json({ marker: null });
+      return;
+    }
+    const all = await query(`
+      SELECT DISTINCT bp.user_id, u.name, u.handicap
+      FROM bookings b
+      JOIN booking_players bp ON bp.booking_id = b.id
+      JOIN users u ON u.id = bp.user_id
+      WHERE b.portal_slot_id = ? AND b.status = 'confirmed'
+      ORDER BY bp.user_id
+    `, [mySlot.portal_slot_id]);
+    const myIdx = all.findIndex((p) => p.user_id === user.id);
+    if (myIdx < 0) {
+      res.json({ marker: null });
+      return;
+    }
+    const n = all.length;
+    let markerName = null;
+    let markerHandicap = null;
+    let marker2Name = null;
+    let marker2Handicap = null;
+    if (n === 2) {
+      const m = all[1 - myIdx];
+      markerName = m.name;
+      markerHandicap = m.handicap != null ? Number(m.handicap) : null;
+    } else if (n === 3) {
+      if (myIdx === 0) {
+        markerName = all[1].name;
+        markerHandicap = all[1].handicap != null ? Number(all[1].handicap) : null;
+        marker2Name = all[2].name;
+        marker2Handicap = all[2].handicap != null ? Number(all[2].handicap) : null;
+      } else {
+        markerName = all[0].name;
+        markerHandicap = all[0].handicap != null ? Number(all[0].handicap) : null;
+      }
+    } else if (n >= 4) {
+      const pairIdx = myIdx % 2 === 0 ? myIdx + 1 : myIdx - 1;
+      const m = all[Math.min(pairIdx, n - 1)];
+      if (m && m.user_id !== user.id) {
+        markerName = m.name;
+        markerHandicap = m.handicap != null ? Number(m.handicap) : null;
+      }
+    }
+    res.json({ marker: markerName ? { markerName, markerHandicap, marker2Name, marker2Handicap, drawReleased: true } : null });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to load marker" });
+  }
+});
 router23.get("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -76947,6 +77015,69 @@ router23.post("/scoring/rounds", async (req, res) => {
           if (others[1]) {
             opponent2Name = others[1].name;
             opponent2PlayingHcp = req.body.opponent2PlayingHcp != null ? Number(req.body.opponent2PlayingHcp) : others[1].handicap != null ? Math.round(Number(others[1].handicap) * (Number(allowancePct) / 100)) : 0;
+          }
+        }
+      }
+    }
+    const BETTERBALL_ALL = /* @__PURE__ */ new Set([
+      "betterball_match_play",
+      "fourball_stableford",
+      "fourball_gross_betterball",
+      "fourball_net_betterball",
+      "shamble",
+      "best_ball_aggregate",
+      "high_low",
+      "daytona",
+      "low_ball_total",
+      "the_ghost",
+      "betterball_bonus_bogey",
+      "pinehurst_points",
+      "alliance",
+      "american_scramble"
+    ]);
+    const isIndividualTournamentRound = tournamentId && format !== "singles_match_play" && !BETTERBALL_ALL.has(format);
+    if (isIndividualTournamentRound) {
+      const mySlot = await row(`
+        SELECT b.portal_slot_id FROM bookings b
+        JOIN booking_players bp ON bp.booking_id = b.id
+        JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+        WHERE bp.user_id = ? AND pts.event_id = ? AND b.status = 'confirmed'
+        LIMIT 1
+      `, [user.id, tournamentId]);
+      if (mySlot?.portal_slot_id) {
+        const all = await query(`
+          SELECT DISTINCT bp.user_id, u.name, u.handicap
+          FROM bookings b
+          JOIN booking_players bp ON bp.booking_id = b.id
+          JOIN users u ON u.id = bp.user_id
+          WHERE b.portal_slot_id = ? AND b.status = 'confirmed'
+          ORDER BY bp.user_id
+        `, [mySlot.portal_slot_id]);
+        const myIdx = all.findIndex((p) => p.user_id === user.id);
+        if (myIdx >= 0) {
+          const n = all.length;
+          let m1 = null, m2 = null;
+          if (n === 2) {
+            m1 = all[1 - myIdx];
+          } else if (n === 3) {
+            if (myIdx === 0) {
+              m1 = all[1];
+              m2 = all[2];
+            } else {
+              m1 = all[0];
+            }
+          } else if (n >= 4) {
+            const pairIdx = myIdx % 2 === 0 ? myIdx + 1 : myIdx - 1;
+            const candidate = all[Math.min(pairIdx, n - 1)];
+            if (candidate && candidate.user_id !== user.id) m1 = candidate;
+          }
+          if (m1) {
+            opponentName = m1.name;
+            opponentPlayingHcp = req.body.opponentPlayingHcp != null ? Number(req.body.opponentPlayingHcp) : m1.handicap != null ? Math.round(Number(m1.handicap) * (Number(allowancePct) / 100)) : 0;
+          }
+          if (m2) {
+            opponent2Name = m2.name;
+            opponent2PlayingHcp = req.body.opponent2PlayingHcp != null ? Number(req.body.opponent2PlayingHcp) : m2.handicap != null ? Math.round(Number(m2.handicap) * (Number(allowancePct) / 100)) : 0;
           }
         }
       }

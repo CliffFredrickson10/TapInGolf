@@ -1422,41 +1422,41 @@ export default function RoundCompleteScreen() {
                   </View>
                   {/* Gross */}
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    borderRightWidth: isGross && !isMarkerRound ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                     <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g || "—"}</Text>
                   </View>
+                  {/* Net */}
+                  {!isGross && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: showPts || isMarkerRound ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{n || "—"}</Text>
+                    </View>
+                  )}
+                  {/* Pts / Res */}
+                  {showPts && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: isMarkerRound ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
+                        {isParOrBogey
+                          ? (p > 0 ? `+${p}` : p < 0 ? `${p}` : "A/S")
+                          : p}
+                      </Text>
+                    </View>
+                  )}
                   {/* Mkr1 */}
                   {isMarkerRound && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.7)" }}>
+                      borderRightWidth: hasOpp2 ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>
                         {mkrG != null && mkrG > 0 ? mkrG : "—"}
                       </Text>
                     </View>
                   )}
                   {/* Mkr2 */}
                   {hasOpp2 && (
-                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.7)" }}>
-                        {mkr2G != null && mkr2G > 0 ? mkr2G : "—"}
-                      </Text>
-                    </View>
-                  )}
-                  {/* Net */}
-                  {!isGross && (
-                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                      borderRightWidth: showPts ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{n || "—"}</Text>
-                    </View>
-                  )}
-                  {/* Pts / Res */}
-                  {showPts && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
-                        {isParOrBogey
-                          ? (p > 0 ? `+${p}` : p < 0 ? `${p}` : "A/S")
-                          : p}
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>
+                        {mkr2G != null && mkr2G > 0 ? mkr2G : "—"}
                       </Text>
                     </View>
                   )}
@@ -1488,29 +1488,29 @@ export default function RoundCompleteScreen() {
                     <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>H/C</Text>
                     </View>
-                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross && !isMarkerRound ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
                     </View>
-                    {isMarkerRound && (
-                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
-                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkrLabel}</Text>
-                      </View>
-                    )}
-                    {hasOpp2 && (
-                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
-                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkr2Label}</Text>
-                      </View>
-                    )}
                     {!isGross && (
-                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: showPts ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: showPts || isMarkerRound ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
                         <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Net</Text>
                       </View>
                     )}
                     {showPts && (
-                      <View style={{ flex: 1, alignItems: "center" }}>
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isMarkerRound ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
                         <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>
                           {isParOrBogey ? "Res" : "Pts"}
                         </Text>
+                      </View>
+                    )}
+                    {isMarkerRound && (
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: hasOpp2 ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkrLabel}</Text>
+                      </View>
+                    )}
+                    {hasOpp2 && (
+                      <View style={{ flex: 1, alignItems: "center" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkr2Label}</Text>
                       </View>
                     )}
                   </View>
@@ -1549,36 +1549,16 @@ export default function RoundCompleteScreen() {
                           </View>
                           {/* Gross */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                            borderRightWidth: HW, borderRightColor: bdr, paddingVertical: 4 }}>
+                            borderRightWidth: isGross && !isMarkerRound ? 0 : HW, borderRightColor: bdr, paddingVertical: 4 }}>
                             <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
                               color: nr || gross == null ? colors.mutedForeground : colors.foreground }}>
                               {nr ? "NR" : gross != null ? String(gross) : "—"}
                             </Text>
                           </View>
-                          {/* Mkr1 */}
-                          {isMarkerRound && (
-                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                              borderRightWidth: isGross && !hasOpp2 ? 0 : HW, borderRightColor: bdr }}>
-                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                                color: mkrGross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
-                                {mkrGross != null ? String(mkrGross) : "—"}
-                              </Text>
-                            </View>
-                          )}
-                          {/* Mkr2 */}
-                          {hasOpp2 && (
-                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                              borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr }}>
-                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                                color: mkr2Gross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
-                                {mkr2Gross != null ? String(mkr2Gross) : "—"}
-                              </Text>
-                            </View>
-                          )}
                           {/* Net */}
                           {!isGross && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                              borderRightWidth: showPts ? HW : 0, borderRightColor: bdr }}>
+                              borderRightWidth: showPts || isMarkerRound ? HW : 0, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
                                 color: net != null && !nr ? colors.foreground : colors.mutedForeground }}>
                                 {nr ? "—" : net != null ? String(net) : "—"}
@@ -1587,7 +1567,8 @@ export default function RoundCompleteScreen() {
                           )}
                           {/* Pts / Res */}
                           {showPts && (
-                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                              borderRightWidth: isMarkerRound ? HW : 0, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
                                 color: pts != null && !nr
                                   ? (isParOrBogey
@@ -1602,6 +1583,25 @@ export default function RoundCompleteScreen() {
                                       ? (pts === 1 ? "W" : pts === 0 ? "H" : "L")
                                       : String(pts))
                                   : "—"}
+                              </Text>
+                            </View>
+                          )}
+                          {/* Mkr1 */}
+                          {isMarkerRound && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                              borderRightWidth: hasOpp2 ? HW : 0, borderRightColor: bdr }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                                color: mkrGross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
+                                {mkrGross != null ? String(mkrGross) : "—"}
+                              </Text>
+                            </View>
+                          )}
+                          {/* Mkr2 */}
+                          {hasOpp2 && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                                color: mkr2Gross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
+                                {mkr2Gross != null ? String(mkr2Gross) : "—"}
                               </Text>
                             </View>
                           )}

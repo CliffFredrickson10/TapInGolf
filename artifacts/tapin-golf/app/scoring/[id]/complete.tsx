@@ -682,6 +682,199 @@ export default function RoundCompleteScreen() {
                 </View>
               );
             })()
+          ) : isMatchPlay && round.playerHoles ? (
+            // ── Singles Match Play 2-player scorecard ─────────────────────
+            (() => {
+              const myHcp  = round.playing_handicap;
+              const oppHcp = round.opponent_playing_hcp ?? 0;
+              const HW  = StyleSheet.hairlineWidth;
+              const bdr = colors.border;
+              const pBg = colors.primary;
+
+              const meLabel  = "Me";
+              const oppLabel = (round.opponent_name ?? "Opponent").split(" ")[0].slice(0, 7);
+
+              let myTotG = 0, oppTotG = 0;
+              let myTotN = 0, oppTotN = 0;
+              let myF9G = 0, oppF9G = 0, myB9G = 0, oppB9G = 0;
+              let myF9N = 0, oppF9N = 0, myB9N = 0, oppB9N = 0;
+              let totW = 0, totL = 0, totH = 0;
+              let f9W = 0, f9L = 0, f9H = 0;
+              let b9W = 0, b9L = 0, b9H = 0;
+
+              const holeData = sc.map(h => {
+                const mySaved  = holes[h.number];
+                const oppSaved = round.playerHoles![`0_${h.number}`];
+
+                const myG  = mySaved?.is_nr  ? null : mySaved?.gross_score  ?? null;
+                const oppG = oppSaved?.is_nr ? null : oppSaved?.gross_score ?? null;
+
+                const myHa  = getHA(h.stroke_index, myHcp);
+                const oppHa = getHA(h.stroke_index, oppHcp);
+                const myN   = myG  != null ? myG  - myHa  : null;
+                const oppN  = oppG != null ? oppG - oppHa : null;
+
+                let res: "W" | "L" | "H" | null = null;
+                if (myN != null && oppN != null) {
+                  if      (myN < oppN) { res = "W"; totW++; }
+                  else if (myN > oppN) { res = "L"; totL++; }
+                  else                 { res = "H"; totH++; }
+                }
+
+                const isFront = h.number <= 9;
+                if (myG  != null) { myTotG  += myG;  if (isFront) myF9G  += myG;  else myB9G  += myG;  }
+                if (oppG != null) { oppTotG += oppG; if (isFront) oppF9G += oppG; else oppB9G += oppG; }
+                if (myN  != null) { myTotN  += myN;  if (isFront) myF9N  += myN;  else myB9N  += myN;  }
+                if (oppN != null) { oppTotN += oppN; if (isFront) oppF9N += oppN; else oppB9N += oppN; }
+                if (res === "W") { if (isFront) f9W++; else b9W++; }
+                if (res === "L") { if (isFront) f9L++; else b9L++; }
+                if (res === "H") { if (isFront) f9H++; else b9H++; }
+
+                return { h, myG, oppG, myN, oppN, res, myNr: !!mySaved?.is_nr, oppNr: !!oppSaved?.is_nr };
+              });
+
+              const resColor = (r: "W"|"L"|"H"|null) =>
+                r === "W" ? "#22c55e" : r === "L" ? "#f87171" : r === "H" ? GOLD : colors.mutedForeground;
+
+              const playerPair = (gross: number|null, net: number|null, nr: boolean, isMe: boolean, last: boolean) => {
+                const rb = last
+                  ? { borderRightWidth: 1.5, borderRightColor: bdr }
+                  : { borderRightWidth: HW,  borderRightColor: bdr };
+                const nameColor = isMe ? "#a3e4bc" : "#fca5a5";
+                return (
+                  <View style={[{ flex: 2, flexDirection: "row" }, rb]}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                      borderRightWidth: HW, borderRightColor: bdr }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                        color: nr ? colors.mutedForeground : gross != null ? (isMe ? "#a3e4bc" : "#fca5a5") : colors.mutedForeground }}>
+                        {nr ? "NR" : gross != null ? String(gross) : "—"}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
+                      <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                        color: net != null ? nameColor : colors.mutedForeground }}>
+                        {nr ? "—" : net != null ? String(net) : "—"}
+                      </Text>
+                    </View>
+                  </View>
+                );
+              };
+
+              const f9Par  = sc.filter(h => h.number <= 9).reduce((s,h) => s+h.par, 0);
+              const b9Par  = sc.filter(h => h.number >  9).reduce((s,h) => s+h.par, 0);
+              const totPar = f9Par + b9Par;
+
+              const TotRow = (label: string, par: number, isLast: boolean,
+                mg: number, mn: number, og: number, on: number, w: number, l: number, hv: number) => (
+                <View key={label} style={{ flexDirection: "row",
+                  backgroundColor: isLast ? pBg : pBg + "e0",
+                  borderTopWidth: isLast ? 1.5 : HW,
+                  borderTopColor: isLast ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                  <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold",
+                      color: isLast ? GOLD : "rgba(255,255,255,0.8)" }}>{label}</Text>
+                  </View>
+                  <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
+                  </View>
+                  {/* Me gross + net */}
+                  <View style={{ flex: 2, flexDirection: "row", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.35)" }}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{mg > 0 ? String(mg) : "—"}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{mn !== 0 || mg > 0 ? String(mn) : "—"}</Text>
+                    </View>
+                  </View>
+                  {/* Opp gross + net */}
+                  <View style={{ flex: 2, flexDirection: "row", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{og > 0 ? String(og) : "—"}</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{on !== 0 || og > 0 ? String(on) : "—"}</Text>
+                    </View>
+                  </View>
+                  <View style={{ width: 32, alignItems: "center", justifyContent: "center", gap: 1 }}>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#4ade80" }}>{w}W</Text>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#f87171" }}>{l}L</Text>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: GOLD }}>{hv}H</Text>
+                  </View>
+                </View>
+              );
+
+              return (
+                <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
+                  {/* Header row 1: player names */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 7 }}>
+                    <View style={{ width: 28, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>H</Text>
+                    </View>
+                    <View style={{ width: 26, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
+                    </View>
+                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.3)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{meLabel}</Text>
+                    </View>
+                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.3)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{oppLabel}</Text>
+                    </View>
+                    <View style={{ width: 32, alignItems: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Res</Text>
+                    </View>
+                  </View>
+                  {/* Header row 2: Score / Net sub-labels */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg + "cc",
+                    borderBottomWidth: 1.5, borderBottomColor: bdr }}>
+                    <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    {[{rb:HW},{rb:1.5},{rb:HW},{rb:HW}].map(({rb},i) => (
+                      <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
+                        borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
+                          color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
+                          {i % 2 === 0 ? "Score" : "Net"}
+                        </Text>
+                      </View>
+                    ))}
+                    <View style={{ width: 32 }} />
+                  </View>
+                  {/* Hole rows */}
+                  {holeData.map(({ h, myG, oppG, myN, oppN, res, myNr, oppNr }, idx) => {
+                    const rowBg = idx % 2 === 0 ? colors.card
+                      : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
+                    const rc = resColor(res);
+                    return (
+                      <React.Fragment key={h.number}>
+                        <View style={{ flexDirection: "row", backgroundColor: rowBg,
+                          borderBottomWidth: HW, borderBottomColor: bdr }}>
+                          <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.number}</Text>
+                          </View>
+                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
+                          </View>
+                          {playerPair(myG,  myN,  myNr,  true,  true)}
+                          {playerPair(oppG, oppN, oppNr, false, false)}
+                          <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
+                          </View>
+                        </View>
+                        {h.number === 9 && TotRow("OUT", f9Par, false, myF9G, myF9N, oppF9G, oppF9N, f9W, f9L, f9H)}
+                      </React.Fragment>
+                    );
+                  })}
+                  {TotRow("IN",  b9Par,  false, myB9G, myB9N, oppB9G, oppB9N, b9W, b9L, b9H)}
+                  {TotRow("TOT", totPar, true,  myTotG, myTotN, oppTotG, oppTotN, totW, totL, totH)}
+                </View>
+              );
+            })()
           ) : (
             // ── Standard single-player scorecard ──────────────────────────
             <>

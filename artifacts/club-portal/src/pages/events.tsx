@@ -266,7 +266,7 @@ const EMPTY_FORM = {
   additional_fees: [] as { name: string; amount: number }[],
   ballot: false, scoring_enabled: true, payment_required: true, entries_required: false,
   use_tiered_pricing: false, allow_wallet: true, allow_prepaid: false, allow_voucher: false,
-  shotgun_start: false,
+  shotgun_start: null as boolean | null,
   block_full_day: false,
   use_divisions: false,
   divisions: DEFAULT_DIVISIONS,
@@ -733,17 +733,17 @@ export default function Events() {
       .finally(() => setCheckingExistingSlots(false));
   }, [editId, dlgOpen, form.event_date, form.end_date]);
 
-  // ── Auto-open shotgun dialog when shotgun start is selected with no slots yet ──
+  // ── Auto-open shotgun dialog when shotgun start is explicitly selected with no slots yet ──
   useEffect(() => {
-    if (!form.shotgun_start || wizardStep !== 4 || !form.event_date || editId) return;
+    if (form.shotgun_start !== true || wizardStep !== 4 || !form.event_date || editId) return;
     if (eventSlots.length > 0) return;
     setShotgunDlgDate(form.event_date);
     setShotgunDlgOpen(true);
   }, [form.shotgun_start, wizardStep]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Auto-open interval tee-gen dialog when interval start is selected with no slots yet ──
+  // ── Auto-open interval tee-gen dialog when interval start is explicitly selected with no slots yet ──
   useEffect(() => {
-    if (form.shotgun_start || wizardStep !== 4 || !form.event_date || editId) return;
+    if (form.shotgun_start !== false || wizardStep !== 4 || !form.event_date || editId) return;
     if (eventSlots.length > 0) return;
     setGenDialogDate("");
     setGenDialogOpen(true);
@@ -3312,15 +3312,15 @@ ${bodyHtml}
                           <button key={String(opt.value)} type="button"
                             onClick={() => setForm(f => ({ ...f, shotgun_start: opt.value }))}
                             className={`text-left rounded-xl border-2 p-4 transition-all ${
-                              !!form.shotgun_start === opt.value
+                              form.shotgun_start === opt.value
                                 ? "border-[#1a5c38] bg-[#1a5c38]/5 shadow-sm"
                                 : "border-border bg-background hover:border-[#1a5c38]/40"}`}>
                             <div className="flex items-center gap-2 mb-1.5">
                               <span className="text-xl">{opt.icon}</span>
-                              <span className={`text-sm font-semibold ${!!form.shotgun_start === opt.value ? "text-[#1a5c38]" : ""}`}>
+                              <span className={`text-sm font-semibold ${form.shotgun_start === opt.value ? "text-[#1a5c38]" : ""}`}>
                                 {opt.label}
                               </span>
-                              {!!form.shotgun_start === opt.value && (
+                              {form.shotgun_start === opt.value && (
                                 <span className="ml-auto text-[10px] font-bold text-white bg-[#1a5c38] rounded-full px-1.5 py-0.5">Selected</span>
                               )}
                             </div>
@@ -3378,7 +3378,7 @@ ${bodyHtml}
                             )}
                           </div>
                           {/* ── Interval start: prominent generate CTA when no slots exist ── */}
-                          {!form.shotgun_start && eventSlots.length === 0 && !checkingExistingSlots && (
+                          {form.shotgun_start === false && eventSlots.length === 0 && !checkingExistingSlots && (
                             <div className="rounded-xl border-2 border-dashed border-[#1a5c38]/40 bg-[#1a5c38]/5 p-5 flex flex-col items-center gap-3 text-center">
                               <Clock className="h-8 w-8 text-[#1a5c38]/50" />
                               <div>
@@ -3395,7 +3395,7 @@ ${bodyHtml}
                               </Button>
                             </div>
                           )}
-                          {!editId && !form.shotgun_start && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
+                          {!editId && form.shotgun_start === false && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
                               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
                               <div className="flex-1 min-w-0">
@@ -3438,7 +3438,7 @@ ${bodyHtml}
                                         <button type="button"
                                           className="text-[11px] text-muted-foreground hover:text-foreground flex items-center gap-1"
                                           onClick={() => {
-                                            if (form.shotgun_start) {
+                                            if (form.shotgun_start === true) {
                                               setShotgunDlgDate(date); setShotgunDlgOpen(true);
                                             } else {
                                               setGenDialogDate(date); setGenDialogOpen(true);
@@ -3502,7 +3502,7 @@ ${bodyHtml}
                               })}
                             </div>
                           )}
-                          {!editId && !form.shotgun_start && eventSlots.length > 0 && (
+                          {!editId && form.shotgun_start === false && eventSlots.length > 0 && (
                             <Button type="button" variant="outline" size="sm"
                               className="w-full h-7 text-xs border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/5 gap-1.5"
                               onClick={() => { setGenDialogDate(""); setGenDialogOpen(true); }}>
@@ -3527,14 +3527,14 @@ ${bodyHtml}
                         <Button type="button" variant="outline" size="sm"
                           className="h-8 text-xs border-[#1a5c38]/40 text-[#1a5c38] hover:bg-[#1a5c38]/5"
                           onClick={() => {
-                            if (form.shotgun_start) {
+                            if (form.shotgun_start === true) {
                               setShotgunDlgDate(""); setShotgunDlgOpen(true);
                             } else {
                               setGenDialogDate(""); setGenDialogOpen(true);
                             }
                           }}>
                           <Clock className="h-3.5 w-3.5 mr-1.5" />
-                          Configure {form.shotgun_start ? "Shotgun" : "Interval"} Schedule Settings
+                          Configure {form.shotgun_start === true ? "Shotgun" : "Interval"} Schedule Settings
                         </Button>
                         {teeConfigSnapshot && (
                           <p className="text-xs text-[#1a5c38] flex items-center gap-1.5 font-medium">
@@ -3613,8 +3613,8 @@ ${bodyHtml}
                           <div className="space-y-1 text-xs">
                             <div className="flex justify-between">
                               <span className="text-muted-foreground">Start type</span>
-                              <span className={`font-medium ${form.shotgun_start ? "text-[#1a5c38]" : ""}`}>
-                                {form.shotgun_start ? "🔫 Shotgun" : "🕗 Interval"}
+                              <span className={`font-medium ${form.shotgun_start === true ? "text-[#1a5c38]" : ""}`}>
+                                {form.shotgun_start === true ? "🔫 Shotgun" : form.shotgun_start === false ? "🕗 Interval" : "—"}
                               </span>
                             </div>
                             <div className="flex justify-between">
@@ -3642,8 +3642,10 @@ ${bodyHtml}
                   </Button>
                   <div className="flex-1" />
                   {wizardStep < 5 ? (
-                    <Button type="button" onClick={() => setWizardStep(w => w + 1)}
-                      className="bg-[#1a5c38] hover:bg-[#164d30]">
+                    <Button type="button"
+                      disabled={wizardStep === 4 && form.shotgun_start === null}
+                      onClick={() => setWizardStep(w => w + 1)}
+                      className="bg-[#1a5c38] hover:bg-[#164d30] disabled:opacity-40">
                       Next →
                     </Button>
                   ) : templateMode ? (

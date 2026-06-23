@@ -17,10 +17,19 @@ import { ScrollView, StyleSheet, Text, View } from "react-native";
 const GOLD = "#c8a84b";
 const HW   = StyleSheet.hairlineWidth;
 
-function getHA(si: number, ph: number) {
-  if (ph <= 0) return 0;
-  if (ph <= 18) return si <= ph ? 1 : 0;
-  return 1 + (si <= ph - 18 ? 1 : 0);
+function getHA(si: number, ph: number): number {
+  if (ph === 0) return 0;
+  if (ph > 0) {
+    if (ph <= 18) return si <= ph ? 1 : 0;
+    return 1 + (si <= ph - 18 ? 1 : 0);
+  }
+  // Plus handicapper (ph < 0): give strokes back from SI 18 downward
+  const abs = -ph;
+  if (abs <= 18) return si >= (19 - abs) ? -1 : 0;
+  return -1 + (si >= (19 - (abs - 18)) ? -1 : 0);
+}
+function fmtHcp(ph: number): string {
+  return ph < 0 ? `+${-ph}` : String(ph);
 }
 
 type ScorecardHole = { number: number; par: number; stroke_index: number };
@@ -361,7 +370,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
             paddingVertical: 6,
             borderRightWidth: showRes ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
             <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
-              {v !== 0 ? String(v) : "—"}
+              {mode === "hcap" ? fmtHcp(v) : (v !== 0 ? String(v) : "—")}
             </Text>
           </View>
           {showRes && (
@@ -470,8 +479,11 @@ export default function ScorecardUnified({ round, colors }: Props) {
                     <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: MFG }}>{h.par}</Text>
                   </View>
                   <View style={{ width: W_SI, alignItems: "center", justifyContent: "center",
-                    borderRightWidth: HW, borderRightColor: bdr }}>
+                    borderRightWidth: HW, borderRightColor: bdr, paddingVertical: 2 }}>
                     <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: MFG }}>{h.stroke_index}</Text>
+                    {getHA(h.stroke_index, myHcp) < 0 && (
+                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#f87171", lineHeight: 9 }}>+1</Text>
+                    )}
                   </View>
                   {PairCell(aG, aR, mpRes, true,  aNr, aBold)}
                   {showB && PairCell(bG, bR, null,  true,  bNr, bBold)}

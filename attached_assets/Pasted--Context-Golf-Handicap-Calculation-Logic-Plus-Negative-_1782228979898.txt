@@ -1,0 +1,38 @@
+# Context: Golf Handicap Calculation Logic (Plus/Negative Handicaps)
+
+Please review the following rules and logic for handling golfers with a handicap better than 0 (known as a "Plus" handicap, represented mathematically as a negative number, e.g., +3 or -3). Use this logic to update our database schema, handicap calculations, and scorecard rendering functionality.
+
+---
+
+## 1. The Core Mathematical Formula
+For a standard handicap, the net score formula is:
+Net Score = Gross Score - Course Handicap
+
+For a plus handicapper, because their handicap is mathematically a negative value, subtracting it results in adding strokes to their score:
+Net Score = Gross Score - (-Course Handicap) -> Net Score = Gross Score + Course Handicap
+
+### Reference Calculation Table
+| Golfer Type | Course Handicap | Formula | Gross Score | Net Score |
+| :--- | :--- | :--- | :--- | :--- |
+| Mid-Handicapper | 10 | 70 - 10 | 70 | 60 |
+| Scratch Golfer | 0 | 70 - 0 | 70 | 70 |
+| Plus Golfer | +3 (or -3) | 70 + 3 | 70 | 73 |
+
+---
+
+## 2. Scorecard Allocation Logic (Stroke Index Rules)
+When displaying a scorecard or calculating stableford points/net match play for a plus handicapper, strokes must be **given back to the course** based strictly on the **Stroke Index (SI)**.
+
+### Implementation Rules for Plus Handicaps:
+1. **Direction of Allocation:** Instead of starting at Stroke Index 1 (the hardest hole), plus handicappers give strokes back starting at **Stroke Index 18** (the easiest hole), then SI 17, SI 16, and so forth, depending on their absolute playing handicap.
+2. **Example (+2 Playing Handicap):**
+   * The player must add 1 stroke to their gross score on the hole with **Stroke Index 18**.
+   * The player must add 1 stroke to their gross score on the hole with **Stroke Index 17**.
+   * On these two holes, a gross par converts into a **net bogey**.
+3. **No Hole-Type Exceptions:** The allocation is purely determined by the numeric Stroke Index on the scorecard (18 down to 1). There are no exceptions for specific pars (e.g., par 5s).
+
+---
+
+## 3. UI/UX & Display Requirements
+* **Handicap Display:** Ensure plus handicaps are displayed to the user using the standard plus prefix (e.g., "+2") rather than a negative sign ("-2") to match traditional golfing conventions.
+* **Scorecard Matrix:** On the digital scorecard, highlight holes where the plus handicapper is giving a stroke back (SI 18, SI 17, etc.) with a distinct indicator (e.g., a "+1" or a specific color stroke dot) so they know their net score will be higher than their gross score on those holes.

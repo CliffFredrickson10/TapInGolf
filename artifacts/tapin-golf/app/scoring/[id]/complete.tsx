@@ -476,8 +476,8 @@ export default function RoundCompleteScreen() {
           {[
             { label: "Format", value: FORMAT_LABELS[round.format] ?? round.format },
             { label: "Tee", value: round.tee_color.charAt(0).toUpperCase() + round.tee_color.slice(1) },
-            { label: "Course HCP", value: String(round.course_handicap) },
-            { label: "Playing HCP", value: String(round.playing_handicap) },
+            { label: "Course HCP", value: round.course_handicap < 0 ? `+${-round.course_handicap}` : String(round.course_handicap) },
+            { label: "Playing HCP", value: round.playing_handicap < 0 ? `+${-round.playing_handicap}` : String(round.playing_handicap) },
             { label: "Allowance", value: `${round.allowance_pct}%` },
             { label: "Date", value: new Date(round.started_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) },
           ].map((row, i) => (

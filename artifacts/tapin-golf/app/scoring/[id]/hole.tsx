@@ -68,9 +68,15 @@ function hasFourPlayers(r: { format: string; partner_name?: string | null }): bo
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getHA(si: number, ph: number): number {
-  if (ph <= 0) return 0;
-  if (ph <= 18) return si <= ph ? 1 : 0;
-  return 1 + (si <= ph - 18 ? 1 : 0);
+  if (ph === 0) return 0;
+  if (ph > 0) {
+    if (ph <= 18) return si <= ph ? 1 : 0;
+    return 1 + (si <= ph - 18 ? 1 : 0);
+  }
+  // Plus handicapper (ph < 0): give strokes back from SI 18 downward
+  const abs = -ph;
+  if (abs <= 18) return si >= (19 - abs) ? -1 : 0;
+  return -1 + (si >= (19 - (abs - 18)) ? -1 : 0);
 }
 function calcPoints(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));
@@ -901,7 +907,7 @@ export default function HoleEntryScreen() {
         <View style={[styles.holeHeader, { paddingTop: 20, paddingBottom: 4 }]}>
           <Text style={[styles.holeName, { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <View style={styles.hcpChip}>
-            <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
+            <Text style={styles.hcpChipText}>Playing HCP {ph < 0 ? `+${-ph}` : ph}</Text>
           </View>
           <View style={styles.statsRow}>
             {[

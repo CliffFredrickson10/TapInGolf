@@ -7,9 +7,15 @@ const router: IRouter = Router();
 // ─── Scoring helpers ──────────────────────────────────────────────────────────
 
 function getHA(strokeIndex: number, playingHcp: number): number {
-  if (playingHcp <= 0) return 0;
-  if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
-  return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
+  if (playingHcp === 0) return 0;
+  if (playingHcp > 0) {
+    if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
+    return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
+  }
+  // Plus handicapper (playingHcp < 0): give strokes back from SI 18 downward
+  const abs = -playingHcp;
+  if (abs <= 18) return strokeIndex >= (19 - abs) ? -1 : 0;
+  return -1 + (strokeIndex >= (19 - (abs - 18)) ? -1 : 0);
 }
 
 function calcPoints(gross: number, par: number, ha: number): number {
@@ -834,9 +840,14 @@ router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
 // ─── Complete round ───────────────────────────────────────────────────────────
 
 function getHALocal(si: number, ph: number): number {
-  if (ph <= 0) return 0;
-  if (ph <= 18) return si <= ph ? 1 : 0;
-  return 1 + (si <= ph - 18 ? 1 : 0);
+  if (ph === 0) return 0;
+  if (ph > 0) {
+    if (ph <= 18) return si <= ph ? 1 : 0;
+    return 1 + (si <= ph - 18 ? 1 : 0);
+  }
+  const abs = -ph;
+  if (abs <= 18) return si >= (19 - abs) ? -1 : 0;
+  return -1 + (si >= (19 - (abs - 18)) ? -1 : 0);
 }
 function getStablefordPts(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));

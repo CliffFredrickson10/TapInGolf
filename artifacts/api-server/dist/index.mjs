@@ -62048,6 +62048,7 @@ router2.post("/auth/register", async (req, res) => {
           Number(pm.prepaid_rounds) || 0
         ]
       );
+      await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [pm.club_id, id]);
       const pmHna = pm.hna_number ? String(pm.hna_number).trim().replace(/\D/g, "") || null : null;
       const pmStu = pm.student_number ? String(pm.student_number).trim() || null : null;
       if (pmHna || pmStu) {
@@ -69375,6 +69376,7 @@ router13.post("/admin/members", async (req, res) => {
       await exec("UPDATE club_members SET status = 'active', membership_type = ? WHERE club_id = ? AND user_id = ?", [membership_type, clubId, user_id]);
     } else throw err;
   }
+  await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [clubId, user_id]);
   const targetUser = await row("SELECT push_token FROM users WHERE id = ?", [user_id]);
   if (targetUser?.push_token) {
     sendPushNotifications([{
@@ -72060,6 +72062,7 @@ router14.post("/portal/members", requireClubAuth2, async (req, res) => {
        prepaid_rounds  = EXCLUDED.prepaid_rounds`,
     [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0]
   );
+  await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
   await exec(
     `UPDATE users SET
        hna_number            = ?,
@@ -72154,6 +72157,7 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
            prepaid_rounds  = EXCLUDED.prepaid_rounds`,
         [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds]
       );
+      await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
       await exec(
         `UPDATE users SET
            hna_number            = ?,

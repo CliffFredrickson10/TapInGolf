@@ -2399,6 +2399,7 @@ router.post("/portal/members", requireClubAuth, async (req: Request, res: Respon
        prepaid_rounds  = EXCLUDED.prepaid_rounds`,
     [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0]
   );
+  await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
   await exec(
     `UPDATE users SET
        hna_number            = ?,
@@ -2478,6 +2479,7 @@ router.post("/portal/members/import", requireClubAuth, async (req: Request, res:
            prepaid_rounds  = EXCLUDED.prepaid_rounds`,
         [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds]
       );
+      await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
       // Roster is authoritative for the HNA number
       await exec(
         `UPDATE users SET

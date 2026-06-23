@@ -158,6 +158,8 @@ router.post("/auth/register", async (req, res): Promise<void> => {
         [pm.club_id, id, pm.membership_type || "standard", pm.status || "active", pm.club_id,
          fmtDate(pm.start_date), fmtDate(pm.renewal_date), pm.benefits ?? null, Number(pm.prepaid_rounds) || 0]
       );
+      // Set home club if the user doesn't have one yet
+      await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [pm.club_id, id]);
       const pmHna = pm.hna_number ? String(pm.hna_number).trim().replace(/\D/g, "") || null : null;
       const pmStu = pm.student_number ? String(pm.student_number).trim() || null : null;
       if (pmHna || pmStu) {

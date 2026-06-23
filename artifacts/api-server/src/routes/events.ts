@@ -474,6 +474,7 @@ router.post("/admin/members", async (req, res): Promise<void> => {
       await exec("UPDATE club_members SET status = 'active', membership_type = ? WHERE club_id = ? AND user_id = ?", [membership_type, clubId, user_id]);
     } else throw err;
   }
+  await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [clubId, user_id]);
 
   const targetUser = await row<any>("SELECT push_token FROM users WHERE id = ?", [user_id]);
   if (targetUser?.push_token) {

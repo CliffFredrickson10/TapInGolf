@@ -391,28 +391,22 @@ export default function RoundCompleteScreen() {
               // Reusable cell builders
               const scoreCell = (val: string | number | null, isBest: boolean, dimmed?: boolean) => (
                 <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 5,
-                  backgroundColor: isBest ? "#16a34a22" : "transparent",
                   borderRightWidth: HW, borderRightColor: bdr }}>
                   <Text style={{ fontSize: 12, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                    color: isBest ? "#16a34a" : dimmed ? colors.mutedForeground : colors.foreground }}>
+                    color: dimmed ? colors.mutedForeground : val != null ? colors.foreground : colors.mutedForeground }}>
                     {val != null ? String(val) : "—"}
                   </Text>
                 </View>
               );
-              const resultCell = (pts: number | null, isBest: boolean) => {
-                const ptColor = pts == null ? colors.mutedForeground
-                  : pts >= 3 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 1 ? "#ea580c" : "#dc2626";
-                return (
-                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4,
-                    backgroundColor: isBest ? "#16a34a18" : "transparent",
-                    borderRightWidth: HW, borderRightColor: bdr }}>
-                    <Text style={{ fontSize: 10, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                      color: isBest ? "#16a34a" : ptColor }}>
-                      {pts != null ? String(pts) : "—"}
-                    </Text>
-                  </View>
-                );
-              };
+              const resultCell = (pts: number | null, isBest: boolean) => (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 4,
+                  borderRightWidth: HW, borderRightColor: bdr }}>
+                  <Text style={{ fontSize: 10, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                    color: pts != null ? colors.foreground : colors.mutedForeground }}>
+                    {pts != null ? String(pts) : "—"}
+                  </Text>
+                </View>
+              );
 
               // Collect hole data to allow running totals
               const holeData = sc.map(h => {
@@ -487,28 +481,26 @@ export default function RoundCompleteScreen() {
                 gross: number | null, pts: number | null, nr: boolean, isBest: boolean,
                 isLastInTeam: boolean
               ) => {
-                const ptColor = pts == null ? colors.mutedForeground
-                  : pts >= 3 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 1 ? "#ea580c" : "#dc2626";
                 const grossTxt = nr ? "NR" : gross != null ? String(gross) : "—";
                 const ptsTxt   = pts != null ? String(pts) : "—";
-                const bg       = isBest ? "#16a34a18" : "transparent";
                 const rightBorder = isLastInTeam
                   ? { borderRightWidth: 1.5, borderRightColor: bdr }
                   : { borderRightWidth: HW, borderRightColor: bdr };
+                const txtColor = nr || (gross == null && pts == null) ? colors.mutedForeground : colors.foreground;
                 return (
-                  <View style={[{ flex: 2, flexDirection: "row", backgroundColor: bg }, rightBorder]}>
+                  <View style={[{ flex: 2, flexDirection: "row" }, rightBorder]}>
                     {/* Score sub-col */}
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
                       borderRightWidth: HW, borderRightColor: bdr }}>
                       <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                        color: isBest ? "#16a34a" : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
+                        color: txtColor }}>
                         {grossTxt}
                       </Text>
                     </View>
                     {/* Result sub-col */}
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
                       <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                        color: isBest ? "#16a34a" : ptColor }}>
+                        color: pts != null ? colors.foreground : colors.mutedForeground }}>
                         {ptsTxt}
                       </Text>
                     </View>
@@ -537,8 +529,8 @@ export default function RoundCompleteScreen() {
                     {[
                       { lbl: meLabel,   color: "#a3e4bc", rightBorder: HW },
                       { lbl: prtLabel,  color: "#a3e4bc", rightBorder: 1.5 },
-                      { lbl: opp1Label, color: "#fca5a5", rightBorder: HW },
-                      { lbl: opp2Label, color: "#fca5a5", rightBorder: HW },
+                      { lbl: opp1Label, color: "#f87171", rightBorder: HW },
+                      { lbl: opp2Label, color: "#f87171", rightBorder: HW },
                     ].map(({ lbl, color, rightBorder }, i) => (
                       <View key={i} style={{ flex: 2, alignItems: "center", justifyContent: "center",
                         borderRightWidth: rightBorder, borderRightColor: "rgba(255,255,255,0.3)" }}>
@@ -595,7 +587,7 @@ export default function RoundCompleteScreen() {
                           </Text>
                         </View>
                         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
-                          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>
+                          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
                             {p > 0 ? String(p) : "—"}
                           </Text>
                         </View>
@@ -690,31 +682,6 @@ export default function RoundCompleteScreen() {
                       </>
                     );
                   })()}
-                  {/* HCAP row */}
-                  {[
-                    { label: "HCAP", vals: [myHcp, prtHcp, opp1Hcp, opp2Hcp], fmt: (v: number) => String(v) },
-                    { label: "NETT", vals: [myTotG - myHcp, prtTotG - prtHcp, o1TotG - opp1Hcp, o2TotG - opp2Hcp], fmt: (v: number, i: number) => ([myTotG, prtTotG, o1TotG, o2TotG][i] > 0 ? String(v) : "—") },
-                  ].map(({ label, vals, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
-                      borderTopWidth: HW, borderTopColor: bdr }}>
-                      <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
-                      </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
-                      {vals.map((v, i) => (
-                        <View key={i} style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                          borderRightWidth: i === 1 ? 1.5 : i < 3 ? HW : 0,
-                          borderRightColor: bdr }}>
-                          <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
-                            color: i < 2 ? colors.primary : "#b91c1c" }}>{fmt(v, i)}</Text>
-                        </View>
-                      ))}
-                      <View style={{ width: 32 }} />
-                    </View>
-                  ))}
                 </View>
               );
             })()
@@ -1048,19 +1015,18 @@ export default function RoundCompleteScreen() {
                 const rb = last
                   ? { borderRightWidth: 1.5, borderRightColor: bdr }
                   : { borderRightWidth: HW,  borderRightColor: bdr };
-                const nameColor = isMe ? colors.primary : "#b91c1c";
                 return (
                   <View style={[{ flex: 2, flexDirection: "row" }, rb]}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
                       borderRightWidth: HW, borderRightColor: bdr }}>
                       <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                        color: nr ? colors.mutedForeground : gross != null ? (isMe ? colors.primary : "#b91c1c") : colors.mutedForeground }}>
+                        color: nr || gross == null ? colors.mutedForeground : colors.foreground }}>
                         {nr ? "NR" : gross != null ? String(gross) : "—"}
                       </Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
                       <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                        color: net != null ? nameColor : colors.mutedForeground }}>
+                        color: net != null && !nr ? colors.foreground : colors.mutedForeground }}>
                         {nr ? "—" : net != null ? String(net) : "—"}
                       </Text>
                     </View>
@@ -1095,7 +1061,7 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{mg > 0 ? String(mg) : "—"}</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{mn !== 0 || mg > 0 ? String(mn) : "—"}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{mn !== 0 || mg > 0 ? String(mn) : "—"}</Text>
                     </View>
                   </View>
                   {/* Opp gross + net */}
@@ -1105,7 +1071,7 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{og > 0 ? String(og) : "—"}</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{on !== 0 || og > 0 ? String(on) : "—"}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{on !== 0 || og > 0 ? String(on) : "—"}</Text>
                     </View>
                   </View>
                   <View style={{ width: 32, alignItems: "center", justifyContent: "center", gap: 1 }}>
@@ -1133,7 +1099,7 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{meLabel}</Text>
                     </View>
                     <View style={{ flex: 2, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.3)" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{oppLabel}</Text>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#f87171" }}>{oppLabel}</Text>
                     </View>
                     <View style={{ width: 32, alignItems: "center" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Res</Text>
@@ -1189,34 +1155,6 @@ export default function RoundCompleteScreen() {
                   })}
                   {TotRow("IN",  b9Par,  false, myB9G, myB9N, oppB9G, oppB9N, b9W, b9L, b9H)}
                   {TotRow("TOT", totPar, true,  myTotG, myTotN, oppTotG, oppTotN, totW, totL, totH)}
-                  {[
-                    { label: "HCAP", myVal: myHcp, oppVal: oppHcp, fmt: (v: number) => String(v) },
-                    { label: "NETT", myVal: myTotG - myHcp, oppVal: oppTotG - oppHcp, fmt: (v: number, gross: number) => gross > 0 ? String(v) : "—" },
-                  ].map(({ label, myVal, oppVal, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
-                      borderTopWidth: HW, borderTopColor: bdr }}>
-                      <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
-                      </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
-                      <View style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: 1.5, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.primary }}>
-                          {label === "HCAP" ? fmt(myVal) : fmt(myVal, myTotG)}
-                        </Text>
-                      </View>
-                      <View style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#b91c1c" }}>
-                          {label === "HCAP" ? fmt(oppVal) : fmt(oppVal, oppTotG)}
-                        </Text>
-                      </View>
-                      <View style={{ width: 32 }} />
-                    </View>
-                  ))}
                 </View>
               );
             })()
@@ -1254,20 +1192,6 @@ export default function RoundCompleteScreen() {
 
               const totPar = f9Par + b9Par;
 
-              const ptsColor = (p: number | null) =>
-                p == null ? colors.mutedForeground
-                : p >= 3  ? "#22c55e"
-                : p >= 2  ? GOLD
-                : p >= 1  ? "#fb923c"
-                : "#f87171";
-
-              const grossColor = (d: number | null) => {
-                if (d == null) return colors.mutedForeground;
-                const ss = scoreStyle(d);
-                return ss.text;
-              };
-              const grossBorder = (d: number | null) =>
-                d != null ? scoreStyle(d).border : undefined;
 
               const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean) => (
                 <View key={label} style={{ flexDirection: "row",
@@ -1290,7 +1214,7 @@ export default function RoundCompleteScreen() {
                   {/* HC placeholder */}
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>{ph}</Text>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{ph}</Text>
                   </View>
                   {/* Gross */}
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
@@ -1301,13 +1225,13 @@ export default function RoundCompleteScreen() {
                   {!isGross && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                       borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{n || "—"}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{n || "—"}</Text>
                     </View>
                   )}
                   {/* Pts */}
                   {!isGross && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>{p}</Text>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{p}</Text>
                     </View>
                   )}
                 </View>
@@ -1332,29 +1256,27 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>SI</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>H/C</Text>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>H/C</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
                     </View>
                     {!isGross && (
                       <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
-                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Net</Text>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Net</Text>
                       </View>
                     )}
                     {!isGross && (
                       <View style={{ flex: 1, alignItems: "center" }}>
-                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>Pts</Text>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Pts</Text>
                       </View>
                     )}
                   </View>
 
                   {/* Hole rows */}
-                  {holeData.map(({ h, ha, nr, gross, net, pts, diff }, idx) => {
+                  {holeData.map(({ h, ha, nr, gross, net, pts }, idx) => {
                     const rowBg = idx % 2 === 0 ? colors.card
                       : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
-                    const gc  = grossColor(diff);
-                    const gb  = grossBorder(diff);
                     return (
                       <React.Fragment key={h.number}>
                         <View style={{ flexDirection: "row", backgroundColor: rowBg,
@@ -1379,32 +1301,24 @@ export default function RoundCompleteScreen() {
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 11,
                               fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular",
-                              color: ha > 0 ? GOLD : colors.mutedForeground }}>
+                              color: ha > 0 ? colors.foreground : colors.mutedForeground }}>
                               {ha > 0 ? `+${ha}` : "0"}
                             </Text>
                           </View>
                           {/* Gross */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                             borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr, paddingVertical: 4 }}>
-                            {gb ? (
-                              <View style={{ borderWidth: 1.5, borderColor: gb, borderRadius: 5,
-                                paddingHorizontal: 4, paddingVertical: 1 }}>
-                                <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: gc }}>
-                                  {nr ? "NR" : gross != null ? String(gross) : "—"}
-                                </Text>
-                              </View>
-                            ) : (
-                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: gc }}>
-                                {nr ? "NR" : gross != null ? String(gross) : "—"}
-                              </Text>
-                            )}
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                              color: nr || gross == null ? colors.mutedForeground : colors.foreground }}>
+                              {nr ? "NR" : gross != null ? String(gross) : "—"}
+                            </Text>
                           </View>
                           {/* Net */}
                           {!isGross && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                               borderRightWidth: HW, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                                color: net != null ? colors.primary : colors.mutedForeground }}>
+                                color: net != null && !nr ? colors.foreground : colors.mutedForeground }}>
                                 {nr ? "—" : net != null ? String(net) : "—"}
                               </Text>
                             </View>
@@ -1413,7 +1327,7 @@ export default function RoundCompleteScreen() {
                           {!isGross && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
-                                color: ptsColor(pts) }}>
+                                color: pts != null && !nr ? colors.foreground : colors.mutedForeground }}>
                                 {nr ? "0" : pts != null ? String(pts) : "—"}
                               </Text>
                             </View>
@@ -1425,39 +1339,6 @@ export default function RoundCompleteScreen() {
                   })}
                   {TotRow("IN",  b9Par, b9G, b9N, b9P, false)}
                   {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true)}
-                  {[
-                    { label: "HCAP", hcVal: ph, grossVal: null as number | null },
-                    { label: "NETT", hcVal: null as number | null, grossVal: (f9G + b9G) > 0 ? (f9G + b9G) - ph : null },
-                  ].map(({ label, hcVal, grossVal }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
-                      borderTopWidth: HW, borderTopColor: bdr }}>
-                      <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
-                      </View>
-                      {/* Par */}
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
-                      {/* SI */}
-                      <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: bdr }} />
-                      {/* HC */}
-                      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#9a7a1e" }}>
-                          {hcVal != null ? String(hcVal) : ""}
-                        </Text>
-                      </View>
-                      {/* Gross */}
-                      <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: !isGross ? HW : 0, borderRightColor: bdr }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.primary }}>
-                          {grossVal != null ? String(grossVal) : ""}
-                        </Text>
-                      </View>
-                      {!isGross && <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: bdr }} />}
-                      {!isGross && <View style={{ flex: 1 }} />}
-                    </View>
-                  ))}
                 </View>
               );
             })()

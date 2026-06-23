@@ -480,23 +480,26 @@ export default function HoleEntryScreen() {
   const opp1QuickRef = useRef<ScrollView>(null);
   const opp2QuickRef = useRef<ScrollView>(null);
 
-  // Centre the Par button in the quick-tap row whenever the hole changes.
+  // Centre the Bogey button in the quick-tap row whenever the hole changes.
   // PAR_INDEX is dynamic: offset array is [-4..5] with val<1 items filtered,
   // so the number of buttons before par = min(4, par-1).
+  // We centre on Bogey (par+1) rather than Par so that Double and +3 are
+  // both visible on-screen without the user needing to scroll right.
   useEffect(() => {
     const currentPar = round?.scorecard?.[holeIdx]?.par ?? 4;
-    const PAR_INDEX = Math.min(4, currentPar - 1);
+    const PAR_INDEX  = Math.min(4, currentPar - 1);
+    const BOGEY_INDEX = PAR_INDEX + 1;  // one step right of par
     const BTN_WIDTH = 68;
     const GAP = 6;
     const ROW_PADDING = 20;   // quickRow contentContainerStyle paddingHorizontal
     const SECTION_PAD = 20;   // stepperSection paddingHorizontal (shrinks viewport)
     const screenWidth = Dimensions.get("window").width;
     const viewportWidth = screenWidth - SECTION_PAD * 2;
-    const parCenter = ROW_PADDING + PAR_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
-    const scrollX = Math.max(0, parCenter - viewportWidth / 2);
+    const focusCenter = ROW_PADDING + BOGEY_INDEX * (BTN_WIDTH + GAP) + BTN_WIDTH / 2;
+    const scrollX = Math.max(0, focusCenter - viewportWidth / 2);
     // BbPlayerInput + betterball user box: group box marginHorizontal:12×2 + borderWidth:1×2 = 26px narrower
     const bbViewportWidth = screenWidth - 26;
-    const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
+    const bbScrollX = Math.max(0, focusCenter - bbViewportWidth / 2);
     const isBbRound = hasFourPlayers(round ?? { format: "", partner_name: null });
     setTimeout(() => {
       quickRowRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });

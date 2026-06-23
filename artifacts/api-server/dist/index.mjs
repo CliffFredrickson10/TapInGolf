@@ -77297,12 +77297,12 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
           holes_played = ?
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
-    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play" || round.format === "singles_stableford_match_play")) {
+    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play" || round.format === "betterball_gross_match_play")) {
       try {
         const match = await row("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
         if (match && match.status !== "complete" && match.status !== "bye") {
           let won = 0, lost = 0, halved = 0;
-          if (round.format === "singles_match_play" || round.format === "singles_stableford_match_play") {
+          if (round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play") {
             const oppRows = await query(
               "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
               [roundId]
@@ -77317,6 +77317,10 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
                 const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0));
                 if (myPts > oppPts) won++;
                 else if (myPts < oppPts) lost++;
+                else halved++;
+              } else if (round.format === "singles_gross_match_play") {
+                if (h.gross_score < opp.gross_score) won++;
+                else if (h.gross_score > opp.gross_score) lost++;
                 else halved++;
               } else {
                 const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
@@ -77339,25 +77343,38 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
               else if (p.player_index === 1) opp1Map[p.hole_number] = p;
               else if (p.player_index === 2) opp2Map[p.hole_number] = p;
             }
-            const partnerHcp = round.partner_playing_hcp ?? 0;
-            const opp1Hcp = round.opponent_playing_hcp ?? 0;
-            const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
             for (const h of holeRows) {
               if (h.is_nr || h.gross_score == null) continue;
               const opp1 = opp1Map[h.hole_number];
               const opp2 = opp2Map[h.hole_number];
               if (!opp1 && !opp2) continue;
               const partner = partnerMap[h.hole_number];
-              const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
-              const partNet = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - getHALocal(h.stroke_index, partnerHcp) : null;
-              const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
-              const opp1Net = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - getHALocal(h.stroke_index, opp1Hcp) : null;
-              const opp2Net = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - getHALocal(h.stroke_index, opp2Hcp) : null;
-              const oppBest = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : opp1Net ?? opp2Net;
-              if (oppBest == null) continue;
-              if (teamBest < oppBest) won++;
-              else if (teamBest > oppBest) lost++;
-              else halved++;
+              if (round.format === "betterball_gross_match_play") {
+                const myGross = h.gross_score;
+                const partGross = partner?.gross_score != null && !partner.is_nr ? partner.gross_score : null;
+                const teamBest = partGross != null ? Math.min(myGross, partGross) : myGross;
+                const opp1Gross = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score : null;
+                const opp2Gross = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score : null;
+                const oppBest = opp1Gross != null && opp2Gross != null ? Math.min(opp1Gross, opp2Gross) : opp1Gross ?? opp2Gross;
+                if (oppBest == null) continue;
+                if (teamBest < oppBest) won++;
+                else if (teamBest > oppBest) lost++;
+                else halved++;
+              } else {
+                const partnerHcp = round.partner_playing_hcp ?? 0;
+                const opp1Hcp = round.opponent_playing_hcp ?? 0;
+                const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
+                const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+                const partNet = partner?.gross_score != null && !partner.is_nr ? partner.gross_score - getHALocal(h.stroke_index, partnerHcp) : null;
+                const teamBest = partNet != null ? Math.min(myNet, partNet) : myNet;
+                const opp1Net = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - getHALocal(h.stroke_index, opp1Hcp) : null;
+                const opp2Net = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - getHALocal(h.stroke_index, opp2Hcp) : null;
+                const oppBest = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : opp1Net ?? opp2Net;
+                if (oppBest == null) continue;
+                if (teamBest < oppBest) won++;
+                else if (teamBest > oppBest) lost++;
+                else halved++;
+              }
             }
           }
           const holesUp = won - lost;

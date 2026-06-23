@@ -57,7 +57,9 @@ const FORMAT_LABELS: Record<string, string> = {
   american_scramble: "American Scramble",
   singles_match_play: "Singles Match Play",
   singles_stableford_match_play: "Singles Stableford Match Play",
+  singles_gross_match_play: "Singles Gross Match Play",
   betterball_match_play: "Betterball Match Play",
+  betterball_gross_match_play: "Betterball Gross Match Play",
 };
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
@@ -120,6 +122,26 @@ function calcMatchResultByPts(
   return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
 }
 
+function calcMatchResultByGross(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    const opp  = playerHoles[`0_${h.number}`];
+    if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
+    if      (mine.gross_score < opp.gross_score) won++;
+    else if (mine.gross_score > opp.gross_score) lost++;
+    else                                         halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
+}
+
 function calcBBMatchResult(
   sc: ScorecardHole[],
   myHoles: Record<number, SavedHole>,
@@ -143,6 +165,36 @@ function calcBBMatchResult(
     const opp1Net  = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score - oppHA : null;
     const opp2Net  = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score - oppHA : null;
     const oppBest  = opp1Net != null && opp2Net != null ? Math.min(opp1Net, opp2Net) : (opp1Net ?? opp2Net);
+    if (oppBest == null) continue;
+    if      (teamBest < oppBest) won++;
+    else if (teamBest > oppBest) lost++;
+    else                         halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
+}
+
+function calcBBGrossMatchResult(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    if (!mine || mine.is_nr || mine.gross_score == null) continue;
+    const opp1    = playerHoles[`1_${h.number}`];
+    const opp2    = playerHoles[`2_${h.number}`];
+    if (!opp1 && !opp2) continue;
+    const partner   = playerHoles[`0_${h.number}`];
+    const myGross   = mine.gross_score;
+    const partGross = partner?.gross_score != null && !partner.is_nr ? partner.gross_score : null;
+    const teamBest  = partGross != null ? Math.min(myGross, partGross) : myGross;
+    const opp1Gross = opp1?.gross_score != null && !opp1.is_nr ? opp1.gross_score : null;
+    const opp2Gross = opp2?.gross_score != null && !opp2.is_nr ? opp2.gross_score : null;
+    const oppBest   = opp1Gross != null && opp2Gross != null ? Math.min(opp1Gross, opp2Gross) : (opp1Gross ?? opp2Gross);
     if (oppBest == null) continue;
     if      (teamBest < oppBest) won++;
     else if (teamBest > oppBest) lost++;
@@ -244,18 +296,22 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
-  const isMatchPlay       = round.format === "singles_match_play" || round.format === "singles_stableford_match_play";
-  const singleMetric      = round.format === "singles_stableford_match_play" ? "stableford" : "net";
-  const isBetterball      = round.format === "betterball_match_play";
-  const isFourball        = round.format === "betterball_match_play";
+  const isMatchPlay       = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
+  const singleMetric      = round.format === "singles_stableford_match_play" ? "stableford" : round.format === "singles_gross_match_play" ? "gross" : "net";
+  const isBetterball      = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play";
+  const isFourball        = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play";
   const isFourballNonMatch = ["fourball_stableford", "fourball_gross_betterball"].includes(round.format);
   const isAnyMatch   = isMatchPlay || isBetterball;
   const matchResult  = isMatchPlay && round.playerHoles
     ? (singleMetric === "stableford"
         ? calcMatchResultByPts(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+        : singleMetric === "gross"
+        ? calcMatchResultByGross(sc, holes, round.playerHoles)
         : calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : isBetterball && round.playerHoles
-    ? calcBBMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    ? (round.format === "betterball_gross_match_play"
+        ? calcBBGrossMatchResult(sc, holes, round.playerHoles)
+        : calcBBMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : null;
 
   // Verification status
@@ -391,7 +447,7 @@ export default function RoundCompleteScreen() {
               const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
 
               const metric = round.format === "fourball_stableford"      ? "stableford"
-                           : round.format === "fourball_gross_betterball" ? "gross"
+                           : (round.format === "fourball_gross_betterball" || round.format === "betterball_gross_match_play") ? "gross"
                            : "net";
               const bestOf = (a: number | null, b: number | null) =>
                 a == null ? b : b == null ? a : metric === "stableford" ? Math.max(a, b) : Math.min(a, b);
@@ -592,7 +648,7 @@ export default function RoundCompleteScreen() {
                         borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
                           color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
-                          {i % 2 === 0 ? "Score" : "Net"}
+                          {i % 2 === 0 ? "Score" : metric === "stableford" ? "Pts" : metric === "gross" ? "Gr" : "Net"}
                         </Text>
                       </View>
                     ))}
@@ -1030,6 +1086,12 @@ export default function RoundCompleteScreen() {
                     else if (myPts < oppPts) { res = "L"; totL++; }
                     else                     { res = "H"; totH++; }
                   }
+                } else if (singleMetric === "gross") {
+                  if (myG != null && oppG != null) {
+                    if      (myG < oppG) { res = "W"; totW++; }
+                    else if (myG > oppG) { res = "L"; totL++; }
+                    else                 { res = "H"; totH++; }
+                  }
                 } else {
                   if (myN != null && oppN != null) {
                     if      (myN < oppN) { res = "W"; totW++; }
@@ -1160,7 +1222,7 @@ export default function RoundCompleteScreen() {
                         borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
                           color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
-                          {i % 2 === 0 ? "Score" : singleMetric === "stableford" ? "Pts" : "Net"}
+                          {i % 2 === 0 ? "Score" : singleMetric === "stableford" ? "Pts" : singleMetric === "gross" ? "Gr" : "Net"}
                         </Text>
                       </View>
                     ))}
@@ -1187,26 +1249,26 @@ export default function RoundCompleteScreen() {
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                           </View>
-                          {playerPair(myG,  singleMetric === "stableford" ? myPts  : myN,  myNr,  true,  true)}
-                          {playerPair(oppG, singleMetric === "stableford" ? oppPts : oppN, oppNr, false, false)}
+                          {playerPair(myG,  singleMetric === "stableford" ? myPts  : singleMetric === "gross" ? myG  : myN,  myNr,  true,  true)}
+                          {playerPair(oppG, singleMetric === "stableford" ? oppPts : singleMetric === "gross" ? oppG : oppN, oppNr, false, false)}
                           <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                             <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
                           </View>
                         </View>
                         {h.number === 9 && TotRow("OUT", f9Par, false,
-                          myF9G, singleMetric === "stableford" ? myF9P  : myF9N,
-                          oppF9G, singleMetric === "stableford" ? oppF9P : oppF9N,
+                          myF9G, singleMetric === "stableford" ? myF9P  : singleMetric === "gross" ? myF9G  : myF9N,
+                          oppF9G, singleMetric === "stableford" ? oppF9P : singleMetric === "gross" ? oppF9G : oppF9N,
                           f9W, f9L, f9H)}
                       </React.Fragment>
                     );
                   })}
                   {TotRow("IN",  b9Par,  false,
-                    myB9G,  singleMetric === "stableford" ? myB9P  : myB9N,
-                    oppB9G, singleMetric === "stableford" ? oppB9P : oppB9N,
+                    myB9G,  singleMetric === "stableford" ? myB9P  : singleMetric === "gross" ? myB9G  : myB9N,
+                    oppB9G, singleMetric === "stableford" ? oppB9P : singleMetric === "gross" ? oppB9G : oppB9N,
                     b9W, b9L, b9H)}
                   {TotRow("TOT", totPar, true,
-                    myTotG,  singleMetric === "stableford" ? myTotP  : myTotN,
-                    oppTotG, singleMetric === "stableford" ? oppTotP : oppTotN,
+                    myTotG,  singleMetric === "stableford" ? myTotP  : singleMetric === "gross" ? myTotG  : myTotN,
+                    oppTotG, singleMetric === "stableford" ? oppTotP : singleMetric === "gross" ? oppTotG : oppTotN,
                     totW, totL, totH)}
                 </View>
               );

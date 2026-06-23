@@ -61,7 +61,6 @@ const INDIVIDUAL_SCORING_FORMATS = [
   { value: "individual_bonus_bogey", label: "Individual Bonus Bogey" },
   { value: "individual_par",         label: "Individual Par" },
   { value: "individual_bogey",       label: "Individual Bogey" },
-  { value: "eclectic",               label: "Eclectic (Multi-Round)" },
 ];
 
 // Formats for betterball / two-player-team knockout.

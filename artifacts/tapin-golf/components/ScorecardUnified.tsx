@@ -85,9 +85,14 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const fn = (n?: string|null, fb = "?") => (n ?? "").split(" ")[0].slice(0, 7) || fb;
 
   /* ── Player slots — always all four, regardless of format ── */
+  // NO_SLOT sentinel: column is structurally present but has no player assigned.
+  // Used so HCAP/NETT summary rows render "—" instead of a number.
+  const NO_SLOT = -9999;
+
   const showB  = true;
-  const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : fn(round.opponent_name, "Mkr");
-  const bHcp   = isBBFmt ? prtHcp : o1Hcp;
+  // For singles match play the opponent lives in column C (cPhIdx=0); B is an empty marker column.
+  const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : isMP ? "Mkr" : fn(round.opponent_name, "Mkr");
+  const bHcp   = isMP ? NO_SLOT : isBBFmt ? prtHcp : o1Hcp;
 
   const showC  = true;
   const cLabel = (isBBFmt || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
@@ -147,7 +152,8 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (aG != null) { if (fr) aF9G += aG; else aB9G += aG; }
     if (aR != null) { if (fr) aF9R += aR; else aB9R += aR; }
 
-    const bD  = showB ? getPH(0, hn) : { g: null as number|null, nr: false };
+    // For singles match play, column B is an empty marker slot; opponent data lives in column C.
+    const bD  = showB && !isMP ? getPH(0, hn) : { g: null as number|null, nr: false };
     const bHa = getHA(h.stroke_index, bHcp);
     const bG  = bD.g; const bNr = bD.nr;
     const bR  = (showB && !isMP && bG != null) ? calcRes(bG, h.par, bHa) : null;
@@ -360,13 +366,18 @@ export default function ScorecardUnified({ round, colors }: Props) {
     const bTop = isLast ? 1.5 : HW;
     const bTopC = isLast ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)";
 
+    // NO_SLOT: empty column — scr returns NO_SLOT so PairS always displays "—"
     const scr = (g: number, hcp: number) =>
-      mode === "hcap" ? hcp : mode === "nett" ? g - hcp : g;
+      hcp === NO_SLOT ? NO_SLOT
+      : mode === "hcap" ? hcp : mode === "nett" ? g - hcp : g;
 
     const cdwhl = abwhl === "W" ? "L" : abwhl === "L" ? "W" : abwhl;
 
     const PairS = (g: number, r: number, hcp: number) => {
       const v = scr(g, hcp);
+      const disp = v === NO_SLOT ? "—"
+        : mode === "hcap" ? fmtHcp(v)
+        : v !== 0 ? String(v) : "—";
       return (
         <View style={{ width: pairW, flexDirection: "row",
           borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
@@ -374,7 +385,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
             paddingVertical: 6,
             borderRightWidth: showRes ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
             <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>
-              {mode === "hcap" ? fmtHcp(v) : (v !== 0 ? String(v) : "—")}
+              {disp}
             </Text>
           </View>
           {showRes && (

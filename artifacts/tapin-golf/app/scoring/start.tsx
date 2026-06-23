@@ -179,7 +179,7 @@ export default function StartRoundScreen() {
   const [casualOpp2, setCasualOpp2] = useState<CasualPlayer | null>(null);
   const [pickerTarget, setPickerTarget] = useState<"partner" | "opp1" | "opp2" | null>(null);
   const [playerSearchQ, setPlayerSearchQ] = useState("");
-  const [playerResults, setPlayerResults] = useState<Array<{ id: number; name: string; handicap: number | null }>>([]);
+  const [playerResults, setPlayerResults] = useState<Array<{ id: number; name: string; handicap: number | null; isMe?: boolean }>>([]); 
   const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
   const [guestMode, setGuestMode] = useState(false);
   const [guestName, setGuestName] = useState("");
@@ -1055,19 +1055,27 @@ export default function StartRoundScreen() {
                 {playerResults.map(p => (
                   <TouchableOpacity
                     key={p.id}
-                    onPress={() => selectCasualPlayer({ userId: p.id, name: p.name, hcp: String(p.handicap != null ? Math.round(Number(p.handicap)) : 0) })}
-                    style={[styles.clubRow, { borderBottomColor: colors.border }]}
+                    disabled={!!p.isMe}
+                    onPress={() => !p.isMe && selectCasualPlayer({ userId: p.id, name: p.name, hcp: String(p.handicap != null ? Math.round(Number(p.handicap)) : 0) })}
+                    style={[styles.clubRow, { borderBottomColor: colors.border, opacity: p.isMe ? 0.5 : 1 }]}
                   >
-                    <View style={[styles.clubIcon, { backgroundColor: colors.primary + "20" }]}>
-                      <Ionicons name="person" size={16} color={colors.primary} />
+                    <View style={[styles.clubIcon, { backgroundColor: p.isMe ? colors.mutedForeground + "20" : colors.primary + "20" }]}>
+                      <Ionicons name="person" size={16} color={p.isMe ? colors.mutedForeground : colors.primary} />
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.clubName, { color: colors.foreground }]}>{p.name}</Text>
+                      <View style={{ flexDirection: "row", alignItems: "center", gap: 6 }}>
+                        <Text style={[styles.clubName, { color: colors.foreground }]}>{p.name}</Text>
+                        {p.isMe && (
+                          <View style={{ backgroundColor: colors.mutedForeground + "30", borderRadius: 4, paddingHorizontal: 5, paddingVertical: 1 }}>
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, fontWeight: "600" }}>YOU</Text>
+                          </View>
+                        )}
+                      </View>
                       <Text style={[styles.clubLocation, { color: colors.mutedForeground }]}>
-                        WHS Index: {p.handicap != null ? p.handicap : "—"}
+                        {p.isMe ? "Can't add yourself" : `WHS Index: ${p.handicap != null ? p.handicap : "—"}`}
                       </Text>
                     </View>
-                    <Ionicons name="add-circle-outline" size={22} color={colors.primary} />
+                    {!p.isMe && <Ionicons name="add-circle-outline" size={22} color={colors.primary} />}
                   </TouchableOpacity>
                 ))}
 

@@ -1069,14 +1069,15 @@ router.get("/scoring/players/search", async (req, res) => {
     const q = String(req.query.q ?? "").trim();
     if (q.length < 2) { res.json({ players: [] }); return; }
     const players = await query<any>(
-      "SELECT id, name, handicap FROM users WHERE name ILIKE ? AND id != ? ORDER BY name LIMIT 10",
-      [`%${q}%`, user.id]
+      "SELECT id, name, handicap FROM users WHERE name ILIKE ? ORDER BY name LIMIT 10",
+      [`%${q}%`]
     );
     res.json({
       players: players.map((p: any) => ({
         id: p.id,
         name: p.name,
         handicap: p.handicap != null ? Number(p.handicap) : null,
+        isMe: p.id === user.id,
       })),
     });
   } catch (err: any) {

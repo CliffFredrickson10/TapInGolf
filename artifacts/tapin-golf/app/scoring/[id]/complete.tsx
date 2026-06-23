@@ -863,10 +863,10 @@ export default function RoundCompleteScreen() {
                   ))}
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{abp > 0 ? String(abp) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{abp > 0 ? String(abp) : "—"}</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{bbp > 0 ? String(bbp) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#f87171" }}>{bbp > 0 ? String(bbp) : "—"}</Text>
                   </View>
                 </View>
               );
@@ -966,14 +966,14 @@ export default function RoundCompleteScreen() {
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold",
-                              color: aBestP != null ? colors.foreground : colors.mutedForeground }}>
+                              color: aBestP != null ? "#16a34a" : colors.mutedForeground }}>
                               {aBestP != null ? String(aBestP) : "—"}
                             </Text>
                           </View>
                           {/* Team B best pts */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                             <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold",
-                              color: bBestP != null ? colors.foreground : colors.mutedForeground }}>
+                              color: bBestP != null ? "#dc2626" : colors.mutedForeground }}>
                               {bBestP != null ? String(bBestP) : "—"}
                             </Text>
                           </View>

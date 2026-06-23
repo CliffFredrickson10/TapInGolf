@@ -51,20 +51,36 @@ router.get("/scoring/clubs/:clubId/scorecard", async (req, res) => {
 
 router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
   try {
-    await getUser(req);
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
     const clubId = parseInt(req.params.clubId);
     if (!clubId) { res.status(400).json({ message: "Invalid club id" }); return; }
 
+    // Only surface tournaments where the requesting user has a confirmed spot:
+    //   a) approved event_registrations entry (formal / knockout events), OR
+    //   b) a confirmed booking on a tee slot exclusive to this event
     const tournaments = await query<any>(`
       SELECT id, name, event_date, end_date, format, format2, format_custom,
              knockout_type, knockout_scoring_format
-      FROM golf_events
+      FROM golf_events ge
       WHERE club_id = ?
         AND COALESCE(end_date, event_date) >= CURRENT_DATE - INTERVAL '1 day'
         AND status NOT IN ('cancelled', 'completed')
+        AND (
+          EXISTS (
+            SELECT 1 FROM event_registrations er
+            WHERE er.event_id = ge.id AND er.user_id = ? AND er.status = 'approved'
+          )
+          OR EXISTS (
+            SELECT 1 FROM bookings b
+            JOIN booking_players bp ON bp.booking_id = b.id
+            JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+            WHERE pts.event_id = ge.id AND bp.user_id = ? AND b.status = 'confirmed'
+          )
+        )
       ORDER BY event_date ASC
       LIMIT 20
-    `, [clubId]);
+    `, [clubId, user.id, user.id]);
 
     res.json({ tournaments });
   } catch (err: any) {
@@ -212,18 +228,32 @@ router.post("/scoring/rounds", async (req, res) => {
 
     if (!clubId) { res.status(400).json({ message: "clubId is required" }); return; }
 
-    // Block scoring if the user's registration for this tournament is not approved
+    // Block scoring unless the user has a confirmed spot in this tournament.
+    // A spot is confirmed via either:
+    //   a) an approved event_registrations entry (formal / knockout events), OR
+    //   b) a confirmed booking on a tee slot exclusive to this event
     if (tournamentId) {
-      const reg = await row<{ status: string }>(
-        "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+      const hasReg = await row<{ 1: number }>(
+        "SELECT 1 FROM event_registrations WHERE user_id = ? AND event_id = ? AND status = 'approved' LIMIT 1",
         [user.id, tournamentId]
       );
-      if (!reg) {
-        res.status(403).json({ message: "You are not registered for this tournament." });
-        return;
-      }
-      if (reg.status !== "approved") {
-        res.status(403).json({ message: "Your registration for this tournament has not been confirmed yet." });
+      const hasBooking = !hasReg && await row<{ 1: number }>(`
+        SELECT 1 FROM bookings b
+        JOIN booking_players bp ON bp.booking_id = b.id
+        JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+        WHERE pts.event_id = ? AND bp.user_id = ? AND b.status = 'confirmed'
+        LIMIT 1
+      `, [tournamentId, user.id]);
+      if (!hasReg && !hasBooking) {
+        // Distinguish: pending reg vs completely absent
+        const pendingReg = await row<{ status: string }>(
+          "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+          [user.id, tournamentId]
+        );
+        const msg = pendingReg
+          ? "Your registration for this tournament has not been confirmed yet."
+          : "You don't have a confirmed booking for this tournament.";
+        res.status(403).json({ message: msg });
         return;
       }
     }

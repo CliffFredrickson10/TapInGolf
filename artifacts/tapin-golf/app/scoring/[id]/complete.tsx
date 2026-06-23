@@ -695,21 +695,21 @@ export default function RoundCompleteScreen() {
                     { label: "HCAP", vals: [myHcp, prtHcp, opp1Hcp, opp2Hcp], fmt: (v: number) => String(v) },
                     { label: "NETT", vals: [myTotG - myHcp, prtTotG - prtHcp, o1TotG - opp1Hcp, o2TotG - opp2Hcp], fmt: (v: number, i: number) => ([myTotG, prtTotG, o1TotG, o2TotG][i] > 0 ? String(v) : "—") },
                   ].map(({ label, vals, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: label === "HCAP" ? pBg + "55" : pBg + "33",
-                      borderTopWidth: HW, borderTopColor: "rgba(255,255,255,0.15)" }}>
+                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
+                      borderTopWidth: HW, borderTopColor: bdr }}>
                       <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? GOLD : "#a3e4bc" }}>{label}</Text>
+                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
                       </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
+                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
                       {vals.map((v, i) => (
                         <View key={i} style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
                           borderRightWidth: i === 1 ? 1.5 : i < 3 ? HW : 0,
-                          borderRightColor: "rgba(255,255,255,0.2)" }}>
+                          borderRightColor: bdr }}>
                           <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
-                            color: i < 2 ? "#a3e4bc" : "#fca5a5" }}>{fmt(v, i)}</Text>
+                            color: i < 2 ? colors.primary : "#b91c1c" }}>{fmt(v, i)}</Text>
                         </View>
                       ))}
                       <View style={{ width: 32 }} />
@@ -985,25 +985,25 @@ export default function RoundCompleteScreen() {
                     { label: "HCAP", vals: [myHcp, prtHcp, opp1Hcp, opp2Hcp], fmt: (v: number) => String(v) },
                     { label: "NETT", vals: [myTotG - myHcp, prtTotG - prtHcp, o1TotG - opp1Hcp, o2TotG - opp2Hcp], fmt: (v: number, i: number) => ([myTotG, prtTotG, o1TotG, o2TotG][i] > 0 ? String(v) : "—") },
                   ].map(({ label, vals, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: label === "HCAP" ? pBg + "55" : pBg + "33",
-                      borderTopWidth: HW, borderTopColor: "rgba(255,255,255,0.15)" }}>
+                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
+                      borderTopWidth: HW, borderTopColor: bdr }}>
                       <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? GOLD : "#a3e4bc" }}>{label}</Text>
+                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
                       </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
+                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
                       {vals.map((v, i) => (
                         <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
                           borderRightWidth: i === 1 ? 1.5 : i < 3 ? HW : 0,
-                          borderRightColor: "rgba(255,255,255,0.2)" }}>
+                          borderRightColor: bdr }}>
                           <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
-                            color: i < 2 ? "#a3e4bc" : "#fca5a5" }}>{fmt(v, i)}</Text>
+                            color: i < 2 ? colors.primary : "#b91c1c" }}>{fmt(v, i)}</Text>
                         </View>
                       ))}
                       {/* HC + Best Ball cols: empty */}
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
                       <View style={{ flex: 3 }} />
                     </View>
                   ))}
@@ -1213,24 +1213,24 @@ export default function RoundCompleteScreen() {
                     { label: "HCAP", myVal: myHcp, oppVal: oppHcp, fmt: (v: number) => String(v) },
                     { label: "NETT", myVal: myTotG - myHcp, oppVal: oppTotG - oppHcp, fmt: (v: number, gross: number) => gross > 0 ? String(v) : "—" },
                   ].map(({ label, myVal, oppVal, fmt }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: label === "HCAP" ? pBg + "55" : pBg + "33",
-                      borderTopWidth: HW, borderTopColor: "rgba(255,255,255,0.15)" }}>
+                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
+                      borderTopWidth: HW, borderTopColor: bdr }}>
                       <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? GOLD : "#a3e4bc" }}>{label}</Text>
+                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
                       </View>
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
-                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
+                      <View style={{ width: 24, borderRightWidth: HW, borderRightColor: bdr }} />
                       <View style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.3)" }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>
+                        borderRightWidth: 1.5, borderRightColor: bdr }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.primary }}>
                           {label === "HCAP" ? fmt(myVal) : fmt(myVal, myTotG)}
                         </Text>
                       </View>
                       <View style={{ flex: 2, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#b91c1c" }}>
                           {label === "HCAP" ? fmt(oppVal) : fmt(oppVal, oppTotG)}
                         </Text>
                       </View>
@@ -1449,32 +1449,32 @@ export default function RoundCompleteScreen() {
                     { label: "HCAP", hcVal: ph, grossVal: null as number | null },
                     { label: "NETT", hcVal: null as number | null, grossVal: (f9G + b9G) > 0 ? (f9G + b9G) - ph : null },
                   ].map(({ label, hcVal, grossVal }) => (
-                    <View key={label} style={{ flexDirection: "row", backgroundColor: label === "HCAP" ? pBg + "55" : pBg + "33",
-                      borderTopWidth: HW, borderTopColor: "rgba(255,255,255,0.15)" }}>
+                    <View key={label} style={{ flexDirection: "row", backgroundColor: "#f0f7f3",
+                      borderTopWidth: HW, borderTopColor: bdr }}>
                       <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", letterSpacing: 0.5,
-                          color: label === "HCAP" ? GOLD : "#a3e4bc" }}>{label}</Text>
+                          color: label === "HCAP" ? "#9a7a1e" : colors.primary }}>{label}</Text>
                       </View>
                       {/* Par */}
-                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ width: 26, borderRightWidth: HW, borderRightColor: bdr }} />
                       {/* SI */}
-                      <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                      <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: bdr }} />
                       {/* HC */}
                       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>
+                        borderRightWidth: HW, borderRightColor: bdr }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#9a7a1e" }}>
                           {hcVal != null ? String(hcVal) : ""}
                         </Text>
                       </View>
                       {/* Gross */}
                       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 6,
-                        borderRightWidth: !isGross ? HW : 0, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>
+                        borderRightWidth: !isGross ? HW : 0, borderRightColor: bdr }}>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.primary }}>
                           {grossVal != null ? String(grossVal) : ""}
                         </Text>
                       </View>
-                      {!isGross && <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />}
+                      {!isGross && <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: bdr }} />}
                       {!isGross && <View style={{ flex: 1 }} />}
                     </View>
                   ))}

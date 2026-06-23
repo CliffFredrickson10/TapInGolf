@@ -88,11 +88,12 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const isMkr1 = !isBBFmt && !isMP && !!round.opponent_name && hasPH;
   const isMkr2 = isMkr1 && !!round.opponent2_name;
 
-  const showB  = (isBBFmt && !!round.partner_name && hasPH) || isMkr1;
+  // For betterball all 4 player slots are structural (always show, may be empty)
+  const showB  = isBBFmt || isMkr1;
   const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : fn(round.opponent_name, "Mkr");
   const bHcp   = isBBFmt ? prtHcp : o1Hcp;
 
-  const showC  = (isBBFmt && !!round.opponent_name && hasPH)
+  const showC  = isBBFmt
               || (isMP && !!round.opponent_name && hasPH)
               || isMkr2;
   const cLabel = (isBBFmt || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
@@ -100,7 +101,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   // playerHoles index for C: BB opp1=1, singles opp=0, casual mkr2=1
   const cPhIdx = (isBBFmt || isMkr2) ? 1 : 0;
 
-  const showD  = isBBFmt && !!round.opponent2_name && hasPH;
+  const showD  = isBBFmt;
   const dLabel = fn(round.opponent2_name, "Opp2");
   const dHcp   = o2Hcp;
 

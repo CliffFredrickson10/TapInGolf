@@ -76493,6 +76493,24 @@ function getHA(strokeIndex, playingHcp) {
   if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
   return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
 }
+function getStablefordMax(fmt, par, ha) {
+  switch (fmt) {
+    case "net_stroke_play":
+    case "chairman":
+    case "par_bogey":
+    case "individual_par":
+    case "individual_bogey":
+    case "singles_gross_match_play":
+    case "betterball_gross_match_play":
+    case "modified_stableford":
+      return null;
+    case "individual_bonus_bogey":
+      return par + 3 + ha;
+    // double bogey nets 1 pt; triple bogey = 0 pts
+    default:
+      return par + 2 + ha;
+  }
+}
 function calcFormatPts(fmt, gross, par, ha) {
   const netVsPar = gross - ha - par;
   switch (fmt) {
@@ -77240,7 +77258,8 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
       `, [roundId, holeNum, par, strokeIndex]);
     } else {
       const ha = getHA(strokeIndex, playing_handicap);
-      const effectiveGross = roundFormat === "maximum_score" ? Math.min(grossScore, par + 2 + ha) : grossScore;
+      const stablefordMax = getStablefordMax(roundFormat ?? "individual_stableford", par, ha);
+      const effectiveGross = stablefordMax != null ? Math.min(grossScore, stablefordMax) : grossScore;
       const netScore = effectiveGross - ha;
       const pts = calcFormatPts(roundFormat ?? "individual_stableford", effectiveGross, par, ha);
       await exec(`

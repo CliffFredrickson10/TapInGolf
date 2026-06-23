@@ -15,6 +15,26 @@ function getHA(strokeIndex: number, playingHcp: number): number {
 function calcPoints(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));
 }
+
+// Returns the gross score at which a player earns 0 points and should pick up,
+// or null for formats with no stableford-style maximum (stroke play, par/bogey, gross).
+function getStablefordMax(fmt: string, par: number, ha: number): number | null {
+  switch (fmt) {
+    case "net_stroke_play":
+    case "chairman":
+    case "par_bogey":
+    case "individual_par":
+    case "individual_bogey":
+    case "singles_gross_match_play":
+    case "betterball_gross_match_play":
+    case "modified_stableford":
+      return null;
+    case "individual_bonus_bogey":
+      return par + 3 + ha; // double bogey nets 1 pt; triple bogey = 0 pts
+    default:
+      return par + 2 + ha; // standard stableford: double bogey net = 0 pts
+  }
+}
 function calcFormatPts(fmt: string, gross: number, par: number, ha: number): number {
   const netVsPar = (gross - ha) - par;
   switch (fmt) {
@@ -760,7 +780,8 @@ router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
       `, [roundId, holeNum, par, strokeIndex]);
     } else {
       const ha = getHA(strokeIndex, playing_handicap);
-      const effectiveGross = roundFormat === "maximum_score" ? Math.min(grossScore, par + 2 + ha) : grossScore;
+      const stablefordMax = getStablefordMax(roundFormat ?? "individual_stableford", par, ha);
+      const effectiveGross = stablefordMax != null ? Math.min(grossScore, stablefordMax) : grossScore;
       const netScore = effectiveGross - ha;
       const pts = calcFormatPts(roundFormat ?? "individual_stableford", effectiveGross, par, ha);
 

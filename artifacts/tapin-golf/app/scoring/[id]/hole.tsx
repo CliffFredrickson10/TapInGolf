@@ -75,6 +75,26 @@ function getHA(si: number, ph: number): number {
 function calcPoints(gross: number, par: number, ha: number): number {
   return Math.max(0, par + 2 - (gross - ha));
 }
+
+// Returns the gross score at which a player earns 0 points and should pick up,
+// or null for formats with no stableford-style maximum (stroke play, par/bogey, gross).
+function getStablefordMax(fmt: string, par: number, ha: number): number | null {
+  switch (fmt) {
+    case "net_stroke_play":
+    case "chairman":
+    case "par_bogey":
+    case "individual_par":
+    case "individual_bogey":
+    case "singles_gross_match_play":
+    case "betterball_gross_match_play":
+    case "modified_stableford":
+      return null;
+    case "individual_bonus_bogey":
+      return par + 3 + ha; // double bogey nets 1 pt; triple bogey = 0 pts
+    default:
+      return par + 2 + ha; // standard stableford: double bogey net = 0 pts
+  }
+}
 function calcFormatPts(fmt: string, gross: number, par: number, ha: number): number {
   const netVsPar = (gross - ha) - par;
   switch (fmt) {
@@ -385,12 +405,13 @@ function calcBetterballStablefordMatchStatus(
 // (Defining this inside HoleEntryScreen would give it a new reference on every
 //  render, causing unmount/remount and resetting the ScrollView position.)
 function BbPlayerInput({
-  label, color, bgColor, gross: g, setGross: sg, ha: playerHA, par, isBest, flat, quickRef,
+  label, color, bgColor, gross: g, setGross: sg, ha: playerHA, par, isBest, flat, quickRef, maxGross,
 }: {
   label: string; color: string; bgColor: string;
   gross: number | null; setGross: (v: number | null) => void;
   ha: number; par: number; isBest?: boolean; flat?: boolean;
   quickRef?: React.RefObject<ScrollView>;
+  maxGross?: number | null;
 }) {
   return (
     <View style={[styles.oppStepperSection, { backgroundColor: bgColor, paddingVertical: 8 }, flat ? { marginHorizontal: 0, borderRadius: 0 } : { marginHorizontal: 12 }]}>
@@ -438,14 +459,13 @@ function BbPlayerInput({
             </TouchableOpacity>
           );
         })}
-        {/* Pickup — max Stableford score (par + 2 + ha = 0 pts) */}
-        {(() => {
-          const pickupVal = par + 2 + playerHA;
-          const active = g === pickupVal;
+        {/* Pickup — format's max Stableford score (0 pts threshold) */}
+        {maxGross != null && (() => {
+          const active = g === maxGross;
           return (
-            <TouchableOpacity key="pickup" onPress={() => { Haptics.selectionAsync(); sg(pickupVal); }}
+            <TouchableOpacity key="pickup" onPress={() => { Haptics.selectionAsync(); sg(maxGross); }}
               style={[styles.quickBtn, { backgroundColor: active ? MUTED_FG + "33" : SURFACE, borderColor: active ? MUTED_FG : BORDER, width: 80 }]}>
-              <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{pickupVal}</Text>
+              <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{maxGross}</Text>
               <Text style={[styles.quickBtnLabel, { color: active ? "#fff" : MUTED_FG }]}>Pickup</Text>
             </TouchableOpacity>
           );
@@ -596,7 +616,8 @@ export default function HoleEntryScreen() {
   const oppHA = getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0);
   const isParOrBogeyFormat = round.format === "par_bogey" || round.format === "individual_par" || round.format === "individual_bogey";
   const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman";
-  const effectiveGross     = round.format === "maximum_score" && gross != null ? Math.min(gross, hole.par + 2 + ha) : gross;
+  const stablefordMax  = getStablefordMax(round.format ?? "individual_stableford", hole.par, ha);
+  const effectiveGross = stablefordMax != null && gross != null ? Math.min(gross, stablefordMax) : gross;
   const pts      = effectiveGross != null ? calcFormatPts(round.format ?? "individual_stableford", effectiveGross, hole.par, ha) : null;
   const netScore = effectiveGross != null ? effectiveGross - ha : null;
 
@@ -987,9 +1008,9 @@ export default function HoleEntryScreen() {
                   </TouchableOpacity>
                 );
               })}
-              {/* Pickup — sets gross to max Stableford score (par + 2 + ha = 0 pts) */}
-              {(() => {
-                const pickupVal = hole.par + 2 + ha;
+              {/* Pickup — sets gross to the format's max Stableford score (0 pts threshold) */}
+              {stablefordMax != null && (() => {
+                const pickupVal = stablefordMax;
                 const active = gross === pickupVal;
                 return (
                   <TouchableOpacity
@@ -1015,6 +1036,7 @@ export default function HoleEntryScreen() {
                 gross={partnerGross} setGross={setPartnerGross}
                 ha={partnerHA} par={hole.par} isBest={bbTeamWinner === 1}
                 quickRef={partnerQuickRef}
+                maxGross={getStablefordMax(round.format ?? "individual_stableford", hole.par, partnerHA)}
               />
             </>
           )}
@@ -1053,6 +1075,7 @@ export default function HoleEntryScreen() {
                 gross={oppGross} setGross={setOppGross}
                 ha={oppHA} par={hole.par}
                 quickRef={opp1QuickRef}
+                maxGross={getStablefordMax(round.format ?? "individual_stableford", hole.par, oppHA)}
               />
               {round.opponent2_name && (
                 <>
@@ -1063,6 +1086,7 @@ export default function HoleEntryScreen() {
                     gross={opp2Gross} setGross={setOpp2Gross}
                     ha={opp2HA} par={hole.par}
                     quickRef={opp2QuickRef}
+                    maxGross={getStablefordMax(round.format ?? "individual_stableford", hole.par, opp2HA)}
                   />
                 </>
               )}
@@ -1094,6 +1118,7 @@ export default function HoleEntryScreen() {
                   gross={oppGross} setGross={setOppGross}
                   ha={oppHA} par={hole.par} isBest={bbOppWinner === 0}
                   quickRef={opp1QuickRef}
+                  maxGross={getStablefordMax(round.format ?? "individual_stableford", hole.par, oppHA)}
                 />
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
                 <BbPlayerInput flat
@@ -1102,6 +1127,7 @@ export default function HoleEntryScreen() {
                   gross={opp2Gross} setGross={setOpp2Gross}
                   ha={opp2HA} par={hole.par} isBest={bbOppWinner === 1}
                   quickRef={opp2QuickRef}
+                  maxGross={getStablefordMax(round.format ?? "individual_stableford", hole.par, opp2HA)}
                 />
               </View>
             ) : (

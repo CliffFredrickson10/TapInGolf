@@ -278,10 +278,11 @@ export default function HoleEntryScreen() {
   const opp2QuickRef = useRef<ScrollView>(null);
 
   // Centre the Par button in the quick-tap row whenever the hole changes.
-  // stepperSection has paddingHorizontal:20, so the ScrollView viewport is
-  // screenWidth-40 wide. We must use that viewport width, not screenWidth.
+  // PAR_INDEX is dynamic: offset array is [-4..5] with val<1 items filtered,
+  // so the number of buttons before par = min(4, par-1).
   useEffect(() => {
-    const PAR_INDEX = 3;      // index of offset=0 in [-3,-2,-1,0,1,2,3,4,5]
+    const currentPar = round?.scorecard?.[holeIdx]?.par ?? 4;
+    const PAR_INDEX = Math.min(4, currentPar - 1);
     const BTN_WIDTH = 68;
     const GAP = 6;
     const ROW_PADDING = 20;   // quickRow contentContainerStyle paddingHorizontal

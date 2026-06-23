@@ -97,9 +97,9 @@ export default function ScorecardUnified({ round, colors }: Props) {
   // playerHoles index: singles MP opponent is at index 0; partner/opp1/mkr2 at index 1
   const cPhIdx = isMP ? 0 : 1;
 
-  // D = opp2 (betterball only)
-  const showD  = isBBFmt;
-  const dLabel = fn(round.opponent2_name, "Opp2");
+  // D = opp2 (betterball) or marker 3 (individual) — not applicable to singles match play
+  const showD  = !isMP;
+  const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : "Mkr3";
   const dHcp   = o2Hcp;
 
   const showTeam = isBBFmt;

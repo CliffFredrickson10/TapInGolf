@@ -1361,7 +1361,13 @@ export default function RoundCompleteScreen() {
               const isModStableford = round.format === "modified_stableford";
               const showPts        = !isGross && !isNetOnly;
 
+              const isMarkerRound = !!round.opponent_name && !!round.playerHoles;
+              const mkrLabel = isMarkerRound
+                ? (round.opponent_name!.split(" ")[0].slice(0, 5))
+                : "Mkr";
+
               let f9G = 0, b9G = 0, f9N = 0, b9N = 0, f9P = 0, b9P = 0;
+              let f9Mkr = 0, b9Mkr = 0;
               let f9Par = 0, b9Par = 0;
 
               const holeData = sc.map(h => {
@@ -1379,13 +1385,16 @@ export default function RoundCompleteScreen() {
                 if (pts   != null && !nr) { if (isFront) f9P += pts; else b9P += pts; }
                 if (isFront) f9Par += h.par; else b9Par += h.par;
 
-                return { h, ha, nr, gross, net, pts, diff };
+                const mkrSaved = isMarkerRound ? round.playerHoles![`0_${h.number}`] : undefined;
+                const mkrGross = mkrSaved?.is_nr ? null : (mkrSaved?.gross_score ?? null);
+                if (mkrGross != null) { if (isFront) f9Mkr += mkrGross; else b9Mkr += mkrGross; }
+                return { h, ha, nr, gross, net, pts, diff, mkrGross };
               });
 
               const totPar = f9Par + b9Par;
 
 
-              const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean) => (
+              const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean, mkrG?: number | null) => (
                 <View key={label} style={{ flexDirection: "row",
                   backgroundColor: isLast ? pBg : pBg + "e0",
                   borderTopWidth: isLast ? 1.5 : HW,
@@ -1413,6 +1422,15 @@ export default function RoundCompleteScreen() {
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
                     <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g || "—"}</Text>
                   </View>
+                  {/* Mkr */}
+                  {isMarkerRound && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.7)" }}>
+                        {mkrG != null && mkrG > 0 ? mkrG : "—"}
+                      </Text>
+                    </View>
+                  )}
                   {/* Net */}
                   {!isGross && (
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
@@ -1458,9 +1476,14 @@ export default function RoundCompleteScreen() {
                     <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>H/C</Text>
                     </View>
-                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
                       <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
                     </View>
+                    {isMarkerRound && (
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.65)" }}>{mkrLabel}</Text>
+                      </View>
+                    )}
                     {!isGross && (
                       <View style={{ flex: 1, alignItems: "center", borderRightWidth: showPts ? HW : 0, borderRightColor: "rgba(255,255,255,0.25)" }}>
                         <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Net</Text>
@@ -1509,12 +1532,22 @@ export default function RoundCompleteScreen() {
                           </View>
                           {/* Gross */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
-                            borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr, paddingVertical: 4 }}>
+                            borderRightWidth: HW, borderRightColor: bdr, paddingVertical: 4 }}>
                             <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
                               color: nr || gross == null ? colors.mutedForeground : colors.foreground }}>
                               {nr ? "NR" : gross != null ? String(gross) : "—"}
                             </Text>
                           </View>
+                          {/* Mkr */}
+                          {isMarkerRound && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                              borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                                color: mkrGross != null ? colors.mutedForeground : colors.mutedForeground + "80" }}>
+                                {mkrGross != null ? String(mkrGross) : "—"}
+                              </Text>
+                            </View>
+                          )}
                           {/* Net */}
                           {!isGross && (
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
@@ -1546,12 +1579,12 @@ export default function RoundCompleteScreen() {
                             </View>
                           )}
                         </View>
-                        {h.number === 9 && TotRow("OUT", f9Par, f9G, f9N, f9P, false)}
+                        {h.number === 9 && TotRow("OUT", f9Par, f9G, f9N, f9P, false, f9Mkr || null)}
                       </React.Fragment>
                     );
                   })}
-                  {TotRow("IN",  b9Par, b9G, b9N, b9P, false)}
-                  {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true)}
+                  {TotRow("IN",  b9Par, b9G, b9N, b9P, false, b9Mkr || null)}
+                  {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true, (f9Mkr + b9Mkr) || null)}
                 </View>
               );
             })()

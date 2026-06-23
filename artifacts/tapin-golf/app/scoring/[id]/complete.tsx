@@ -876,55 +876,213 @@ export default function RoundCompleteScreen() {
               );
             })()
           ) : (
-            // ── Standard single-player scorecard ──────────────────────────
-            <>
-              <View style={[styles.scHeaderRow, { backgroundColor: colors.primary, borderRadius: 10, marginBottom: 2 }]}>
-                {["Hole", "Par", "SI", "H/C", "Gross", "Net", "Pts"].map(h => (
-                  <Text key={h} style={styles.scHeaderCell}>{h}</Text>
-                ))}
-              </View>
+            // ── Solo scorecard (all other formats) — rich table style ──────
+            (() => {
+              const ph  = round.playing_handicap;
+              const HW  = StyleSheet.hairlineWidth;
+              const bdr = colors.border;
+              const pBg = colors.primary;
 
-              {sc.map(h => {
+              const isStableford = round.format === "individual_stableford";
+              const isGross      = round.format === "gross_stroke_play";
+
+              let f9G = 0, b9G = 0, f9N = 0, b9N = 0, f9P = 0, b9P = 0;
+              let f9Par = 0, b9Par = 0;
+
+              const holeData = sc.map(h => {
                 const saved = holes[h.number];
-                const ha = getHA(h.stroke_index, round.playing_handicap);
-                const isNr = saved?.is_nr;
-                const gross = saved?.gross_score;
-                const net = saved?.net_score;
-                const pts = saved?.stableford_points;
-                const diff = gross != null ? gross - h.par : null;
-                const ss = diff != null ? scoreStyle(diff) : null;
+                const ha    = getHA(h.stroke_index, ph);
+                const nr    = !!saved?.is_nr;
+                const gross = nr ? null : saved?.gross_score ?? null;
+                const net   = nr ? null : saved?.net_score   ?? null;
+                const pts   = nr ? 0    : saved?.stableford_points ?? null;
+                const diff  = gross != null ? gross - h.par : null;
 
-                return (
-                  <View key={h.number} style={[styles.scRow, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                    <Text style={[styles.scCell, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>{h.number}</Text>
-                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.par}</Text>
-                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{h.stroke_index}</Text>
-                    <Text style={[styles.scCell, { color: ha > 0 ? "#c8a84b" : colors.mutedForeground, fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular" }]}>
-                      {ha > 0 ? `+${ha}` : "0"}
-                    </Text>
-                    <View style={[styles.scCellWrap, ss?.border ? { borderColor: ss.border, borderWidth: 1.5, borderRadius: 6 } : {}]}>
-                      <Text style={[styles.scCell, { color: ss?.text ?? colors.mutedForeground }]}>
-                        {isNr ? "NR" : gross != null ? String(gross) : "—"}
-                      </Text>
-                    </View>
-                    <Text style={[styles.scCell, { color: colors.mutedForeground }]}>{isNr ? "—" : net != null ? String(net) : "—"}</Text>
-                    <Text style={[styles.scCell, { color: pts != null ? (pts >= 3 ? "#22c55e" : pts >= 2 ? "#c8a84b" : pts >= 1 ? "#fb923c" : "#f87171") : colors.mutedForeground, fontFamily: "Inter_700Bold" }]}>
-                      {isNr ? "0" : pts != null ? String(pts) : "—"}
-                    </Text>
+                const isFront = h.number <= 9;
+                if (gross != null) { if (isFront) f9G += gross; else b9G += gross; }
+                if (net   != null) { if (isFront) f9N += net;   else b9N += net;   }
+                if (pts   != null && !nr) { if (isFront) f9P += pts; else b9P += pts; }
+                if (isFront) f9Par += h.par; else b9Par += h.par;
+
+                return { h, ha, nr, gross, net, pts, diff };
+              });
+
+              const totPar = f9Par + b9Par;
+
+              const ptsColor = (p: number | null) =>
+                p == null ? colors.mutedForeground
+                : p >= 3  ? "#22c55e"
+                : p >= 2  ? GOLD
+                : p >= 1  ? "#fb923c"
+                : "#f87171";
+
+              const grossColor = (d: number | null) => {
+                if (d == null) return colors.mutedForeground;
+                const ss = scoreStyle(d);
+                return ss.text;
+              };
+              const grossBorder = (d: number | null) =>
+                d != null ? scoreStyle(d).border : undefined;
+
+              const TotRow = (label: string, par: number, g: number, n: number, p: number, isLast: boolean) => (
+                <View key={label} style={{ flexDirection: "row",
+                  backgroundColor: isLast ? pBg : pBg + "e0",
+                  borderTopWidth: isLast ? 1.5 : HW,
+                  borderTopColor: isLast ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                  {/* Label */}
+                  <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)", paddingVertical: 7 }}>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold",
+                      color: isLast ? GOLD : "rgba(255,255,255,0.8)" }}>{label}</Text>
                   </View>
-                );
-              })}
+                  {/* Par */}
+                  <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
+                  </View>
+                  {/* SI placeholder */}
+                  <View style={{ flex: 1, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
+                  {/* HC placeholder */}
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>{ph}</Text>
+                  </View>
+                  {/* Gross */}
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g || "—"}</Text>
+                  </View>
+                  {/* Net */}
+                  {!isGross && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{n || "—"}</Text>
+                    </View>
+                  )}
+                  {/* Pts */}
+                  {!isGross && (
+                    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                      <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD }}>{p}</Text>
+                    </View>
+                  )}
+                </View>
+              );
 
-              <View style={[styles.scTotalsRow, { backgroundColor: colors.primary, borderRadius: 10, marginTop: 2 }]}>
-                <Text style={styles.scTotalLabel}>TOTAL</Text>
-                <Text style={styles.scTotalPar}>{sc.reduce((s, h) => s + h.par, 0)}</Text>
-                <Text style={styles.scTotalBlank}>—</Text>
-                <Text style={[styles.scTotalBlank, { color: "#c8a84b" }]}>{round.playing_handicap}</Text>
-                <Text style={styles.scTotalValue}>{totalGross || "—"}</Text>
-                <Text style={styles.scTotalValue}>{totalNet || "—"}</Text>
-                <Text style={[styles.scTotalValue, { color: GOLD }]}>{totalPts}</Text>
-              </View>
-            </>
+              const cols = isGross
+                ? ["Hole","Par","SI","H/C","Gross"]
+                : ["Hole","Par","SI","H/C","Gross","Net","Pts"];
+
+              return (
+                <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
+                  {/* Header */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 8,
+                    borderBottomWidth: 1.5, borderBottomColor: bdr }}>
+                    <View style={{ width: 28, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>H</Text>
+                    </View>
+                    <View style={{ width: 26, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>SI</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>H/C</Text>
+                    </View>
+                    <View style={{ flex: 1, alignItems: "center", borderRightWidth: isGross ? 0 : HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Gross</Text>
+                    </View>
+                    {!isGross && (
+                      <View style={{ flex: 1, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Net</Text>
+                      </View>
+                    )}
+                    {!isGross && (
+                      <View style={{ flex: 1, alignItems: "center" }}>
+                        <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>Pts</Text>
+                      </View>
+                    )}
+                  </View>
+
+                  {/* Hole rows */}
+                  {holeData.map(({ h, ha, nr, gross, net, pts, diff }, idx) => {
+                    const rowBg = idx % 2 === 0 ? colors.card
+                      : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
+                    const gc  = grossColor(diff);
+                    const gb  = grossBorder(diff);
+                    return (
+                      <React.Fragment key={h.number}>
+                        <View style={{ flexDirection: "row", backgroundColor: rowBg,
+                          borderBottomWidth: HW, borderBottomColor: bdr, alignItems: "center" }}>
+                          {/* Hole */}
+                          <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 9,
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.number}</Text>
+                          </View>
+                          {/* Par */}
+                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
+                          </View>
+                          {/* SI */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
+                          </View>
+                          {/* HC strokes */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11,
+                              fontFamily: ha > 0 ? "Inter_700Bold" : "Inter_400Regular",
+                              color: ha > 0 ? GOLD : colors.mutedForeground }}>
+                              {ha > 0 ? `+${ha}` : "0"}
+                            </Text>
+                          </View>
+                          {/* Gross */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: isGross ? 0 : HW, borderRightColor: bdr, paddingVertical: 4 }}>
+                            {gb ? (
+                              <View style={{ borderWidth: 1.5, borderColor: gb, borderRadius: 5,
+                                paddingHorizontal: 4, paddingVertical: 1 }}>
+                                <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: gc }}>
+                                  {nr ? "NR" : gross != null ? String(gross) : "—"}
+                                </Text>
+                              </View>
+                            ) : (
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: gc }}>
+                                {nr ? "NR" : gross != null ? String(gross) : "—"}
+                              </Text>
+                            )}
+                          </View>
+                          {/* Net */}
+                          {!isGross && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                              borderRightWidth: HW, borderRightColor: bdr }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                                color: net != null ? "#a3e4bc" : colors.mutedForeground }}>
+                                {nr ? "—" : net != null ? String(net) : "—"}
+                              </Text>
+                            </View>
+                          )}
+                          {/* Pts */}
+                          {!isGross && (
+                            <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
+                                color: ptsColor(pts) }}>
+                                {nr ? "0" : pts != null ? String(pts) : "—"}
+                              </Text>
+                            </View>
+                          )}
+                        </View>
+                        {h.number === 9 && TotRow("OUT", f9Par, f9G, f9N, f9P, false)}
+                      </React.Fragment>
+                    );
+                  })}
+                  {TotRow("IN",  b9Par, b9G, b9N, b9P, false)}
+                  {TotRow("TOT", totPar, f9G + b9G, f9N + b9N, f9P + b9P, true)}
+                </View>
+              );
+            })()
           )}
         </View>
       </ScrollView>

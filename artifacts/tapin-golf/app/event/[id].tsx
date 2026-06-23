@@ -722,7 +722,7 @@ export default function EventDetailScreen() {
           // Regular event: scrollable tabs
           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: "row" }}>
             {(["info","draw","scores","submit"] as const).map(t => (
-              <TouchableOpacity key={t} style={[styles.tab, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
+              <TouchableOpacity key={t} style={[styles.tabScrollable, activeTab === t && { borderBottomColor: colors.primary, borderBottomWidth: 2 }]} onPress={() => setActiveTab(t)}>
                 <Text style={[styles.tabText, { color: activeTab === t ? colors.primary : colors.mutedForeground }]}>
                   {t === "info" ? "Info" : t === "draw" ? "Draw" : t === "scores" ? "Leaderboard" : "Submit Score"}
                 </Text>
@@ -2220,7 +2220,8 @@ const styles = StyleSheet.create({
   backBtn:       { paddingTop: 2 },
   tabBar:        { flexDirection: "row", borderBottomWidth: 1 },
   tab:           { flex: 1, paddingVertical: 10, alignItems: "center" },
-  tabText:       { fontSize: 12, fontWeight: "600" },
+  tabScrollable: { paddingVertical: 10, paddingHorizontal: 18, alignItems: "center" },
+  tabText:       { fontSize: 13, fontWeight: "600" },
   metaCard:      { borderRadius: 12, borderWidth: 1, padding: 14, marginBottom: 12, gap: 8 },
   metaRow:       { flexDirection: "row", alignItems: "center", gap: 8 },
   metaText:      { fontSize: 13, flex: 1 },

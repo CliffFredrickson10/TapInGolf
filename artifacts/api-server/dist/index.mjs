@@ -76495,18 +76495,27 @@ function getHA(strokeIndex, playingHcp) {
 }
 function getStablefordMax(fmt, par, ha) {
   switch (fmt) {
+    // No cap — stroke play has no forced pickup without Model Local Rule E-3
     case "net_stroke_play":
     case "chairman":
-    case "par_bogey":
-    case "individual_par":
-    case "individual_bogey":
+    // No cap — gross match play pickup is hole-concession, not a fixed formula
     case "singles_gross_match_play":
     case "betterball_gross_match_play":
+    // No cap — modified stableford accumulates negative pts so there is no neutral pickup point
     case "modified_stableford":
       return null;
+    // Par/bogey: pickup once the hole is definitively lost (R&A Rule 21.2)
+    case "par_bogey":
+    case "individual_par":
+      return par + 1 + ha;
+    // net bogey = worst outcome in par game (-1 pt)
+    case "individual_bogey":
+      return par + 2 + ha;
+    // net double bogey = worst outcome in bogey game (-1 pt)
+    // Bonus bogey: double bogey nets 1 pt; triple bogey = 0 pts (pickup point)
     case "individual_bonus_bogey":
       return par + 3 + ha;
-    // double bogey nets 1 pt; triple bogey = 0 pts
+    // All standard stableford formats: net double bogey = 0 pts (R&A Rule 21.1b(2))
     default:
       return par + 2 + ha;
   }

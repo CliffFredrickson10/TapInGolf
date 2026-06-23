@@ -76551,10 +76551,14 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
             JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
             WHERE pts.event_id = ge.id AND bp.user_id = ? AND b.status = 'confirmed'
           )
+          OR EXISTS (
+            SELECT 1 FROM knockout_matches km
+            WHERE km.event_id = ge.id AND (km.player1_id = ? OR km.player2_id = ?)
+          )
         )
       ORDER BY event_date ASC
       LIMIT 20
-    `, [clubId, user.id, user.id]);
+    `, [clubId, user.id, user.id, user.id, user.id]);
     res.json({ tournaments });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
@@ -76720,7 +76724,11 @@ router23.post("/scoring/rounds", async (req, res) => {
         WHERE pts.event_id = ? AND bp.user_id = ? AND b.status = 'confirmed'
         LIMIT 1
       `, [tournamentId, user.id]);
-      if (!hasReg && !hasBooking) {
+      const hasKoMatch = !hasReg && !hasBooking && await row(
+        "SELECT 1 FROM knockout_matches WHERE event_id = ? AND (player1_id = ? OR player2_id = ?) LIMIT 1",
+        [tournamentId, user.id, user.id]
+      );
+      if (!hasReg && !hasBooking && !hasKoMatch) {
         const pendingReg = await row(
           "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
           [user.id, tournamentId]

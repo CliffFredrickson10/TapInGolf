@@ -57,8 +57,9 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     if (!clubId) { res.status(400).json({ message: "Invalid club id" }); return; }
 
     // Only surface tournaments where the requesting user has a confirmed spot:
-    //   a) approved event_registrations entry (formal / knockout events), OR
-    //   b) a confirmed booking on a tee slot exclusive to this event
+    //   a) approved event_registrations entry (formal events), OR
+    //   b) a confirmed booking on a tee slot exclusive to this event, OR
+    //   c) appears as player1_id or player2_id in any knockout_matches for this event
     const tournaments = await query<any>(`
       SELECT id, name, event_date, end_date, format, format2, format_custom,
              knockout_type, knockout_scoring_format
@@ -77,10 +78,14 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
             JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
             WHERE pts.event_id = ge.id AND bp.user_id = ? AND b.status = 'confirmed'
           )
+          OR EXISTS (
+            SELECT 1 FROM knockout_matches km
+            WHERE km.event_id = ge.id AND (km.player1_id = ? OR km.player2_id = ?)
+          )
         )
       ORDER BY event_date ASC
       LIMIT 20
-    `, [clubId, user.id, user.id]);
+    `, [clubId, user.id, user.id, user.id, user.id]);
 
     res.json({ tournaments });
   } catch (err: any) {
@@ -244,7 +249,11 @@ router.post("/scoring/rounds", async (req, res) => {
         WHERE pts.event_id = ? AND bp.user_id = ? AND b.status = 'confirmed'
         LIMIT 1
       `, [tournamentId, user.id]);
-      if (!hasReg && !hasBooking) {
+      const hasKoMatch = !hasReg && !hasBooking && await row<{ 1: number }>(
+        "SELECT 1 FROM knockout_matches WHERE event_id = ? AND (player1_id = ? OR player2_id = ?) LIMIT 1",
+        [tournamentId, user.id, user.id]
+      );
+      if (!hasReg && !hasBooking && !hasKoMatch) {
         // Distinguish: pending reg vs completely absent
         const pendingReg = await row<{ status: string }>(
           "SELECT status FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",

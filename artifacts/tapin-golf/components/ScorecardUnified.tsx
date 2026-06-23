@@ -84,21 +84,18 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const o2Hcp  = round.opponent2_playing_hcp ?? o1Hcp;
   const fn = (n?: string|null, fb = "?") => (n ?? "").split(" ")[0].slice(0, 7) || fb;
 
-  /* ── Player presence (format-structural, always shown) ───── */
-  // B = partner (betterball) or marker 1 (individual); not applicable to singles match play
-  const showB  = !isMP;
+  /* ── Player slots — always all four, regardless of format ── */
+  const showB  = true;
   const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : fn(round.opponent_name, "Mkr");
   const bHcp   = isBBFmt ? prtHcp : o1Hcp;
 
-  // C = opp1 (betterball), opponent (singles MP), or marker 2 (individual) — always shown
   const showC  = true;
   const cLabel = (isBBFmt || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
   const cHcp   = (isBBFmt || isMP) ? o1Hcp : o2Hcp;
-  // playerHoles index: singles MP opponent is at index 0; partner/opp1/mkr2 at index 1
+  // playerHoles index: singles MP opponent sits at index 0; all others at index 1
   const cPhIdx = isMP ? 0 : 1;
 
-  // D = opp2 (betterball) or marker 3 (individual) — not applicable to singles match play
-  const showD  = !isMP;
+  const showD  = true;
   const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : "Mkr3";
   const dHcp   = o2Hcp;
 

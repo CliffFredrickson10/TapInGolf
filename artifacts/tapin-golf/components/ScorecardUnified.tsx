@@ -146,28 +146,30 @@ export default function ScorecardUnified({ round, colors }: Props) {
     const aNr = !!aSv?.is_nr;
     const aG  = aNr ? null : aSv?.gross_score ?? null;
     const aHa = getHA(h.stroke_index, myHcp);
-    const aR  = (!isGrOnly && !isMP && aG != null) ? calcR(aG, h.par, aHa) : null;
+    const calcRes = (g: number, par: number, ha: number) =>
+      isGrOnly ? g - par : calcR(g, par, ha);
+    const aR  = (!isMP && aG != null) ? calcRes(aG, h.par, aHa) : null;
     if (aG != null) { if (fr) aF9G += aG; else aB9G += aG; }
     if (aR != null) { if (fr) aF9R += aR; else aB9R += aR; }
 
     const bD  = showB ? getPH(0, hn) : { g: null as number|null, nr: false };
     const bHa = getHA(h.stroke_index, bHcp);
     const bG  = bD.g; const bNr = bD.nr;
-    const bR  = (showB && !isGrOnly && !isMP && bG != null) ? calcR(bG, h.par, bHa) : null;
+    const bR  = (showB && !isMP && bG != null) ? calcRes(bG, h.par, bHa) : null;
     if (bG != null) { if (fr) bF9G += bG; else bB9G += bG; }
     if (bR != null) { if (fr) bF9R += bR; else bB9R += bR; }
 
     const cD  = showC ? getPH(cPhIdx, hn) : { g: null as number|null, nr: false };
     const cHa = getHA(h.stroke_index, cHcp);
     const cG  = cD.g; const cNr = cD.nr;
-    const cR  = (showC && !isGrOnly && !isMP && cG != null) ? calcR(cG, h.par, cHa) : null;
+    const cR  = (showC && !isMP && cG != null) ? calcRes(cG, h.par, cHa) : null;
     if (cG != null) { if (fr) cF9G += cG; else cB9G += cG; }
     if (cR != null) { if (fr) cF9R += cR; else cB9R += cR; }
 
     const dD  = showD ? getPH(2, hn) : { g: null as number|null, nr: false };
     const dHa = getHA(h.stroke_index, dHcp);
     const dG  = dD.g; const dNr = dD.nr;
-    const dR  = (showD && !isGrOnly && dG != null) ? calcR(dG, h.par, dHa) : null;
+    const dR  = (showD && dG != null) ? calcRes(dG, h.par, dHa) : null;
     if (dG != null) { if (fr) dF9G += dG; else dB9G += dG; }
     if (dR != null) { if (fr) dF9R += dR; else dB9R += dR; }
 
@@ -235,7 +237,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const totBBWHL = net2whl(f9bbW + b9bbW, f9bbL + b9bbL);
 
   /* ── Display helpers ──────────────────────────────────────── */
-  const resLbl = isGrOnly ? "—" : isNetOny || isMaxSc ? "Net" : isPar ? "+/−" : isMP ? "Res" : "Pts";
+  const resLbl = isNetOny || isMaxSc ? "Net" : isPar || isGrOnly ? "+/−" : isMP ? "Res" : "Pts";
   const whlC = (w: "W"|"H"|"L"|null) => !w ? MFG : w === "W" ? "#22c55e" : w === "H" ? GOLD : "#f87171";
 
   const rTxt = (r: number|null, nr: boolean): string => {
@@ -243,11 +245,15 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (isMP)  return r === 1 ? "W" : r === 0 ? "H" : "L";
     if (isPar) return r > 0 ? `+${r}` : r === 0 ? "0" : `${r}`;
     if (isMod || isBonusB) return r > 0 ? `+${r}` : `${r}`;
+    // Gross stroke play: strokes vs par (birdie = −1, par = E, bogey = +1 …)
+    if (isGrOnly) return r > 0 ? `+${r}` : r === 0 ? "E" : `${r}`;
     return String(r);
   };
   const rClr = (r: number|null, nr: boolean) => {
     if (nr || r == null) return MFG;
     if (isPar || isMP) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : GOLD;
+    // Gross stroke play: under par = green, even = gold, over par = red
+    if (isGrOnly) return r < 0 ? "#22c55e" : r === 0 ? GOLD : "#f87171";
     if (isMod) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : FG;
     // Bonus bogey: +2/+1 = green, 0 = gold, −1/−2 = red
     if (isBonusB) return r > 0 ? "#22c55e" : r === 0 ? GOLD : "#f87171";

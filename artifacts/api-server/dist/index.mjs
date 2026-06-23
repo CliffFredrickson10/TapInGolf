@@ -71137,6 +71137,7 @@ router14.get("/portal/events/:id/conflicts", requireClubAuth2, async (req, res) 
      FROM golf_events ge
      WHERE ge.club_id = ? AND ge.id != ?
        AND ge.status NOT IN ('cancelled')
+       AND ge.knockout_type IS NULL
        AND ge.event_date <= ? AND COALESCE(ge.end_date, ge.event_date) >= ?
      ORDER BY ge.event_date ASC`,
     [club.id, evId, dateTo, dateFrom]

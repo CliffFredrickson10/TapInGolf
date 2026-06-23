@@ -1419,7 +1419,9 @@ router.get("/portal/events/:id/conflicts", requireClubAuth, async (req: Request,
       )
     : [];
 
-  // Other non-cancelled events at this club whose date range overlaps
+  // Other non-cancelled events at this club whose date range overlaps.
+  // Knockout tournaments (knockout_type IS NOT NULL) span months with round deadlines only —
+  // they have no fixed tee times and must never block regular competitions.
   const conflicting_events = await query<any>(
     `SELECT ge.id, ge.name, ge.event_date, ge.end_date, ge.status,
             (SELECT COUNT(*) FROM portal_tee_slots pts WHERE pts.event_id = ge.id) AS slot_count,
@@ -1427,6 +1429,7 @@ router.get("/portal/events/:id/conflicts", requireClubAuth, async (req: Request,
      FROM golf_events ge
      WHERE ge.club_id = ? AND ge.id != ?
        AND ge.status NOT IN ('cancelled')
+       AND ge.knockout_type IS NULL
        AND ge.event_date <= ? AND COALESCE(ge.end_date, ge.event_date) >= ?
      ORDER BY ge.event_date ASC`,
     [club.id, evId, dateTo, dateFrom]

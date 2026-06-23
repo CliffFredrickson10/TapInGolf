@@ -84,23 +84,20 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const o2Hcp  = round.opponent2_playing_hcp ?? o1Hcp;
   const fn = (n?: string|null, fb = "?") => (n ?? "").split(" ")[0].slice(0, 7) || fb;
 
-  /* ── Player presence ──────────────────────────────────────── */
-  const isMkr1 = !isBBFmt && !isMP && !!round.opponent_name && hasPH;
-  const isMkr2 = isMkr1 && !!round.opponent2_name;
-
-  // For betterball all 4 player slots are structural (always show, may be empty)
-  const showB  = isBBFmt || isMkr1;
+  /* ── Player presence (format-structural, always shown) ───── */
+  // B = partner (betterball) or marker 1 (individual); not applicable to singles match play
+  const showB  = !isMP;
   const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : fn(round.opponent_name, "Mkr");
   const bHcp   = isBBFmt ? prtHcp : o1Hcp;
 
-  const showC  = isBBFmt
-              || (isMP && !!round.opponent_name && hasPH)
-              || isMkr2;
+  // C = opp1 (betterball), opponent (singles MP), or marker 2 (individual) — always shown
+  const showC  = true;
   const cLabel = (isBBFmt || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
   const cHcp   = (isBBFmt || isMP) ? o1Hcp : o2Hcp;
-  // playerHoles index for C: BB opp1=1, singles opp=0, casual mkr2=1
-  const cPhIdx = (isBBFmt || isMkr2) ? 1 : 0;
+  // playerHoles index: singles MP opponent is at index 0; partner/opp1/mkr2 at index 1
+  const cPhIdx = isMP ? 0 : 1;
 
+  // D = opp2 (betterball only)
   const showD  = isBBFmt;
   const dLabel = fn(round.opponent2_name, "Opp2");
   const dHcp   = o2Hcp;

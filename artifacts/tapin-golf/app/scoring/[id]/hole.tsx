@@ -1040,10 +1040,7 @@ export default function HoleEntryScreen() {
         {/* ── MARKER section — individual tournament rounds ─────── */}
         {isMarkerRound && (
           <>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
-            </View>
-            <View style={[styles.scoringSectionHeader, { paddingTop: 2, paddingBottom: 2 }]}>
+            <View style={[styles.scoringSectionHeader, { paddingTop: 10, paddingBottom: 2 }]}>
               <View style={[styles.sectionDot, { backgroundColor: "#60a5fa" }]} />
               <Text style={[styles.sectionLabel, { color: "#60a5fa" }]}>MARKING FOR</Text>
             </View>
@@ -1074,10 +1071,12 @@ export default function HoleEntryScreen() {
         {/* ── OPPONENT score section (matchplay + betterball) ─────── */}
         {(isAnyMatch || isBetterball) && (
           <>
-            <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
-              <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
-            </View>
-            <View style={[styles.scoringSectionHeader, { paddingTop: 2, paddingBottom: 2 }]}>
+            {isAnyMatch && (
+              <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
+                <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>
+              </View>
+            )}
+            <View style={[styles.scoringSectionHeader, { paddingTop: isAnyMatch ? 2 : 10, paddingBottom: 2 }]}>
               <View style={[styles.sectionDot, { backgroundColor: "#ef4444" }]} />
               <Text style={[styles.sectionLabel, { color: "#ef4444" }]}>
                 {isBetterball ? "OPPONENTS" : (round.opponent_name ?? "OPPONENT").toUpperCase()}

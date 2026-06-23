@@ -291,18 +291,20 @@ export default function StartRoundScreen() {
     if (isNaN(ch) || String(ch) !== courseHcp.trim()) {
       Alert.alert("Handicap Required", "Please enter your Course Handicap as a whole number before starting."); return;
     }
-    if (isKnockoutMatch && matchOpponent) {
-      const opp = parseInt(oppHcp, 10);
-      if (isNaN(opp) || String(opp) !== oppHcp.trim()) {
-        Alert.alert("Handicap Required", `Please confirm ${matchOpponent.opponentName ?? "Opponent"}'s Course Handicap as a whole number.`); return;
+    if ((isKnockoutMatch || isBetterball) && matchOpponent) {
+      if (matchOpponent.opponentName) {
+        const opp = parseInt(oppHcp, 10);
+        if (isNaN(opp) || String(opp) !== oppHcp.trim()) {
+          Alert.alert("Handicap Required", `Please confirm ${matchOpponent.opponentName ?? "Opponent"}'s Course Handicap as a whole number.`); return;
+        }
       }
-      if (format === "betterball_match_play" && matchOpponent.partnerName) {
+      if (isBetterball && matchOpponent.partnerName) {
         const prt = parseInt(partnerHcp, 10);
         if (isNaN(prt) || String(prt) !== partnerHcp.trim()) {
           Alert.alert("Handicap Required", `Please confirm ${matchOpponent.partnerName}'s Course Handicap as a whole number.`); return;
         }
       }
-      if (format === "betterball_match_play" && matchOpponent.opp2Name) {
+      if (isBetterball && matchOpponent.opp2Name) {
         const o2 = parseInt(opp2Hcp, 10);
         if (isNaN(o2) || String(o2) !== opp2Hcp.trim()) {
           Alert.alert("Handicap Required", `Please confirm ${matchOpponent.opp2Name ?? "Opponent 2"}'s Course Handicap as a whole number.`); return;
@@ -322,7 +324,7 @@ export default function StartRoundScreen() {
           playingHandicap: ch,
           allowancePct: 100,
           tournamentId: linkedTournamentId,
-          ...(isKnockoutMatch && matchOpponent ? {
+          ...((isKnockoutMatch || isBetterball) && matchOpponent ? {
             opponentPlayingHcp:  parseInt(oppHcp)     || 0,
             partnerPlayingHcp:   parseInt(partnerHcp)  || 0,
             opponent2PlayingHcp: parseInt(opp2Hcp)    || 0,
@@ -753,9 +755,9 @@ export default function StartRoundScreen() {
                   {/* Helper to render a stepper row */}
                   {([
                     { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null },
-                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: (format === "betterball_match_play" && !!matchOpponent?.partnerName), whsIdx: partnerWhsIdx },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || format === "betterball_match_play") && !!matchOpponent, whsIdx: oppWhsIdx },
-                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: format === "betterball_match_play" && !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: (format === "singles_match_play" || isBetterball) && !!matchOpponent?.opponentName, whsIdx: oppWhsIdx },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: isBetterball && !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx },
                   ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean; whsIdx: number | null }[])
                     .filter(r => r.show)
                     .map(r => (

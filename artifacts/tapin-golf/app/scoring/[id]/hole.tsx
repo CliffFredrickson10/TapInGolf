@@ -55,9 +55,16 @@ type Round = {
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
   partner_name?: string | null;
+  partner_playing_hcp?: number;
   opponent2_name?: string | null;
+  opponent2_playing_hcp?: number;
   playerHoles?: Record<string, { gross_score: number | null; is_nr: number }>;
 };
+
+// True for any format where we score all 4 players
+function hasFourPlayers(r: { format: string; partner_name?: string | null; opponent_name?: string | null }): boolean {
+  return r.format === "betterball_match_play" || (r.format !== "singles_match_play" && !!(r.partner_name || r.opponent_name));
+}
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 function getHA(si: number, ph: number): number {
@@ -294,10 +301,11 @@ export default function HoleEntryScreen() {
     // BbPlayerInput + betterball user box: group box marginHorizontal:12×2 + borderWidth:1×2 = 26px narrower
     const bbViewportWidth = screenWidth - 26;
     const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
+    const isBbRound = hasFourPlayers(round ?? { format: "", partner_name: null, opponent_name: null });
     setTimeout(() => {
-      quickRowRef.current?.scrollTo({ x: isBetterball ? bbScrollX : scrollX, animated: false });
+      quickRowRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
-      opp1QuickRef.current?.scrollTo({ x: isBetterball ? bbScrollX : scrollX, animated: false });
+      opp1QuickRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
     }, 80);
   }, [holeIdx, round]);
@@ -315,7 +323,7 @@ export default function HoleEntryScreen() {
       setHoleIdx(startIdx);
       setGross(holes[scorecard[startIdx]?.number]?.gross_score ?? null);
       const ph0 = data.playerHoles as Record<string, any> | undefined;
-      if (data.format === "betterball_match_play") {
+      if (hasFourPlayers(data)) {
         setPartnerGross(ph0?.[`0_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
         setOppGross(ph0?.[`1_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
         setOpp2Gross(ph0?.[`2_${scorecard[startIdx]?.number}`]?.gross_score ?? null);
@@ -399,8 +407,7 @@ export default function HoleEntryScreen() {
   const goToHole = (idx: number) => {
     setHoleIdx(idx);
     setGross(round.holes[scorecard[idx].number]?.gross_score ?? null);
-    const isBB = round.format === "betterball_match_play";
-    if (isBB) {
+    if (hasFourPlayers(round)) {
       setPartnerGross(round.playerHoles?.[`0_${scorecard[idx].number}`]?.gross_score ?? null);
       setOppGross(round.playerHoles?.[`1_${scorecard[idx].number}`]?.gross_score ?? null);
       setOpp2Gross(round.playerHoles?.[`2_${scorecard[idx].number}`]?.gross_score ?? null);
@@ -420,7 +427,7 @@ export default function HoleEntryScreen() {
     if (!isNr && gross == null) return;
     setSaving(true);
     const isMP = round.format === "singles_match_play";
-    const isBB = round.format === "betterball_match_play";
+    const isBB = hasFourPlayers(round);
     const body: Record<string, unknown> = {
       par: hole.par,
       strokeIndex: hole.stroke_index,
@@ -434,7 +441,7 @@ export default function HoleEntryScreen() {
       body.players = [
         { name: round.partner_name ?? "Partner", grossScore: isNr ? null : partnerGross },
         { name: round.opponent_name ?? "Opp 1",  grossScore: isNr ? null : oppGross    },
-        { name: round.opponent2_name ?? "Opp 2",  grossScore: isNr ? null : opp2Gross   },
+        { name: round.opponent2_name ?? "Opp 2", grossScore: isNr ? null : opp2Gross   },
       ];
     }
 
@@ -510,27 +517,42 @@ export default function HoleEntryScreen() {
     router.replace("/(tabs)/scoring");
   };
 
-  const isLastHole   = holeIdx === scorecard.length - 1;
-  const isMatchPlay  = round.format === "singles_match_play";
-  const isBetterball = round.format === "betterball_match_play";
-  const isAnyMatch   = isMatchPlay || isBetterball;
+  const isLastHole         = holeIdx === scorecard.length - 1;
+  const isMatchPlay        = round.format === "singles_match_play";
+  const isKnockoutBetterball = round.format === "betterball_match_play";
+  // isBetterball = any round with 4-player input (knockout betterball OR regular betterball with group)
+  const isBetterball       = hasFourPlayers(round);
+  // isAnyMatch = true only for actual match-play formats (drives match-status banner / End Match button)
+  const isAnyMatch         = isMatchPlay || isKnockoutBetterball;
+  // hasOpponents = show opponent inputs (match play + any betterball with opponents)
+  const hasOpponents       = isAnyMatch || isBetterball;
+
   const matchSt: MatchStatus | null = isMatchPlay
     ? calcMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
-    : isBetterball
+    : isKnockoutBetterball
     ? calcBetterballMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
     : null;
 
   // Betterball per-hole helpers (current hole being entered)
-  const partnerHA  = isBetterball ? getHA(hole.stroke_index, round.playing_handicap) : 0;
-  const opp2HA     = isBetterball ? getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0) : 0;
+  const partnerHA  = isBetterball ? getHA(hole.stroke_index, round.partner_playing_hcp ?? round.playing_handicap) : 0;
+  const opp2HA     = isBetterball ? getHA(hole.stroke_index, round.opponent2_playing_hcp ?? round.opponent_playing_hcp ?? 0) : 0;
   const partnerNet = partnerGross != null ? partnerGross - partnerHA : null;
   const opp1Net    = oppGross     != null ? oppGross     - oppHA     : null;
   const opp2Net    = opp2Gross    != null ? opp2Gross    - opp2HA    : null;
-  // Which player is carrying the team? (lower net = better in matchplay)
+  // Which player is carrying the team? (lower net = better)
   const bbTeamWinner = netScore != null && partnerNet != null
     ? (netScore <= partnerNet ? 0 : 1) : netScore != null ? 0 : 1;
   const bbOppWinner  = opp1Net != null && opp2Net != null
     ? (opp1Net  <= opp2Net   ? 0 : 1) : opp1Net  != null ? 0 : 1;
+
+  // Best-ball Stableford points for regular betterball competitions
+  const partnerPts = isBetterball && partnerGross != null ? calcPoints(partnerGross, hole.par, partnerHA) : null;
+  const bbPts = isBetterball
+    ? (pts != null && partnerPts != null ? Math.max(pts, partnerPts) : (pts ?? partnerPts ?? null))
+    : null;
+  const runningBbPts = isBetterball && !isKnockoutBetterball
+    ? scorecard.slice(0, holeIdx).reduce((sum, h) => sum + (round.holes[h.number]?.stableford_points ?? 0), 0)
+    : 0;
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
@@ -615,9 +637,9 @@ export default function HoleEntryScreen() {
         contentContainerStyle={{ paddingBottom: 8 }}
       >
         {/* Hole identity */}
-        <View style={[styles.holeHeader, isAnyMatch && { paddingTop: 20, paddingBottom: 4 }]}>
-          {!isAnyMatch && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
-          <Text style={[styles.holeName, isAnyMatch && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
+        <View style={[styles.holeHeader, hasOpponents && { paddingTop: 20, paddingBottom: 4 }]}>
+          {!hasOpponents && <Text style={styles.nowScoringLabel}>NOW SCORING</Text>}
+          <Text style={[styles.holeName, hasOpponents && { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <View style={styles.hcpChip}>
             <Text style={styles.hcpChipText}>Playing HCP {ph}</Text>
           </View>
@@ -650,7 +672,7 @@ export default function HoleEntryScreen() {
         )}
 
         {/* ── YOUR SCORE / YOUR TEAM section ─────────────────────── */}
-        {isAnyMatch && (
+        {hasOpponents && (
           <View style={[styles.scoringSectionHeader, { paddingTop: 6, paddingBottom: 2 }]}>
             <View style={[styles.sectionDot, { backgroundColor: GREEN }]} />
             <Text style={[styles.sectionLabel, { color: GREEN }]}>
@@ -761,16 +783,27 @@ export default function HoleEntryScreen() {
           )}
         </View>
 
-        {/* Points summary — non-matchplay only */}
-        {pts != null && !isAnyMatch && (
+        {/* Points summary — individual non-betterball non-matchplay only */}
+        {pts != null && !hasOpponents && (
           <View style={styles.ptsSummary}>
             <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
             <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
           </View>
         )}
 
+        {/* Best-ball points summary for regular (non-knockout) betterball competitions */}
+        {isBetterball && !isKnockoutBetterball && bbPts != null && (
+          <View style={[styles.ptsSummary, { flexDirection: "row", justifyContent: "space-between", alignItems: "center" }]}>
+            <View>
+              <Text style={styles.ptsSummaryLabel}>Best Ball Points</Text>
+              <Text style={{ fontSize: 11, color: MUTED_FG, fontFamily: "Inter_400Regular", marginTop: 2 }}>Running: {runningBbPts + bbPts} pts</Text>
+            </View>
+            <Text style={[styles.ptsSummaryValue, { color: bbPts >= 3 ? "#22c55e" : bbPts >= 2 ? GOLD : bbPts >= 1 ? "#fb923c" : "#f87171" }]}>{bbPts}</Text>
+          </View>
+        )}
+
         {/* ── OPPONENT score section (matchplay + betterball) ─────── */}
-        {isAnyMatch && (
+        {hasOpponents && (
           <>
             <View style={{ alignItems: "center", justifyContent: "center", paddingTop: 14, paddingBottom: 8 }}>
               <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: MUTED_FG, letterSpacing: 3 }}>VS</Text>

@@ -76889,6 +76889,68 @@ router23.post("/scoring/rounds", async (req, res) => {
         }
       }
     }
+    const BETTERBALL_FORMATS_SET = /* @__PURE__ */ new Set([
+      "fourball_stableford",
+      "fourball_gross_betterball",
+      "fourball_net_betterball",
+      "shamble",
+      "best_ball_aggregate",
+      "high_low",
+      "daytona",
+      "low_ball_total",
+      "the_ghost",
+      "betterball_bonus_bogey",
+      "pinehurst_points"
+    ]);
+    if (tournamentId && BETTERBALL_FORMATS_SET.has(format)) {
+      const myReg = await row(
+        "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
+        [user.id, tournamentId]
+      );
+      const teamId = myReg?.team_id ?? null;
+      if (teamId) {
+        const ptnr = await row(
+          `SELECT u.name, u.handicap FROM event_registrations er
+           JOIN users u ON u.id = er.user_id
+           WHERE er.team_id = ? AND er.user_id != ? AND er.event_id = ? LIMIT 1`,
+          [teamId, user.id, tournamentId]
+        );
+        if (ptnr) {
+          partnerName = ptnr.name ?? null;
+          partnerPlayingHcp = req.body.partnerPlayingHcp != null ? Number(req.body.partnerPlayingHcp) : ptnr.handicap != null ? Math.round(Number(ptnr.handicap) * (Number(allowancePct) / 100)) : 0;
+        }
+        const mySlot = await row(`
+          SELECT b.portal_slot_id FROM bookings b
+          JOIN booking_players bp ON bp.booking_id = b.id
+          JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+          WHERE bp.user_id = ? AND pts.event_id = ? AND b.status = 'confirmed'
+          LIMIT 1
+        `, [user.id, tournamentId]);
+        if (mySlot?.portal_slot_id) {
+          const others = await query(`
+            SELECT DISTINCT bp.user_id, u.name, u.handicap
+            FROM bookings b
+            JOIN booking_players bp ON bp.booking_id = b.id
+            JOIN users u ON u.id = bp.user_id
+            LEFT JOIN event_registrations er ON er.user_id = bp.user_id AND er.event_id = ?
+            WHERE b.portal_slot_id = ?
+              AND bp.user_id != ?
+              AND (er.team_id IS NULL OR er.team_id != ?)
+              AND b.status = 'confirmed'
+            ORDER BY bp.user_id
+            LIMIT 2
+          `, [tournamentId, mySlot.portal_slot_id, user.id, teamId]);
+          if (others[0]) {
+            opponentName = others[0].name;
+            opponentPlayingHcp = req.body.opponentPlayingHcp != null ? Number(req.body.opponentPlayingHcp) : others[0].handicap != null ? Math.round(Number(others[0].handicap) * (Number(allowancePct) / 100)) : 0;
+          }
+          if (others[1]) {
+            opponent2Name = others[1].name;
+            opponent2PlayingHcp = req.body.opponent2PlayingHcp != null ? Number(req.body.opponent2PlayingHcp) : others[1].handicap != null ? Math.round(Number(others[1].handicap) * (Number(allowancePct) / 100)) : 0;
+          }
+        }
+      }
+    }
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]

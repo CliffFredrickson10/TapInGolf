@@ -139,7 +139,7 @@ function scoreLabel(d: number): string {
 function scoreStyle(d: number): { border?: string; background?: string; text: string } {
   if (d <= -2) return { border: "#fbbf24", text: "#fbbf24" };
   if (d === -1) return { border: "#22c55e", text: "#22c55e" };
-  if (d === 0) return { text: "#a3e4bc" };
+  if (d === 0) return { text: "#1a5c38" };
   if (d === 1) return { border: "#fb923c", text: "#fb923c" };
   return { border: "#f87171", text: "#f87171" };
 }
@@ -962,7 +962,7 @@ export default function RoundCompleteScreen() {
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                              color: aBestN != null ? "#a3e4bc" : colors.mutedForeground }}>
+                              color: aBestN != null ? colors.primary : colors.mutedForeground }}>
                               {aBestN != null ? String(aBestN) : "—"}
                             </Text>
                           </View>
@@ -1068,13 +1068,13 @@ export default function RoundCompleteScreen() {
                 const rb = last
                   ? { borderRightWidth: 1.5, borderRightColor: bdr }
                   : { borderRightWidth: HW,  borderRightColor: bdr };
-                const nameColor = isMe ? "#a3e4bc" : "#fca5a5";
+                const nameColor = isMe ? colors.primary : "#b91c1c";
                 return (
                   <View style={[{ flex: 2, flexDirection: "row" }, rb]}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
                       borderRightWidth: HW, borderRightColor: bdr }}>
                       <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                        color: nr ? colors.mutedForeground : gross != null ? (isMe ? "#a3e4bc" : "#fca5a5") : colors.mutedForeground }}>
+                        color: nr ? colors.mutedForeground : gross != null ? (isMe ? colors.primary : "#b91c1c") : colors.mutedForeground }}>
                         {nr ? "NR" : gross != null ? String(gross) : "—"}
                       </Text>
                     </View>
@@ -1424,7 +1424,7 @@ export default function RoundCompleteScreen() {
                             <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                               borderRightWidth: HW, borderRightColor: bdr }}>
                               <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
-                                color: net != null ? "#a3e4bc" : colors.mutedForeground }}>
+                                color: net != null ? colors.primary : colors.mutedForeground }}>
                                 {nr ? "—" : net != null ? String(net) : "—"}
                               </Text>
                             </View>

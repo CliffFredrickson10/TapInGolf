@@ -171,6 +171,7 @@ export default function StartRoundScreen() {
   const selectedFormatLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;
   const linkedTournament = tournaments.find(t => t.id === linkedTournamentId) ?? null;
   const isBetterball = BETTERBALL_FORMATS.has(format);
+  const isMatchPlay  = format === "singles_match_play";
 
   // Casual player picker state
   const [casualPartner, setCasualPartner] = useState<CasualPlayer | null>(null);
@@ -838,12 +839,16 @@ export default function StartRoundScreen() {
               </Section>
 
               {/* ── Casual Players — only shown for non-tournament rounds ── */}
-              {!linkedTournamentId && !!format && format !== "singles_match_play" && (
-                <Section title={isBetterball ? "PARTNER & OPPONENTS" : "MARKING FOR (OPTIONAL)"}>
+              {!linkedTournamentId && !!format && (
+                <Section title={isBetterball ? "PARTNER & OPPONENTS" : isMatchPlay ? "OPPONENT" : "MARKING FOR (OPTIONAL)"}>
                   {/* Description text */}
                   {isBetterball ? (
                     <Text style={[styles.casualDesc, { color: colors.mutedForeground }]}>
                       Add your partner to score together. Opponents are optional.
+                    </Text>
+                  ) : isMatchPlay ? (
+                    <Text style={[styles.casualDesc, { color: colors.mutedForeground }]}>
+                      Add your opponent for this match play game.
                     </Text>
                   ) : (
                     <Text style={[styles.casualDesc, { color: colors.mutedForeground }]}>
@@ -916,8 +921,8 @@ export default function StartRoundScreen() {
                     </TouchableOpacity>
                   )}
 
-                  {/* Opp2 / Marker2 — only shown once opp1 is filled */}
-                  {casualOpp1 && (casualOpp2 ? (
+                  {/* Opp2 / Marker2 — not shown for singles match play (one opponent only) */}
+                  {casualOpp1 && !isMatchPlay && (casualOpp2 ? (
                     <View style={[styles.casualCard, { borderColor: (isBetterball ? "#dc2626" : "#a78bfa") + "50", backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "0c" }]}>
                       <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "25" }]}>
                         <Ionicons name="person" size={15} color={isBetterball ? "#dc2626" : "#a78bfa"} />

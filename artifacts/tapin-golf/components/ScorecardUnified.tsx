@@ -226,12 +226,13 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const totBBWHL = net2whl(f9bbW + b9bbW, f9bbL + b9bbL);
 
   /* ── Display helpers ──────────────────────────────────────── */
-  const resLbl = isNetOny || isMaxSc ? "Net" : isPar ? "Res" : isMP ? "Res" : "Pts";
+  const resLbl = isNetOny || isMaxSc ? "Net" : isPar ? "+/−" : isMP ? "Res" : "Pts";
   const whlC = (w: "W"|"H"|"L"|null) => !w ? MFG : w === "W" ? "#22c55e" : w === "H" ? GOLD : "#f87171";
 
   const rTxt = (r: number|null, nr: boolean): string => {
     if (nr || r == null) return "—";
-    if (isPar || isMP) return r === 1 ? "W" : r === 0 ? "H" : "L";
+    if (isMP)  return r === 1 ? "W" : r === 0 ? "H" : "L";
+    if (isPar) return r > 0 ? `+${r}` : r === 0 ? "0" : `${r}`;
     if (isMod || isBonusB) return r > 0 ? `+${r}` : `${r}`;
     return String(r);
   };

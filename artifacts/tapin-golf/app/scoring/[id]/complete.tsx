@@ -217,9 +217,10 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
-  const isMatchPlay  = round.format === "singles_match_play";
-  const isBetterball = round.format === "betterball_match_play";
-  const isFourball   = ["betterball_match_play", "fourball_stableford", "fourball_gross_betterball"].includes(round.format);
+  const isMatchPlay       = round.format === "singles_match_play";
+  const isBetterball      = round.format === "betterball_match_play";
+  const isFourball        = round.format === "betterball_match_play";
+  const isFourballNonMatch = ["fourball_stableford", "fourball_gross_betterball"].includes(round.format);
   const isAnyMatch   = isMatchPlay || isBetterball;
   const matchResult  = isMatchPlay && round.playerHoles
     ? calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
@@ -689,6 +690,272 @@ export default function RoundCompleteScreen() {
                       </>
                     );
                   })()}
+                </View>
+              );
+            })()
+          ) : isFourballNonMatch && round.playerHoles ? (
+            // ── Non-match Fourball scorecard (Stableford / Gross Betterball) ──
+            (() => {
+              const myHcp   = round.playing_handicap;
+              const prtHcp  = round.partner_playing_hcp  ?? round.playing_handicap;
+              const opp1Hcp = round.opponent_playing_hcp ?? 0;
+              const opp2Hcp = round.opponent2_playing_hcp ?? opp1Hcp;
+              const HW  = StyleSheet.hairlineWidth;
+              const bdr = colors.border;
+              const pBg = colors.primary;
+
+              const isStableford = round.format === "fourball_stableford";
+
+              const firstName = (n?: string | null) => (n ?? "?").split(" ")[0].slice(0, 6);
+              const meLabel   = "Me";
+              const prtLabel  = firstName(round.partner_name)   || "Prt";
+              const opp1Label = firstName(round.opponent_name)  || "Opp1";
+              const opp2Label = firstName(round.opponent2_name) || "Opp2";
+
+              let myTotG = 0, prtTotG = 0, o1TotG = 0, o2TotG = 0;
+              let myF9G = 0, prtF9G = 0, o1F9G = 0, o2F9G = 0;
+              let myB9G = 0, prtB9G = 0, o1B9G = 0, o2B9G = 0;
+              let aBestTotG = 0, aBestTotN = 0, aBestTotP = 0;
+              let aBestF9G = 0, aBestF9N = 0, aBestF9P = 0;
+              let aBestB9G = 0, aBestB9N = 0, aBestB9P = 0;
+              let f9Par = 0, b9Par = 0;
+
+              const holeData = sc.map(h => {
+                const mySaved   = holes[h.number];
+                const prtSaved  = round.playerHoles![`0_${h.number}`];
+                const opp1Saved = round.playerHoles![`1_${h.number}`];
+                const opp2Saved = round.playerHoles![`2_${h.number}`];
+
+                const myG   = mySaved?.is_nr   ? null : mySaved?.gross_score   ?? null;
+                const prtG  = prtSaved?.is_nr  ? null : prtSaved?.gross_score  ?? null;
+                const opp1G = opp1Saved?.is_nr ? null : opp1Saved?.gross_score ?? null;
+                const opp2G = opp2Saved?.is_nr ? null : opp2Saved?.gross_score ?? null;
+
+                const myHa   = getHA(h.stroke_index, myHcp);
+                const prtHa  = getHA(h.stroke_index, prtHcp);
+                const o1Ha   = getHA(h.stroke_index, opp1Hcp);
+                const o2Ha   = getHA(h.stroke_index, opp2Hcp);
+
+                const myNet  = myG   != null ? myG   - myHa  : null;
+                const prtNet = prtG  != null ? prtG  - prtHa : null;
+
+                const myP  = myG  != null ? calcPts(myG,   h.par, myHa)  : null;
+                const prtP = prtG != null ? calcPts(prtG,  h.par, prtHa) : null;
+
+                // Team A best ball
+                let aBestG: number | null = null, aBestN: number | null = null, aBestP: number | null = null;
+                let myBest = false, prtBest = false;
+                if (isStableford) {
+                  if (myP != null && (prtP == null || myP >= prtP)) { aBestP = myP; aBestG = myG; aBestN = myNet; myBest = true; }
+                  else if (prtP != null) { aBestP = prtP; aBestG = prtG; aBestN = prtNet; prtBest = true; }
+                } else {
+                  if (myG != null && (prtG == null || myG <= prtG)) { aBestG = myG; aBestN = myNet; myBest = true; }
+                  else if (prtG != null) { aBestG = prtG; aBestN = prtNet; prtBest = true; }
+                  aBestP = aBestG != null ? calcPts(aBestG, h.par, myBest ? myHa : prtHa) : null;
+                }
+
+                const isFront = h.number <= 9;
+                if (myG   != null) { myTotG  += myG;   if (isFront) myF9G   += myG;   else myB9G   += myG;   }
+                if (prtG  != null) { prtTotG += prtG;  if (isFront) prtF9G  += prtG;  else prtB9G  += prtG;  }
+                if (opp1G != null) { o1TotG  += opp1G; if (isFront) o1F9G   += opp1G; else o1B9G   += opp1G; }
+                if (opp2G != null) { o2TotG  += opp2G; if (isFront) o2F9G   += opp2G; else o2B9G   += opp2G; }
+                if (aBestG != null) { aBestTotG += aBestG; if (isFront) aBestF9G += aBestG; else aBestB9G += aBestG; }
+                if (aBestN != null) { aBestTotN += aBestN; if (isFront) aBestF9N += aBestN; else aBestB9N += aBestN; }
+                if (aBestP != null) { aBestTotP += aBestP; if (isFront) aBestF9P += aBestP; else aBestB9P += aBestP; }
+                if (isFront) f9Par += h.par; else b9Par += h.par;
+
+                return { h, myG, prtG, opp1G, opp2G, myBest, prtBest, myHa, aBestG, aBestN, aBestP,
+                         myNr: !!mySaved?.is_nr, prtNr: !!prtSaved?.is_nr,
+                         opp1Nr: !!opp1Saved?.is_nr, opp2Nr: !!opp2Saved?.is_nr };
+              });
+
+              const totPar = f9Par + b9Par;
+
+              const ptsColor = (p: number | null) =>
+                p == null ? colors.mutedForeground : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171";
+
+              const scoreCell = (gross: number | null, nr: boolean, isBest: boolean, isMyTeam: boolean) => (
+                <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                  backgroundColor: isBest ? (isMyTeam ? "#16a34a18" : "#3b82f618") : "transparent",
+                  borderRightWidth: HW, borderRightColor: bdr }}>
+                  <Text style={{ fontSize: 11,
+                    fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
+                    color: isBest ? (isMyTeam ? "#22c55e" : "#60a5fa") : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
+                    {nr ? "NR" : gross != null ? String(gross) : "—"}
+                  </Text>
+                </View>
+              );
+
+              const TotRow = (label: string, par: number, isLast: boolean,
+                mg: number, pg: number, o1g: number, o2g: number,
+                ag: number, an: number, ap: number) => (
+                <View key={label} style={{ flexDirection: "row",
+                  backgroundColor: isLast ? pBg : pBg + "e0",
+                  borderTopWidth: isLast ? 1.5 : HW,
+                  borderTopColor: isLast ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                  <View style={{ width: 28, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)", paddingVertical: 7 }}>
+                    <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold",
+                      color: isLast ? GOLD : "rgba(255,255,255,0.8)" }}>{label}</Text>
+                  </View>
+                  <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
+                  </View>
+                  <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
+                  {[mg, pg, o1g, o2g].map((g, i) => (
+                    <View key={i} style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{g > 0 ? String(g) : "—"}</Text>
+                    </View>
+                  ))}
+                  <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{ag > 0 ? String(ag) : "—"}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                    borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{an !== 0 || ag > 0 ? String(an) : "—"}</Text>
+                  </View>
+                  <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                    <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>{ap > 0 || (ag > 0) ? String(ap) : "—"}</Text>
+                  </View>
+                </View>
+              );
+
+              return (
+                <View style={{ borderRadius: 10, borderWidth: HW, borderColor: bdr, overflow: "hidden" }}>
+                  {/* Header row 1: group labels */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg, paddingVertical: 6 }}>
+                    <View style={{ width: 28, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>H</Text>
+                    </View>
+                    <View style={{ width: 26, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>Par</Text>
+                    </View>
+                    <View style={{ width: 24, alignItems: "center", borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.6)" }}>SI</Text>
+                    </View>
+                    {/* Team A */}
+                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Team A</Text>
+                    </View>
+                    {/* Team B */}
+                    <View style={{ flex: 2, alignItems: "center", borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>Team B</Text>
+                    </View>
+                    {/* Best Ball summary header */}
+                    <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.25)" }} />
+                    <View style={{ flex: 3, alignItems: "center" }}>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: GOLD }}>Best Ball</Text>
+                    </View>
+                  </View>
+                  {/* Header row 2: player names + column labels */}
+                  <View style={{ flexDirection: "row", backgroundColor: pBg + "cc",
+                    borderBottomWidth: 1.5, borderBottomColor: bdr }}>
+                    <View style={{ width: 28, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    <View style={{ width: 26, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.15)" }} />
+                    {[meLabel, prtLabel, opp1Label, opp2Label].map((lbl, i) => (
+                      <View key={i} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
+                        borderRightWidth: i === 1 ? 1.5 : HW,
+                        borderRightColor: i === 1 ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
+                          color: i < 2 ? "#a3e4bc" : "#fca5a5", letterSpacing: 0.2 }}>{lbl}</Text>
+                      </View>
+                    ))}
+                    <View style={{ width: 26, alignItems: "center", paddingVertical: 3,
+                      borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
+                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: GOLD }}>HC</Text>
+                    </View>
+                    {["Gross","Net","Pts"].map((lbl, i) => (
+                      <View key={lbl} style={{ flex: 1, alignItems: "center", paddingVertical: 3,
+                        borderRightWidth: i < 2 ? HW : 0,
+                        borderRightColor: "rgba(255,255,255,0.2)" }}>
+                        <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
+                          color: lbl === "Pts" ? GOLD : lbl === "Net" ? "#a3e4bc" : "rgba(255,255,255,0.7)" }}>{lbl}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Hole rows */}
+                  {holeData.map(({ h, myG, prtG, opp1G, opp2G, myBest, prtBest, myHa, aBestG, aBestN, aBestP,
+                                   myNr, prtNr, opp1Nr, opp2Nr }, idx) => {
+                    const rowBg = idx % 2 === 0 ? colors.card
+                      : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
+                    return (
+                      <React.Fragment key={h.number}>
+                        <View style={{ flexDirection: "row", backgroundColor: rowBg,
+                          borderBottomWidth: HW, borderBottomColor: bdr, alignItems: "center" }}>
+                          <View style={{ width: 28, alignItems: "center", justifyContent: "center", paddingVertical: 9,
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold", color: colors.foreground }}>{h.number}</Text>
+                          </View>
+                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.par}</Text>
+                          </View>
+                          <View style={{ width: 24, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
+                          </View>
+                          {scoreCell(myG,   myNr,   myBest,  true)}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                            backgroundColor: prtBest ? "#16a34a18" : "transparent",
+                            borderRightWidth: 1.5, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: prtBest ? "Inter_700Bold" : "Inter_400Regular",
+                              color: prtBest ? "#22c55e" : prtNr ? colors.mutedForeground : prtG != null ? colors.foreground : colors.mutedForeground }}>
+                              {prtNr ? "NR" : prtG != null ? String(prtG) : "—"}
+                            </Text>
+                          </View>
+                          {scoreCell(opp1G, opp1Nr, false, false)}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
+                            borderRightWidth: 1.5, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                              color: opp2Nr ? colors.mutedForeground : opp2G != null ? colors.foreground : colors.mutedForeground }}>
+                              {opp2Nr ? "NR" : opp2G != null ? String(opp2G) : "—"}
+                            </Text>
+                          </View>
+                          {/* HC strokes for my hole */}
+                          <View style={{ width: 26, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: myHa > 0 ? "Inter_700Bold" : "Inter_400Regular",
+                              color: myHa > 0 ? GOLD : colors.mutedForeground }}>
+                              {myHa > 0 ? `+${myHa}` : "0"}
+                            </Text>
+                          </View>
+                          {/* Best Gross */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                              color: aBestG != null ? colors.foreground : colors.mutedForeground }}>
+                              {aBestG != null ? String(aBestG) : "—"}
+                            </Text>
+                          </View>
+                          {/* Best Net */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
+                            borderRightWidth: HW, borderRightColor: bdr }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_400Regular",
+                              color: aBestN != null ? "#a3e4bc" : colors.mutedForeground }}>
+                              {aBestN != null ? String(aBestN) : "—"}
+                            </Text>
+                          </View>
+                          {/* Best Pts */}
+                          <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+                            <Text style={{ fontSize: 11, fontFamily: "Inter_700Bold",
+                              color: ptsColor(aBestP) }}>
+                              {aBestP != null ? String(aBestP) : "—"}
+                            </Text>
+                          </View>
+                        </View>
+                        {h.number === 9 && TotRow("OUT", f9Par, false,
+                          myF9G, prtF9G, o1F9G, o2F9G, aBestF9G, aBestF9N, aBestF9P)}
+                      </React.Fragment>
+                    );
+                  })}
+                  {TotRow("IN",  b9Par, false, myB9G, prtB9G, o1B9G, o2B9G, aBestB9G, aBestB9N, aBestB9P)}
+                  {TotRow("TOT", totPar, true, myTotG, prtTotG, o1TotG, o2TotG, aBestTotG, aBestTotN, aBestTotP)}
                 </View>
               );
             })()

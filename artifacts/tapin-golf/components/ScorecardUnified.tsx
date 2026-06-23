@@ -96,7 +96,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const dHcp   = o2Hcp;
 
   const showTeam = isBBFmt;
-  const showRes  = !isGrOnly;
+  const showRes  = true;
 
   /* ── Individual result per player per hole ────────────────── */
   function calcR(g: number, par: number, ha: number): number {
@@ -226,7 +226,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const totBBWHL = net2whl(f9bbW + b9bbW, f9bbL + b9bbL);
 
   /* ── Display helpers ──────────────────────────────────────── */
-  const resLbl = isNetOny || isMaxSc ? "Net" : isPar ? "+/−" : isMP ? "Res" : "Pts";
+  const resLbl = isGrOnly ? "—" : isNetOny || isMaxSc ? "Net" : isPar ? "+/−" : isMP ? "Res" : "Pts";
   const whlC = (w: "W"|"H"|"L"|null) => !w ? MFG : w === "W" ? "#22c55e" : w === "H" ? GOLD : "#f87171";
 
   const rTxt = (r: number|null, nr: boolean): string => {

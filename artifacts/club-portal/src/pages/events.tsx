@@ -3369,6 +3369,24 @@ ${bodyHtml}
                               </span>
                             )}
                           </div>
+                          {/* ── Interval start: prominent generate CTA when no slots exist ── */}
+                          {!form.shotgun_start && eventSlots.length === 0 && !checkingExistingSlots && (
+                            <div className="rounded-xl border-2 border-dashed border-[#1a5c38]/40 bg-[#1a5c38]/5 p-5 flex flex-col items-center gap-3 text-center">
+                              <Clock className="h-8 w-8 text-[#1a5c38]/50" />
+                              <div>
+                                <p className="text-sm font-semibold text-[#1a5c38]">No tee schedule yet</p>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  Generate tee slots for {tournamentDates.length === 1 ? "this day" : `all ${tournamentDates.length} days`} at once, or use the Generate button on each day below.
+                                </p>
+                              </div>
+                              <Button type="button" size="sm"
+                                className="bg-[#1a5c38] hover:bg-[#164d30] text-white h-8 px-4 text-xs gap-1.5"
+                                onClick={() => { setGenDialogDate(""); setGenDialogOpen(true); }}>
+                                <Clock className="h-3.5 w-3.5" />
+                                Generate Tee Schedule
+                              </Button>
+                            </div>
+                          )}
                           {!editId && !form.shotgun_start && !importBannerDismissed && (checkingExistingSlots || existingGeneralSlots.length > 0) && (
                             <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 flex items-start gap-2.5">
                               <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
@@ -3476,8 +3494,12 @@ ${bodyHtml}
                               })}
                             </div>
                           )}
-                          {!editId && (
-                            <p className="text-[11px] text-muted-foreground">After saving, use Generate on each day to quickly build a full tee schedule.</p>
+                          {!editId && !form.shotgun_start && eventSlots.length > 0 && (
+                            <Button type="button" variant="outline" size="sm"
+                              className="w-full h-7 text-xs border-[#1a5c38]/30 text-[#1a5c38] hover:bg-[#1a5c38]/5 gap-1.5"
+                              onClick={() => { setGenDialogDate(""); setGenDialogOpen(true); }}>
+                              <Plus className="h-3 w-3" />Re-generate / Add more days
+                            </Button>
                           )}
                         </div>
                       );

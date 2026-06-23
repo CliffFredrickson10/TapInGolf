@@ -55,6 +55,9 @@ const FORMAT_LABELS: Record<string, string> = {
   fourball_stableford: "Betterball Stableford",
   fourball_gross_betterball: "Four-Ball Gross Betterball",
   american_scramble: "American Scramble",
+  singles_match_play: "Singles Match Play",
+  singles_stableford_match_play: "Singles Stableford Match Play",
+  betterball_match_play: "Betterball Match Play",
 };
 
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
@@ -85,6 +88,30 @@ function calcMatchResult(
     const oppNet = opp.gross_score  - getHA(h.stroke_index, oppHcp);
     if      (myNet < oppNet) won++;
     else if (myNet > oppNet) lost++;
+    else                     halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  return { holesUp, holesPlayed, holesRemaining, won, lost, halved, ...buildMatchLabel(holesUp, holesPlayed, holesRemaining, won, lost, halved) };
+}
+
+function calcMatchResultByPts(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+) {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    const opp  = playerHoles[`0_${h.number}`];
+    if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
+    const myPts  = calcPts(mine.gross_score, h.par, getHA(h.stroke_index, myHcp));
+    const oppPts = calcPts(opp.gross_score,  h.par, getHA(h.stroke_index, oppHcp));
+    if      (myPts > oppPts) won++;
+    else if (myPts < oppPts) lost++;
     else                     halved++;
   }
   const holesPlayed    = won + lost + halved;
@@ -217,13 +244,16 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
-  const isMatchPlay       = round.format === "singles_match_play";
+  const isMatchPlay       = round.format === "singles_match_play" || round.format === "singles_stableford_match_play";
+  const singleMetric      = round.format === "singles_stableford_match_play" ? "stableford" : "net";
   const isBetterball      = round.format === "betterball_match_play";
   const isFourball        = round.format === "betterball_match_play";
   const isFourballNonMatch = ["fourball_stableford", "fourball_gross_betterball"].includes(round.format);
   const isAnyMatch   = isMatchPlay || isBetterball;
   const matchResult  = isMatchPlay && round.playerHoles
-    ? calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    ? (singleMetric === "stableford"
+        ? calcMatchResultByPts(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+        : calcMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : isBetterball && round.playerHoles
     ? calcBBMatchResult(sc, holes, round.playerHoles, round.playing_handicap, round.opponent_playing_hcp ?? 0)
     : null;
@@ -376,11 +406,11 @@ export default function RoundCompleteScreen() {
 
               let teamWon = 0, teamLost = 0, teamHalved = 0;
               let myTotG = 0, prtTotG = 0, o1TotG = 0, o2TotG = 0;
-              let myTotP = 0, prtTotP = 0, o1TotP = 0, o2TotP = 0;
+              let myTotN = 0, prtTotN = 0, o1TotN = 0, o2TotN = 0;
               let myF9G = 0, prtF9G = 0, o1F9G = 0, o2F9G = 0;
-              let myF9P = 0, prtF9P = 0, o1F9P = 0, o2F9P = 0;
+              let myF9N = 0, prtF9N = 0, o1F9N = 0, o2F9N = 0;
               let myB9G = 0, prtB9G = 0, o1B9G = 0, o2B9G = 0;
-              let myB9P = 0, prtB9P = 0, o1B9P = 0, o2B9P = 0;
+              let myB9N = 0, prtB9N = 0, o1B9N = 0, o2B9N = 0;
               let f9Won = 0, f9Lost = 0, f9Halved = 0;
               let b9Won = 0, b9Lost = 0, b9Halved = 0;
 
@@ -460,15 +490,15 @@ export default function RoundCompleteScreen() {
                 if (prtG  != null) { prtTotG  += prtG;  if (isFront) prtF9G  += prtG;  else prtB9G  += prtG;  }
                 if (opp1G != null) { o1TotG   += opp1G; if (isFront) o1F9G   += opp1G; else o1B9G   += opp1G; }
                 if (opp2G != null) { o2TotG   += opp2G; if (isFront) o2F9G   += opp2G; else o2B9G   += opp2G; }
-                if (myP   != null) { myTotP   += myP;   if (isFront) myF9P   += myP;   else myB9P   += myP;   }
-                if (prtP  != null) { prtTotP  += prtP;  if (isFront) prtF9P  += prtP;  else prtB9P  += prtP;  }
-                if (o1P   != null) { o1TotP   += o1P;   if (isFront) o1F9P   += o1P;   else o1B9P   += o1P;   }
-                if (o2P   != null) { o2TotP   += o2P;   if (isFront) o2F9P   += o2P;   else o2B9P   += o2P;   }
+                if (myNet  != null) { myTotN  += myNet;  if (isFront) myF9N  += myNet;  else myB9N  += myNet;  }
+                if (prtNet != null) { prtTotN += prtNet; if (isFront) prtF9N += prtNet; else prtB9N += prtNet; }
+                if (o1Net  != null) { o1TotN  += o1Net;  if (isFront) o1F9N  += o1Net;  else o1B9N  += o1Net;  }
+                if (o2Net  != null) { o2TotN  += o2Net;  if (isFront) o2F9N  += o2Net;  else o2B9N  += o2Net;  }
                 if (res === "W") { if (isFront) f9Won++;    else b9Won++;    }
                 if (res === "L") { if (isFront) f9Lost++;   else b9Lost++;   }
                 if (res === "H") { if (isFront) f9Halved++; else b9Halved++; }
 
-                return { h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
+                return { h, myG, prtG, opp1G, opp2G, myNet, prtNet, o1Net, o2Net,
                          myBest, prtBest, o1Best, o2Best, res,
                          mySaved, prtSaved, opp1Saved, opp2Saved };
               });
@@ -562,7 +592,7 @@ export default function RoundCompleteScreen() {
                         borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
                           color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
-                          {i % 2 === 0 ? "Score" : "Res"}
+                          {i % 2 === 0 ? "Score" : "Net"}
                         </Text>
                       </View>
                     ))}
@@ -627,7 +657,7 @@ export default function RoundCompleteScreen() {
 
                     return (
                       <>
-                        {holeData.map(({ h, myG, prtG, opp1G, opp2G, myP, prtP, o1P, o2P,
+                        {holeData.map(({ h, myG, prtG, opp1G, opp2G, myNet, prtNet, o1Net, o2Net,
                                          myBest, prtBest, o1Best, o2Best, res,
                                          mySaved, prtSaved, opp1Saved, opp2Saved }, idx) => {
                           const rowBg = idx % 2 === 0 ? colors.card
@@ -649,10 +679,10 @@ export default function RoundCompleteScreen() {
                                   borderRightWidth: HW, borderRightColor: bdr }}>
                                   <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                                 </View>
-                                {playerPair(myG,   myP,   !!mySaved?.is_nr,   myBest,   false)}
-                                {playerPair(prtG,  prtP,  !!prtSaved?.is_nr,  prtBest,  true)}
-                                {playerPair(opp1G, o1P,   !!opp1Saved?.is_nr, o1Best,   false)}
-                                {playerPair(opp2G, o2P,   !!opp2Saved?.is_nr, o2Best,   false)}
+                                {playerPair(myG,   myNet,  !!mySaved?.is_nr,   myBest,   false)}
+                                {playerPair(prtG,  prtNet, !!prtSaved?.is_nr,  prtBest,  true)}
+                                {playerPair(opp1G, o1Net,  !!opp1Saved?.is_nr, o1Best,   false)}
+                                {playerPair(opp2G, o2Net,  !!opp2Saved?.is_nr, o2Best,   false)}
                                 <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                                   <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
                                 </View>
@@ -660,8 +690,8 @@ export default function RoundCompleteScreen() {
                               {/* OUT totals after hole 9 */}
                               {h.number === 9 && TotRow(
                                 "OUT", f9Par, false,
-                                myF9G, myF9P, prtF9G, prtF9P,
-                                o1F9G, o1F9P, o2F9G, o2F9P,
+                                myF9G, myF9N, prtF9G, prtF9N,
+                                o1F9G, o1F9N, o2F9G, o2F9N,
                                 f9Won, f9Lost, f9Halved,
                               )}
                             </React.Fragment>
@@ -669,14 +699,14 @@ export default function RoundCompleteScreen() {
                         })}
                         {TotRow(
                           "IN", b9Par, false,
-                          myB9G, myB9P, prtB9G, prtB9P,
-                          o1B9G, o1B9P, o2B9G, o2B9P,
+                          myB9G, myB9N, prtB9G, prtB9N,
+                          o1B9G, o1B9N, o2B9G, o2B9N,
                           b9Won, b9Lost, b9Halved,
                         )}
                         {TotRow(
                           "TOT", totPar, true,
-                          myTotG, myTotP, prtTotG, prtTotP,
-                          o1TotG, o1TotP, o2TotG, o2TotP,
+                          myTotG, myTotN, prtTotG, prtTotN,
+                          o1TotG, o1TotN, o2TotG, o2TotN,
                           teamWon, teamLost, teamHalved,
                         )}
                       </>
@@ -971,8 +1001,10 @@ export default function RoundCompleteScreen() {
 
               let myTotG = 0, oppTotG = 0;
               let myTotN = 0, oppTotN = 0;
+              let myTotP = 0, oppTotP = 0;
               let myF9G = 0, oppF9G = 0, myB9G = 0, oppB9G = 0;
               let myF9N = 0, oppF9N = 0, myB9N = 0, oppB9N = 0;
+              let myF9P = 0, oppF9P = 0, myB9P = 0, oppB9P = 0;
               let totW = 0, totL = 0, totH = 0;
               let f9W = 0, f9L = 0, f9H = 0;
               let b9W = 0, b9L = 0, b9H = 0;
@@ -986,14 +1018,24 @@ export default function RoundCompleteScreen() {
 
                 const myHa  = getHA(h.stroke_index, myHcp);
                 const oppHa = getHA(h.stroke_index, oppHcp);
-                const myN   = myG  != null ? myG  - myHa  : null;
-                const oppN  = oppG != null ? oppG - oppHa : null;
+                const myN    = myG  != null ? myG  - myHa  : null;
+                const oppN   = oppG != null ? oppG - oppHa : null;
+                const myPts  = myG  != null ? calcPts(myG,  h.par, myHa)  : null;
+                const oppPts = oppG != null ? calcPts(oppG, h.par, oppHa) : null;
 
                 let res: "W" | "L" | "H" | null = null;
-                if (myN != null && oppN != null) {
-                  if      (myN < oppN) { res = "W"; totW++; }
-                  else if (myN > oppN) { res = "L"; totL++; }
-                  else                 { res = "H"; totH++; }
+                if (singleMetric === "stableford") {
+                  if (myPts != null && oppPts != null) {
+                    if      (myPts > oppPts) { res = "W"; totW++; }
+                    else if (myPts < oppPts) { res = "L"; totL++; }
+                    else                     { res = "H"; totH++; }
+                  }
+                } else {
+                  if (myN != null && oppN != null) {
+                    if      (myN < oppN) { res = "W"; totW++; }
+                    else if (myN > oppN) { res = "L"; totL++; }
+                    else                 { res = "H"; totH++; }
+                  }
                 }
 
                 const isFront = h.number <= 9;
@@ -1001,11 +1043,13 @@ export default function RoundCompleteScreen() {
                 if (oppG != null) { oppTotG += oppG; if (isFront) oppF9G += oppG; else oppB9G += oppG; }
                 if (myN  != null) { myTotN  += myN;  if (isFront) myF9N  += myN;  else myB9N  += myN;  }
                 if (oppN != null) { oppTotN += oppN; if (isFront) oppF9N += oppN; else oppB9N += oppN; }
+                if (myPts  != null) { myTotP  += myPts;  if (isFront) myF9P  += myPts;  else myB9P  += myPts;  }
+                if (oppPts != null) { oppTotP += oppPts; if (isFront) oppF9P += oppPts; else oppB9P += oppPts; }
                 if (res === "W") { if (isFront) f9W++; else b9W++; }
                 if (res === "L") { if (isFront) f9L++; else b9L++; }
                 if (res === "H") { if (isFront) f9H++; else b9H++; }
 
-                return { h, myG, oppG, myN, oppN, res, myNr: !!mySaved?.is_nr, oppNr: !!oppSaved?.is_nr };
+                return { h, myG, oppG, myN, oppN, myPts, oppPts, res, myNr: !!mySaved?.is_nr, oppNr: !!oppSaved?.is_nr };
               });
 
               const resColor = (r: "W"|"L"|"H"|null) =>
@@ -1116,14 +1160,14 @@ export default function RoundCompleteScreen() {
                         borderRightWidth: rb, borderRightColor: "rgba(255,255,255,0.2)" }}>
                         <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
                           color: "rgba(255,255,255,0.55)", letterSpacing: 0.3 }}>
-                          {i % 2 === 0 ? "Score" : "Net"}
+                          {i % 2 === 0 ? "Score" : singleMetric === "stableford" ? "Pts" : "Net"}
                         </Text>
                       </View>
                     ))}
                     <View style={{ width: 32 }} />
                   </View>
                   {/* Hole rows */}
-                  {holeData.map(({ h, myG, oppG, myN, oppN, res, myNr, oppNr }, idx) => {
+                  {holeData.map(({ h, myG, oppG, myN, oppN, myPts, oppPts, res, myNr, oppNr }, idx) => {
                     const rowBg = idx % 2 === 0 ? colors.card
                       : (colors.card === "#fff" || colors.card === "#ffffff" ? "#f7faf8" : colors.background);
                     const rc = resColor(res);
@@ -1143,18 +1187,27 @@ export default function RoundCompleteScreen() {
                             borderRightWidth: HW, borderRightColor: bdr }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: colors.mutedForeground }}>{h.stroke_index}</Text>
                           </View>
-                          {playerPair(myG,  myN,  myNr,  true,  true)}
-                          {playerPair(oppG, oppN, oppNr, false, false)}
+                          {playerPair(myG,  singleMetric === "stableford" ? myPts  : myN,  myNr,  true,  true)}
+                          {playerPair(oppG, singleMetric === "stableford" ? oppPts : oppN, oppNr, false, false)}
                           <View style={{ width: 32, alignItems: "center", justifyContent: "center" }}>
                             <Text style={{ fontSize: 12, fontFamily: "Inter_700Bold", color: rc }}>{res ?? "—"}</Text>
                           </View>
                         </View>
-                        {h.number === 9 && TotRow("OUT", f9Par, false, myF9G, myF9N, oppF9G, oppF9N, f9W, f9L, f9H)}
+                        {h.number === 9 && TotRow("OUT", f9Par, false,
+                          myF9G, singleMetric === "stableford" ? myF9P  : myF9N,
+                          oppF9G, singleMetric === "stableford" ? oppF9P : oppF9N,
+                          f9W, f9L, f9H)}
                       </React.Fragment>
                     );
                   })}
-                  {TotRow("IN",  b9Par,  false, myB9G, myB9N, oppB9G, oppB9N, b9W, b9L, b9H)}
-                  {TotRow("TOT", totPar, true,  myTotG, myTotN, oppTotG, oppTotN, totW, totL, totH)}
+                  {TotRow("IN",  b9Par,  false,
+                    myB9G,  singleMetric === "stableford" ? myB9P  : myB9N,
+                    oppB9G, singleMetric === "stableford" ? oppB9P : oppB9N,
+                    b9W, b9L, b9H)}
+                  {TotRow("TOT", totPar, true,
+                    myTotG,  singleMetric === "stableford" ? myTotP  : myTotN,
+                    oppTotG, singleMetric === "stableford" ? oppTotP : oppTotN,
+                    totW, totL, totH)}
                 </View>
               );
             })()

@@ -76896,7 +76896,7 @@ router23.post("/scoring/rounds", async (req, res) => {
     let partnerPlayingHcp = 0;
     let opponent2Name = null;
     let opponent2PlayingHcp = 0;
-    if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play")) {
+    if (tournamentId && (format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play")) {
       const teamReg = await row(
         "SELECT team_id FROM event_registrations WHERE user_id = ? AND event_id = ? LIMIT 1",
         [user.id, tournamentId]
@@ -77258,6 +77258,9 @@ function getHALocal(si, ph) {
   if (ph <= 18) return si <= ph ? 1 : 0;
   return 1 + (si <= ph - 18 ? 1 : 0);
 }
+function getStablefordPts(gross, par, ha) {
+  return Math.max(0, par + 2 - (gross - ha));
+}
 router23.post("/scoring/rounds/:id/complete", async (req, res) => {
   try {
     const user = await getUser(req);
@@ -77294,12 +77297,12 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
           holes_played = ?
       WHERE id = ?
     `, [totalGross, totalNet, totalPoints, holeRows.length, roundId]);
-    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play")) {
+    if (round.match_id && (round.format === "singles_match_play" || round.format === "betterball_match_play" || round.format === "singles_stableford_match_play")) {
       try {
         const match = await row("SELECT * FROM knockout_matches WHERE id = ?", [round.match_id]);
         if (match && match.status !== "complete" && match.status !== "bye") {
           let won = 0, lost = 0, halved = 0;
-          if (round.format === "singles_match_play") {
+          if (round.format === "singles_match_play" || round.format === "singles_stableford_match_play") {
             const oppRows = await query(
               "SELECT hole_number, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ? AND player_index = 0",
               [roundId]
@@ -77309,11 +77312,19 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
             for (const h of holeRows) {
               const opp = oppMap[h.hole_number];
               if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
-              const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
-              const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
-              if (myNet < oppNet) won++;
-              else if (myNet > oppNet) lost++;
-              else halved++;
+              if (round.format === "singles_stableford_match_play") {
+                const myPts = getStablefordPts(h.gross_score, h.par, getHALocal(h.stroke_index, round.playing_handicap));
+                const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0));
+                if (myPts > oppPts) won++;
+                else if (myPts < oppPts) lost++;
+                else halved++;
+              } else {
+                const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
+                const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+                if (myNet < oppNet) won++;
+                else if (myNet > oppNet) lost++;
+                else halved++;
+              }
             }
           } else {
             const pRows = await query(

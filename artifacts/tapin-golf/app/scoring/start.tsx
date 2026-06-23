@@ -242,7 +242,7 @@ export default function StartRoundScreen() {
 
   // Fetch partner/opponent/marker info whenever a tournament is linked
   useEffect(() => {
-    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play";
     const isBetterballGroup = isBetterball && !isKnockoutMatch;
     const isIndividualTournament = !isBetterball && !isKnockoutMatch;
 
@@ -337,11 +337,13 @@ export default function StartRoundScreen() {
     setCasualPartner(null); setCasualOpp1(null); setCasualOpp2(null);
     let mappedFormat: string;
     if (t.knockout_type === "individual") {
-      // Singles knockout → always matchplay scoring
-      mappedFormat = "singles_match_play";
+      mappedFormat = t.knockout_scoring_format === "stableford"
+        ? "singles_stableford_match_play"
+        : "singles_match_play";
     } else if (t.knockout_type === "team") {
-      // Team knockout is always betterball matchplay — triggers opponent/partner lookup
-      mappedFormat = "betterball_match_play";
+      mappedFormat = t.knockout_scoring_format === "stableford"
+        ? "fourball_stableford"
+        : "betterball_match_play";
     } else {
       // Regular stroke/stableford event
       const raw = t.format ?? "stableford";
@@ -356,7 +358,7 @@ export default function StartRoundScreen() {
     if (!selectedClub) { Alert.alert("Select a club", "Please choose a golf club first."); return; }
 
     // Validate all visible handicap fields are whole numbers
-    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+    const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play";
     const ch = parseInt(courseHcp, 10);
     if (isNaN(ch) || String(ch) !== courseHcp.trim()) {
       Alert.alert("Handicap Required", "Please enter your Course Handicap as a whole number before starting."); return;
@@ -549,7 +551,7 @@ export default function StartRoundScreen() {
 
                     {/* Partner / opponent preview */}
                     {(() => {
-                      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play";
+                      const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play";
                       const isBetterballGroup = isBetterball && !isKnockoutMatch;
                       if (!isKnockoutMatch && !isBetterballGroup) return null;
 

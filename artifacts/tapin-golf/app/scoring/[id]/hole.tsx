@@ -138,6 +138,43 @@ function calcMatchStatus(
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
+// ─── Stableford Singles Match Status ─────────────────────────────────────────
+function calcStablefardSinglesMatchStatus(
+  sc: ScorecardHole[],
+  myHoles: Record<number, SavedHole>,
+  playerHoles: Record<string, { gross_score: number | null; is_nr: number }>,
+  myHcp: number,
+  oppHcp: number
+): MatchStatus {
+  let won = 0, lost = 0, halved = 0;
+  for (const h of sc) {
+    const mine = myHoles[h.number];
+    const opp  = playerHoles[`0_${h.number}`];
+    if (!mine || !opp || mine.is_nr || opp.is_nr || mine.gross_score == null || opp.gross_score == null) continue;
+    const myPts  = calcPoints(mine.gross_score, h.par, getHA(h.stroke_index, myHcp));
+    const oppPts = calcPoints(opp.gross_score,  h.par, getHA(h.stroke_index, oppHcp));
+    if      (myPts > oppPts) won++;
+    else if (myPts < oppPts) lost++;
+    else                     halved++;
+  }
+  const holesPlayed    = won + lost + halved;
+  const holesRemaining = sc.length - holesPlayed;
+  const holesUp        = won - lost;
+  if (holesPlayed > 0 && holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+  if (holesPlayed > 0 && -holesUp > holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
+  if (holesPlayed === 0 || holesUp === 0)
+    return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
+  if (holesUp > 0 && holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+  if (holesUp < 0 && -holesUp === holesRemaining)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
+  if (holesUp > 0)
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+  return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
+}
+
 // ─── Betterball Match Status ──────────────────────────────────────────────────
 function calcBetterballMatchStatus(
   sc: ScorecardHole[],
@@ -537,7 +574,7 @@ export default function HoleEntryScreen() {
   };
 
   const isLastHole         = holeIdx === scorecard.length - 1;
-  const isMatchPlay        = round.format === "singles_match_play";
+  const isMatchPlay        = round.format === "singles_match_play" || round.format === "singles_stableford_match_play";
   const isKnockoutBetterball = round.format === "betterball_match_play";
   // isBetterball = any round with 4-player input (knockout betterball OR regular betterball with group)
   const isBetterball       = hasFourPlayers(round);
@@ -549,7 +586,9 @@ export default function HoleEntryScreen() {
   const hasOpponents       = isAnyMatch || isBetterball || isMarkerRound;
 
   const matchSt: MatchStatus | null = isMatchPlay
-    ? calcMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+    ? (round.format === "singles_stableford_match_play"
+        ? calcStablefardSinglesMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
+        : calcMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0))
     : isKnockoutBetterball
     ? calcBetterballMatchStatus(scorecard, round.holes, round.playerHoles ?? {}, round.playing_handicap, round.opponent_playing_hcp ?? 0)
     : null;

@@ -50,6 +50,7 @@ const FORMAT_LABELS: Record<string, string> = {
   fourball_gross_betterball: "Four-Ball Gross Betterball",
   fourball_net_betterball: "Four-Ball Net Betterball",
   betterball_match_play: "Betterball Match Play",
+  singles_stableford_match_play: "Singles Stableford Match Play",
   american_scramble: "American Scramble",
   shamble: "Shamble",
   eclectic: "Eclectic",

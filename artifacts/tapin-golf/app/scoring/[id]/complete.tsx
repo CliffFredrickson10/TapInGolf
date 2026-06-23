@@ -895,7 +895,7 @@ export default function RoundCompleteScreen() {
                     {/* Team B spans flex:4 */}
                     <View style={{ flex: 4, alignItems: "center", justifyContent: "center",
                       borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)" }}>
-                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#dc2626" }}>Team B</Text>
+                      <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#f87171" }}>Team B</Text>
                     </View>
                     {/* Best pts per team */}
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
@@ -903,7 +903,7 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>A</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#dc2626" }}>B</Text>
+                      <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold", color: "#f87171" }}>B</Text>
                     </View>
                   </View>
                   {/* Header row 2: player names + Gross/Pts sub-labels */}
@@ -922,7 +922,7 @@ export default function RoundCompleteScreen() {
                         borderRightWidth: last ? 1.5 : HW,
                         borderRightColor: last ? "rgba(255,255,255,0.4)" : "rgba(255,255,255,0.2)" }}>
                         <Text style={{ fontSize: 8, fontFamily: "Inter_700Bold",
-                          color: team === "A" ? "#a3e4bc" : "#dc2626" }}>{lbl}</Text>
+                          color: team === "A" ? "#a3e4bc" : "#f87171" }}>{lbl}</Text>
                         <Text style={{ fontSize: 6, color: "rgba(255,255,255,0.4)",
                           fontFamily: "Inter_400Regular" }}>G / Pts</Text>
                       </View>
@@ -932,7 +932,7 @@ export default function RoundCompleteScreen() {
                       <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>Pts</Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 3 }}>
-                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#dc2626" }}>Pts</Text>
+                      <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold", color: "#f87171" }}>Pts</Text>
                     </View>
                   </View>
 

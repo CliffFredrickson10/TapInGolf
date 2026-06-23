@@ -95,9 +95,9 @@ function getStablefordMax(fmt: string, par: number, ha: number): number | null {
       return par + 1 + ha; // net bogey = worst outcome in par game (-1 pt)
     case "individual_bogey":
       return par + 2 + ha; // net double bogey = worst outcome in bogey game (-1 pt)
-    // Bonus bogey: double bogey nets 1 pt; triple bogey = 0 pts (pickup point)
+    // Bonus bogey: double bogey or worse = -2 (worst score); nothing to gain by continuing
     case "individual_bonus_bogey":
-      return par + 3 + ha;
+      return par + 2 + ha;
     // All standard stableford formats: net double bogey = 0 pts (R&A Rule 21.1b(2))
     default:
       return par + 2 + ha;
@@ -113,12 +113,11 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
       if (netVsPar === 1) return -1;
       return -3;
     case "individual_bonus_bogey":
-      if (netVsPar <= -2) return 4;
-      if (netVsPar === -1) return 3;
-      if (netVsPar === 0) return 2;
-      if (netVsPar === 1) return 2;
-      if (netVsPar === 2) return 1;
-      return 0;
+      if (netVsPar <= -2) return 2;   // eagle or better = +2
+      if (netVsPar === -1) return 1;  // birdie = +1
+      if (netVsPar === 0) return 0;   // par = 0 (level)
+      if (netVsPar === 1) return -1;  // bogey = -1
+      return -2;                       // double bogey or worse = -2
     case "par_bogey":
     case "individual_par":
       return netVsPar < 0 ? 1 : netVsPar === 0 ? 0 : -1;
@@ -1051,12 +1050,20 @@ export default function HoleEntryScreen() {
         </View>
 
         {/* Points summary — individual (including marker rounds; NOT matchplay / betterball) */}
-        {pts != null && (!hasOpponents || isMarkerRound) && (
-          <View style={styles.ptsSummary}>
-            <Text style={styles.ptsSummaryLabel}>Stableford Points</Text>
-            <Text style={[styles.ptsSummaryValue, { color: pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171" }]}>{pts}</Text>
-          </View>
-        )}
+        {pts != null && (!hasOpponents || isMarkerRound) && (() => {
+          const isBonusBogey = round.format === "individual_bonus_bogey";
+          const ptsLabel = isBonusBogey ? "Bonus Bogey Points" : "Stableford Points";
+          const ptsTxt   = isBonusBogey ? (pts > 0 ? `+${pts}` : `${pts}`) : String(pts);
+          const ptsClr   = isBonusBogey
+            ? (pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171")
+            : (pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171");
+          return (
+            <View style={styles.ptsSummary}>
+              <Text style={styles.ptsSummaryLabel}>{ptsLabel}</Text>
+              <Text style={[styles.ptsSummaryValue, { color: ptsClr }]}>{ptsTxt}</Text>
+            </View>
+          );
+        })()}
 
         {/* Best-ball points summary for regular (non-knockout) betterball competitions */}
         {isBetterball && !isKnockoutBetterball && bbPts != null && (

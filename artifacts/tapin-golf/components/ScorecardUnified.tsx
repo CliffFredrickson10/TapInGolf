@@ -106,11 +106,11 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (isMod)     { const d = g - ha - par; return d <= -2 ? 3 : d === -1 ? 1 : d === 0 ? 0 : d === 1 ? -1 : -3; }
     if (isBonusB)  {
       const d = g - ha - par;
-      if (d <= -2) return 4;
-      if (d === -1) return 3;
-      if (d <= 1)  return 2; // par or bogey
-      if (d === 2) return 1;
-      return 0;
+      if (d <= -2) return 2;   // eagle or better = +2
+      if (d === -1) return 1;  // birdie = +1
+      if (d === 0)  return 0;  // par = 0
+      if (d === 1)  return -1; // bogey = -1
+      return -2;                // double bogey or worse = -2
     }
     return Math.max(0, par + 2 - (g - ha));  // stableford default
   }
@@ -232,15 +232,15 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const rTxt = (r: number|null, nr: boolean): string => {
     if (nr || r == null) return "—";
     if (isPar || isMP) return r === 1 ? "W" : r === 0 ? "H" : "L";
-    if (isMod) return r > 0 ? `+${r}` : `${r}`;
+    if (isMod || isBonusB) return r > 0 ? `+${r}` : `${r}`;
     return String(r);
   };
   const rClr = (r: number|null, nr: boolean) => {
     if (nr || r == null) return MFG;
     if (isPar || isMP) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : GOLD;
     if (isMod) return r > 0 ? "#22c55e" : r < 0 ? "#f87171" : FG;
-    // Bonus bogey: 4/3 pts = green, 2 pts = gold, 1 pt = orange, 0 pts = red
-    if (isBonusB) return r >= 3 ? "#22c55e" : r === 2 ? GOLD : r === 1 ? "#fb923c" : "#f87171";
+    // Bonus bogey: +2/+1 = green, 0 = gold, −1/−2 = red
+    if (isBonusB) return r > 0 ? "#22c55e" : r === 0 ? GOLD : "#f87171";
     // Standard stableford
     return r >= 3 ? "#22c55e" : r >= 2 ? GOLD : r >= 1 ? "#fb923c" : "#f87171";
   };

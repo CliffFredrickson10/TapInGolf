@@ -798,31 +798,27 @@ export default function RoundCompleteScreen() {
 
               const totPar = f9Par + b9Par;
 
-              const ptsColor = (p: number | null) =>
-                p == null ? colors.mutedForeground : p >= 3 ? "#22c55e" : p >= 2 ? GOLD : p >= 1 ? "#fb923c" : "#f87171";
-
               // Gross + Pts pair for one player
               const playerPair = (
                 gross: number | null, pts: number | null, nr: boolean,
                 isBest: boolean, isMyTeam: boolean, lastInTeam: boolean,
               ) => {
-                const teamColor = isMyTeam ? "#22c55e" : "#60a5fa";
-                const bg = isBest ? (isMyTeam ? "#16a34a18" : "#3b82f618") : "transparent";
                 const rb = lastInTeam
                   ? { borderRightWidth: 1.5, borderRightColor: bdr }
                   : { borderRightWidth: HW,  borderRightColor: bdr };
+                const txtColor = nr || (gross == null && pts == null) ? colors.mutedForeground : colors.foreground;
                 return (
-                  <View style={[{ flex: 2, flexDirection: "row", backgroundColor: bg }, rb]}>
+                  <View style={[{ flex: 2, flexDirection: "row" }, rb]}>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8,
                       borderRightWidth: HW, borderRightColor: bdr }}>
                       <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                        color: isBest ? teamColor : nr ? colors.mutedForeground : gross != null ? colors.foreground : colors.mutedForeground }}>
+                        color: txtColor }}>
                         {nr ? "NR" : gross != null ? String(gross) : "—"}
                       </Text>
                     </View>
                     <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 8 }}>
                       <Text style={{ fontSize: 11, fontFamily: isBest ? "Inter_700Bold" : "Inter_400Regular",
-                        color: isBest ? teamColor : ptsColor(pts) }}>
+                        color: pts != null ? colors.foreground : colors.mutedForeground }}>
                         {pts != null ? String(pts) : "—"}
                       </Text>
                     </View>
@@ -851,27 +847,26 @@ export default function RoundCompleteScreen() {
                     <Text style={{ fontSize: 9, fontFamily: "Inter_700Bold", color: "#fff" }}>{par}</Text>
                   </View>
                   <View style={{ width: 24, borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }} />
-                  {[{g:mg,p:mp,last:false,myTeam:true},{g:pg,p:pp,last:true,myTeam:true},
-                    {g:o1g,p:o1p,last:false,myTeam:false},{g:o2g,p:o2p,last:true,myTeam:false}].map(({g,p,last,myTeam},i) => (
+                  {[{g:mg,p:mp,last:false},{g:pg,p:pp,last:true},
+                    {g:o1g,p:o1p,last:false},{g:o2g,p:o2p,last:true}].map(({g,p,last},i) => (
                     <View key={i} style={[{ flex: 2, flexDirection: "row" },
                       last ? { borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.35)" }
                            : { borderRightWidth: HW,  borderRightColor: "rgba(255,255,255,0.2)" }]}>
                       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7,
                         borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{g > 0 ? String(g) : "—"}</Text>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: "#fff" }}>{g > 0 ? String(g) : "—"}</Text>
                       </View>
                       <View style={{ flex: 1, alignItems: "center", justifyContent: "center", paddingVertical: 7 }}>
-                        <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold",
-                          color: myTeam ? "#a3e4bc" : "#fca5a5" }}>{p > 0 ? String(p) : "—"}</Text>
+                        <Text style={{ fontSize: 10, fontFamily: "Inter_400Regular", color: "#fff" }}>{p > 0 ? String(p) : "—"}</Text>
                       </View>
                     </View>
                   ))}
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                     borderRightWidth: HW, borderRightColor: "rgba(255,255,255,0.2)" }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#a3e4bc" }}>{abp > 0 ? String(abp) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{abp > 0 ? String(abp) : "—"}</Text>
                   </View>
                   <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fca5a5" }}>{bbp > 0 ? String(bbp) : "—"}</Text>
+                    <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{bbp > 0 ? String(bbp) : "—"}</Text>
                   </View>
                 </View>
               );
@@ -970,13 +965,15 @@ export default function RoundCompleteScreen() {
                           {/* Team A best pts */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center",
                             borderRightWidth: HW, borderRightColor: bdr }}>
-                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: ptsColor(aBestP) }}>
+                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold",
+                              color: aBestP != null ? colors.foreground : colors.mutedForeground }}>
                               {aBestP != null ? String(aBestP) : "—"}
                             </Text>
                           </View>
                           {/* Team B best pts */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: ptsColor(bBestP) }}>
+                            <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold",
+                              color: bBestP != null ? colors.foreground : colors.mutedForeground }}>
                               {bBestP != null ? String(bBestP) : "—"}
                             </Text>
                           </View>

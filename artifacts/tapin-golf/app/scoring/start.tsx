@@ -45,7 +45,6 @@ const FORMAT_GROUPS: FormatGroup[] = [
       { key: "individual_bonus_bogey", label: "Individual Bonus Bogey" },
       { key: "chairman",               label: "Chairman (The Perch)" },
       { key: "maximum_score",          label: "Maximum Score" },
-      { key: "eclectic",               label: "Eclectic (Multi-Round)" },
     ],
   },
   {

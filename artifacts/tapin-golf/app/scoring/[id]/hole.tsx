@@ -499,8 +499,10 @@ export default function HoleEntryScreen() {
     const bbScrollX = Math.max(0, parCenter - bbViewportWidth / 2);
     const isBbRound = hasFourPlayers(round ?? { format: "", partner_name: null });
     setTimeout(() => {
-      quickRowRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
+      // Main player is now always in a card (same width as bb card: screenWidth-26)
+      quickRowRef.current?.scrollTo({ x: bbScrollX, animated: false });
       partnerQuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+      // Singles opponent uses oppStepperSection (marginHorizontal:12, no border) → scrollX
       opp1QuickRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
     }, 80);
@@ -909,8 +911,8 @@ export default function HoleEntryScreen() {
           </Text>
         </View>
 
-        <View style={isBetterball ? styles.teamGroupBox : undefined}>
-          <View style={[styles.stepperSection, isBetterball && { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#071a0e" }]}>
+        <View style={[styles.teamGroupBox, { borderColor: isBetterball ? "#1a5c3860" : "#22c55e40" }]}>
+          <View style={[styles.stepperSection, { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#071a0e" }]}>
             {isBetterball && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
                 <View style={[styles.sectionDot, { backgroundColor: "#22c55e" }]} />

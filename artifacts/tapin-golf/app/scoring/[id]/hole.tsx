@@ -220,11 +220,12 @@ function BbPlayerInput({
         </TouchableOpacity>
       </View>
       <ScrollView ref={quickRef} horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.quickRow}>
-        {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+        {[-4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
           const val = par + offset;
+          if (val < 1) return null;
           const active = g === val;
           const qColor = val < par ? "#22c55e" : val === par ? GOLD : val === par + 1 ? "#fb923c" : "#f87171";
-          const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+          const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
           const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
           return (
             <TouchableOpacity key={offset} onPress={() => { Haptics.selectionAsync(); sg(val); }}
@@ -708,11 +709,12 @@ export default function HoleEntryScreen() {
               showsHorizontalScrollIndicator={false}
               contentContainerStyle={styles.quickRow}
             >
-              {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+              {[-4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
                 const val = hole.par + offset;
+                if (val < 1) return null;
                 const active = gross === val;
                 const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-                const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
                 const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                 return (
                   <TouchableOpacity
@@ -840,11 +842,12 @@ export default function HoleEntryScreen() {
                   showsHorizontalScrollIndicator={false}
                   contentContainerStyle={styles.quickRow}
                 >
-                  {[-3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
+                  {[-4, -3, -2, -1, 0, 1, 2, 3, 4, 5].map(offset => {
                     const val = hole.par + offset;
+                    if (val < 1) return null;
                     const active = oppGross === val;
                     const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
-                    const labelMap: Record<number, string> = { [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
+                    const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
                     const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                     return (
                       <TouchableOpacity

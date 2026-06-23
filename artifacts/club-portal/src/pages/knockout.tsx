@@ -47,13 +47,37 @@ interface UnpairedMember {
   name: string;
 }
 
-const SCORING_FORMATS = [
-  { value: "stableford",  label: "Stableford" },
-  { value: "stroke_play", label: "Stroke Play (Gross)" },
-  { value: "match_play",  label: "Match Play" },
-  { value: "net_stroke_play", label: "Stroke Play (Net)" },
-  { value: "par_bogey",   label: "Par / Bogey" },
-  { value: "other",       label: "Other" },
+// Formats that determine how the hole winner is decided in a singles knockout.
+// Excludes "Singles Match Play" (circular — the tournament IS match play)
+// and all full-group / team formats.
+const INDIVIDUAL_SCORING_FORMATS = [
+  { value: "individual_stableford",  label: "Individual Stableford" },
+  { value: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
+  { value: "net_stroke_play",        label: "Net Stroke Play" },
+  { value: "modified_stableford",    label: "Modified Stableford" },
+  { value: "par_bogey",              label: "Par / Bogey" },
+  { value: "maximum_score",          label: "Maximum Score" },
+  { value: "chairman",               label: "Chairman (The Perch)" },
+  { value: "individual_bonus_bogey", label: "Individual Bonus Bogey" },
+  { value: "individual_par",         label: "Individual Par" },
+  { value: "individual_bogey",       label: "Individual Bogey" },
+  { value: "eclectic",               label: "Eclectic (Multi-Round)" },
+];
+
+// Formats for betterball / two-player-team knockout.
+// Excludes "Betterball Match Play" (circular) and full-group formats (scramble, alliance etc.).
+const BETTERBALL_SCORING_FORMATS = [
+  { value: "fourball_stableford",       label: "Betterball Stableford (4BBB)" },
+  { value: "fourball_gross_betterball", label: "Four-Ball Gross Betterball" },
+  { value: "fourball_net_betterball",   label: "Four-Ball Net Betterball" },
+  { value: "shamble",                   label: "Shamble" },
+  { value: "best_ball_aggregate",       label: "Best Ball Aggregate" },
+  { value: "high_low",                  label: "High-Low" },
+  { value: "daytona",                   label: "Daytona (Las Vegas)" },
+  { value: "low_ball_total",            label: "Low Ball / Total Score" },
+  { value: "the_ghost",                 label: "The Ghost" },
+  { value: "betterball_bonus_bogey",    label: "Betterball Bonus Bogey" },
+  { value: "pinehurst_points",          label: "Pinehurst (Multiplication Betterball)" },
 ];
 
 const EMPTY_FORM = {
@@ -65,7 +89,7 @@ const EMPTY_FORM = {
   draw_method: "random" as "random" | "seeded",
   pairing_deadline: "",
   singles_entry_deadline: "",
-  knockout_scoring_format: "stableford",
+  knockout_scoring_format: "individual_stableford",
 };
 
 function fmtDate(d: string | null | undefined) {
@@ -172,7 +196,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             <div className="grid grid-cols-2 gap-2">
               <button
                 type="button"
-                onClick={() => setForm(f => ({ ...f, knockout_type: "individual" }))}
+                onClick={() => setForm(f => ({ ...f, knockout_type: "individual", knockout_scoring_format: "individual_stableford" }))}
                 className={[
                   "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
                   form.knockout_type === "individual"
@@ -194,7 +218,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
 
               <button
                 type="button"
-                onClick={() => setForm(f => ({ ...f, knockout_type: "team" }))}
+                onClick={() => setForm(f => ({ ...f, knockout_type: "team", knockout_scoring_format: "fourball_stableford" }))}
                 className={[
                   "flex flex-col items-start gap-1 rounded-lg border-2 p-3 text-left transition-all",
                   form.knockout_type === "team"
@@ -295,7 +319,7 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
               >
                 <SelectTrigger><SelectValue /></SelectTrigger>
                 <SelectContent>
-                  {SCORING_FORMATS.map(sf => (
+                  {(form.knockout_type === "team" ? BETTERBALL_SCORING_FORMATS : INDIVIDUAL_SCORING_FORMATS).map(sf => (
                     <SelectItem key={sf.value} value={sf.value}>{sf.label}</SelectItem>
                   ))}
                 </SelectContent>

@@ -337,11 +337,16 @@ export default function StartRoundScreen() {
     setCasualPartner(null); setCasualOpp1(null); setCasualOpp2(null);
     let mappedFormat: string;
     if (t.knockout_type === "individual") {
-      mappedFormat = t.knockout_scoring_format === "stableford"
+      // "stableford" is the legacy stored value; "individual_stableford" and
+      // "modified_stableford" are the new full format keys from the portal dropdown.
+      const indivStableford = new Set(["stableford", "individual_stableford", "modified_stableford"]);
+      mappedFormat = indivStableford.has(t.knockout_scoring_format)
         ? "singles_stableford_match_play"
         : "singles_match_play";
     } else if (t.knockout_type === "team") {
-      mappedFormat = t.knockout_scoring_format === "stableford"
+      // "stableford" is legacy; "fourball_stableford" is the explicit new key.
+      const teamStableford = new Set(["stableford", "fourball_stableford"]);
+      mappedFormat = teamStableford.has(t.knockout_scoring_format)
         ? "fourball_stableford"
         : "betterball_match_play";
     } else {

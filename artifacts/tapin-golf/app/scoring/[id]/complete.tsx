@@ -973,7 +973,7 @@ export default function RoundCompleteScreen() {
                           {/* Team B best pts */}
                           <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
                             <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold",
-                              color: bBestP != null ? "#dc2626" : colors.mutedForeground }}>
+                              color: bBestP != null ? "#f87171" : colors.mutedForeground }}>
                               {bBestP != null ? String(bBestP) : "—"}
                             </Text>
                           </View>

@@ -76489,9 +76489,14 @@ var import_express23 = __toESM(require_express2(), 1);
 init_pg();
 var router23 = (0, import_express23.Router)();
 function getHA(strokeIndex, playingHcp) {
-  if (playingHcp <= 0) return 0;
-  if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
-  return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
+  if (playingHcp === 0) return 0;
+  if (playingHcp > 0) {
+    if (playingHcp <= 18) return strokeIndex <= playingHcp ? 1 : 0;
+    return 1 + (strokeIndex <= playingHcp - 18 ? 1 : 0);
+  }
+  const abs = -playingHcp;
+  if (abs <= 18) return strokeIndex >= 19 - abs ? -1 : 0;
+  return -1 + (strokeIndex >= 19 - (abs - 18) ? -1 : 0);
 }
 function getStablefordMax(fmt, par, ha) {
   switch (fmt) {
@@ -77308,9 +77313,14 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
   }
 });
 function getHALocal(si, ph) {
-  if (ph <= 0) return 0;
-  if (ph <= 18) return si <= ph ? 1 : 0;
-  return 1 + (si <= ph - 18 ? 1 : 0);
+  if (ph === 0) return 0;
+  if (ph > 0) {
+    if (ph <= 18) return si <= ph ? 1 : 0;
+    return 1 + (si <= ph - 18 ? 1 : 0);
+  }
+  const abs = -ph;
+  if (abs <= 18) return si >= 19 - abs ? -1 : 0;
+  return -1 + (si >= 19 - (abs - 18) ? -1 : 0);
 }
 function getStablefordPts(gross, par, ha) {
   return Math.max(0, par + 2 - (gross - ha));
@@ -77367,8 +77377,10 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
               const opp = oppMap[h.hole_number];
               if (!opp || h.is_nr || opp.is_nr || h.gross_score == null || opp.gross_score == null) continue;
               if (round.format === "singles_stableford_match_play") {
-                const myPts = getStablefordPts(h.gross_score, h.par, getHALocal(h.stroke_index, round.playing_handicap));
-                const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0));
+                const myHcp = round.playing_handicap;
+                const oppHcp = round.opponent_playing_hcp ?? 0;
+                const myPts = getStablefordPts(h.gross_score, h.par, getHALocal(h.stroke_index, Math.max(0, myHcp - oppHcp)));
+                const oppPts = getStablefordPts(opp.gross_score, h.par, getHALocal(h.stroke_index, Math.max(0, oppHcp - myHcp)));
                 if (myPts > oppPts) won++;
                 else if (myPts < oppPts) lost++;
                 else halved++;
@@ -77377,8 +77389,10 @@ router23.post("/scoring/rounds/:id/complete", async (req, res) => {
                 else if (h.gross_score > opp.gross_score) lost++;
                 else halved++;
               } else {
-                const myNet = h.gross_score - getHALocal(h.stroke_index, round.playing_handicap);
-                const oppNet = opp.gross_score - getHALocal(h.stroke_index, round.opponent_playing_hcp ?? 0);
+                const myHcp = round.playing_handicap;
+                const oppHcp = round.opponent_playing_hcp ?? 0;
+                const myNet = h.gross_score - getHALocal(h.stroke_index, Math.max(0, myHcp - oppHcp));
+                const oppNet = opp.gross_score - getHALocal(h.stroke_index, Math.max(0, oppHcp - myHcp));
                 if (myNet < oppNet) won++;
                 else if (myNet > oppNet) lost++;
                 else halved++;

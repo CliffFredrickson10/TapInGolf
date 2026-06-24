@@ -124,17 +124,21 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     const clubId = parseInt(req.params.clubId);
     if (!clubId) { res.status(400).json({ message: "Invalid club id" }); return; }
 
-    // Only surface tournaments where the requesting user has a confirmed spot:
+    // Surface tournaments where the requesting user has a confirmed spot OR
+    // is eligible to self-enter (open / members-only events without pre-registration):
     //   a) approved event_registrations entry (formal events), OR
     //   b) a confirmed booking on a tee slot exclusive to this event, OR
-    //   c) appears as player1_id or player2_id in any knockout_matches for this event
+    //   c) appears as player1_id or player2_id in any knockout_matches, OR
+    //   d) event is open/members_only with scoring enabled (monthly medals etc.) —
+    //      player self-registers on score submission; no prior approval needed
     const tournaments = await query<any>(`
       SELECT id, name, event_date, end_date, format, format2, format_custom,
-             knockout_type, knockout_scoring_format
+             knockout_type, knockout_scoring_format, restriction, event_type
       FROM golf_events ge
       WHERE club_id = ?
         AND COALESCE(end_date, event_date) >= CURRENT_DATE - INTERVAL '1 day'
         AND status NOT IN ('cancelled', 'completed')
+        AND event_type != 'eclectic'
         AND (
           EXISTS (
             SELECT 1 FROM event_registrations er
@@ -149,6 +153,11 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
           OR EXISTS (
             SELECT 1 FROM knockout_matches km
             WHERE km.event_id = ge.id AND (km.player1_id = ? OR km.player2_id = ?)
+          )
+          OR (
+            ge.restriction IN ('open', 'members_only')
+            AND ge.scoring_enabled = 1
+            AND ge.knockout_type IS NULL
           )
         )
       ORDER BY event_date ASC
@@ -1397,14 +1406,28 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
     try {
       const fullRound = await row<any>("SELECT * FROM scoring_rounds WHERE id = ?", [roundId]);
       const ev = await row<any>(
-        "SELECT id, club_id, format, event_type, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
+        "SELECT id, club_id, format, event_type, restriction, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
         [round.tournament_id]
       );
       if (ev && ev.scoring_enabled && fullRound) {
-        const reg = await row<any>(
+        let reg = await row<any>(
           "SELECT id, division, frozen_handicap, team_id, status FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
           [round.tournament_id, user.id]
         );
+        // Auto-register player for open / members-only events (e.g. monthly medal)
+        // so their scores feed event_scores and the eclectic ringer board.
+        if (!reg && ev.restriction && ['open', 'members_only'].includes(ev.restriction) && ev.knockout_type == null) {
+          await exec(
+            `INSERT INTO event_registrations (event_id, user_id, status, frozen_handicap)
+             VALUES (?, ?, 'approved', ?)
+             ON CONFLICT (event_id, user_id) DO UPDATE SET status = 'approved'`,
+            [round.tournament_id, user.id, user.handicap ?? null]
+          );
+          reg = await row<any>(
+            "SELECT id, division, frozen_handicap, team_id, status FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+            [round.tournament_id, user.id]
+          );
+        }
         if (reg) {
           const holeRows = await query<any>(
             "SELECT hole_number, par, stroke_index, gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",

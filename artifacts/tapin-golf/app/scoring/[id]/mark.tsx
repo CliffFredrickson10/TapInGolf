@@ -265,19 +265,19 @@ export default function MarkCardScreen() {
           {/* Comparison table */}
           <View style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
             <View style={[styles.compareHeader, { borderBottomColor: colors.border, backgroundColor: colors.primary + "12" }]}>
-              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 60, flex: 0 }]}>Hole</Text>
-              <Text style={[styles.compareHeaderCell, { color: GOLD }]}>Your Card</Text>
-              <Text style={[styles.compareHeaderCell, { color: colors.primary }]}>{playerName}'s Card</Text>
-              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 40, flex: 0 }]}>Diff</Text>
+              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 52, textAlign: "left" }]}>Hole</Text>
+              <Text style={[styles.compareHeaderCell, { color: GOLD, width: 72, textAlign: "center" }]}>Your Card</Text>
+              <Text style={[styles.compareHeaderCell, { color: colors.primary, flex: 1, textAlign: "center" }]}>{playerName.split(" ")[0]}'s Card</Text>
+              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 44, textAlign: "center" }]}>Diff</Text>
             </View>
             {mismatches.map(m => {
               const diff = m.markerScore - m.playerScore;
               return (
                 <View key={m.hole} style={[styles.compareRow, { borderTopColor: colors.border, backgroundColor: "#dc262608" }]}>
-                  <Text style={[styles.compareHole, { color: colors.mutedForeground, width: 60 }]}>Hole {m.hole}</Text>
-                  <Text style={[styles.compareScore, { color: GOLD }]}>{m.markerScore}</Text>
-                  <Text style={[styles.compareScore, { color: colors.primary }]}>{m.playerScore}</Text>
-                  <Text style={[styles.compareScore, { color: RED_MISMATCH, width: 40 }]}>
+                  <Text style={[styles.compareHole, { color: colors.mutedForeground, width: 52, textAlign: "left" }]}>Hole {m.hole}</Text>
+                  <Text style={[styles.compareScore, { color: GOLD, width: 72, textAlign: "center" }]}>{m.markerScore}</Text>
+                  <Text style={[styles.compareScore, { color: colors.primary, flex: 1, textAlign: "center" }]}>{m.playerScore}</Text>
+                  <Text style={[styles.compareScore, { color: RED_MISMATCH, width: 44, textAlign: "center" }]}>
                     {diff > 0 ? `+${diff}` : `${diff}`}
                   </Text>
                 </View>

@@ -181,7 +181,8 @@ export default function StartRoundScreen() {
   const [casualPartner, setCasualPartner] = useState<CasualPlayer | null>(null);
   const [casualOpp1, setCasualOpp1] = useState<CasualPlayer | null>(null);
   const [casualOpp2, setCasualOpp2] = useState<CasualPlayer | null>(null);
-  const [pickerTarget, setPickerTarget] = useState<"partner" | "opp1" | "opp2" | null>(null);
+  const [pickerTarget, setPickerTarget] = useState<"partner" | "opp1" | "opp2" | "tournamentMarker" | null>(null);
+  const [tournamentMarker, setTournamentMarker] = useState<CasualPlayer | null>(null);
   const [playerSearchQ, setPlayerSearchQ] = useState("");
   const [playerResults, setPlayerResults] = useState<Array<{ id: number; name: string; handicap: number | null; isMe?: boolean }>>([]); 
   const [playerSearchLoading, setPlayerSearchLoading] = useState(false);
@@ -203,7 +204,7 @@ export default function StartRoundScreen() {
     return () => clearTimeout(t);
   }, [playerSearchQ, token]);
 
-  const openPicker = (target: "partner" | "opp1" | "opp2") => {
+  const openPicker = (target: "partner" | "opp1" | "opp2" | "tournamentMarker") => {
     setPickerTarget(target);
     setPlayerSearchQ("");
     setPlayerResults([]);
@@ -216,6 +217,12 @@ export default function StartRoundScreen() {
     if (pickerTarget === "partner") setCasualPartner(p);
     else if (pickerTarget === "opp1") setCasualOpp1(p);
     else if (pickerTarget === "opp2") setCasualOpp2(p);
+    else if (pickerTarget === "tournamentMarker") {
+      setTournamentMarker(p);
+      const hcpNum = p.hcp !== "" ? Number(p.hcp) : null;
+      setOppWhsIdx(hcpNum);
+      setOppHcp(p.hcp);
+    }
     setPickerTarget(null);
   };
 
@@ -370,7 +377,7 @@ export default function StartRoundScreen() {
     setFormat(mappedFormat);
   };
 
-  const unlinkTournament = () => { setLinkedTournamentId(null); setMatchOpponent(null); };
+  const unlinkTournament = () => { setLinkedTournamentId(null); setMatchOpponent(null); setTournamentMarker(null); };
 
   const onStartRound = async () => {
     if (!selectedClub) { Alert.alert("Select a club", "Please choose a golf club first."); return; }
@@ -380,6 +387,12 @@ export default function StartRoundScreen() {
     const ch = parseInt(courseHcp, 10);
     if (isNaN(ch) || String(ch) !== courseHcp.trim()) {
       Alert.alert("Handicap Required", "Please enter your Course Handicap as a whole number before starting."); return;
+    }
+    // For individual tournament formats (not knockout, not betterball team) a marker is required
+    const _isKnockoutFmt = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play";
+    const needsMarker = !!linkedTournamentId && !isBetterball && !_isKnockoutFmt;
+    if (needsMarker && !matchOpponent && !tournamentMarker) {
+      Alert.alert("Marker Required", "Please assign a marker from your 4-ball before starting a tournament round."); return;
     }
     if (matchOpponent) {
       if (matchOpponent.opponentName) {
@@ -401,6 +414,12 @@ export default function StartRoundScreen() {
         }
       }
     }
+    if (tournamentMarker) {
+      const opp = parseInt(oppHcp, 10);
+      if (isNaN(opp) || String(opp) !== oppHcp.trim()) {
+        Alert.alert("Handicap Required", `Please confirm ${tournamentMarker.name}'s Course Handicap as a whole number.`); return;
+      }
+    }
 
     setSubmitting(true);
     try {
@@ -418,6 +437,9 @@ export default function StartRoundScreen() {
             opponentPlayingHcp:  parseInt(oppHcp)     || 0,
             partnerPlayingHcp:   parseInt(partnerHcp)  || 0,
             opponent2PlayingHcp: parseInt(opp2Hcp)    || 0,
+          } : tournamentMarker ? {
+            opponentName:       tournamentMarker.name,
+            opponentPlayingHcp: parseInt(oppHcp) || 0,
           } : {}),
           opponentTeeColor:  oppTeeColor,
           partnerTeeColor:   partnerTeeColor,
@@ -570,10 +592,69 @@ export default function StartRoundScreen() {
                       </TouchableOpacity>
                     </View>
 
-                    {/* Partner / opponent preview */}
+                    {/* Partner / opponent / marker preview */}
                     {(() => {
                       const isKnockoutMatch = format === "singles_match_play" || format === "betterball_match_play" || format === "singles_stableford_match_play" || format === "singles_gross_match_play" || format === "betterball_gross_match_play" || format === "fourball_stableford_match_play";
                       const isBetterballGroup = isBetterball && !isKnockoutMatch;
+                      const isIndividual = !isBetterball && !isKnockoutMatch;
+
+                      // ── Individual tournament: show marker selector ──────────
+                      if (isIndividual) {
+                        if (matchOpponentLoading) {
+                          return (
+                            <View style={[styles.opponentBanner, { borderColor: colors.primary + "30", backgroundColor: colors.primary + "08", marginTop: 8 }]}>
+                              <ActivityIndicator size="small" color={colors.primary} />
+                            </View>
+                          );
+                        }
+                        if (matchOpponent?.opponentName) {
+                          // Pre-assigned marker from tee draw
+                          return (
+                            <View style={[styles.opponentBanner, { borderColor: colors.primary + "40", backgroundColor: colors.primary + "10", marginTop: 8 }]}>
+                              <View style={[styles.opponentAvatar, { backgroundColor: colors.primary }]}>
+                                <Ionicons name="person" size={14} color="#fff" />
+                              </View>
+                              <View style={{ flex: 1 }}>
+                                <Text style={styles.opponentVsLabel}>YOUR MARKER</Text>
+                                <Text style={[styles.opponentName, { color: colors.foreground }]}>
+                                  {matchOpponent.opponentName}
+                                  {matchOpponent.opponentHandicap != null ? `  ·  HCP ${matchOpponent.opponentHandicap}` : ""}
+                                </Text>
+                              </View>
+                              <Ionicons name="checkmark-circle" size={18} color={colors.primary} />
+                            </View>
+                          );
+                        }
+                        // No draw → manual marker selection
+                        return (
+                          <View style={{ marginTop: 8, gap: 6 }}>
+                            <Text style={[styles.opponentVsLabel, { color: colors.mutedForeground, marginBottom: 2 }]}>MARKER (REQUIRED)</Text>
+                            {tournamentMarker ? (
+                              <View style={[styles.casualCard, { borderColor: colors.primary + "50", backgroundColor: colors.primary + "0c" }]}>
+                                <View style={[styles.casualAvatar, { backgroundColor: colors.primary + "25" }]}>
+                                  <Ionicons name="person" size={15} color={colors.primary} />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                  <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{tournamentMarker.name}</Text>
+                                  {!tournamentMarker.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                                  {oppWhsIdx != null && (
+                                    <Text style={{ fontSize: 11, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>WHS Index: {oppWhsIdx}</Text>
+                                  )}
+                                </View>
+                                <TouchableOpacity onPress={() => { setTournamentMarker(null); setOppWhsIdx(null); setOppHcp("0"); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                                  <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
+                                </TouchableOpacity>
+                              </View>
+                            ) : (
+                              <TouchableOpacity onPress={() => openPicker("tournamentMarker")} style={[styles.addPlayerBtn, { borderColor: "#ef444460", backgroundColor: "#ef44440a" }]}>
+                                <Ionicons name="person-add-outline" size={17} color="#ef4444" />
+                                <Text style={[styles.addPlayerTxt, { color: "#ef4444" }]}>Select Marker (Required)</Text>
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        );
+                      }
+
                       if (!isKnockoutMatch && !isBetterballGroup) return null;
 
                       if (matchOpponentLoading) {
@@ -827,7 +908,7 @@ export default function StartRoundScreen() {
                   {([
                     { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: teeColor as string | null, setTeeColor: setTeeColor as ((v: string) => void) | null },
                     { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx, teeColor: partnerTeeColor, setTeeColor: setPartnerTeeColor },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
+                    { label: `${matchOpponent?.opponentName ?? tournamentMarker?.name ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName || !!tournamentMarker, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
                     { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx, teeColor: opp2TeeColor, setTeeColor: setOpp2TeeColor },
                   ])
                     .filter(r => r.show)
@@ -1070,7 +1151,7 @@ export default function StartRoundScreen() {
             {/* Header */}
             <View style={styles.pickerHeader}>
               <Text style={[styles.pickerTitle, { color: colors.foreground }]}>
-                {guestMode ? "Add Guest" : `Add ${
+                {guestMode ? "Add Guest" : pickerTarget === "tournamentMarker" ? "Select Marker" : `Add ${
                   pickerTarget === "partner" ? "Partner"
                   : pickerTarget === "opp1" ? (isBetterball ? "Opponent" : "Player to Mark For")
                   : isBetterball ? "2nd Opponent" : "2nd Player to Mark For"

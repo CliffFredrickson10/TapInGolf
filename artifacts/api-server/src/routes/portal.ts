@@ -1712,7 +1712,7 @@ router.get("/portal/events/:id/registrations", requireClubAuth, async (req: Requ
   if (!event) { res.status(404).json({ message: "Event not found" }); return; }
   const regs = await query<any>(
     `SELECT er.id, er.status, er.registered_at, er.division, er.frozen_handicap,
-            er.payment_status, er.paid_at,
+            er.payment_status, er.payment_method, er.paid_at,
             er.team_id, et.name as team_name,
             u.id as user_id, u.name as user_name, u.email as user_email, u.handicap, u.phone
      FROM event_registrations er
@@ -1723,6 +1723,54 @@ router.get("/portal/events/:id/registrations", requireClubAuth, async (req: Requ
     [evId]
   );
   res.json(regs.map((r: any) => ({ ...r, frozen_handicap: r.frozen_handicap != null ? parseFloat(r.frozen_handicap) : null })));
+});
+
+// ── Mark a registration as paid (club override) ────────────────────────────────
+router.patch("/portal/events/:id/registrations/:regId/mark-paid", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const regId = Number(req.params.regId);
+  const { payment_method = "manual" } = req.body ?? {};
+
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const reg = await row<any>("SELECT id FROM event_registrations WHERE id = ? AND event_id = ?", [regId, evId]);
+  if (!reg) { res.status(404).json({ message: "Registration not found" }); return; }
+
+  await exec(
+    "UPDATE event_registrations SET payment_status = 'paid', payment_method = ?, paid_at = NOW() WHERE id = ?",
+    [payment_method, regId]
+  );
+  res.json({ success: true });
+});
+
+// ── Manually add a player entry (club override) ────────────────────────────────
+router.post("/portal/events/:id/registrations/manual", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const { email, payment_method } = req.body ?? {};
+
+  if (!email?.trim()) { res.status(400).json({ message: "Email is required" }); return; }
+
+  const event = await row<any>("SELECT id, name FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  const user = await row<any>("SELECT id, handicap FROM users WHERE email = ?", [email.trim().toLowerCase()]);
+  if (!user) { res.status(404).json({ message: "No TapIn account found for that email address" }); return; }
+
+  const isPaid = !!payment_method;
+  await exec(
+    `INSERT INTO event_registrations (event_id, user_id, status, frozen_handicap, payment_status, payment_method, paid_at)
+     VALUES (?, ?, 'approved', ?, ?, ?, ${isPaid ? "NOW()" : "NULL"})
+     ON CONFLICT (event_id, user_id) DO UPDATE
+       SET status = 'approved',
+           payment_status = EXCLUDED.payment_status,
+           payment_method = EXCLUDED.payment_method,
+           paid_at        = EXCLUDED.paid_at`,
+    [evId, user.id, user.handicap ?? null, isPaid ? "paid" : "unpaid", payment_method ?? null]
+  );
+  res.json({ success: true });
 });
 
 router.put("/portal/events/:id/registrations/:userId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

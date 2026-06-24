@@ -517,6 +517,7 @@ export default function HoleEntryScreen() {
   const [abandoning, setAbandoning] = useState(false);
   const [showHcpModal, setShowHcpModal] = useState(false);
   const [hcpDraft, setHcpDraft] = useState({ my: 0, opp: 0, partner: 0, opp2: 0 });
+  const [scoreError, setScoreError] = useState<string | null>(null);
   const [savingHcp, setSavingHcp] = useState(false);
   const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
@@ -654,7 +655,11 @@ export default function HoleEntryScreen() {
     return sum;
   }, 0);
 
+  // Auto-clear error banner when the user enters any score
+  useEffect(() => { setScoreError(null); }, [gross, partnerGross, oppGross, opp2Gross]);
+
   const goToHole = (idx: number) => {
+    setScoreError(null);
     setHoleIdx(idx);
     setGross(round.holes[scorecard[idx].number]?.gross_score ?? null);
     if (hasFourPlayers(round)) {
@@ -694,12 +699,10 @@ export default function HoleEntryScreen() {
 
       if (missing.length > 0) {
         const isSelf = missing.length === 1 && missing[0] === "You";
-        Alert.alert(
-          "Score Required",
+        setScoreError(
           isSelf
-            ? "Please enter your score before proceeding."
-            : `Please enter a score for the following player${missing.length > 1 ? "s" : ""} before proceeding:\n\n${missing.join("\n")}`,
-          [{ text: "OK" }]
+            ? "Enter your score before proceeding."
+            : `Enter a score for: ${missing.join(", ")}`
         );
         return;
       }
@@ -1294,6 +1297,14 @@ export default function HoleEntryScreen() {
         )}
       </ScrollView>
 
+      {/* Score error banner */}
+      {scoreError && (
+        <View style={styles.scoreErrorBanner}>
+          <Ionicons name="alert-circle" size={15} color="#fff" />
+          <Text style={styles.scoreErrorText}>{scoreError}</Text>
+        </View>
+      )}
+
       {/* Action buttons — fixed at bottom */}
       <View style={[styles.actions, { paddingBottom: insets.bottom + 16 }]}>
         {/* Previous Hole — hidden on hole 1 */}
@@ -1563,6 +1574,12 @@ const styles = StyleSheet.create({
     marginHorizontal: 12,
     overflow: "hidden",
   },
+  scoreErrorBanner: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    marginHorizontal: 16, marginBottom: 6, borderRadius: 10,
+    backgroundColor: "#b91c1c", paddingVertical: 9, paddingHorizontal: 12,
+  },
+  scoreErrorText: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" },
   actions: {
     flexDirection: "row", gap: 10, paddingHorizontal: 16, paddingTop: 12,
   },

@@ -58,6 +58,7 @@ export default function MarkCardScreen() {
   const [round, setRound] = useState<RoundDetail | null>(null);
   const [playerName, setPlayerName] = useState<string>("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ verified: boolean; mismatches: any[] } | null>(null);
 
@@ -88,7 +89,7 @@ export default function MarkCardScreen() {
       const match = (pendingRes.marks ?? []).find((m: any) => m.id === parseInt(id));
       if (match) setPlayerName(match.player_name ?? "Player");
     } catch (err: any) {
-      Alert.alert("Error", err.message || "Failed to load round");
+      setLoadError(err.message || "Failed to load round");
     } finally {
       setLoading(false);
     }
@@ -139,10 +140,27 @@ export default function MarkCardScreen() {
     }
   };
 
-  if (loading || !round) {
+  if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
         <GolfBallLoader size={60} />
+      </View>
+    );
+  }
+
+  if (!round) {
+    return (
+      <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center", padding: 32 }}>
+        <Ionicons name="alert-circle-outline" size={48} color={colors.mutedForeground} style={{ marginBottom: 12 }} />
+        <Text style={{ fontSize: 16, fontFamily: "Inter_600SemiBold", color: colors.foreground, textAlign: "center", marginBottom: 8 }}>
+          Card not found
+        </Text>
+        <Text style={{ fontSize: 13, color: colors.mutedForeground, textAlign: "center", marginBottom: 24 }}>
+          {loadError ?? "This scorecard could not be loaded."}
+        </Text>
+        <TouchableOpacity onPress={() => router.back()} style={{ backgroundColor: colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 }}>
+          <Text style={{ color: "#fff", fontFamily: "Inter_600SemiBold", fontSize: 14 }}>Go Back</Text>
+        </TouchableOpacity>
       </View>
     );
   }

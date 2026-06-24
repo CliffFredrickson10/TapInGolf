@@ -77583,15 +77583,17 @@ router23.get("/scoring/rounds/:id", async (req, res) => {
     const rounds = await query(`
       SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
              e.name AS tournament_name,
+             u.name AS player_name,
              km.status      AS match_status,
              km.dispute     AS match_dispute,
              km.winner_id   AS match_winner_id
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
+      JOIN users u ON u.id = r.user_id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       LEFT JOIN knockout_matches km ON km.id = r.match_id
-      WHERE r.id = ? AND r.user_id = ?
-    `, [roundId, user.id]);
+      WHERE r.id = ? AND (r.user_id = ? OR r.marker_user_id = ?)
+    `, [roundId, user.id, user.id]);
     if (rounds.length === 0) {
       res.status(404).json({ message: "Round not found" });
       return;

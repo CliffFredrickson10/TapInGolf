@@ -698,11 +698,12 @@ router.get("/events/feed", async (req, res): Promise<void> => {
     c.id AS club_id, c.name AS club_name, c.logo_url AS club_logo_url
   `;
 
-  // Date filter: regular events use event_date; knockout tournaments (which span weeks/months)
-  // stay visible until their end_date passes.
+  // Date filter: regular events use event_date; knockout and eclectic tournaments (which span
+  // weeks/months) stay visible until their end_date passes.
   const dateFilter = `(
     ge.event_date >= CURRENT_DATE
     OR (ge.format IN ('knockout_individual','knockout_team') AND COALESCE(ge.end_date, ge.event_date) >= CURRENT_DATE)
+    OR (ge.event_type = 'eclectic' AND COALESCE(ge.end_date, ge.event_date) >= CURRENT_DATE)
   )`;
 
   // Home-club events: clubs the user is an active member of, for eligible restrictions

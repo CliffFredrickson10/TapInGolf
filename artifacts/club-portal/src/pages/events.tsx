@@ -238,7 +238,7 @@ function fmtFormat(ev: { format: string; format_custom?: string | null }) {
 }
 const TYPE_LABELS: Record<string, string> = {
   competition: "Competition", open_day: "Open Day", corporate: "Corporate",
-  social: "Social", eclectic: "Eclectic (Ringer Board)", other: "Other",
+  social: "Social", other: "Other",
 };
 const RESTRICT_LABELS: Record<string, string> = {
   open: "Open", members_only: "Members Only", invitation_only: "Invite Only", whs_players_only: "WHS Index Players Only",
@@ -535,15 +535,15 @@ export default function Events() {
   const today = new Date().toISOString().slice(0, 10);
 
   const upcomingEvents = events
-    .filter(ev => ev.status !== "cancelled" && ev.event_date >= today)
+    .filter(ev => ev.status !== "cancelled" && ev.event_date >= today && ev.event_type !== "eclectic")
     .sort((a, b) => a.event_date.localeCompare(b.event_date) || (a.start_time ?? "").localeCompare(b.start_time ?? ""));
 
   const pastEvents = events
-    .filter(ev => ev.status !== "cancelled" && ev.event_date < today)
+    .filter(ev => ev.status !== "cancelled" && ev.event_date < today && ev.event_type !== "eclectic")
     .sort((a, b) => b.event_date.localeCompare(a.event_date) || (b.start_time ?? "").localeCompare(a.start_time ?? ""));
 
   const cancelledEvents = events
-    .filter(ev => ev.status === "cancelled")
+    .filter(ev => ev.status === "cancelled" && ev.event_type !== "eclectic")
     .sort((a, b) => b.event_date.localeCompare(a.event_date));
 
   const activeList = eventsTab === "upcoming" ? upcomingEvents : eventsTab === "past" ? pastEvents : cancelledEvents;
@@ -3030,7 +3030,7 @@ ${bodyHtml}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label>Tournament Type</Label>
-                        <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, ...(v === 'eclectic' ? { format: 'net_stroke_play' } : {}) }))}>
+                        <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -3052,13 +3052,7 @@ ${bodyHtml}
                   {/* ━━━ STEP 1: FORMAT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 1 && (<>
                     <p className="text-sm text-muted-foreground">Choose the playing format(s) for this tournament.</p>
-                    {form.event_type === 'eclectic' && (
-                      <div className="rounded-lg border bg-muted/40 p-4 space-y-1">
-                        <p className="text-sm font-medium">Format locked: Nett Stroke Play (Medal)</p>
-                        <p className="text-xs text-muted-foreground">Eclectic competitions always use Individual Nett Stroke Play. Each player's best score per hole is tracked across all submitted rounds.</p>
-                      </div>
-                    )}
-                    <div className={`grid grid-cols-2 gap-3${form.event_type === 'eclectic' ? ' hidden' : ''}`}>
+                    <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label>Format 1 *</Label>
                         <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>

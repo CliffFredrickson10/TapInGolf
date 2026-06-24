@@ -46,6 +46,7 @@ const TYPE_LABELS: Record<string, string> = {
   open_day: "Open Day",
   corporate: "Corporate",
   social: "Social",
+  eclectic: "Eclectic",
   other: "Other",
 };
 

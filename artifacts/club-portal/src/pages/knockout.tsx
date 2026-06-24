@@ -55,7 +55,6 @@ const INDIVIDUAL_SCORING_FORMATS = [
   { value: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
   { value: "net_stroke_play",        label: "Net Stroke Play" },
   { value: "modified_stableford",    label: "Modified Stableford" },
-  { value: "par_bogey",              label: "Par / Bogey" },
   { value: "maximum_score",          label: "Maximum Score" },
   { value: "chairman",               label: "Chairman (The Perch)" },
   { value: "individual_bonus_bogey", label: "Individual Bonus Bogey" },

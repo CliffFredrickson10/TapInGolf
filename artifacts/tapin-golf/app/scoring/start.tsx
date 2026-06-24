@@ -38,7 +38,6 @@ const FORMAT_GROUPS: FormatGroup[] = [
       { key: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
       { key: "net_stroke_play",        label: "Net Stroke Play" },
       { key: "singles_match_play",     label: "Singles Match Play" },
-      { key: "par_bogey",              label: "Par / Bogey Competition" },
       { key: "individual_par",         label: "Individual Par Competition" },
       { key: "individual_bogey",       label: "Individual Bogey Competition" },
       { key: "modified_stableford",    label: "Modified Stableford" },
@@ -325,8 +324,8 @@ export default function StartRoundScreen() {
     fourball:            "fourball_stableford",
     scramble:            "american_scramble",
     alliance:            "alliance",
-    bogey:               "par_bogey",
-    par_bogey:           "par_bogey",
+    bogey:               "individual_par",
+    par_bogey:           "individual_par",
     modified_stableford: "modified_stableford",
     par:                 "individual_par",
     other:               "other",
@@ -340,7 +339,7 @@ export default function StartRoundScreen() {
       // "stableford" is the legacy stored value; "individual_stableford" and
       // "modified_stableford" are the new full format keys from the portal dropdown.
       // Only pure Stableford pts formats get pts comparison; all others (including
-      // modified_stableford, par_bogey, maximum_score, chairman, bonus_bogey, etc.)
+      // modified_stableford, individual_par, individual_bogey, maximum_score, chairman, bonus_bogey, etc.)
       // use net comparison — hole winner is identical for those formats.
       const indivStableford = new Set(["stableford", "individual_stableford"]);
       const indivGross      = new Set(["gross_stroke_play"]);

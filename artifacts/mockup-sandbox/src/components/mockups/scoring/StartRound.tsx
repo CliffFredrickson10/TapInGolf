@@ -33,7 +33,6 @@ const FORMAT_GROUPS: FormatGroup[] = [
       { key: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
       { key: "net_stroke_play",        label: "Net Stroke Play" },
       { key: "singles_match_play",     label: "Singles Match Play" },
-      { key: "par_bogey",              label: "Par / Bogey Competition" },
       { key: "individual_par",         label: "Individual Par Competition" },
       { key: "individual_bogey",       label: "Individual Bogey Competition" },
       { key: "modified_stableford",    label: "Modified Stableford" },

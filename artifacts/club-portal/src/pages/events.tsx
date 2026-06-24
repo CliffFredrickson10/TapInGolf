@@ -174,7 +174,6 @@ const FORMAT_LABELS: Record<string, string> = {
   singles_match_play: "Singles Match Play",
   individual_stableford: "Individual Stableford",
   modified_stableford: "Individual Modified Stableford",
-  par_bogey: "Par / Bogey Competition",
   maximum_score: "Maximum Score",
   chairman: "Chairman (The Perch)",
   individual_bonus_bogey: "Individual Bonus Bogey",
@@ -2945,7 +2944,6 @@ ${bodyHtml}
                               <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
                               <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
                               <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
-                              <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
                               <SelectItem value="maximum_score">Maximum Score</SelectItem>
                               <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
                               <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
@@ -2992,7 +2990,6 @@ ${bodyHtml}
                               <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
                               <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
                               <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
-                              <SelectItem value="par_bogey">Par / Bogey Competition</SelectItem>
                               <SelectItem value="maximum_score">Maximum Score</SelectItem>
                               <SelectItem value="chairman">Chairman (The Perch)</SelectItem>
                               <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>

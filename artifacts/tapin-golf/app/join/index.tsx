@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type OpenGame = {
@@ -578,8 +579,9 @@ export default function JoinGameScreen() {
   // ── Render ────────────────────────────────────────────────────────────────────
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border }]}>
+      <View style={[styles.header, { paddingTop: 12, borderBottomColor: colors.border }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={8}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </TouchableOpacity>

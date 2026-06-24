@@ -18,6 +18,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
+import { AppHeader } from "@/components/AppHeader";
 
 const GOLD = "#c8a84b";
 const GREEN_MATCH = "#16a34a";
@@ -183,7 +184,8 @@ export default function MarkCardScreen() {
   if (done) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+        <AppHeader />
+        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: 8 }]}>
           <View style={{ flex: 1 }}>
             <Text style={styles.headerTitle}>Card Submitted</Text>
             <Text style={styles.headerSub}>{round.tournament_name ?? round.club_name}</Text>
@@ -243,7 +245,8 @@ export default function MarkCardScreen() {
   if (reviewing) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+        <AppHeader />
+        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: 8 }]}>
           <TouchableOpacity onPress={() => setReviewing(false)} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={20} color="#fff" />
           </TouchableOpacity>
@@ -427,8 +430,9 @@ export default function MarkCardScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+      <AppHeader />
+      {/* Sub-header: back + card title */}
+      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>

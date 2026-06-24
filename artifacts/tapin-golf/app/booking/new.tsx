@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface AppliedVoucher {
@@ -579,13 +580,14 @@ export default function NewBookingScreen() {
   // ── Render ───────────────────────────────────────────────────────────────────
   return (
     <>
+      <AppHeader />
       <ScrollView
         style={{ flex: 1, backgroundColor: colors.background }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
         {/* Header */}
-        <View style={[styles.header, { paddingTop: topPad + 12 }]}>
+        <View style={[styles.header, { paddingTop: 12 }]}>
           <TouchableOpacity onPress={() => router.back()}>
             <Ionicons name="arrow-back" size={24} color={colors.foreground} />
           </TouchableOpacity>

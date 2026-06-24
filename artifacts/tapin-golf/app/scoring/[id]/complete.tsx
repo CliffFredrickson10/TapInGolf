@@ -19,6 +19,7 @@ import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
 import ScorecardUnified from "@/components/ScorecardUnified";
+import { AppHeader } from "@/components/AppHeader";
 
 type ScorecardHole = { number: number; par: number; stroke_index: number; distance_m?: number };
 type SavedHole = {
@@ -476,8 +477,9 @@ export default function RoundCompleteScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+      <AppHeader />
+      {/* Sub-header: back + round title */}
+      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={20} color="#fff" />
         </TouchableOpacity>

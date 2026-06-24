@@ -16,6 +16,7 @@ import { WebView } from "react-native-webview";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { API_BASE } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Shared: build the map-embed URL with optional user coords ───────────────
 function mapEmbedUrl(userLat?: number, userLng?: number): string {
@@ -101,11 +102,12 @@ export default function MapScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <AppHeader />
       {/* Header */}
       <View
         style={[
           styles.header,
-          { paddingTop: topPad + 12, backgroundColor: colors.card, borderBottomColor: colors.border },
+          { paddingTop: 12, backgroundColor: colors.card, borderBottomColor: colors.border },
         ]}
       >
         <TouchableOpacity onPress={() => router.back()} hitSlop={8}>

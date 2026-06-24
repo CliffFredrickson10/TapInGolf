@@ -21,6 +21,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 type Member = { id: number; name: string; email: string; avatar?: string | null };
 type Friend = { id: number; name: string; email: string; avatar?: string | null };
@@ -210,8 +211,9 @@ export default function GroupSettingsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.primary }]}>
+      <View style={[styles.header, { paddingTop: 12, backgroundColor: colors.primary }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backCircleWrap}>
           <View style={styles.backCircle}>
             <Ionicons name="arrow-back" size={20} color={colors.primary} />

@@ -19,6 +19,7 @@ import CachedImage from "@/components/CachedImage";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 const SA_PROVINCES = [
   "Gauteng",
@@ -143,7 +144,8 @@ export default function ProfileScreen() {
   if (!user) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.backHeader, { paddingTop: topPad + 8 }]}>
+        <AppHeader />
+        <View style={[styles.backHeader, { paddingTop: 8 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10} activeOpacity={0.8}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
@@ -282,7 +284,8 @@ export default function ProfileScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.backHeader, { paddingTop: topPad + 8 }]}>
+      <AppHeader />
+      <View style={[styles.backHeader, { paddingTop: 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>

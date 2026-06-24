@@ -12,6 +12,7 @@ import {
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+import { AppHeader } from "@/components/AppHeader";
 
 const MENU_ITEMS = [
   {
@@ -82,8 +83,9 @@ export default function SuperDashboard() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 12, backgroundColor: colors.primary }]}>
+      <View style={[styles.header, { paddingTop: 12, backgroundColor: colors.primary }]}>
         <TouchableOpacity
           onPress={() => router.back()}
           style={styles.backBtn}

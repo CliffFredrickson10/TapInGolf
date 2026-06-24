@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
 import { getGeofencingStatus, startGeofencing } from "@/lib/geofencing";
+import { AppHeader } from "@/components/AppHeader";
 
 type ClubGeo = {
   id: number;
@@ -126,11 +127,12 @@ export default function GeofenceConfigScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader />
       {/* Header */}
       <View
         style={[
           styles.header,
-          { paddingTop: insets.top + 12, backgroundColor: colors.primary },
+          { paddingTop: 12, backgroundColor: colors.primary },
         ]}
       >
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

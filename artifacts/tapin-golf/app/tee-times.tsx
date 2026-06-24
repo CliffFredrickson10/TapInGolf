@@ -16,6 +16,7 @@ import TeeTimeSlot, { TeeTime } from "@/components/TeeTimeSlot";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 interface Club {
   id: number;
@@ -126,9 +127,9 @@ export default function TeeTimesScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+      <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>

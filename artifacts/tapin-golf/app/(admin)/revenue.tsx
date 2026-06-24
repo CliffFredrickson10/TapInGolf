@@ -20,6 +20,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Types ────────────────────────────────────────────────────────
 type Summary = {
@@ -172,8 +173,9 @@ export default function RevenueScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: insets.top + 12, backgroundColor: colors.primary }]}>
+      <View style={[styles.header, { paddingTop: 12, backgroundColor: colors.primary }]}>
         <TouchableOpacity onPress={() => router.back()} style={{ padding: 4 }}>
           <Ionicons name="arrow-back" size={24} color="#fff" />
         </TouchableOpacity>

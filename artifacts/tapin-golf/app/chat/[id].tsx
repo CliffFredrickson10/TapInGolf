@@ -21,6 +21,7 @@ import GifPicker from "@/components/GifPicker";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 const GIF_PREFIX = "[GIF]:";
 
@@ -328,8 +329,9 @@ export default function ChatScreen() {
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
+      <AppHeader />
       {/* Header */}
-      <View style={[styles.header, { paddingTop: topPad + 12, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
+      <View style={[styles.header, { paddingTop: 12, borderBottomColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="chevron-back" size={24} color={colors.foreground} />
         </TouchableOpacity>

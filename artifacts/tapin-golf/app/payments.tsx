@@ -18,6 +18,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 type Transaction = {
   id: number;
@@ -176,7 +177,8 @@ export default function PaymentsScreen() {
   if (!user) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
-        <View style={[styles.backHeader, { paddingTop: topPad + 8 }]}>
+        <AppHeader />
+        <View style={[styles.backHeader, { paddingTop: 8 }]}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10} activeOpacity={0.8}>
             <Ionicons name="arrow-back" size={22} color="#fff" />
           </TouchableOpacity>
@@ -192,7 +194,8 @@ export default function PaymentsScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      <View style={[styles.backHeader, { paddingTop: topPad + 8 }]}>
+      <AppHeader />
+      <View style={[styles.backHeader, { paddingTop: 8 }]}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={10} activeOpacity={0.8}>
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>

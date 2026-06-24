@@ -19,6 +19,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 const DARK_BG   = "#0d1f14";
@@ -898,8 +899,9 @@ export default function HoleEntryScreen() {
 
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
-      {/* Top bar — clears notch/Dynamic Island on device; min-36 for web sim */}
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36) }]}>
+      <AppHeader />
+      {/* Top bar — back + club name + round controls */}
+      <View style={[styles.topBar, { paddingTop: 8 }]}>
         {/* Row 1: back + club name */}
         <View style={styles.topBarRow1}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>

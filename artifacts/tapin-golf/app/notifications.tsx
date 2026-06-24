@@ -16,6 +16,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
+import { AppHeader } from "@/components/AppHeader";
 
 // ─── Types ─────────────────────────────────────────────────────────────────
 type AppNotification = {
@@ -221,12 +222,13 @@ export default function NotificationsScreen() {
 
   return (
     <View style={[styles.root, { backgroundColor: colors.background }]}>
+      <AppHeader />
       {/* Header */}
       <View
         style={[
           styles.header,
           {
-            paddingTop: topPad + 12,
+            paddingTop: 12,
             backgroundColor: colors.card,
             borderBottomColor: colors.border,
           },

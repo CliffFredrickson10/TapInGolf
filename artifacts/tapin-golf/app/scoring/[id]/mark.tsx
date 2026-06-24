@@ -39,6 +39,8 @@ type RoundDetail = {
   scorecard: ScorecardHole[];
   holes: Record<number, SavedHole>;
   marker_submitted_at?: string | null;
+  // Scores the marker captured for this player live during the round
+  markerCapturedHoles?: Record<number, { gross_score: number | null; is_nr: number }>;
 };
 
 export default function MarkCardScreen() {
@@ -66,10 +68,18 @@ export default function MarkCardScreen() {
     try {
       const data = await apiFetch(`/scoring/rounds/${id}`, token);
       setRound(data);
-      // Start with all blanks — Megan enters from her own card
-      const blank: Record<string, string> = {};
-      for (const h of data.scorecard ?? []) blank[String(h.number)] = "";
-      setScores(blank);
+      // Pre-fill from the scores the marker captured live during the round.
+      // Falls back to blank for any hole not yet captured.
+      const prefill: Record<string, string> = {};
+      for (const h of data.scorecard ?? []) {
+        const captured = data.markerCapturedHoles?.[h.number];
+        if (captured && !captured.is_nr && captured.gross_score != null) {
+          prefill[String(h.number)] = String(captured.gross_score);
+        } else {
+          prefill[String(h.number)] = "";
+        }
+      }
+      setScores(prefill);
 
       const pendingRes = await apiFetch("/scoring/pending-marks", token);
       const match = (pendingRes.marks ?? []).find((m: any) => m.id === parseInt(id));
@@ -434,6 +444,16 @@ export default function MarkCardScreen() {
         </View>
       </View>
 
+      {/* Info banner — pre-populated explanation */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 10, paddingBottom: 4 }}>
+        <View style={[styles.infoBanner, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          <Ionicons name="information-circle-outline" size={16} color={GOLD} style={{ marginTop: 1, flexShrink: 0 }} />
+          <Text style={[styles.infoBannerText, { color: colors.mutedForeground }]}>
+            Pre-filled from your scorecard. Correct any errors, then submit — differences will be sent to the club.
+          </Text>
+        </View>
+      </View>
+
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
         {front9.length > 0 && (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
@@ -500,7 +520,7 @@ export default function MarkCardScreen() {
             {submitting
               ? "Submitting…"
               : !allFilled
-              ? "Enter All 18 Holes"
+              ? "Complete Missing Holes"
               : mismatches.length > 0
               ? `Review ${mismatches.length} Difference${mismatches.length !== 1 ? "s" : ""}`
               : "Submit — All Scores Match ✓"}
@@ -567,6 +587,12 @@ const styles = StyleSheet.create({
     gap: 8, borderRadius: 16, paddingVertical: 15,
   },
   footerBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  infoBanner: {
+    flexDirection: "row", alignItems: "flex-start", gap: 8,
+    borderWidth: StyleSheet.hairlineWidth, borderRadius: 10,
+    paddingHorizontal: 12, paddingVertical: 9,
+  },
+  infoBannerText: { flex: 1, fontSize: 12, fontFamily: "Inter_400Regular", lineHeight: 17 },
   resultCard: {
     flexDirection: "row", alignItems: "flex-start", gap: 14,
     borderRadius: 16, borderWidth: 1.5, padding: 18,

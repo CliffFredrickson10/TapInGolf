@@ -783,7 +783,23 @@ router.get("/scoring/rounds/:id", async (req, res) => {
     const playerHoles: Record<string, any> = {};
     for (const p of playerRows) playerHoles[`${p.player_index}_${p.hole_number}`] = p;
 
-    res.json({ ...round, scorecard, holes, playerHoles });
+    // If the requesting user is the marker, fetch the scores they captured for this player
+    // during their own round (stored in scoring_player_holes at player_index=0 on their round).
+    let markerCapturedHoles: Record<number, { gross_score: number | null; is_nr: number }> = {};
+    if (round.marker_user_id === user.id && round.tournament_id) {
+      const markerCaptures = await query<any>(`
+        SELECT sph.hole_number, sph.gross_score, sph.is_nr
+        FROM scoring_player_holes sph
+        JOIN scoring_rounds sr2 ON sr2.id = sph.round_id
+        WHERE sr2.tournament_id = ?
+          AND sr2.user_id = ?
+          AND sph.player_index = 0
+        ORDER BY sph.hole_number
+      `, [round.tournament_id, user.id]);
+      for (const c of markerCaptures) markerCapturedHoles[c.hole_number] = c;
+    }
+
+    res.json({ ...round, scorecard, holes, playerHoles, markerCapturedHoles });
   } catch (err: any) {
     if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
     req.log?.error({ err }, "get round error");

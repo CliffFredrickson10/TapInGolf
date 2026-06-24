@@ -103,7 +103,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const cPhIdx = isMP ? 0 : 1;
 
   const showD  = true;
-  const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : "Mkr3";
+  const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : fn(round.partner_name, "Mkr3");
   const dHcp   = o2Hcp;
 
   const showTeam = true;

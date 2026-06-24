@@ -1,5 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -316,6 +316,13 @@ export default function RoundCompleteScreen() {
       setPendingMarks(res.marks ?? []);
     } catch {}
   }, [token]);
+
+  // Re-check pending marks and dispute status every time this screen comes into focus
+  // (e.g. the other player submitted their round after this screen was first opened)
+  useFocusEffect(useCallback(() => {
+    checkPendingMarks();
+    loadRound();
+  }, [checkPendingMarks, loadRound]));
 
   const onComplete = async () => {
     if (!round || completing) return;
@@ -678,10 +685,21 @@ export default function RoundCompleteScreen() {
           </View>
         ) : (
           <View style={{ gap: 10 }}>
-            {round.tournament_id && round.score_submitted && (
+            {round.tournament_id && round.score_submitted && !round.score_disputed && (
               <View style={[styles.footerBtn, { backgroundColor: "#16a34a22", borderWidth: 1.5, borderColor: "#16a34a60" }]}>
                 <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
                 <Text style={[styles.footerBtnText, { color: "#16a34a" }]}>Score Submitted to Club ✓</Text>
+              </View>
+            )}
+            {round.tournament_id && round.score_disputed === 1 && (
+              <View style={[styles.footerBtn, { backgroundColor: "#dc262622", borderWidth: 1.5, borderColor: "#dc262660", flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                  <Ionicons name="warning" size={18} color="#dc2626" />
+                  <Text style={[styles.footerBtnText, { color: "#dc2626" }]}>Score Disputed ⚠</Text>
+                </View>
+                <Text style={{ fontSize: 11, color: "#dc2626aa", fontFamily: "Inter_400Regular", paddingLeft: 26 }}>
+                  Your marker recorded different scores on some holes. Contact the club to resolve.
+                </Text>
               </View>
             )}
             {pendingMarks.length > 0 && (

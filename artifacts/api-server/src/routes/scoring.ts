@@ -1189,6 +1189,180 @@ router.post("/scoring/rounds/:id/complete", async (req, res) => {
   }
 });
 
+// ─── Event-score auto-computation helpers ────────────────────────────────────
+
+// Formats where the competitive score requires per-hole computation (team/pair)
+const SCRAMBLE_FMTS    = new Set(["texas_scramble","american_scramble","scramble"]);
+const SHAMBLE_FMTS     = new Set(["shamble"]);
+const ALLIANCE_FMTS    = new Set(["alliance"]);
+const PAIR_BEST_PTS    = new Set([
+  "fourball_stableford","betterball","best_ball_aggregate","high_low","daytona",
+  "low_ball_total","betterball_bonus_bogey","pinehurst_points","the_ghost",
+  "fourball_stableford_match_play",
+]);
+const PAIR_BEST_NET    = new Set(["fourball_net_betterball","betterball_match_play"]);
+const PAIR_BEST_GROSS  = new Set(["fourball_gross_betterball","betterball_gross_match_play"]);
+const GROSS_ONLY_FMTS  = new Set(["gross_stroke_play","singles_gross_match_play",
+                                   "chairman","chapman"]);
+const NET_PRIMARY_FMTS = new Set(["net_stroke_play","singles_match_play",
+                                   "singles_stableford_match_play"]);
+
+const PAIR_TEAM_FMTS  = new Set([
+  ...SHAMBLE_FMTS, ...PAIR_BEST_PTS, ...PAIR_BEST_NET, ...PAIR_BEST_GROSS,
+  "chapman",
+]);
+const GROUP_TEAM_FMTS = new Set([...SCRAMBLE_FMTS, ...ALLIANCE_FMTS]);
+
+function isTeamFmtSR(fmt: string): boolean {
+  return PAIR_TEAM_FMTS.has(fmt) || GROUP_TEAM_FMTS.has(fmt);
+}
+
+function computeEventScore(
+  fmt: string,
+  round: any,
+  holeRows: any[],
+  playerRows: any[],
+): { gross: number|null; net: number|null; points: number|null; holeScores: Record<string,number> } {
+
+  // Index player holes: player_index → hole_number → row
+  const ph: Record<number, Record<number, any>> = {};
+  for (const p of playerRows) {
+    if (!ph[p.player_index]) ph[p.player_index] = {};
+    ph[p.player_index][p.hole_number] = p;
+  }
+
+  const partnerHcp  = round.partner_playing_hcp  ?? 0;
+  const opp1Hcp     = round.opponent_playing_hcp  ?? 0;
+  const opp2Hcp     = round.opponent2_playing_hcp ?? 0;
+
+  let totalGross = 0, totalNet = 0, totalPoints = 0;
+  const holeScores: Record<string, number> = {};
+
+  for (const h of holeRows) {
+    if (h.is_nr || h.gross_score == null) continue;
+    const par = h.par ?? 4;
+    const si  = h.stroke_index ?? h.hole_number;
+
+    // Helper: stableford pts for any player at this hole
+    const ptsFor = (gross: number, hcp: number) =>
+      Math.max(0, par + 2 - (gross - getHA(si, hcp)));
+
+    if (SCRAMBLE_FMTS.has(fmt)) {
+      // Min gross from any player in the group
+      let best = h.gross_score;
+      for (let i = 0; i <= 2; i++) {
+        const p = ph[i]?.[h.hole_number];
+        if (p && !p.is_nr && p.gross_score != null && p.gross_score < best) best = p.gross_score;
+      }
+      totalGross += best;
+      holeScores[h.hole_number] = best;
+
+    } else if (SHAMBLE_FMTS.has(fmt)) {
+      // Max stableford from any player in the group
+      let best = h.stableford_points ?? 0;
+      const companions = [
+        { idx: 0, hcp: partnerHcp }, { idx: 1, hcp: opp1Hcp }, { idx: 2, hcp: opp2Hcp },
+      ];
+      for (const { idx, hcp } of companions) {
+        const p = ph[idx]?.[h.hole_number];
+        if (p && !p.is_nr && p.gross_score != null) {
+          const pts = ptsFor(p.gross_score, hcp);
+          if (pts > best) best = pts;
+        }
+      }
+      totalPoints += best;
+      holeScores[h.hole_number] = best;
+
+    } else if (ALLIANCE_FMTS.has(fmt)) {
+      // Sum top-N stableford per hole (N = 1/par3, 2/par4, 3/par5)
+      const n = par <= 3 ? 1 : par === 4 ? 2 : 3;
+      const allPts: number[] = [h.stableford_points ?? 0];
+      for (const [idx, hcp] of [[0, partnerHcp],[1, opp1Hcp],[2, opp2Hcp]] as [number,number][]) {
+        const p = ph[idx]?.[h.hole_number];
+        if (p && !p.is_nr && p.gross_score != null) allPts.push(ptsFor(p.gross_score, hcp));
+      }
+      allPts.sort((a, b) => b - a);
+      const holePts = allPts.slice(0, n).reduce((s, x) => s + x, 0);
+      totalPoints += holePts;
+      holeScores[h.hole_number] = holePts;
+
+    } else if (PAIR_BEST_PTS.has(fmt)) {
+      // Best stableford from me or partner
+      const myPts = h.stableford_points ?? 0;
+      const partnerRow = ph[0]?.[h.hole_number];
+      const partnerPts = (partnerRow && !partnerRow.is_nr && partnerRow.gross_score != null)
+        ? ptsFor(partnerRow.gross_score, partnerHcp) : 0;
+      let holePts: number;
+      if (fmt === "the_ghost")         holePts = Math.max(myPts, 2);
+      else if (fmt === "pinehurst_points") holePts = myPts * partnerPts;
+      else                              holePts = Math.max(myPts, partnerPts);
+      totalPoints += holePts;
+      totalGross  += h.gross_score;
+      holeScores[h.hole_number] = holePts;
+
+    } else if (PAIR_BEST_NET.has(fmt)) {
+      // Best net from me or partner
+      const myNet = h.net_score ?? (h.gross_score - getHA(si, round.playing_handicap ?? 0));
+      const partnerRow = ph[0]?.[h.hole_number];
+      const partnerNet = (partnerRow && !partnerRow.is_nr && partnerRow.gross_score != null)
+        ? partnerRow.gross_score - getHA(si, partnerHcp) : myNet;
+      const best = Math.min(myNet, partnerNet);
+      totalNet   += best;
+      totalGross += h.gross_score;
+      holeScores[h.hole_number] = best;
+
+    } else if (PAIR_BEST_GROSS.has(fmt)) {
+      // Best gross from me or partner
+      const partnerRow = ph[0]?.[h.hole_number];
+      const partnerGross = (partnerRow && !partnerRow.is_nr && partnerRow.gross_score != null)
+        ? partnerRow.gross_score : null;
+      const best = partnerGross != null ? Math.min(h.gross_score, partnerGross) : h.gross_score;
+      totalGross += best;
+      holeScores[h.hole_number] = best;
+
+    } else if (GROSS_ONLY_FMTS.has(fmt)) {
+      totalGross += h.gross_score;
+      holeScores[h.hole_number] = h.gross_score;
+
+    } else if (NET_PRIMARY_FMTS.has(fmt)) {
+      totalNet   += h.net_score ?? 0;
+      totalGross += h.gross_score;
+      holeScores[h.hole_number] = h.net_score ?? 0;
+
+    } else {
+      // Default: stableford
+      totalPoints += h.stableford_points ?? 0;
+      totalGross  += h.gross_score;
+      totalNet    += h.net_score ?? 0;
+      holeScores[h.hole_number] = h.stableford_points ?? 0;
+    }
+  }
+
+  // Pack into result — only populate fields meaningful for this format
+  if (SCRAMBLE_FMTS.has(fmt) || PAIR_BEST_GROSS.has(fmt)) {
+    return { gross: totalGross || null, net: null, points: null, holeScores };
+  }
+  if (PAIR_BEST_NET.has(fmt)) {
+    return { gross: totalGross || null, net: totalNet || null, points: null, holeScores };
+  }
+  if (SHAMBLE_FMTS.has(fmt) || ALLIANCE_FMTS.has(fmt) || PAIR_BEST_PTS.has(fmt)) {
+    return { gross: null, net: null, points: totalPoints !== 0 ? totalPoints : null, holeScores };
+  }
+  if (GROSS_ONLY_FMTS.has(fmt)) {
+    return { gross: totalGross || null, net: null, points: null, holeScores };
+  }
+  if (NET_PRIMARY_FMTS.has(fmt)) {
+    return { gross: totalGross || null, net: totalNet || null, points: null, holeScores };
+  }
+  // Stableford / all others
+  return {
+    gross:  totalGross  ? totalGross  : null,
+    net:    totalNet    ? totalNet    : null,
+    points: totalPoints !== 0 ? totalPoints : null,
+    holeScores,
+  };
+}
+
 // ─── Submit score to club tournament ─────────────────────────────────────────
 
 router.post("/scoring/rounds/:id/submit", async (req, res) => {
@@ -1211,6 +1385,72 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
       "UPDATE scoring_rounds SET score_submitted = 1 WHERE id = ?",
       [roundId]
     );
+
+    // ── Auto-write to event_scores ────────────────────────────────────────────
+    try {
+      const fullRound = await row<any>("SELECT * FROM scoring_rounds WHERE id = ?", [roundId]);
+      const ev = await row<any>(
+        "SELECT id, format, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
+        [round.tournament_id]
+      );
+      if (ev && ev.scoring_enabled && fullRound) {
+        const reg = await row<any>(
+          "SELECT id, division, frozen_handicap, team_id, status FROM event_registrations WHERE event_id = ? AND user_id = ? AND status = 'approved'",
+          [round.tournament_id, user.id]
+        );
+        if (reg) {
+          const holeRows = await query<any>(
+            "SELECT hole_number, par, stroke_index, gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",
+            [roundId]
+          );
+          const playerRows = await query<any>(
+            "SELECT hole_number, player_index, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ?",
+            [roundId]
+          );
+
+          const { gross, net, points, holeScores } = computeEventScore(
+            ev.format ?? "gross_stroke_play", fullRound, holeRows, playerRows
+          );
+
+          const isTeam = isTeamFmtSR(ev.format ?? "");
+          if (isTeam && reg.team_id) {
+            const existing = await row<any>(
+              "SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = 1",
+              [round.tournament_id, reg.team_id]
+            );
+            if (!existing) {
+              await exec(
+                `INSERT INTO event_scores
+                   (event_id, team_id, user_id, division, frozen_handicap, round,
+                    gross, net, points, hole_scores, verified)
+                 VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                [round.tournament_id, reg.team_id, user.id,
+                 reg.division, reg.frozen_handicap,
+                 gross, net, points, JSON.stringify(holeScores)]
+              );
+            }
+          } else if (!isTeam) {
+            const existing = await row<any>(
+              "SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = 1 AND team_id IS NULL",
+              [round.tournament_id, user.id]
+            );
+            if (!existing) {
+              await exec(
+                `INSERT INTO event_scores
+                   (event_id, user_id, division, frozen_handicap, round,
+                    gross, net, points, hole_scores, verified)
+                 VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                [round.tournament_id, user.id,
+                 reg.division, reg.frozen_handicap,
+                 gross, net, points, JSON.stringify(holeScores)]
+              );
+            }
+          }
+        }
+      }
+    } catch (autoErr: any) {
+      req.log?.warn({ err: autoErr }, "auto-submit to event_scores failed (non-fatal)");
+    }
 
     res.json({ ok: true });
   } catch (err: any) {

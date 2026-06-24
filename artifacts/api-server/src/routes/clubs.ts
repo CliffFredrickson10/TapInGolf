@@ -837,15 +837,61 @@ const PAIR_FORMATS = new Set([
   "betterball", "fourball", "fourball_gross_betterball", "fourball_net_betterball",
   "betterball_match_play", "fourball_stableford", "shamble", "best_ball_aggregate",
   "high_low", "daytona", "low_ball_total", "the_ghost", "betterball_bonus_bogey",
-  "pinehurst_points",
+  "pinehurst_points", "chapman",
+  "betterball_gross_match_play", "fourball_stableford_match_play",
 ]);
 // Formats where the whole draw group (up to 4) is one team
-const GROUP_FORMATS = new Set(["american_scramble", "scramble", "alliance"]);
+const GROUP_FORMATS = new Set(["american_scramble", "scramble", "alliance", "texas_scramble"]);
 
 function teamSize(format: string): "pair" | "group" | "individual" {
   if (PAIR_FORMATS.has(format)) return "pair";
   if (GROUP_FORMATS.has(format)) return "group";
   return "individual";
+}
+
+// ─── Format-aware leaderboard rank order ─────────────────────────────────────
+// Returns the ORDER BY fragment for RANK() OVER based on which metric is primary
+// for the given format (gross-stroke < net-stroke < points-stableford).
+
+const RANK_GROSS_ASC_FMTS = new Set([
+  "gross_stroke_play", "chairman",
+  "texas_scramble", "american_scramble", "scramble", "chapman",
+  "betterball_gross_match_play", "fourball_gross_betterball", "singles_gross_match_play",
+]);
+const RANK_NET_ASC_FMTS = new Set([
+  "net_stroke_play",
+  "betterball_match_play", "fourball_net_betterball",
+  "singles_match_play",
+]);
+
+function rankOrderClause(format: string): string {
+  if (RANK_GROSS_ASC_FMTS.has(format)) return `
+    CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC,
+    CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC`;
+  if (RANK_NET_ASC_FMTS.has(format)) return `
+    CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC,
+    CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC`;
+  return `
+    CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+    CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC`;
+}
+
+function rankOrderClauseDQ(format: string): string {
+  if (RANK_GROSS_ASC_FMTS.has(format)) return `
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC`;
+  if (RANK_NET_ASC_FMTS.has(format)) return `
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC`;
+  return `
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
+    CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC`;
 }
 
 // GET /events/:id  — returns event object directly (screen uses data directly, not data.event)
@@ -1164,9 +1210,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
          SUM(es.net)    AS net,
          SUM(es.points) AS points,
          RANK() OVER (PARTITION BY es.division ORDER BY
-           CASE WHEN SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
-           CASE WHEN SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
-           CASE WHEN SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
+           ${rankOrderClause(ev.format ?? "")}
          ) AS position
        FROM event_scores es
        JOIN event_teams et ON et.id = es.team_id
@@ -1203,9 +1247,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
        BOOL_OR(es.dq) AS dq,
        MAX(es.dq_reason) AS dq_reason,
        RANK() OVER (PARTITION BY er.division ORDER BY
-         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.points) IS NOT NULL THEN SUM(es.points) END DESC,
-         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.net)    IS NOT NULL THEN SUM(es.net)    END ASC,
-         CASE WHEN NOT BOOL_OR(es.dq) AND SUM(es.gross)  IS NOT NULL THEN SUM(es.gross)  END ASC
+         ${rankOrderClauseDQ(ev.format ?? "")}
        ) AS position
      FROM event_scores es
      JOIN users u ON u.id = es.user_id

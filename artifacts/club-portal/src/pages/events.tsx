@@ -157,6 +157,37 @@ const PAIR_FORMATS_FE = new Set([
   "pinehurst_points", "chapman",
 ]);
 const GROUP_FORMATS_FE = new Set(["american_scramble", "scramble", "alliance", "texas_scramble"]);
+
+// Returns which of gross/net/points is the PRIMARY competitive metric for the format
+function primaryMetricFor(fmt?: string | null): "gross" | "net" | "points" {
+  const grossFmts = new Set(["gross_stroke_play","chairman","texas_scramble","american_scramble",
+    "scramble","chapman","betterball_gross_match_play","fourball_gross_betterball","singles_gross_match_play"]);
+  const netFmts = new Set(["net_stroke_play","betterball_match_play","fourball_net_betterball","singles_match_play"]);
+  if (grossFmts.has(fmt ?? "")) return "gross";
+  if (netFmts.has(fmt ?? ""))   return "net";
+  return "points";
+}
+
+// Column labels for gross / net / points adjusted for context
+function scoreColLabels(fmt?: string | null, isTeam = false): [string, string, string] {
+  const isScramble  = new Set(["texas_scramble","american_scramble","scramble"]).has(fmt ?? "");
+  const isBetterNet = new Set(["fourball_net_betterball","betterball_match_play"]).has(fmt ?? "");
+  const isBetterGross = new Set(["fourball_gross_betterball","betterball_gross_match_play"]).has(fmt ?? "");
+  const isShamble   = fmt === "shamble";
+  const isAlliance  = fmt === "alliance";
+  const isNetFmt    = new Set(["net_stroke_play"]).has(fmt ?? "");
+  const grossLbl    = isScramble ? (isTeam ? "Team Gross" : "Best Gross")
+                    : isBetterGross ? (isTeam ? "Best Gross" : "Gross")
+                    : "Gross";
+  const netLbl      = isBetterNet ? (isTeam ? "Best Net" : "Net")
+                    : isNetFmt   ? "Nett"
+                    : "Nett";
+  const ptsLbl      = isShamble   ? (isTeam ? "Team Pts" : "Best Pts")
+                    : isAlliance  ? (isTeam ? "Team Pts" : "Alliance Pts")
+                    : "Stableford Pts";
+  return [grossLbl, netLbl, ptsLbl];
+}
+
 function isTeamFormatFE(f1: string, f2?: string | null) {
   return PAIR_FORMATS_FE.has(f1) || GROUP_FORMATS_FE.has(f1) || PAIR_FORMATS_FE.has(f2 ?? "") || GROUP_FORMATS_FE.has(f2 ?? "");
 }
@@ -2294,14 +2325,16 @@ ${bodyHtml}
                             if (!teamMap.has(s.team_id!)) teamMap.set(s.team_id!, s);
                           });
                           const teams = Array.from(teamMap.values());
+                          const primary = primaryMetricFor(detail.format);
+                          const [grossLbl, netLbl, ptsLbl] = scoreColLabels(detail.format, true);
                           return (
                             <>
                               <p className="text-xs text-muted-foreground mb-2">Team scores — one submission per partnership/group.</p>
                               <div className="grid grid-cols-5 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
                                 <span className="col-span-2">Team</span>
-                                <span className="text-center">Gross</span>
-                                <span className="text-center">Nett</span>
-                                <span className="text-center">Stableford Pts</span>
+                                <span className={`text-center${primary === "gross" ? " font-bold text-foreground" : ""}`}>{grossLbl}</span>
+                                <span className={`text-center${primary === "net" ? " font-bold text-foreground" : ""}`}>{netLbl}</span>
+                                <span className={`text-center${primary === "points" ? " font-bold text-foreground" : ""}`}>{ptsLbl}</span>
                               </div>
                               {teams.map(s => (
                                 <Card key={s.team_id}>
@@ -2439,13 +2472,19 @@ ${bodyHtml}
                               </div>
                             )}
 
-                            <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
-                              <span className="col-span-2">Player</span>
-                              <span className="text-center">Gross</span>
-                              <span className="text-center">Nett</span>
-                              <span className="text-center">Stableford Pts</span>
-                              <span></span>
-                            </div>
+                            {(() => {
+                              const primary2 = primaryMetricFor(detail.format);
+                              const [gLbl, nLbl, pLbl] = scoreColLabels(detail.format, false);
+                              return (
+                                <div className="grid grid-cols-6 gap-2 text-xs text-muted-foreground font-medium px-3 py-1.5 bg-muted/40 rounded-md">
+                                  <span className="col-span-2">Player</span>
+                                  <span className={`text-center${primary2 === "gross" ? " font-bold text-foreground" : ""}`}>{gLbl}</span>
+                                  <span className={`text-center${primary2 === "net" ? " font-bold text-foreground" : ""}`}>{nLbl}</span>
+                                  <span className={`text-center${primary2 === "points" ? " font-bold text-foreground" : ""}`}>{pLbl}</span>
+                                  <span></span>
+                                </div>
+                              );
+                            })()}
                             {regs.filter(r => r.status === "approved").map(r => {
                               const submitted = scores.find(s => s.user_id === r.user_id && s.round === scoreRound);
                               const isDQ = submitted?.dq;

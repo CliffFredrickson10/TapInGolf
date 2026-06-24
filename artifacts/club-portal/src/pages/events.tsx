@@ -2549,7 +2549,14 @@ ${bodyHtml}
                                     <div className="grid grid-cols-5 gap-2 items-center text-sm">
                                       <div className="col-span-2">
                                         <p className="font-medium text-xs">{s.team_name ?? "Team"}</p>
-                                        <p className="text-[11px] text-muted-foreground">{s.division ? `${s.division} Div` : "—"} {s.verified ? "· ✓ Verified" : "· Unverified"}</p>
+                                        <div className="flex items-center gap-1 mt-0.5">
+                                          <span className="text-[11px] text-muted-foreground">{s.division ? `${s.division} Div` : "—"}</span>
+                                          {s.verified ? (
+                                            <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 px-1 py-0.5 rounded">✓ Verified</span>
+                                          ) : (
+                                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">⏳ Unverified</span>
+                                          )}
+                                        </div>
                                       </div>
                                       {(["gross","net","points"] as const).map(field => (
                                         <Input
@@ -2706,6 +2713,9 @@ ${bodyHtml}
                                           {!isDQ && submitted?.marker_disputed === 1 && (
                                             <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">⚠ Disputed</span>
                                           )}
+                                          {!isDQ && submitted && !submitted.verified && !submitted.marker_disputed && (
+                                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">⏳ Unverified</span>
+                                          )}
                                           {!isDQ && submitted?.verified === 1 && submitted?.marker_disputed !== 1 && (
                                             <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 px-1 py-0.5 rounded">✓ Verified</span>
                                           )}
@@ -2713,7 +2723,7 @@ ${bodyHtml}
                                         <p className="text-[11px] text-muted-foreground">
                                           {r.division ? `${r.division} Div` : "—"}
                                           {submitted && !isDQ && submitted.marker_name ? ` · Marker: ${submitted.marker_name}` : ""}
-                                          {submitted && !isDQ && !submitted.marker_disputed && !submitted.verified && submitted.marker_name && !submitted.marker_submitted_at ? " · Awaiting marker" : ""}
+                                          {submitted && !isDQ && !submitted.marker_disputed && !submitted.verified && submitted.marker_name && !submitted.marker_submitted_at ? " · Awaiting countersignature" : ""}
                                           {isDQ && submitted?.dq_reason ? ` · ${submitted.dq_reason}` : ""}
                                         </p>
                                       </div>

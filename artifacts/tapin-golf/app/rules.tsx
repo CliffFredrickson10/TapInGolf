@@ -75,7 +75,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "individual_par",
-        label: "Par / Individual Par",
+        label: "Individual Par Competition",
         icon: "remove-circle-outline",
         howItWorks:
           "Match your net score against par on each hole — you either win, halve, or lose each hole against the course.",
@@ -87,7 +87,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "individual_bogey",
-        label: "Individual Bogey",
+        label: "Individual Bogey Competition",
         icon: "remove-outline",
         howItWorks:
           "Same concept as Par competition, but bogey (not par) is the target on each hole.",
@@ -123,7 +123,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "individual_bonus_bogey",
-        label: "Bonus Bogey",
+        label: "Individual Bonus Bogey",
         icon: "gift-outline",
         howItWorks:
           "A points-based format where birdies and eagles earn bonus points while bogeys lose points.",
@@ -135,7 +135,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "chairman",
-        label: "Chairman's Prize",
+        label: "Chairman (The Perch)",
         icon: "trophy-outline",
         howItWorks:
           "A prestige net stroke-play competition, typically played off a reduced handicap allowance (3/4 or 7/8) set by the club.",
@@ -165,7 +165,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "singles_stableford_match_play",
-        label: "Stableford Match Play",
+        label: "Singles Stableford Match Play",
         icon: "star-half-outline",
         howItWorks:
           "Match play using Stableford points instead of gross/net strokes. Win the hole with more points, halve with equal, lose with fewer.",
@@ -177,7 +177,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "singles_gross_match_play",
-        label: "Gross Match Play",
+        label: "Singles Gross Match Play",
         icon: "golf-outline",
         howItWorks:
           "Head-to-head match play using gross (no handicap) strokes. Fewest gross strokes on a hole wins it.",
@@ -195,7 +195,7 @@ const CATEGORIES: Category[] = [
     formats: [
       {
         key: "betterball_match_play",
-        label: "Betterball Match Play (4BBB)",
+        label: "Betterball Match Play",
         icon: "people-outline",
         howItWorks:
           "Two teams of two. Each player plays their own ball. The better net score from each team per hole is compared — the team with the lower net score wins the hole.",
@@ -207,7 +207,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "fourball_stableford",
-        label: "Fourball Stableford (4BBB)",
+        label: "Betterball Stableford (4BBB)",
         icon: "star-outline",
         howItWorks:
           "Teams of two. Both players score stableford points on their own ball. The higher of the two partners' points counts as the team score for that hole.",
@@ -219,7 +219,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "fourball_net_betterball",
-        label: "Fourball Net Betterball",
+        label: "Four-Ball Net Betterball",
         icon: "ribbon-outline",
         howItWorks:
           "Teams of two. The better net score between the two partners counts as the team score on each hole.",
@@ -231,7 +231,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "fourball_gross_betterball",
-        label: "Fourball Gross Betterball",
+        label: "Four-Ball Gross Betterball",
         icon: "ribbon-outline",
         howItWorks:
           "Teams of two playing gross betterball — no handicap. The better gross score from each team's two players counts per hole.",
@@ -279,7 +279,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "pinehurst_points",
-        label: "Multiplication Betterball (Pinehurst Points)",
+        label: "Multiplication Betterball (Pinehurst)",
         icon: "close-circle-outline",
         howItWorks:
           "Teams of two. Both players score stableford points on their own ball per hole. Instead of taking the best score, the two partners' stableford points are MULTIPLIED together to give the team score for that hole.",
@@ -291,7 +291,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "high_low",
-        label: "High/Low",
+        label: "High-Low",
         icon: "bar-chart-outline",
         howItWorks:
           "A team format where two scores are recorded per team per hole: the HIGH ball (worst net) and the LOW ball (best net). Both scores contribute across the round in different ways.",
@@ -327,7 +327,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "low_ball_total",
-        label: "Low Ball Total",
+        label: "Low Ball / Total Score",
         icon: "trending-down-outline",
         howItWorks:
           "Tracks the lowest net score from a group on each hole and accumulates it as the team's running total.",
@@ -393,7 +393,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "chapman",
-        label: "Chapman (Pinehurst Alternate Shot)",
+        label: "Chapman (Pinehurst)",
         icon: "swap-vertical-outline",
         howItWorks:
           "Both partners tee off. Each then plays the other's drive. The team selects the better of the two second shots, and from there alternate shot is played to complete the hole (one player putts, the other plays the next shot, alternating).",

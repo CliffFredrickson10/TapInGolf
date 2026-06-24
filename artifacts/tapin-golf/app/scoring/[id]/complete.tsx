@@ -54,7 +54,7 @@ type Round = {
 
 const FORMAT_LABELS: Record<string, string> = {
   individual_stableford:       "Individual Stableford",
-  gross_stroke_play:           "Gross Stroke Play",
+  gross_stroke_play:           "Gross Stroke Play (Medal)",
   net_stroke_play:             "Net Stroke Play",
   par_bogey:                   "Par / Bogey Competition",
   individual_par:              "Individual Par Competition",
@@ -64,7 +64,7 @@ const FORMAT_LABELS: Record<string, string> = {
   chairman:                    "Chairman (The Perch)",
   maximum_score:               "Maximum Score",
   eclectic:                    "Eclectic",
-  fourball_stableford:         "Betterball Stableford",
+  fourball_stableford:         "Betterball Stableford (4BBB)",
   fourball_gross_betterball:   "Four-Ball Gross Betterball",
   fourball_net_betterball:     "Four-Ball Net Betterball",
   shamble:                     "Shamble",
@@ -74,7 +74,7 @@ const FORMAT_LABELS: Record<string, string> = {
   low_ball_total:              "Low Ball / Total Score",
   the_ghost:                   "The Ghost",
   betterball_bonus_bogey:      "Betterball Bonus Bogey",
-  pinehurst_points:            "Betterball (Pinehurst)",
+  pinehurst_points:            "Multiplication Betterball (Pinehurst)",
   alliance:                    "Alliance",
   american_scramble:           "American Scramble",
   texas_scramble:              "Texas Scramble",

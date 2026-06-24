@@ -70,13 +70,13 @@ export default function ScorecardUnified({ round, colors }: Props) {
                    "fourball_stableford_match_play"].includes(fmt);
   const isBBStb = fmt === "fourball_stableford" || fmt === "fourball_stableford_match_play";
   const isBBGrs = fmt === "fourball_gross_betterball" || fmt === "betterball_gross_match_play";
-  const isGrOnly  = fmt === "gross_stroke_play";
-  const isNetOny  = fmt === "net_stroke_play" || fmt === "chairman" || fmt === "fourball_net_betterball" || isScramble;
-  const isPar     = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
-  const isBonusB  = fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey";
-  const isMod     = fmt === "modified_stableford";
-  const isMaxSc    = fmt === "maximum_score";
+  const isGrOnly   = fmt === "gross_stroke_play";
   const isScramble = ["texas_scramble","american_scramble","chapman"].includes(fmt);
+  const isNetOny   = fmt === "net_stroke_play" || fmt === "chairman" || fmt === "fourball_net_betterball" || isScramble;
+  const isPar      = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
+  const isBonusB   = fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey";
+  const isMod      = fmt === "modified_stableford";
+  const isMaxSc    = fmt === "maximum_score";
   const hasPH      = !!round.playerHoles;
 
   /* ── Handicaps ────────────────────────────────────────────── */

@@ -358,6 +358,22 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
+  const isScrambleFmt = ["texas_scramble","american_scramble","chapman"].includes(round.format);
+  let teamTotal = 0;
+  if (isScrambleFmt) {
+    const ph = round.playerHoles ?? {};
+    sc.forEach(h => {
+      const saved = holes[h.number];
+      const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
+      const others = ([0, 1, 2] as const).map(i => {
+        const s = ph[`${i}_${h.number}`];
+        return (s && !s.is_nr && s.gross_score != null) ? s.gross_score : null;
+      });
+      const allScores = ([myG, ...others] as (number | null)[]).filter((g): g is number => g != null);
+      if (allScores.length > 0) teamTotal += Math.min(...allScores);
+    });
+  }
+
   const isMatchPlay  = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
   const singleMetric = round.format === "singles_stableford_match_play" ? "stableford" : round.format === "singles_gross_match_play" ? "gross" : "net";
   const isBetterball = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play";
@@ -405,12 +421,20 @@ export default function RoundCompleteScreen() {
 
         {/* Summary cards */}
         <View style={[styles.summaryRow, { backgroundColor: colors.primary + "08", borderBottomColor: colors.border }]}>
-          {[
-            { label: "Stableford", value: String(totalPts), unit: "pts", highlight: true },
-            { label: "Gross", value: String(totalGross), unit: null, highlight: false },
-            { label: "Net", value: String(totalNet), unit: null, highlight: false },
-            { label: "Holes", value: String(holesScored), unit: `/ ${sc.length}`, highlight: false },
-          ].map(s => (
+          {(isScrambleFmt
+            ? [
+                { label: "Team", value: String(teamTotal || "—"), unit: null, highlight: true },
+                { label: "My Gross", value: String(totalGross), unit: null, highlight: false },
+                { label: "My Net", value: String(totalNet), unit: null, highlight: false },
+                { label: "Holes", value: String(holesScored), unit: `/ ${sc.length}`, highlight: false },
+              ]
+            : [
+                { label: "Stableford", value: String(totalPts), unit: "pts", highlight: true },
+                { label: "Gross", value: String(totalGross), unit: null, highlight: false },
+                { label: "Net", value: String(totalNet), unit: null, highlight: false },
+                { label: "Holes", value: String(holesScored), unit: `/ ${sc.length}`, highlight: false },
+              ]
+          ).map(s => (
             <View key={s.label} style={[styles.summaryCard, { borderColor: s.highlight ? colors.primary + "40" : colors.border, backgroundColor: s.highlight ? colors.primary + "12" : colors.card }]}>
               <View style={{ flexDirection: "row", alignItems: "baseline", gap: 3 }}>
                 <Text style={[styles.summaryValue, { color: s.highlight ? colors.primary : colors.foreground }]}>{s.value}</Text>

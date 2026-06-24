@@ -32,6 +32,38 @@ type Category = {
   formats: Format[];
 };
 
+const WHS_ALLOWANCES: Record<string, string> = {
+  individual_stableford:         "95% of Course Handicap (WHS recommended allowance)",
+  gross_stroke_play:             "No allowance — scratch competition only",
+  net_stroke_play:               "95% of Course Handicap for WHS competitions (100% for casual play)",
+  individual_par:                "95% of Course Handicap (WHS recommended allowance)",
+  individual_bogey:              "95% of Course Handicap (WHS recommended allowance)",
+  modified_stableford:           "95% of Course Handicap (committee may adjust the point scale)",
+  maximum_score:                 "95% of Course Handicap (WHS recommended allowance)",
+  individual_bonus_bogey:        "95% of Course Handicap",
+  chairman:                      "75% or 87.5% — reduced allowance set by the committee (common SA club practice)",
+  singles_match_play:            "100% of full difference in Course Handicaps — lower-handicap player gives strokes to higher",
+  singles_stableford_match_play: "100% of full difference in Course Handicaps",
+  singles_gross_match_play:      "No allowance — scratch match play",
+  betterball_match_play:         "85% of Course Handicap each (WHS Table 2, Four-Ball)",
+  fourball_stableford:           "85% of Course Handicap each (WHS Table 2, Four-Ball Stableford)",
+  fourball_net_betterball:       "90% of Course Handicap each (WHS Table 2, Four-Ball Stroke Play)",
+  fourball_gross_betterball:     "No allowance — scratch format",
+  betterball_bonus_bogey:        "85% of Course Handicap each",
+  betterball_gross_match_play:   "No allowance — scratch format",
+  the_ghost:                     "100% of Course Handicap (full individual allowance; the ghost plays to par with no handicap)",
+  pinehurst_points:              "85% of Course Handicap each (WHS Table 2, same as standard 4BBB)",
+  high_low:                      "85% of Course Handicap each",
+  daytona:                       "90% of Course Handicap each (committee variant)",
+  best_ball_aggregate:           "85% of Course Handicap each",
+  low_ball_total:                "85% of Course Handicap each",
+  alliance:                      "75% of Course Handicap each (WHS recommendation for alliance-style team formats)",
+  texas_scramble:                "Committee formula: typically (A + B + C + D) ÷ 4 × 25%. E.g. for handicaps 12, 16, 20, 24 → team allowance = 18 × 25% = 4.5 strokes. Minimum number of drives per player usually required.",
+  american_scramble:             "Committee formula: same as Texas Scramble — typically 10–25% of average Course Handicap. Exact percentage set by the committee.",
+  shamble:                       "90% of each player's Course Handicap, distributed per hole by stroke index (WHS individual component)",
+  chapman:                       "60% of lower Course Handicap + 40% of higher Course Handicap (WHS recommended Chapman/Greensomes formula)",
+};
+
 const CATEGORIES: Category[] = [
   {
     title: "Individual Formats",
@@ -443,6 +475,12 @@ function FormatCard({ fmt, colors }: { fmt: Format; colors: any }) {
             <Text style={[s.blockTitle, { color: "#60a5fa" }]}>Handicap</Text>
             <Text style={s.blockText}>{fmt.handicap}</Text>
           </View>
+          {WHS_ALLOWANCES[fmt.key] && (
+            <View style={s.block}>
+              <Text style={[s.blockTitle, { color: "#60a5fa" }]}>WHS Allowance</Text>
+              <Text style={s.blockText}>{WHS_ALLOWANCES[fmt.key]}</Text>
+            </View>
+          )}
           <View style={s.pickupRow}>
             <Ionicons name="hand-left-outline" size={13} color={GOLD} />
             <Text style={s.pickupText}>{fmt.pickup}</Text>

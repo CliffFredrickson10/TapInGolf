@@ -865,32 +865,38 @@ export default function HoleEntryScreen() {
   return (
     <View style={{ flex: 1, backgroundColor: DARK_BG }}>
       {/* Top bar — clears notch/Dynamic Island on device; min-36 for web sim */}
-      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36), paddingBottom: isMatchPlay ? 8 : 8 }]}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
-        </TouchableOpacity>
-        <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
-        <TouchableOpacity
-          onPress={onAbandon}
-          style={[styles.topActionBtn, { borderColor: "rgba(255,255,255,0.2)" }]}
-        >
-          <Ionicons name="close-circle-outline" size={13} color="rgba(255,255,255,0.55)" />
-          <Text style={[styles.topActionText, { color: "rgba(255,255,255,0.55)" }]}>Abandon</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={confirmAndFinish}
-          style={[styles.topActionBtn, { borderColor: "#f87171" + "55" }]}
-        >
-          <Ionicons name="flag" size={13} color="#f87171" />
-          <Text style={[styles.topActionText, { color: "#f87171" }]}>End Round</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => router.push(`/scoring/${id}/complete`)}
-          style={[styles.topActionBtn, { borderColor: GOLD + "55" }]}
-        >
-          <Ionicons name="list" size={13} color={GOLD} />
-          <Text style={[styles.topActionText, { color: GOLD }]}>Scorecard</Text>
-        </TouchableOpacity>
+      <View style={[styles.topBar, { paddingTop: Math.max(insets.top + 8, 36) }]}>
+        {/* Row 1: back + club name */}
+        <View style={styles.topBarRow1}>
+          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
+        </View>
+        {/* Row 2: action buttons */}
+        <View style={styles.topBarRow2}>
+          <TouchableOpacity
+            onPress={onAbandon}
+            style={[styles.topActionBtn, { borderColor: "rgba(255,255,255,0.2)" }]}
+          >
+            <Ionicons name="close-circle-outline" size={13} color="rgba(255,255,255,0.55)" />
+            <Text style={[styles.topActionText, { color: "rgba(255,255,255,0.55)" }]}>Abandon</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={confirmAndFinish}
+            style={[styles.topActionBtn, { borderColor: "#f87171" + "55" }]}
+          >
+            <Ionicons name="flag" size={13} color="#f87171" />
+            <Text style={[styles.topActionText, { color: "#f87171" }]}>End Round</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => router.push(`/scoring/${id}/complete`)}
+            style={[styles.topActionBtn, { borderColor: GOLD + "55" }]}
+          >
+            <Ionicons name="list" size={13} color={GOLD} />
+            <Text style={[styles.topActionText, { color: GOLD }]}>Scorecard</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Hole strip — View wrapper pins height so flexbox can't stretch the horizontal ScrollView */}
@@ -1412,14 +1418,20 @@ export default function HoleEntryScreen() {
 
 const styles = StyleSheet.create({
   topBar: {
-    flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 8, gap: 10,
+    paddingHorizontal: 16, paddingBottom: 8,
+  },
+  topBarRow1: {
+    flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8,
+  },
+  topBarRow2: {
+    flexDirection: "row", alignItems: "center", gap: 8,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,
-    alignItems: "center", justifyContent: "center",
+    alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   topBarClub: {
-    flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#a3e4bc", textAlign: "center",
+    flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#a3e4bc",
   },
   cardBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,

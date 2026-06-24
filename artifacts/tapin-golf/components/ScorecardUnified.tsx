@@ -60,21 +60,24 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const holes = round.holes ?? {};
 
   /* ── Format flags ─────────────────────────────────────────── */
-  const isBBFmt = ["fourball_stableford","fourball_gross_betterball",
-                   "fourball_net_betterball","betterball_bonus_bogey",
-                   "betterball_match_play","betterball_gross_match_play",
-                   "fourball_stableford_match_play"].includes(fmt);
+  const isBBFmt = [
+    "fourball_stableford","betterball_match_play","betterball_gross_match_play",
+    "fourball_stableford_match_play","fourball_net_betterball","fourball_gross_betterball",
+    "betterball_bonus_bogey",
+  ].includes(fmt);
   const isMP    = ["singles_match_play","singles_stableford_match_play",
                    "singles_gross_match_play"].includes(fmt);
   const isBBMP  = ["betterball_match_play","betterball_gross_match_play",
                    "fourball_stableford_match_play"].includes(fmt);
   const isBBStb = fmt === "fourball_stableford" || fmt === "fourball_stableford_match_play";
   const isBBGrs = fmt === "fourball_gross_betterball" || fmt === "betterball_gross_match_play";
+  // formats that use partner/opponent column labels but have custom score computation
+  const isBBLabels = isBBFmt || fmt === "low_ball_total" || fmt === "pinehurst_points";
   const isGrOnly   = fmt === "gross_stroke_play";
   const isScramble   = ["texas_scramble","american_scramble","chapman"].includes(fmt);
   const isShambleFmt = fmt === "shamble";
   const isAllianceFmt = fmt === "alliance";
-  const isTeamFmt    = isScramble || isShambleFmt || isAllianceFmt;
+  const isTeamFmt    = isScramble || isShambleFmt || isAllianceFmt || fmt === "the_ghost";
   const isNetOny    = fmt === "net_stroke_play" || fmt === "chairman" || fmt === "fourball_net_betterball" || isScramble;
   const isPar      = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
   const isBonusB   = fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey";
@@ -96,17 +99,17 @@ export default function ScorecardUnified({ round, colors }: Props) {
 
   const showB  = true;
   // For singles match play the opponent lives in column C (cPhIdx=0); B is an empty marker column.
-  const bLabel = isBBFmt ? fn(round.partner_name, "Ptnr") : isMP ? "Mkr" : fn(round.opponent_name, "Mkr");
-  const bHcp   = isMP ? NO_SLOT : isBBFmt ? prtHcp : o1Hcp;
+  const bLabel = isBBLabels ? fn(round.partner_name, "Ptnr") : isMP ? "Mkr" : fn(round.opponent_name, "Mkr");
+  const bHcp   = isMP ? NO_SLOT : isBBLabels ? prtHcp : o1Hcp;
 
   const showC  = true;
-  const cLabel = (isBBFmt || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
-  const cHcp   = (isBBFmt || isMP) ? o1Hcp : o2Hcp;
+  const cLabel = (isBBLabels || isMP) ? fn(round.opponent_name, "Opp") : fn(round.opponent2_name, "Mkr2");
+  const cHcp   = (isBBLabels || isMP) ? o1Hcp : o2Hcp;
   // playerHoles index: singles MP opponent sits at index 0; all others at index 1
   const cPhIdx = isMP ? 0 : 1;
 
   const showD  = true;
-  const dLabel = isBBFmt ? fn(round.opponent2_name, "Opp2") : fn(round.partner_name, "Mkr3");
+  const dLabel = isBBLabels ? fn(round.opponent2_name, "Opp2") : fn(round.partner_name, "Mkr3");
   const dHcp   = o2Hcp;
 
   const showTeam = true;
@@ -213,8 +216,11 @@ export default function ScorecardUnified({ round, colors }: Props) {
       const dM = dG != null ? (isBBGrs ? dG : (isBBStb || isBonusB) ? dR : dG - dHa2) : null;
       const teamAB = bestOf(aM, bM, hi);
       const teamCD = bestOf(cM, dM, hi);
-      abPts = (isBBStb || isBonusB) ? teamAB : null;
-      cdPts = (isBBStb || isBonusB) ? teamCD : null;
+      const showNumericBB = isBBStb || isBonusB
+        || fmt === "fourball_net_betterball"
+        || fmt === "fourball_gross_betterball";
+      abPts = showNumericBB ? teamAB : null;
+      cdPts = showNumericBB ? teamCD : null;
       if (teamAB != null && teamCD != null) {
         abWHL = (hi ? teamAB > teamCD : teamAB < teamCD) ? "W"
               : (hi ? teamCD > teamAB : teamCD < teamAB) ? "L" : "H";
@@ -238,6 +244,35 @@ export default function ScorecardUnified({ round, colors }: Props) {
         abPts = Math.max(...ptsList);
         if (fr) abF9 += abPts; else abB9 += abPts;
       }
+    }
+    // Low Ball / Total: Result = best (low ball) stableford pts from each pair per hole
+    if (fmt === "low_ball_total") {
+      const ab = ([aR, bR] as (number|null)[]).filter((v): v is number => v != null);
+      const cd = ([cR, dR] as (number|null)[]).filter((v): v is number => v != null);
+      abPts = ab.length > 0 ? Math.max(...ab) : null;
+      cdPts = cd.length > 0 ? Math.max(...cd) : null;
+      if (abPts != null) { if (fr) abF9 += abPts; else abB9 += abPts; }
+      if (cdPts != null) { if (fr) cdF9 += cdPts; else cdB9 += cdPts; }
+      if (abPts != null && cdPts != null) {
+        abWHL = abPts > cdPts ? "W" : abPts < cdPts ? "L" : "H";
+      }
+    }
+    // Multiplication Betterball (Pinehurst Points): Result = A pts × B pts
+    if (fmt === "pinehurst_points") {
+      const ap = aR ?? 0; const bp = bR ?? 0;
+      const cp = cR ?? 0; const dp = dR ?? 0;
+      abPts = ap * bp;
+      cdPts = cp * dp;
+      if (fr) { abF9 += abPts; cdF9 += cdPts; } else { abB9 += abPts; cdB9 += cdPts; }
+      if (abPts != null && cdPts != null) {
+        abWHL = abPts > cdPts ? "W" : abPts < cdPts ? "L" : "H";
+      }
+    }
+    // The Ghost: Result = best of player's stableford vs ghost (par = 2 pts every hole)
+    if (fmt === "the_ghost") {
+      const ghostPts = 2;
+      abPts = aR != null ? Math.max(aR, ghostPts) : null;
+      if (abPts != null) { if (fr) abF9 += abPts; else abB9 += abPts; }
     }
     // Alliance: sum of top N stableford pts — 1 on par 3, 2 on par 4, 3 on par 5
     if (isAllianceFmt) {

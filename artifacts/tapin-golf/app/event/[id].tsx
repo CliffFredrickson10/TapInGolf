@@ -74,7 +74,7 @@ interface LeaderboardEntry {
 
 const FORMAT_LABELS: Record<string, string> = {
   // Individual formats
-  gross_stroke_play: "Gross Stroke Play", net_stroke_play: "Net Stroke Play",
+  gross_stroke_play: "Gross Stroke Play", net_stroke_play: "Nett Stroke Play (Medal)",
   singles_match_play: "Singles Match Play", individual_stableford: "Individual Stableford",
   modified_stableford: "Individual Modified Stableford", par_bogey: "Par / Bogey",
   maximum_score: "Maximum Score", chairman: "Chairman (The Perch)",

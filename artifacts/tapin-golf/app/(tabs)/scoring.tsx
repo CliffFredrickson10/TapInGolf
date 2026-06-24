@@ -43,7 +43,7 @@ type Round = {
 const FORMAT_LABELS: Record<string, string> = {
   individual_stableford: "Individual Stableford",
   gross_stroke_play: "Gross Stroke Play",
-  net_stroke_play: "Net Stroke Play",
+  net_stroke_play: "Nett Stroke Play (Medal)",
   singles_match_play: "Singles Match Play",
   par_bogey: "Par / Bogey",
   fourball_stableford: "Betterball Stableford",

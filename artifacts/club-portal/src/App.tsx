@@ -41,6 +41,7 @@ import Bookings from "@/pages/bookings";
 import { Redirect } from "wouter";
 import PortalUsers from "@/pages/portal-users";
 import Scorecard from "@/pages/scorecard";
+import RulesFormats from "@/pages/rules-formats";
 
 function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
   const { canView, canEdit } = useAuth();
@@ -154,6 +155,7 @@ function Router() {
         <Route path="/scorecard">
           <SectionGuard section="scorecard"><Scorecard /></SectionGuard>
         </Route>
+        <Route path="/rules-formats" component={RulesFormats} />
         <Route path="/cancellation-policy">
           <SectionGuard section="cancellation_policy"><CancellationPolicy /></SectionGuard>
         </Route>

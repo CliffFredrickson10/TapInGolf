@@ -200,8 +200,8 @@ const FORMAT_LABELS: Record<string, string> = {
   stroke_play: "Stroke Play", stableford: "Stableford", match_play: "Match Play",
   fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",
   // Individual
-  gross_stroke_play: "Gross Stroke Play (Medal Play)",
-  net_stroke_play: "Net Stroke Play",
+  gross_stroke_play: "Gross Stroke Play",
+  net_stroke_play: "Nett Stroke Play (Medal)",
   singles_match_play: "Singles Match Play",
   individual_stableford: "Individual Stableford",
   modified_stableford: "Individual Modified Stableford",
@@ -2980,8 +2980,8 @@ ${bodyHtml}
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent className="max-h-80">
                             <SelectGroup><SelectLabel>Individual</SelectLabel>
-                              <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
-                              <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                              <SelectItem value="gross_stroke_play">Gross Stroke Play</SelectItem>
+                              <SelectItem value="net_stroke_play">Nett Stroke Play (Medal)</SelectItem>
                               <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
                               <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
                               <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>
@@ -3029,8 +3029,8 @@ ${bodyHtml}
                           <SelectContent className="max-h-80">
                             <SelectItem value="none">— No second format —</SelectItem>
                             <SelectGroup><SelectLabel>Individual</SelectLabel>
-                              <SelectItem value="gross_stroke_play">Gross Stroke Play (Medal Play)</SelectItem>
-                              <SelectItem value="net_stroke_play">Net Stroke Play</SelectItem>
+                              <SelectItem value="gross_stroke_play">Gross Stroke Play</SelectItem>
+                              <SelectItem value="net_stroke_play">Nett Stroke Play (Medal)</SelectItem>
                               <SelectItem value="singles_match_play">Singles Match Play</SelectItem>
                               <SelectItem value="individual_stableford">Individual Stableford</SelectItem>
                               <SelectItem value="modified_stableford">Individual Modified Stableford</SelectItem>

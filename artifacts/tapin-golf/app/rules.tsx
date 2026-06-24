@@ -83,7 +83,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "gross_stroke_play",
-        label: "Gross Stroke Play (Medal)",
+        label: "Gross Stroke Play",
         icon: "golf-outline",
         howItWorks:
           "The most traditional format. Every stroke on every hole counts. No handicap adjustment — pure gross scores.",
@@ -95,7 +95,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "net_stroke_play",
-        label: "Net Stroke Play",
+        label: "Nett Stroke Play (Medal)",
         icon: "calculator-outline",
         howItWorks:
           "Same as stroke play but your course handicap (at the competition allowance) is deducted from your gross total at the end of the round.",

@@ -52,8 +52,8 @@ interface UnpairedMember {
 // and all full-group / team formats.
 const INDIVIDUAL_SCORING_FORMATS = [
   { value: "individual_stableford",  label: "Individual Stableford" },
-  { value: "gross_stroke_play",      label: "Gross Stroke Play (Medal)" },
-  { value: "net_stroke_play",        label: "Net Stroke Play" },
+  { value: "gross_stroke_play",      label: "Gross Stroke Play" },
+  { value: "net_stroke_play",        label: "Nett Stroke Play (Medal)" },
   { value: "modified_stableford",    label: "Modified Stableford" },
   { value: "maximum_score",          label: "Maximum Score" },
   { value: "chairman",               label: "Chairman (The Perch)" },

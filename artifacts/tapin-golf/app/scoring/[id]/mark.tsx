@@ -567,14 +567,14 @@ const styles = StyleSheet.create({
   holeNum: { fontSize: 14, fontFamily: "Inter_700Bold" },
   holePar: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 1 },
   scoreInput: {
-    flex: 1, height: 42, borderRadius: 10, borderWidth: 1.5,
+    flex: 1, minWidth: 0, height: 42, borderRadius: 10, borderWidth: 1.5,
     textAlign: "center", fontSize: 20, fontFamily: "Inter_700Bold",
   },
   matchIndicator: {
     width: 26, height: 26, borderRadius: 13,
     alignItems: "center", justifyContent: "center",
   },
-  playerScoreWrap: { width: 58, alignItems: "center" },
+  playerScoreWrap: { width: 58, flexShrink: 0, alignItems: "center" },
   playerScoreLabel: { fontSize: 9, fontFamily: "Inter_400Regular" },
   playerScoreVal: { fontSize: 18, marginTop: 1 },
   nineTotal: {

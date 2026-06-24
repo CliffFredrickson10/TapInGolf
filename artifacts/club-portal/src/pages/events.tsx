@@ -637,14 +637,14 @@ export default function Events() {
     if (!detail) return;
     const hdrCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<th>${h}</th>`).join('');
     const rows = eclecticBoards.map((b, i) => {
-      const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+      const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {});
       const holeCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<td>${holes[String(h)] ?? '·'}</td>`).join('');
       const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
-      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_gross ?? '—'}</strong></td></tr>`;
+      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_net ?? '—'}</strong></td></tr>`;
     }).join('');
     const start = detail.event_date ? new Date(detail.event_date).toLocaleDateString('en-ZA', {day:'2-digit', month:'short', year:'numeric'}) : '';
     const end = detail.end_date ? new Date(detail.end_date).toLocaleDateString('en-ZA', {day:'2-digit', month:'short', year:'numeric'}) : '';
-    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${detail.name} — Eclectic Leaderboard</title><style>body{font-family:Arial,sans-serif;font-size:10px;margin:24px;color:#111}h2{font-size:15px;text-align:center;margin:0 0 12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px;margin-bottom:14px;font-size:10px}.ml{font-weight:bold}table{border-collapse:collapse;width:100%}th{background:#1a5c38;color:#fff;padding:4px 3px;font-size:9px;border:1px solid #0f3d24}td{border:1px solid #ccc;padding:3px;text-align:center;font-size:9px}td.name{text-align:left;padding-left:6px;min-width:110px;font-size:10px}tr:nth-child(even){background:#f0f7f3}</style></head><body><h2>Eclectic Leaderboard</h2><div class="meta"><div><span class="ml">Eclectic Name:</span> ${detail.name}</div><div><span class="ml">Start:</span> ${start}</div><div><span class="ml">Description:</span> ${detail.description ?? ''}</div><div><span class="ml">End:</span> ${end}</div></div><table><thead><tr><th>Rank</th><th style="text-align:left;padding-left:6px">Name</th>${hdrCells}<th>HC</th><th>Gross</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${detail.name} — Eclectic Leaderboard</title><style>body{font-family:Arial,sans-serif;font-size:10px;margin:24px;color:#111}h2{font-size:15px;text-align:center;margin:0 0 12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px;margin-bottom:14px;font-size:10px}.ml{font-weight:bold}table{border-collapse:collapse;width:100%}th{background:#1a5c38;color:#fff;padding:4px 3px;font-size:9px;border:1px solid #0f3d24}td{border:1px solid #ccc;padding:3px;text-align:center;font-size:9px}td.name{text-align:left;padding-left:6px;min-width:110px;font-size:10px}tr:nth-child(even){background:#f0f7f3}</style></head><body><h2>Eclectic Leaderboard</h2><div class="meta"><div><span class="ml">Eclectic Name:</span> ${detail.name}</div><div><span class="ml">Start:</span> ${start}</div><div><span class="ml">Description:</span> ${detail.description ?? ''}</div><div><span class="ml">End:</span> ${end}</div></div><table><thead><tr><th>Rank</th><th style="text-align:left;padding-left:6px">Name</th>${hdrCells}<th>HC</th><th>Nett</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
     const w = window.open('', '_blank', 'width=1300,height=800');
     if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
   }, [detail, eclecticBoards]);
@@ -2411,7 +2411,7 @@ ${bodyHtml}
                             ) : (
                               <div>
                                 <div className="flex items-center justify-between mb-2">
-                                  <p className="text-xs text-muted-foreground">Best score per hole · Ordered by gross</p>
+                                  <p className="text-xs text-muted-foreground">Best nett score per hole · Ordered by nett</p>
                                   <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={printEclecticLeaderboard}>
                                     <Printer className="h-3 w-3" />Print
                                   </Button>
@@ -2426,23 +2426,23 @@ ${bodyHtml}
                                           <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
                                         ))}
                                         <th className="px-2 py-2 font-semibold text-center w-10">HC</th>
-                                        <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                                        <th className="px-2 py-2 font-semibold text-center w-12">Nett</th>
                                       </tr>
                                     </thead>
                                     <tbody>
                                       {eclecticBoards.map((b, i) => {
-                                        const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+                                        const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {});
                                         const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
                                         return (
                                           <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
                                             <td className="px-2 py-1.5 text-center font-bold text-muted-foreground sticky left-0 bg-inherit z-[5]">{i + 1}</td>
                                             <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-8 bg-inherit z-[5]">{b.player_name}</td>
                                             {Array.from({length: 18}, (_, j) => j + 1).map(h => {
-                                              const s = holes[String(h)];
+                                              const s = (holes as Record<string, number>)[String(h)];
                                               return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
                                             })}
                                             <td className="px-2 py-1.5 text-center text-muted-foreground">{hc}</td>
-                                            <td className="px-2 py-1.5 text-center font-bold">{b.total_gross ?? '—'}</td>
+                                            <td className="px-2 py-1.5 text-center font-bold">{b.total_net ?? '—'}</td>
                                           </tr>
                                         );
                                       })}

@@ -112,10 +112,10 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
   const handlePrint = useCallback(() => {
     const hdrCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<th>${h}</th>`).join('');
     const rows = boards.map((b, i) => {
-      const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+      const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {});
       const holeCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<td>${(holes as Record<string,number>)[String(h)] ?? '·'}</td>`).join('');
       const hc = b.frozen_handicap != null ? parseFloat(String(b.frozen_handicap)).toFixed(1) : '—';
-      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_gross ?? '—'}</strong></td></tr>`;
+      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_net ?? '—'}</strong></td></tr>`;
     }).join('');
     const start = format(new Date(event.event_date), 'd MMM yyyy');
     const end = event.end_date ? format(new Date(event.end_date), 'd MMM yyyy') : '';
@@ -149,7 +149,7 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
         ) : (
           <div>
             <div className="flex items-center justify-between mb-2">
-              <p className="text-[11px] text-muted-foreground">Best score per hole across all submitted rounds · ordered by gross</p>
+              <p className="text-[11px] text-muted-foreground">Best nett score per hole across all submitted rounds · ordered by nett</p>
               <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={handlePrint}>
                 <Printer className="h-3 w-3" />Print
               </Button>
@@ -164,12 +164,12 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                       <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
                     ))}
                     <th className="px-2 py-2 font-semibold text-center w-10">HC</th>
-                    <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                    <th className="px-2 py-2 font-semibold text-center w-12">Nett</th>
                   </tr>
                 </thead>
                 <tbody>
                   {boards.map((b, i) => {
-                    const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {}) as Record<string, number>;
+                    const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {}) as Record<string, number>;
                     const hc = b.frozen_handicap != null ? parseFloat(String(b.frozen_handicap)).toFixed(1) : '—';
                     return (
                       <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
@@ -180,7 +180,7 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                           return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
                         })}
                         <td className="px-2 py-1.5 text-center text-muted-foreground">{hc}</td>
-                        <td className="px-2 py-1.5 text-center font-bold">{b.total_gross ?? '—'}</td>
+                        <td className="px-2 py-1.5 text-center font-bold">{b.total_net ?? '—'}</td>
                       </tr>
                     );
                   })}

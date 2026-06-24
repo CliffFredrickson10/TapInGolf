@@ -1229,7 +1229,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
        FROM eclectic_ringer_board erb
        JOIN users u ON u.id = erb.user_id
        WHERE erb.event_id = ?
-       ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+       ORDER BY erb.division, erb.total_net ASC NULLS LAST`,
       [evId]
     ).catch(() => [] as any[]);
 
@@ -1354,7 +1354,7 @@ router.get("/events/:id/eclectic-board", async (req, res): Promise<void> => {
      FROM eclectic_ringer_board erb
      JOIN users u ON u.id = erb.user_id
      WHERE erb.event_id = ?
-     ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+     ORDER BY erb.division, erb.total_net ASC NULLS LAST`,
     [evId]
   ).catch(() => [] as any[]);
 
@@ -1404,22 +1404,32 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
   if (rounds.length === 0) { res.json({ players, rounds: [] }); return; }
 
   const roundIds = rounds.map((r: any) => r.round_id);
+  const placeholders = roundIds.map(() => '?').join(',');
   const holeRows = await query<any>(
-    `SELECT round_id, hole_number, gross_score
+    `SELECT round_id, hole_number, gross_score, net_score
      FROM scoring_holes
-     WHERE round_id = ANY(?) AND gross_score IS NOT NULL AND is_nr = FALSE`,
-    [roundIds]
+     WHERE round_id IN (${placeholders}) AND gross_score IS NOT NULL AND is_nr = FALSE`,
+    roundIds
   ).catch(() => [] as any[]);
 
   const holesByRound: Record<number, Record<string, number>> = {};
+  const holesNetByRound: Record<number, Record<string, number>> = {};
   for (const h of holeRows) {
     if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
     holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
+    if (h.net_score != null) {
+      if (!holesNetByRound[h.round_id]) holesNetByRound[h.round_id] = {};
+      holesNetByRound[h.round_id][String(h.hole_number)] = h.net_score;
+    }
   }
 
   res.json({
     players,
-    rounds: rounds.map((r: any) => ({ ...r, hole_scores: holesByRound[r.round_id] ?? {} })),
+    rounds: rounds.map((r: any) => ({
+      ...r,
+      hole_scores: holesByRound[r.round_id] ?? {},
+      hole_scores_net: holesNetByRound[r.round_id] ?? {},
+    })),
   });
 });
 

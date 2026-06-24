@@ -1792,13 +1792,13 @@ export default function EventDetailScreen() {
               leaderboard.map(div => (
                 <View key={div.division} style={{ marginBottom: 16 }}>
                   <Text style={[styles.divGroupTitle, { color: colors.foreground }]}>{div.division} Division</Text>
-                  {/* header — eclectic shows HC + Gross; regular shows Gross / Net / Pts */}
+                  {/* header — eclectic shows HC + Nett; regular shows Gross / Net / Pts */}
                   {div.players.some((p: any) => p.holes) ? (
                     <View style={[styles.lbHeader, { backgroundColor: colors.muted }]}>
                       <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1 }]}>#</Text>
                       <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 3 }]}>Player</Text>
                       <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>HC</Text>
-                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Gross</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Nett</Text>
                       <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}></Text>
                     </View>
                   ) : (
@@ -1833,7 +1833,7 @@ export default function EventDetailScreen() {
                           {isEclecticRow ? (
                             <>
                               <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.mutedForeground }]}>{(p as any).handicap != null ? (p as any).handicap.toFixed(1) : "—"}</Text>
-                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
                               <Text style={[styles.lbStat, { color: colors.mutedForeground }]}>{isExpanded ? "▲" : "▼"}</Text>
                             </>
                           ) : (

@@ -78564,6 +78564,26 @@ router23.post("/scoring/rounds/:roundId/marker-scores", async (req, res) => {
           [round.tournament_id, round.user_id]
         );
       }
+      const evt = await row("SELECT name FROM golf_events WHERE id = ?", [round.tournament_id]);
+      const eventLabel = evt?.name ?? "your event";
+      if (verified) {
+        saveUserNotification(
+          round.user_id,
+          "score_verified",
+          "Scorecard Verified \u2713",
+          `Your scorecard for ${eventLabel} has been confirmed by your marker. All scores matched.`,
+          { round_id: roundId, event_id: round.tournament_id }
+        );
+      } else {
+        const holeList = mismatches.map((m) => `Hole ${m.hole}: you ${m.playerScore}, marker ${m.markerScore}`).join("; ");
+        saveUserNotification(
+          round.user_id,
+          "score_disputed",
+          "Score Disputed \u26A0",
+          `Your marker recorded different scores for ${eventLabel}. Contact your club to resolve. (${holeList})`,
+          { round_id: roundId, event_id: round.tournament_id }
+        );
+      }
     }
     res.json({ ok: true, verified, disputed: !verified, mismatches });
   } catch (err) {

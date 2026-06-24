@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec, run } from "../lib/pg";
 import { getUser } from "../lib/auth";
+import { saveUserNotification } from "../lib/userNotifications";
 
 const router: IRouter = Router();
 
@@ -1761,6 +1762,28 @@ router.post("/scoring/rounds/:roundId/marker-scores", async (req, res) => {
         await run(
           "UPDATE event_scores SET marker_disputed = 1 WHERE event_id = ? AND user_id = ? AND round = 1",
           [round.tournament_id, round.user_id]
+        );
+      }
+
+      // Notify the player
+      const evt = await row<any>("SELECT name FROM golf_events WHERE id = ?", [round.tournament_id]);
+      const eventLabel = evt?.name ?? "your event";
+      if (verified) {
+        saveUserNotification(
+          round.user_id,
+          "score_verified",
+          "Scorecard Verified ✓",
+          `Your scorecard for ${eventLabel} has been confirmed by your marker. All scores matched.`,
+          { round_id: roundId, event_id: round.tournament_id }
+        );
+      } else {
+        const holeList = mismatches.map((m: any) => `Hole ${m.hole}: you ${m.playerScore}, marker ${m.markerScore}`).join("; ");
+        saveUserNotification(
+          round.user_id,
+          "score_disputed",
+          "Score Disputed ⚠",
+          `Your marker recorded different scores for ${eventLabel}. Contact your club to resolve. (${holeList})`,
+          { round_id: roundId, event_id: round.tournament_id }
         );
       }
     }

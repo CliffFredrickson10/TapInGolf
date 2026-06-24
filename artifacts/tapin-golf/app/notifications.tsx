@@ -49,6 +49,8 @@ function notifIcon(type: string): { name: any; color: string } {
     case "friend_accepted":   return { name: "people",             color: "#1565c0" };
     case "new_message":       return { name: "chatbubble-ellipses",color: "#6a1b9a" };
     case "club_broadcast":    return { name: "megaphone",          color: "#e65100" };
+    case "score_disputed":    return { name: "warning",            color: "#dc2626" };
+    case "score_verified":    return { name: "checkmark-circle",   color: "#16a34a" };
     case "event_dq":          return { name: "ban",                color: "#dc2626" };
     case "knockout_pair_request": return { name: "people",         color: "#3b82f6" };
     case "event_created":
@@ -72,6 +74,10 @@ function handleTap(notif: AppNotification) {
       break;
     case "new_message":
       if (d.conversation_id) router.push({ pathname: "/chat/[id]", params: { id: d.conversation_id } });
+      break;
+    case "score_disputed":
+    case "score_verified":
+      if (d.round_id) router.push({ pathname: "/scoring/[id]/complete", params: { id: d.round_id } });
       break;
     case "event_dq":
     case "event_created":

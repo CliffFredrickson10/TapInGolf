@@ -294,6 +294,7 @@ export default function RoundCompleteScreen() {
   const [round, setRound] = useState<Round | null>(null);
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState(false);
+  const [eclecticImprovements, setEclecticImprovements] = useState<Array<{ hole: number; oldGross: number | null; newGross: number }>>([]);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -314,7 +315,10 @@ export default function RoundCompleteScreen() {
       await apiFetch(`/scoring/rounds/${id}/complete`, token, { method: "POST" });
       // Auto-submit score immediately after completing
       try {
-        await apiFetch(`/scoring/rounds/${id}/submit`, token, { method: "POST" });
+        const submitRes = await apiFetch(`/scoring/rounds/${id}/submit`, token, { method: "POST" });
+        if (submitRes?.eclecticImprovements?.length > 0) {
+          setEclecticImprovements(submitRes.eclecticImprovements);
+        }
       } catch {}
       await loadRound();
     } catch (err: any) {
@@ -533,6 +537,37 @@ export default function RoundCompleteScreen() {
                   : "Finish your round to record the match result."}
               </Text>
             </View>
+          </View>
+        )}
+
+        {/* Eclectic ringer board improvements */}
+        {eclecticImprovements.length > 0 && (
+          <View style={{ marginHorizontal: 16, marginTop: 4, marginBottom: 4, borderRadius: 14, borderWidth: 1.5, borderColor: "#c8a84b55", backgroundColor: "#c8a84b0d", padding: 14 }}>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 10 }}>
+              <Ionicons name="trophy" size={18} color="#c8a84b" />
+              <Text style={{ fontSize: 14, fontFamily: "Inter_700Bold", color: "#c8a84b" }}>Ringer Board Updated!</Text>
+            </View>
+            <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 8 }}>
+              New personal bests on your eclectic card:
+            </Text>
+            {eclecticImprovements.map(imp => (
+              <View key={imp.hole} style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingVertical: 3 }}>
+                <View style={{ width: 26, height: 26, borderRadius: 13, backgroundColor: colors.primary, alignItems: "center", justifyContent: "center" }}>
+                  <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: "#fff" }}>{imp.hole}</Text>
+                </View>
+                <Text style={{ flex: 1, fontSize: 13, color: colors.foreground }}>Hole {imp.hole}</Text>
+                {imp.oldGross !== null ? (
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground }}>
+                    {imp.oldGross}{" → "}
+                    <Text style={{ color: "#16a34a", fontFamily: "Inter_700Bold" }}>{imp.newGross}</Text>
+                  </Text>
+                ) : (
+                  <Text style={{ fontSize: 13, color: "#16a34a", fontFamily: "Inter_700Bold" }}>
+                    {imp.newGross} ✓
+                  </Text>
+                )}
+              </View>
+            ))}
           </View>
         )}
 

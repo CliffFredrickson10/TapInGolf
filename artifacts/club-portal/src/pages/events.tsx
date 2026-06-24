@@ -348,6 +348,9 @@ export default function Events() {
   // Scores
   const [scores, setScores]     = useState<Score[]>([]);
   const [scoresLoading, setScoresLoading] = useState(false);
+  const [eclecticBoards, setEclecticBoards] = useState<any[]>([]);
+  const [eclecticBoardsLoading, setEclecticBoardsLoading] = useState(false);
+  const [eclecticExpanded, setEclecticExpanded] = useState<number | null>(null);
   const [scoreRound, setScoreRound] = useState(1);
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
@@ -608,6 +611,14 @@ export default function Events() {
     } catch {} finally { setScoresLoading(false); }
   }, []);
 
+  const loadEclecticBoards = useCallback(async (evId: number) => {
+    setEclecticBoardsLoading(true);
+    try {
+      const data = await api<{ boards: any[] }>(`/api/events/${evId}/eclectic-board`);
+      setEclecticBoards(data.boards ?? []);
+    } catch {} finally { setEclecticBoardsLoading(false); }
+  }, []);
+
   const loadInvites = useCallback(async (ev: GolfEvent) => {
     setInvitesLoading(true);
     try {
@@ -699,7 +710,10 @@ export default function Events() {
 
   useEffect(() => {
     if (detail && detailTab === "draw")    loadDraw(detail, drawRound);
-    if (detail && detailTab === "scores")  loadScores(detail, scoreRound);
+    if (detail && detailTab === "scores") {
+      if (detail.event_type === 'eclectic') loadEclecticBoards(detail.id);
+      else loadScores(detail, scoreRound);
+    }
     if (detail && detailTab === "invites") loadInvites(detail);
     if (detail && detailTab === "schedule") {
       setDetailTeeSlotsLoading(true);
@@ -2295,6 +2309,7 @@ ${bodyHtml}
 
                 {/* SCORES TAB */}
                 <TabsContent value="scores" className="pb-8">
+                  {detail?.event_type !== 'eclectic' && (
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-2">
                       <Label className="text-sm">Round</Label>
@@ -2309,9 +2324,69 @@ ${bodyHtml}
                     </div>
                     <Button size="sm" className="h-8 bg-[#1a5c38] hover:bg-[#164d30] text-xs" onClick={saveScores} disabled={savingScores || readOnly}>{savingScores ? "Saving…" : "Save Scores"}</Button>
                   </div>
-                  {scoresLoading ? <Skeleton className="h-32 w-full" /> : (
+                  )}
+                  {scoresLoading || eclecticBoardsLoading ? <Skeleton className="h-32 w-full" /> : (
                     <div className="space-y-2">
-                      {regs.filter(r => r.status === "approved").length === 0 ? (
+                      {detail?.event_type === 'eclectic' ? (
+                        eclecticBoards.length === 0 ? (
+                          <p className="text-sm text-muted-foreground py-6 text-center">No rounds submitted yet. Players must submit scored rounds to appear here.</p>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="text-xs text-muted-foreground mb-3">Ringer board — best score per hole across all submitted rounds. Ordered by total gross.</p>
+                            {eclecticBoards.map((b, i) => {
+                              const holesBest: Record<string, number> = b.holes
+                                ? (typeof b.holes === 'string' ? JSON.parse(b.holes) : b.holes)
+                                : {};
+                              const isOpen = eclecticExpanded === b.user_id;
+                              const filled = Object.keys(holesBest).length;
+                              return (
+                                <Card key={b.user_id}>
+                                  <CardContent className="p-3">
+                                    <button
+                                      type="button"
+                                      className="w-full flex items-center gap-2 text-left"
+                                      onClick={() => setEclecticExpanded(isOpen ? null : b.user_id)}
+                                    >
+                                      <span className="text-xs font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
+                                      <div className="flex-1">
+                                        <p className="font-semibold text-sm">{b.player_name}</p>
+                                        <p className="text-[11px] text-muted-foreground">{b.division ? `${b.division} Div · ` : ""}{b.rounds_counted} round{b.rounds_counted !== 1 ? "s" : ""} · {filled}/18 holes</p>
+                                      </div>
+                                      <div className="flex items-center gap-4 text-xs text-right">
+                                        <div>
+                                          <p className="font-bold text-sm">{b.total_gross ?? "—"}</p>
+                                          <p className="text-muted-foreground text-[10px]">Gross</p>
+                                        </div>
+                                        <div>
+                                          <p className="font-semibold text-sm">{b.total_net ?? "—"}</p>
+                                          <p className="text-muted-foreground text-[10px]">Nett</p>
+                                        </div>
+                                        <span className="text-muted-foreground text-xs">{isOpen ? "▲" : "▼"}</span>
+                                      </div>
+                                    </button>
+                                    {isOpen && (
+                                      <div className="mt-3 pt-3 border-t">
+                                        <div className="grid grid-cols-9 gap-1 mb-2">
+                                          {Array.from({ length: 18 }, (_, j) => j + 1).map(h => {
+                                            const score = holesBest[String(h)];
+                                            return (
+                                              <div key={h} className={`flex flex-col items-center rounded p-1 text-center text-[11px] ${score != null ? "bg-green-50 border border-green-200" : "bg-muted/40 border border-border"}`}>
+                                                <span className="text-muted-foreground text-[9px]">{h}</span>
+                                                <span className={`font-bold ${score != null ? "text-foreground" : "text-muted-foreground/30"}`}>{score ?? "·"}</span>
+                                              </div>
+                                            );
+                                          })}
+                                        </div>
+                                        <p className="text-[10px] text-muted-foreground">{filled}/18 holes recorded</p>
+                                      </div>
+                                    )}
+                                  </CardContent>
+                                </Card>
+                              );
+                            })}
+                          </div>
+                        )
+                      ) : regs.filter(r => r.status === "approved").length === 0 ? (
                         <p className="text-sm text-muted-foreground py-6 text-center">No confirmed players yet.</p>
                       ) : (() => {
                         // Check if this event has any team scores submitted

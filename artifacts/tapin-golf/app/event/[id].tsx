@@ -227,6 +227,9 @@ export default function EventDetailScreen() {
   const [acceptingEntry, setAcceptingEntry]     = useState(false);
   const [optingOutEntry, setOptingOutEntry]     = useState(false);
 
+  // Eclectic ringer board — expandable per-player best-score grid in leaderboard tab
+  const [expandedRinger, setExpandedRinger] = useState<number | null>(null);
+
   const [koPairQuery, setKoPairQuery]       = useState("");
   const [koPairResults, setKoPairResults]   = useState<PartnerResult[]>([]);
   const [koPairSearching, setKoPairSearching] = useState(false);
@@ -1797,15 +1800,54 @@ export default function EventDetailScreen() {
                     <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Net</Text>
                     <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Pts</Text>
                   </View>
-                  {div.players.map(p => (
-                    <View key={p.user_id} style={[styles.lbRow, { borderColor: colors.border, backgroundColor: p.dq ? "#fee2e2" : p.user_id === user?.id ? colors.primaryLight + "30" : "transparent" }]}>
-                      <Text style={[styles.lbPos, { color: p.dq ? "#dc2626" : p.position <= 3 ? colors.accent : colors.mutedForeground }]}>{p.dq ? "DQ" : p.position}</Text>
-                      <Text style={[styles.lbName, { color: p.dq ? "#dc2626" : colors.foreground }]} numberOfLines={1}>{p.player_name}{p.user_id === user?.id ? " (you)" : ""}</Text>
-                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
-                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
-                      <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.points ?? "—")}</Text>
-                    </View>
-                  ))}
+                  {div.players.map(p => {
+                    const isEclecticRow = !!(p.holes);
+                    const isExpanded = expandedRinger === p.user_id;
+                    const holesBest: Record<string, number> = isEclecticRow && p.holes
+                      ? (typeof p.holes === 'string' ? JSON.parse(p.holes) : p.holes)
+                      : {};
+                    return (
+                      <View key={p.user_id}>
+                        <TouchableOpacity
+                          onPress={isEclecticRow ? () => setExpandedRinger(isExpanded ? null : p.user_id) : undefined}
+                          activeOpacity={isEclecticRow ? 0.7 : 1}
+                          style={[styles.lbRow, { borderColor: colors.border, backgroundColor: p.dq ? "#fee2e2" : p.user_id === user?.id ? colors.primaryLight + "30" : "transparent" }]}
+                        >
+                          <Text style={[styles.lbPos, { color: p.dq ? "#dc2626" : p.position <= 3 ? colors.accent : colors.mutedForeground }]}>{p.dq ? "DQ" : p.position}</Text>
+                          <View style={{ flex: 3 }}>
+                            <Text style={[styles.lbName, { color: p.dq ? "#dc2626" : colors.foreground, flex: 0 }]} numberOfLines={1}>{p.player_name}{p.user_id === user?.id ? " (you)" : ""}</Text>
+                            {isEclecticRow && p.rounds != null && (
+                              <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 1 }}>{p.rounds} round{p.rounds !== 1 ? "s" : ""}</Text>
+                            )}
+                          </View>
+                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
+                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
+                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>
+                            {isEclecticRow ? (isExpanded ? "▲" : "▼") : (p.dq ? "—" : (p.points ?? "—"))}
+                          </Text>
+                        </TouchableOpacity>
+                        {isEclecticRow && isExpanded && (
+                          <View style={{ backgroundColor: colors.muted + "80", borderRadius: 8, padding: 8, marginHorizontal: 4, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>BEST SCORES PER HOLE</Text>
+                            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
+                              {Array.from({ length: 18 }, (_, i) => i + 1).map(h => {
+                                const score = holesBest[String(h)];
+                                return (
+                                  <View key={h} style={{ width: 36, alignItems: "center", backgroundColor: score != null ? colors.card : colors.border + "40", borderRadius: 6, padding: 4, borderWidth: 1, borderColor: score != null ? colors.primary + "40" : colors.border }}>
+                                    <Text style={{ fontSize: 8, color: colors.mutedForeground }}>{h}</Text>
+                                    <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: score != null ? colors.foreground : colors.mutedForeground }}>{score ?? "·"}</Text>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 6 }}>
+                              {Object.keys(holesBest).length}/18 holes · Tap row to collapse
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    );
+                  })}
                 </View>
               ))
             )}

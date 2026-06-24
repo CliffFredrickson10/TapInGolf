@@ -1197,8 +1197,48 @@ router.delete("/events/:id/register", async (req, res): Promise<void> => {
 // GET /events/:id/leaderboard  — returns leaderboard grouped by division (team-aware)
 router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   const evId = parseInt(req.params.id, 10);
-  const ev = await row<any>("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row<any>("SELECT id, scoring_enabled, format, event_type FROM golf_events WHERE id = ?", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+
+  // ── Eclectic leaderboard — reads from ringer board, not event_scores ─────
+  if (ev.event_type === 'eclectic') {
+    const boards = await query<any>(
+      `SELECT erb.user_id, u.name AS player_name, erb.division,
+          erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net
+       FROM eclectic_ringer_board erb
+       JOIN users u ON u.id = erb.user_id
+       WHERE erb.event_id = ?
+       ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+      [evId]
+    ).catch(() => [] as any[]);
+
+    const grouped: Record<string, any[]> = {};
+    const divPositions: Record<string, number> = {};
+    for (const b of boards) {
+      const d = b.division ?? "Open";
+      if (!grouped[d]) { grouped[d] = []; divPositions[d] = 1; }
+      grouped[d].push({
+        user_id: b.user_id,
+        player_name: b.player_name,
+        position: divPositions[d]++,
+        division: d,
+        gross: b.total_gross != null ? parseInt(b.total_gross) : null,
+        net:   b.total_net   != null ? parseInt(b.total_net)   : null,
+        points: null,
+        rounds: b.rounds_counted,
+        holes: b.holes,
+        holes_net: b.holes_net,
+        verified: 1,
+        dq: false,
+      });
+    }
+    res.json({
+      leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })),
+      team_format: "individual",
+      eclectic: true,
+    });
+    return;
+  }
 
   const ts = teamSize(ev.format ?? "");
 
@@ -1276,6 +1316,27 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   }
 
   res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
+});
+
+// GET /events/:id/eclectic-board  — full ringer board for all players (portal & mobile)
+router.get("/events/:id/eclectic-board", async (req, res): Promise<void> => {
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row<any>("SELECT id, event_type FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
+  if (ev.event_type !== 'eclectic') { res.status(400).json({ message: "Not an eclectic event" }); return; }
+
+  const boards = await query<any>(
+    `SELECT erb.user_id, u.name AS player_name, erb.division,
+        erb.total_gross, erb.total_net, erb.rounds_counted,
+        erb.holes, erb.holes_net, erb.updated_at
+     FROM eclectic_ringer_board erb
+     JOIN users u ON u.id = erb.user_id
+     WHERE erb.event_id = ?
+     ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+    [evId]
+  ).catch(() => [] as any[]);
+
+  res.json({ boards });
 });
 
 // GET /events/:id/partner-search  — search all TapIn Golf users to pick a partner

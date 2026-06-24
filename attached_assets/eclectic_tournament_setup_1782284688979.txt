@@ -1,0 +1,35 @@
+Eclectic setup
+System Integration Requirement: Adding "Eclectic" Tournament Type to Existing Infrastructure
+
+I want to add a new tournament type to our app's existing Tournaments section (a new tap next to Knockout). We need to implement a "Continuous Year-Long Eclectic" competition (also known as a Ringer Board) that runs over a long period. 
+
+Please adapt our existing tournament architecture, database schemas, and round-submission workflows to accommodate this new format using the logic below.
+
+### 1. Integration & Core Concept
+In our current system, tournaments usually calculate scores by summing total round scores. For this new "Eclectic" tournament type, the system must instead track a golfer's single best score on each individual hole across all rounds submitted *within the tournament's active date range*. 
+
+The player's total tournament leaderboard score will be the sum of their 18 "best" individual hole scores accumulated over the year.
+
+### 2. Database Adjustments
+Instead of creating entirely new tables, please extend our existing schema:
+*   **Tournaments Table:** Add a new Type option: `eclectic`. 
+*   **Tournament Entries / Leaderboard Table:** Ensure that when a user joins an `eclectic` tournament, the system can store/track an array of their 18 "Current Best" hole scores for that specific tournament, alongside their running Gross and Net totals.
+
+### 3. Programmatic Logic & Workflow (The Comparison Engine)
+*   **Trigger:** When a player submits a new round score into the app, check if they are currently enrolled in an active `eclectic` tournament.
+*   **Date & Course Validation:** IF the round's date falls within the tournament's start/end dates AND matches the tournament's designated course(s):
+    *   Loop through Holes 1 to 18 of the newly submitted round.
+    *   Compare the new score for Hole X against the player's stored "Current Best" score for Hole X in that tournament.
+    *   *Rule:* IF the new hole score is LESS THAN the stored eclectic hole score (or if it's the player's first round of the tournament), OVERWRITE the stored score with the new lower score.
+    *   *Rule:* IF the new score is EQUAL TO or GREATER THAN the stored score, DO NOTHING.
+*   **Aggregation:** After the loop, sum the 18 updated hole scores to recalculate the player's "Total Gross Eclectic Score" on the leaderboard.
+
+### 4. Handicap (Net Score) Logic Integration
+Players will use the Individual Nett Stroke play as the format for this tournament, handicap allowance is decided by the club and players must still just enter their HNA app calulated course handicap. exactly how it currently works.
+
+### 5. UI/UX Adaptations
+*   **Existing Leaderboard View:** When viewing an active Eclectic Tournament, the leaderboard should look standard (sorting lowest to highest total score), but clicking on a player's name should expand to show their 18-hole "Ringer Board" grid (their best score on each hole so far).
+*   **Round Submission Feedback:** If a player completes a round and successfully "chips away" at their eclectic tournament score, display a post-round celebration screen showing which specific holes they improved (e.g., "Boom! You dropped your Hole 4 eclectic score from a 5 to a 4!").
+
+Please write the backend functions for this comparison engine logic and show how it will hook into our existing round-submission trigger.
+

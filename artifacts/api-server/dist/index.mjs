@@ -63618,9 +63618,49 @@ router3.delete("/events/:id/register", async (req, res) => {
 });
 router3.get("/events/:id/leaderboard", async (req, res) => {
   const evId = parseInt(req.params.id, 10);
-  const ev = await row("SELECT id, scoring_enabled, format FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row("SELECT id, scoring_enabled, format, event_type FROM golf_events WHERE id = ?", [evId]);
   if (!ev) {
     res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (ev.event_type === "eclectic") {
+    const boards = await query(
+      `SELECT erb.user_id, u.name AS player_name, erb.division,
+          erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net
+       FROM eclectic_ringer_board erb
+       JOIN users u ON u.id = erb.user_id
+       WHERE erb.event_id = ?
+       ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+      [evId]
+    ).catch(() => []);
+    const grouped2 = {};
+    const divPositions = {};
+    for (const b of boards) {
+      const d = b.division ?? "Open";
+      if (!grouped2[d]) {
+        grouped2[d] = [];
+        divPositions[d] = 1;
+      }
+      grouped2[d].push({
+        user_id: b.user_id,
+        player_name: b.player_name,
+        position: divPositions[d]++,
+        division: d,
+        gross: b.total_gross != null ? parseInt(b.total_gross) : null,
+        net: b.total_net != null ? parseInt(b.total_net) : null,
+        points: null,
+        rounds: b.rounds_counted,
+        holes: b.holes,
+        holes_net: b.holes_net,
+        verified: 1,
+        dq: false
+      });
+    }
+    res.json({
+      leaderboard: Object.entries(grouped2).map(([division, players]) => ({ division, players })),
+      team_format: "individual",
+      eclectic: true
+    });
     return;
   }
   const ts = teamSize(ev.format ?? "");
@@ -63697,6 +63737,29 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
     });
   }
   res.json({ leaderboard: Object.entries(grouped).map(([division, players]) => ({ division, players })), team_format: ts });
+});
+router3.get("/events/:id/eclectic-board", async (req, res) => {
+  const evId = parseInt(req.params.id, 10);
+  const ev = await row("SELECT id, event_type FROM golf_events WHERE id = ?", [evId]);
+  if (!ev) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  if (ev.event_type !== "eclectic") {
+    res.status(400).json({ message: "Not an eclectic event" });
+    return;
+  }
+  const boards = await query(
+    `SELECT erb.user_id, u.name AS player_name, erb.division,
+        erb.total_gross, erb.total_net, erb.rounds_counted,
+        erb.holes, erb.holes_net, erb.updated_at
+     FROM eclectic_ringer_board erb
+     JOIN users u ON u.id = erb.user_id
+     WHERE erb.event_id = ?
+     ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+    [evId]
+  ).catch(() => []);
+  res.json({ boards });
 });
 router3.get("/events/:id/partner-search", async (req, res) => {
   const user = await getUser(req);
@@ -77842,7 +77905,9 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
       res.status(400).json({ message: "Round is not linked to a tournament" });
       return;
     }
-    if (round.score_submitted) {
+    const evInfo = round.tournament_id ? await row("SELECT event_type FROM golf_events WHERE id = ?", [round.tournament_id]) : null;
+    const isEclectic = evInfo?.event_type === "eclectic";
+    if (round.score_submitted && !isEclectic) {
       res.json({ ok: true, alreadySubmitted: true });
       return;
     }
@@ -77850,10 +77915,11 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
       "UPDATE scoring_rounds SET score_submitted = 1 WHERE id = ?",
       [roundId]
     );
+    const eclecticImprovements = [];
     try {
       const fullRound = await row("SELECT * FROM scoring_rounds WHERE id = ?", [roundId]);
       const ev = await row(
-        "SELECT id, format, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
+        "SELECT id, format, event_type, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
         [round.tournament_id]
       );
       if (ev && ev.scoring_enabled && fullRound) {
@@ -77870,59 +77936,123 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
             "SELECT hole_number, player_index, gross_score, is_nr FROM scoring_player_holes WHERE round_id = ?",
             [roundId]
           );
-          const { gross, net, points, holeScores } = computeEventScore(
-            ev.format ?? "gross_stroke_play",
-            fullRound,
-            holeRows,
-            playerRows
-          );
-          const isTeam = isTeamFmtSR(ev.format ?? "");
-          if (isTeam && reg.team_id) {
+          if (ev.event_type === "eclectic") {
             const existing = await row(
-              "SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = 1",
-              [round.tournament_id, reg.team_id]
+              "SELECT id, holes, holes_net, rounds_counted FROM eclectic_ringer_board WHERE event_id = ? AND user_id = ?",
+              [ev.id, user.id]
             );
+            const curHoles = existing?.holes ? typeof existing.holes === "string" ? JSON.parse(existing.holes) : existing.holes : {};
+            const curHolesNet = existing?.holes_net ? typeof existing.holes_net === "string" ? JSON.parse(existing.holes_net) : existing.holes_net : {};
+            const newHoles = { ...curHoles };
+            const newHolesNet = { ...curHolesNet };
+            for (const h of holeRows) {
+              if (h.is_nr || h.gross_score == null) continue;
+              const k = String(h.hole_number);
+              const oldG = curHoles[k] != null ? Number(curHoles[k]) : null;
+              const newG = Number(h.gross_score);
+              if (oldG === null || newG < oldG) {
+                eclecticImprovements.push({ hole: h.hole_number, oldGross: oldG, newGross: newG });
+                newHoles[k] = newG;
+              }
+              if (h.net_score != null) {
+                const oldN = curHolesNet[k] != null ? Number(curHolesNet[k]) : null;
+                const newN = Number(h.net_score);
+                if (oldN === null || newN < oldN) newHolesNet[k] = newN;
+              }
+            }
+            const totalGross = Object.keys(newHoles).length > 0 ? Object.values(newHoles).reduce((s, v) => s + Number(v), 0) : null;
+            const totalNet = Object.keys(newHolesNet).length > 0 ? Object.values(newHolesNet).reduce((s, v) => s + Number(v), 0) : null;
+            const roundsNow = (existing?.rounds_counted ?? 0) + 1;
             if (!existing) {
               await exec(
-                `INSERT INTO event_scores
-                   (event_id, team_id, user_id, division, frozen_handicap, round,
-                    gross, net, points, hole_scores, verified)
-                 VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                `INSERT INTO eclectic_ringer_board
+                   (event_id, user_id, holes, holes_net, total_gross, total_net,
+                    rounds_counted, division, frozen_handicap)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                 [
-                  round.tournament_id,
-                  reg.team_id,
+                  ev.id,
                   user.id,
+                  JSON.stringify(newHoles),
+                  JSON.stringify(newHolesNet),
+                  totalGross,
+                  totalNet,
+                  roundsNow,
                   reg.division,
-                  reg.frozen_handicap,
-                  gross,
-                  net,
-                  points,
-                  JSON.stringify(holeScores)
+                  reg.frozen_handicap
+                ]
+              );
+            } else {
+              await exec(
+                `UPDATE eclectic_ringer_board
+                   SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
+                       rounds_counted = ?, updated_at = NOW()
+                 WHERE event_id = ? AND user_id = ?`,
+                [
+                  JSON.stringify(newHoles),
+                  JSON.stringify(newHolesNet),
+                  totalGross,
+                  totalNet,
+                  roundsNow,
+                  ev.id,
+                  user.id
                 ]
               );
             }
-          } else if (!isTeam) {
-            const existing = await row(
-              "SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = 1 AND team_id IS NULL",
-              [round.tournament_id, user.id]
+          } else {
+            const { gross, net, points, holeScores } = computeEventScore(
+              ev.format ?? "gross_stroke_play",
+              fullRound,
+              holeRows,
+              playerRows
             );
-            if (!existing) {
-              await exec(
-                `INSERT INTO event_scores
-                   (event_id, user_id, division, frozen_handicap, round,
-                    gross, net, points, hole_scores, verified)
-                 VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
-                [
-                  round.tournament_id,
-                  user.id,
-                  reg.division,
-                  reg.frozen_handicap,
-                  gross,
-                  net,
-                  points,
-                  JSON.stringify(holeScores)
-                ]
+            const isTeam = isTeamFmtSR(ev.format ?? "");
+            if (isTeam && reg.team_id) {
+              const existing = await row(
+                "SELECT id FROM event_scores WHERE event_id = ? AND team_id = ? AND round = 1",
+                [round.tournament_id, reg.team_id]
               );
+              if (!existing) {
+                await exec(
+                  `INSERT INTO event_scores
+                     (event_id, team_id, user_id, division, frozen_handicap, round,
+                      gross, net, points, hole_scores, verified)
+                   VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                  [
+                    round.tournament_id,
+                    reg.team_id,
+                    user.id,
+                    reg.division,
+                    reg.frozen_handicap,
+                    gross,
+                    net,
+                    points,
+                    JSON.stringify(holeScores)
+                  ]
+                );
+              }
+            } else if (!isTeam) {
+              const existing = await row(
+                "SELECT id FROM event_scores WHERE event_id = ? AND user_id = ? AND round = 1 AND team_id IS NULL",
+                [round.tournament_id, user.id]
+              );
+              if (!existing) {
+                await exec(
+                  `INSERT INTO event_scores
+                     (event_id, user_id, division, frozen_handicap, round,
+                      gross, net, points, hole_scores, verified)
+                   VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                  [
+                    round.tournament_id,
+                    user.id,
+                    reg.division,
+                    reg.frozen_handicap,
+                    gross,
+                    net,
+                    points,
+                    JSON.stringify(holeScores)
+                  ]
+                );
+              }
             }
           }
         }
@@ -77930,7 +78060,7 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
     } catch (autoErr) {
       req.log?.warn({ err: autoErr }, "auto-submit to event_scores failed (non-fatal)");
     }
-    res.json({ ok: true });
+    res.json({ ok: true, eclecticImprovements });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
       res.status(401).json({ message: "Unauthorized" });
@@ -79669,6 +79799,26 @@ async function seedAdOfferings() {
       );
     }
   }
+  await ddl(`ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_event_type_check`);
+  await ddl(`ALTER TABLE golf_events ADD CONSTRAINT golf_events_event_type_check
+    CHECK (event_type IN ('open_day','competition','corporate','social','other','eclectic'))`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS eclectic_ringer_board (
+      id              SERIAL PRIMARY KEY,
+      event_id        INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      user_id         INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      holes           JSONB NOT NULL DEFAULT '{}',
+      holes_net       JSONB NOT NULL DEFAULT '{}',
+      total_gross     INT,
+      total_net       INT,
+      rounds_counted  INT NOT NULL DEFAULT 0,
+      division        VARCHAR(20),
+      frozen_handicap DECIMAL(4,1),
+      updated_at      TIMESTAMP DEFAULT NOW(),
+      UNIQUE(event_id, user_id)
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
 }
 async function migrate() {
   await applyLateAlters();

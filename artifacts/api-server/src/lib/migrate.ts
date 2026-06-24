@@ -1734,6 +1734,28 @@ async function seedAdOfferings(): Promise<void> {
       );
     }
   }
+
+  // ── Eclectic (Ringer Board) tournament type ──────────────────────────────
+  await ddl(`ALTER TABLE golf_events DROP CONSTRAINT IF EXISTS golf_events_event_type_check`);
+  await ddl(`ALTER TABLE golf_events ADD CONSTRAINT golf_events_event_type_check
+    CHECK (event_type IN ('open_day','competition','corporate','social','other','eclectic'))`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS eclectic_ringer_board (
+      id              SERIAL PRIMARY KEY,
+      event_id        INT NOT NULL REFERENCES golf_events(id) ON DELETE CASCADE,
+      user_id         INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      holes           JSONB NOT NULL DEFAULT '{}',
+      holes_net       JSONB NOT NULL DEFAULT '{}',
+      total_gross     INT,
+      total_net       INT,
+      rounds_counted  INT NOT NULL DEFAULT 0,
+      division        VARCHAR(20),
+      frozen_handicap DECIMAL(4,1),
+      updated_at      TIMESTAMP DEFAULT NOW(),
+      UNIQUE(event_id, user_id)
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
 }
 
 export async function migrate(): Promise<void> {

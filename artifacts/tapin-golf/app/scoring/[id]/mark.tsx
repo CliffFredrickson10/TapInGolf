@@ -20,18 +20,11 @@ import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
 
 const GOLD = "#c8a84b";
+const GREEN_MATCH = "#16a34a";
+const RED_MISMATCH = "#dc2626";
 
-type ScorecardHole = {
-  number: number;
-  par: number;
-  stroke_index: number;
-};
-
-type SavedHole = {
-  hole_number: number;
-  gross_score: number | null;
-  is_nr: number;
-};
+type ScorecardHole = { number: number; par: number; stroke_index: number };
+type SavedHole = { hole_number: number; gross_score: number | null; is_nr: number };
 
 type RoundDetail = {
   id: number;
@@ -61,30 +54,23 @@ export default function MarkCardScreen() {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone] = useState<{ verified: boolean; mismatches: any[] } | null>(null);
+  // Review step: shown when mismatches exist before final submit
+  const [reviewing, setReviewing] = useState(false);
 
-  // Marker's entry for each hole: keyed by hole number string → gross score string
+  // Marker's entry — keyed by hole number string → gross score string (blank until Megan types)
   const [scores, setScores] = useState<Record<string, string>>({});
   const inputRefs = useRef<Record<string, TextInput | null>>({});
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
     try {
-      // Fetch round (player's round)
       const data = await apiFetch(`/scoring/rounds/${id}`, token);
       setRound(data);
-      // Pre-fill with player's submitted gross scores so marker can confirm or change
-      const prefill: Record<string, string> = {};
-      for (const h of data.scorecard ?? []) {
-        const saved = data.holes?.[h.number];
-        if (saved && !saved.is_nr && saved.gross_score != null) {
-          prefill[String(h.number)] = String(saved.gross_score);
-        } else {
-          prefill[String(h.number)] = "";
-        }
-      }
-      setScores(prefill);
+      // Start with all blanks — Megan enters from her own card
+      const blank: Record<string, string> = {};
+      for (const h of data.scorecard ?? []) blank[String(h.number)] = "";
+      setScores(blank);
 
-      // Load player name from pending marks endpoint
       const pendingRes = await apiFetch("/scoring/pending-marks", token);
       const match = (pendingRes.marks ?? []).find((m: any) => m.id === parseInt(id));
       if (match) setPlayerName(match.player_name ?? "Player");
@@ -99,35 +85,50 @@ export default function MarkCardScreen() {
 
   const sc = round?.scorecard ?? [];
   const front9 = sc.filter(h => h.number <= 9);
-  const back9 = sc.filter(h => h.number > 9);
+  const back9  = sc.filter(h => h.number > 9);
 
-  const totalGross = sc.reduce((sum, h) => {
-    const v = parseInt(scores[String(h.number)] ?? "");
-    return isNaN(v) ? sum : sum + v;
-  }, 0);
+  // Player's submitted score per hole (read-only reference)
+  const playerScore = (holeNum: number): number | null => {
+    const saved = round?.holes?.[holeNum];
+    if (!saved || saved.is_nr || saved.gross_score == null) return null;
+    return saved.gross_score;
+  };
 
   const allFilled = sc.every(h => {
     const v = scores[String(h.number)];
     return v !== undefined && v !== "" && !isNaN(parseInt(v));
   });
 
+  const mismatches = sc.reduce<Array<{ hole: number; markerScore: number; playerScore: number }>>((acc, h) => {
+    const v = parseInt(scores[String(h.number)] ?? "");
+    const ps = playerScore(h.number);
+    if (!isNaN(v) && ps !== null && v !== ps) acc.push({ hole: h.number, markerScore: v, playerScore: ps });
+    return acc;
+  }, []);
+
   const setScore = (hole: number, val: string) => {
-    // Allow only digits
-    const clean = val.replace(/[^0-9]/g, "");
-    setScores(prev => ({ ...prev, [String(hole)]: clean }));
+    setScores(prev => ({ ...prev, [String(hole)]: val.replace(/[^0-9]/g, "") }));
   };
 
-  const handleSubmit = async () => {
+  // Tapping Submit — if mismatches exist, go to review step first
+  const handleSubmitPress = () => {
     if (!allFilled) {
       Alert.alert("Incomplete", "Please enter a score for every hole before submitting.");
       return;
     }
+    if (mismatches.length > 0) {
+      setReviewing(true);
+    } else {
+      doSubmit();
+    }
+  };
+
+  const doSubmit = async () => {
+    setReviewing(false);
     setSubmitting(true);
     try {
       const holeScores: Record<string, number> = {};
-      for (const h of sc) {
-        holeScores[String(h.number)] = parseInt(scores[String(h.number)]);
-      }
+      for (const h of sc) holeScores[String(h.number)] = parseInt(scores[String(h.number)]);
       const res = await apiFetch(`/scoring/rounds/${id}/marker-scores`, token, {
         method: "POST",
         body: JSON.stringify({ holeScores }),
@@ -140,6 +141,7 @@ export default function MarkCardScreen() {
     }
   };
 
+  // ── Loading / error ─────────────────────────────────────────────────────────
   if (loading) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background, alignItems: "center", justifyContent: "center" }}>
@@ -165,7 +167,7 @@ export default function MarkCardScreen() {
     );
   }
 
-  // ── Result screen ──────────────────────────────────────────────────────────
+  // ── Done screen ─────────────────────────────────────────────────────────────
   if (done) {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -187,46 +189,36 @@ export default function MarkCardScreen() {
               </View>
             </View>
           ) : (
-            <View style={[styles.resultCard, { backgroundColor: "#f59e0b22", borderColor: "#f59e0b60" }]}>
-              <Ionicons name="warning" size={36} color="#f59e0b" />
+            <View style={[styles.resultCard, { backgroundColor: "#dc262622", borderColor: "#dc262660" }]}>
+              <Ionicons name="warning" size={36} color="#dc2626" />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.resultTitle, { color: "#f59e0b" }]}>Score Disputed</Text>
+                <Text style={[styles.resultTitle, { color: "#dc2626" }]}>Score Disputed</Text>
                 <Text style={[styles.resultDetail, { color: colors.mutedForeground }]}>
-                  {done.mismatches.length} hole{done.mismatches.length !== 1 ? "s" : ""} differ from {playerName}'s card.
-                  The club has been notified and will adjudicate.
+                  {done.mismatches.length} hole{done.mismatches.length !== 1 ? "s" : ""} differ from {playerName}'s card. The club has been notified and will adjudicate.
                 </Text>
               </View>
             </View>
           )}
 
           {done.mismatches.length > 0 && (
-            <View style={[styles.mismatchCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <Text style={[styles.mismatchTitle, { color: colors.foreground }]}>Differences</Text>
+            <View style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+              <View style={[styles.compareHeader, { borderBottomColor: colors.border }]}>
+                <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, flex: 0, width: 60 }]}>Hole</Text>
+                <Text style={[styles.compareHeaderCell, { color: GOLD }]}>Your Score</Text>
+                <Text style={[styles.compareHeaderCell, { color: colors.primary }]}>{playerName}'s Score</Text>
+              </View>
               {done.mismatches.map(m => (
-                <View key={m.hole} style={[styles.mismatchRow, { borderTopColor: colors.border }]}>
-                  <Text style={[styles.mismatchHole, { color: colors.mutedForeground }]}>Hole {m.hole}</Text>
-                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                    <View style={{ alignItems: "center" }}>
-                      <Text style={[styles.mismatchScore, { color: colors.primary }]}>{m.playerScore}</Text>
-                      <Text style={[styles.mismatchLabel, { color: colors.mutedForeground }]}>{playerName}</Text>
-                    </View>
-                    <Ionicons name="swap-horizontal" size={14} color={colors.mutedForeground} />
-                    <View style={{ alignItems: "center" }}>
-                      <Text style={[styles.mismatchScore, { color: GOLD }]}>{m.markerScore}</Text>
-                      <Text style={[styles.mismatchLabel, { color: colors.mutedForeground }]}>You</Text>
-                    </View>
-                  </View>
+                <View key={m.hole} style={[styles.compareRow, { borderTopColor: colors.border }]}>
+                  <Text style={[styles.compareHole, { color: colors.mutedForeground, width: 60 }]}>Hole {m.hole}</Text>
+                  <Text style={[styles.compareScore, { color: GOLD }]}>{m.markerScore}</Text>
+                  <Text style={[styles.compareScore, { color: colors.primary }]}>{m.playerScore}</Text>
                 </View>
               ))}
             </View>
           )}
         </ScrollView>
-
         <View style={[styles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: colors.border }]}>
-          <TouchableOpacity
-            onPress={() => router.replace("/(tabs)/scoring")}
-            style={[styles.footerBtn, { backgroundColor: colors.primary }]}
-          >
+          <TouchableOpacity onPress={() => router.replace("/(tabs)/scoring")} style={[styles.footerBtn, { backgroundColor: colors.primary }]}>
             <Ionicons name="golf" size={18} color="#fff" />
             <Text style={[styles.footerBtnText, { color: "#fff" }]}>Back to Scoring</Text>
           </TouchableOpacity>
@@ -235,33 +227,106 @@ export default function MarkCardScreen() {
     );
   }
 
-  // ── Entry screen ───────────────────────────────────────────────────────────
-  const HoleRow = ({ h }: { h: ScorecardHole }) => {
-    const val = scores[String(h.number)] ?? "";
-    const gross = parseInt(val);
-    const diff = isNaN(gross) ? null : gross - h.par;
-    let diffColor = colors.foreground;
-    if (diff !== null) {
-      if (diff <= -2) diffColor = "#7c3aed";
-      else if (diff === -1) diffColor = "#16a34a";
-      else if (diff === 0) diffColor = GOLD;
-      else if (diff === 1) diffColor = "#f87171";
-      else diffColor = "#dc2626";
-    }
+  // ── Review step — confirm mismatches before submitting ──────────────────────
+  if (reviewing) {
     return (
-      <View style={[styles.holeRow, { borderBottomColor: colors.border }]}>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
+          <TouchableOpacity onPress={() => setReviewing(false)} style={styles.backBtn}>
+            <Ionicons name="arrow-back" size={20} color="#fff" />
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.headerTitle}>Review Differences</Text>
+            <Text style={styles.headerSub}>{round.tournament_name ?? round.club_name}</Text>
+          </View>
+        </View>
+
+        <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+          <View style={{ backgroundColor: "#f59e0b18", borderRadius: 12, borderWidth: 1, borderColor: "#f59e0b40", padding: 14, flexDirection: "row", gap: 10, alignItems: "flex-start" }}>
+            <Ionicons name="warning-outline" size={18} color="#f59e0b" style={{ marginTop: 1 }} />
+            <Text style={{ flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", color: colors.foreground, lineHeight: 18 }}>
+              <Text style={{ fontFamily: "Inter_600SemiBold" }}>{mismatches.length} hole{mismatches.length !== 1 ? "s" : ""} differ</Text> between your card and {playerName}'s submission.{"\n"}
+              Fix any data entry errors and re-submit, or submit your scores as-is to send a dispute to the club.
+            </Text>
+          </View>
+
+          {/* Comparison table */}
+          <View style={[styles.compareCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
+            <View style={[styles.compareHeader, { borderBottomColor: colors.border, backgroundColor: colors.primary + "12" }]}>
+              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 60, flex: 0 }]}>Hole</Text>
+              <Text style={[styles.compareHeaderCell, { color: GOLD }]}>Your Card</Text>
+              <Text style={[styles.compareHeaderCell, { color: colors.primary }]}>{playerName}'s Card</Text>
+              <Text style={[styles.compareHeaderCell, { color: colors.mutedForeground, width: 40, flex: 0 }]}>Diff</Text>
+            </View>
+            {mismatches.map(m => {
+              const diff = m.markerScore - m.playerScore;
+              return (
+                <View key={m.hole} style={[styles.compareRow, { borderTopColor: colors.border, backgroundColor: "#dc262608" }]}>
+                  <Text style={[styles.compareHole, { color: colors.mutedForeground, width: 60 }]}>Hole {m.hole}</Text>
+                  <Text style={[styles.compareScore, { color: GOLD }]}>{m.markerScore}</Text>
+                  <Text style={[styles.compareScore, { color: colors.primary }]}>{m.playerScore}</Text>
+                  <Text style={[styles.compareScore, { color: RED_MISMATCH, width: 40 }]}>
+                    {diff > 0 ? `+${diff}` : `${diff}`}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+
+          {/* Also show matching holes as a summary */}
+          <Text style={{ fontSize: 12, fontFamily: "Inter_400Regular", color: colors.mutedForeground, textAlign: "center" }}>
+            {sc.length - mismatches.length} of {sc.length} holes match {playerName}'s card.
+          </Text>
+        </ScrollView>
+
+        <View style={[styles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: colors.border, backgroundColor: colors.background, gap: 10 }]}>
+          <TouchableOpacity onPress={() => setReviewing(false)} style={[styles.footerBtn, { backgroundColor: colors.card, borderWidth: 1.5, borderColor: colors.border }]}>
+            <Ionicons name="pencil" size={18} color={colors.foreground} />
+            <Text style={[styles.footerBtnText, { color: colors.foreground }]}>Edit My Scores</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={doSubmit}
+            disabled={submitting}
+            style={[styles.footerBtn, { backgroundColor: RED_MISMATCH, opacity: submitting ? 0.7 : 1 }]}
+          >
+            {submitting
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Ionicons name="flag" size={18} color="#fff" />}
+            <Text style={[styles.footerBtnText, { color: "#fff" }]}>
+              {submitting ? "Submitting…" : `Submit & Dispute ${mismatches.length} Hole${mismatches.length !== 1 ? "s" : ""}`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  // ── Entry screen ────────────────────────────────────────────────────────────
+  const HoleRow = ({ h }: { h: ScorecardHole }) => {
+    const myVal  = scores[String(h.number)] ?? "";
+    const myNum  = parseInt(myVal);
+    const ps     = playerScore(h.number);
+    const filled = myVal !== "" && !isNaN(myNum);
+    const matches = filled && ps !== null && myNum === ps;
+    const differs = filled && ps !== null && myNum !== ps;
+
+    return (
+      <View style={[styles.holeRow, { borderBottomColor: colors.border, backgroundColor: differs ? "#dc262606" : "transparent" }]}>
+        {/* Hole number + par */}
         <View style={styles.holeNumWrap}>
           <Text style={[styles.holeNum, { color: colors.mutedForeground }]}>{h.number}</Text>
           <Text style={[styles.holePar, { color: colors.mutedForeground }]}>P{h.par}</Text>
         </View>
+
+        {/* Marker's input */}
         <TextInput
           ref={r => { inputRefs.current[String(h.number)] = r; }}
           style={[styles.scoreInput, {
             backgroundColor: colors.card,
-            borderColor: val ? diffColor + "66" : colors.border,
-            color: val ? diffColor : colors.foreground,
+            borderColor: differs ? RED_MISMATCH + "99" : matches ? GREEN_MATCH + "99" : colors.border,
+            color: differs ? RED_MISMATCH : matches ? GREEN_MATCH : colors.foreground,
           }]}
-          value={val}
+          value={myVal}
           onChangeText={v => setScore(h.number, v)}
           keyboardType="numeric"
           maxLength={2}
@@ -274,41 +339,77 @@ export default function MarkCardScreen() {
           }}
           selectTextOnFocus
         />
-        {val !== "" && !isNaN(gross) && (
-          <View style={[styles.diffBadge, { backgroundColor: diffColor + "22" }]}>
-            <Text style={[styles.diffText, { color: diffColor }]}>
-              {diff === 0 ? "E" : diff! > 0 ? `+${diff}` : `${diff}`}
-            </Text>
-          </View>
-        )}
+
+        {/* Match / mismatch indicator */}
+        <View style={[styles.matchIndicator, {
+          backgroundColor: matches ? GREEN_MATCH + "18" : differs ? RED_MISMATCH + "18" : colors.muted + "40",
+        }]}>
+          {matches && <Ionicons name="checkmark" size={14} color={GREEN_MATCH} />}
+          {differs && <Ionicons name="close" size={14} color={RED_MISMATCH} />}
+          {!filled && <View style={{ width: 14 }} />}
+        </View>
+
+        {/* Player's submitted score — always visible as reference */}
+        <View style={styles.playerScoreWrap}>
+          <Text style={[styles.playerScoreLabel, { color: colors.mutedForeground }]}>{playerName.split(" ")[0]}</Text>
+          <Text style={[styles.playerScoreVal, {
+            color: differs ? colors.primary : ps !== null ? colors.primary : colors.mutedForeground,
+            fontFamily: "Inter_700Bold",
+          }]}>
+            {ps ?? "—"}
+          </Text>
+        </View>
       </View>
     );
   };
 
   const NineTotal = ({ holes }: { holes: ScorecardHole[] }) => {
-    const total = holes.reduce((sum, h) => {
+    const myTotal = holes.reduce((sum, h) => {
       const v = parseInt(scores[String(h.number)] ?? "");
       return isNaN(v) ? sum : sum + v;
     }, 0);
+    const playerTotal = holes.reduce((sum, h) => {
+      const ps = playerScore(h.number);
+      return ps !== null ? sum + ps : sum;
+    }, 0);
     const par = holes.reduce((s, h) => s + h.par, 0);
     const filled = holes.filter(h => scores[String(h.number)] !== "" && !isNaN(parseInt(scores[String(h.number)] ?? ""))).length;
+    const allFilled9 = filled === holes.length;
+    const nineMatches = allFilled9 && myTotal === playerTotal;
+    const nineDiffers = allFilled9 && myTotal !== playerTotal;
+
     return (
-      <View style={[styles.nineTotal, { backgroundColor: colors.primary + "18", borderColor: colors.primary + "30" }]}>
+      <View style={[styles.nineTotal, {
+        backgroundColor: nineDiffers ? RED_MISMATCH + "12" : nineMatches ? GREEN_MATCH + "12" : colors.primary + "12",
+        borderColor: nineDiffers ? RED_MISMATCH + "40" : nineMatches ? GREEN_MATCH + "40" : colors.primary + "30",
+      }]}>
         <Text style={[styles.nineTotalLabel, { color: colors.mutedForeground }]}>
           {holes[0].number <= 9 ? "Front 9" : "Back 9"} · Par {par}
         </Text>
-        <Text style={[styles.nineTotalVal, { color: filled === holes.length ? colors.primary : colors.mutedForeground }]}>
-          {filled === holes.length ? total : `${filled}/9`}
-        </Text>
+        <View style={{ flexDirection: "row", gap: 16, alignItems: "center" }}>
+          {allFilled9 && (
+            <Text style={[styles.nineTotalVal, { color: colors.primary, fontSize: 13, fontFamily: "Inter_600SemiBold" }]}>
+              {playerName.split(" ")[0]}: {playerTotal}
+            </Text>
+          )}
+          <Text style={[styles.nineTotalVal, { color: nineDiffers ? RED_MISMATCH : nineMatches ? GREEN_MATCH : colors.mutedForeground }]}>
+            {allFilled9 ? `You: ${myTotal}` : `${filled}/9`}
+          </Text>
+        </View>
       </View>
     );
   };
+
+  const myTotal = sc.reduce((sum, h) => {
+    const v = parseInt(scores[String(h.number)] ?? "");
+    return isNaN(v) ? sum : sum + v;
+  }, 0);
+  const playerTotal = round.total_gross ?? 0;
 
   return (
     <KeyboardAvoidingView
       style={{ flex: 1, backgroundColor: colors.background }}
       behavior={Platform.OS === "ios" ? "padding" : undefined}
-      keyboardVerticalOffset={0}
     >
       {/* Header */}
       <View style={[styles.header, { backgroundColor: colors.primary, paddingTop: insets.top + 8 }]}>
@@ -317,24 +418,25 @@ export default function MarkCardScreen() {
         </TouchableOpacity>
         <View style={{ flex: 1 }}>
           <Text style={styles.headerTitle}>Mark {playerName ? `${playerName}'s` : "Partner's"} Card</Text>
-          <Text style={styles.headerSub} numberOfLines={1}>
-            {round.tournament_name ?? round.club_name}
-          </Text>
+          <Text style={styles.headerSub} numberOfLines={1}>{round.tournament_name ?? round.club_name}</Text>
         </View>
       </View>
 
-      {/* Info banner */}
-      <View style={[styles.infoBanner, { backgroundColor: GOLD + "18", borderBottomColor: GOLD + "40" }]}>
-        <Ionicons name="information-circle-outline" size={15} color={GOLD} />
-        <Text style={[styles.infoText, { color: GOLD }]}>
-          Enter the scores as you recorded them. Pre-filled from {playerName ? `${playerName}'s` : "the player's"} submission — change any you disagree with.
-        </Text>
+      {/* Column header */}
+      <View style={[styles.colHeader, { backgroundColor: colors.card, borderBottomColor: colors.border }]}>
+        <View style={styles.holeNumWrap}>
+          <Text style={[styles.colLabel, { color: colors.mutedForeground }]}>Hole</Text>
+        </View>
+        <Text style={[styles.colLabel, { flex: 1, textAlign: "center", color: GOLD }]}>Your Score</Text>
+        <View style={styles.matchIndicator} />
+        <View style={styles.playerScoreWrap}>
+          <Text style={[styles.colLabel, { color: colors.primary }]}>{playerName.split(" ")[0]}'s Score</Text>
+        </View>
       </View>
 
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        {/* Front 9 */}
         {front9.length > 0 && (
-          <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FRONT 9</Text>
             </View>
@@ -342,8 +444,6 @@ export default function MarkCardScreen() {
             <NineTotal holes={front9} />
           </View>
         )}
-
-        {/* Back 9 */}
         {back9.length > 0 && (
           <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
@@ -354,32 +454,56 @@ export default function MarkCardScreen() {
           </View>
         )}
 
-        {/* Grand total */}
-        <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
-          <View style={[styles.grandTotal, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-            <Text style={styles.grandTotalLabel}>TOTAL GROSS</Text>
-            <Text style={styles.grandTotalVal}>
-              {allFilled ? totalGross : "—"}
-            </Text>
+        {allFilled && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8 }}>
+            <View style={[styles.grandTotal, {
+              backgroundColor: mismatches.length === 0 ? GREEN_MATCH : RED_MISMATCH,
+              borderColor: mismatches.length === 0 ? GREEN_MATCH : RED_MISMATCH,
+            }]}>
+              <View>
+                <Text style={styles.grandTotalLabel}>YOUR TOTAL</Text>
+                <Text style={[styles.grandTotalLabel, { fontSize: 10, opacity: 0.7 }]}>
+                  {playerName.split(" ")[0]}'s total: {playerTotal}
+                </Text>
+              </View>
+              <View style={{ alignItems: "flex-end" }}>
+                <Text style={styles.grandTotalVal}>{myTotal}</Text>
+                {mismatches.length > 0 && (
+                  <Text style={{ color: "rgba(255,255,255,0.85)", fontSize: 11, fontFamily: "Inter_600SemiBold" }}>
+                    {mismatches.length} hole{mismatches.length !== 1 ? "s" : ""} differ
+                  </Text>
+                )}
+              </View>
+            </View>
           </View>
-        </View>
+        )}
       </ScrollView>
 
       {/* Footer */}
       <View style={[styles.footer, { paddingBottom: insets.bottom + 16, borderTopColor: colors.border, backgroundColor: colors.background }]}>
         <TouchableOpacity
-          onPress={handleSubmit}
+          onPress={handleSubmitPress}
           disabled={submitting || !allFilled}
           style={[styles.footerBtn, {
-            backgroundColor: allFilled ? colors.primary : colors.muted,
+            backgroundColor: !allFilled ? colors.muted : mismatches.length > 0 ? RED_MISMATCH : GREEN_MATCH,
             opacity: submitting ? 0.7 : 1,
           }]}
         >
           {submitting
             ? <ActivityIndicator color="#fff" size="small" />
-            : <Ionicons name="checkmark-done" size={18} color={allFilled ? "#fff" : colors.mutedForeground} />}
-          <Text style={[styles.footerBtnText, { color: allFilled ? "#fff" : colors.mutedForeground }]}>
-            {submitting ? "Submitting…" : "Submit Marker's Card"}
+            : <Ionicons
+                name={!allFilled ? "checkmark-done" : mismatches.length > 0 ? "warning" : "checkmark-circle"}
+                size={18}
+                color={!allFilled ? colors.mutedForeground : "#fff"}
+              />}
+          <Text style={[styles.footerBtnText, { color: !allFilled ? colors.mutedForeground : "#fff" }]}>
+            {submitting
+              ? "Submitting…"
+              : !allFilled
+              ? "Enter All 18 Holes"
+              : mismatches.length > 0
+              ? `Review ${mismatches.length} Difference${mismatches.length !== 1 ? "s" : ""}`
+              : "Submit — All Scores Match ✓"}
           </Text>
         </TouchableOpacity>
       </View>
@@ -399,37 +523,43 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontFamily: "Inter_700Bold", color: "#fff" },
   headerSub: { fontSize: 12, fontFamily: "Inter_400Regular", color: "rgba(255,255,255,0.75)", marginTop: 1 },
-  infoBanner: {
-    flexDirection: "row", alignItems: "flex-start", gap: 8,
-    paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1,
+  colHeader: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 16, paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  infoText: { flex: 1, fontSize: 11, fontFamily: "Inter_400Regular", lineHeight: 16 },
+  colLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.5 },
   sectionHeader: { borderBottomWidth: StyleSheet.hairlineWidth, paddingBottom: 6, marginBottom: 4 },
   sectionLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.8 },
   holeRow: {
-    flexDirection: "row", alignItems: "center", gap: 12,
-    paddingVertical: 8, borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: "row", alignItems: "center", gap: 10,
+    paddingVertical: 6, borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  holeNumWrap: { width: 42, alignItems: "center" },
-  holeNum: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  holeNumWrap: { width: 38, alignItems: "center" },
+  holeNum: { fontSize: 14, fontFamily: "Inter_700Bold" },
   holePar: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 1 },
   scoreInput: {
-    flex: 1, height: 44, borderRadius: 12, borderWidth: 1.5,
+    flex: 1, height: 42, borderRadius: 10, borderWidth: 1.5,
     textAlign: "center", fontSize: 20, fontFamily: "Inter_700Bold",
   },
-  diffBadge: { width: 40, height: 28, borderRadius: 8, alignItems: "center", justifyContent: "center" },
-  diffText: { fontSize: 12, fontFamily: "Inter_700Bold" },
+  matchIndicator: {
+    width: 26, height: 26, borderRadius: 13,
+    alignItems: "center", justifyContent: "center",
+  },
+  playerScoreWrap: { width: 58, alignItems: "center" },
+  playerScoreLabel: { fontSize: 9, fontFamily: "Inter_400Regular" },
+  playerScoreVal: { fontSize: 18, marginTop: 1 },
   nineTotal: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     marginTop: 6, borderRadius: 10, borderWidth: 1, paddingHorizontal: 14, paddingVertical: 10,
   },
   nineTotalLabel: { fontSize: 12, fontFamily: "Inter_600SemiBold" },
-  nineTotalVal: { fontSize: 16, fontFamily: "Inter_700Bold" },
+  nineTotalVal: { fontSize: 15, fontFamily: "Inter_700Bold" },
   grandTotal: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     borderRadius: 16, paddingHorizontal: 18, paddingVertical: 14, marginTop: 4,
   },
-  grandTotalLabel: { fontSize: 13, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.8)", letterSpacing: 0.5 },
+  grandTotalLabel: { fontSize: 12, fontFamily: "Inter_700Bold", color: "rgba(255,255,255,0.85)", letterSpacing: 0.5 },
   grandTotalVal: { fontSize: 28, fontFamily: "Inter_700Bold", color: "#fff" },
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: {
@@ -443,15 +573,18 @@ const styles = StyleSheet.create({
   },
   resultTitle: { fontSize: 16, fontFamily: "Inter_700Bold", marginBottom: 6 },
   resultDetail: { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
-  mismatchCard: {
-    borderRadius: 14, borderWidth: 1, overflow: "hidden",
+  compareCard: { borderRadius: 14, borderWidth: 1, overflow: "hidden" },
+  compareHeader: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 10,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  mismatchTitle: { fontSize: 13, fontFamily: "Inter_700Bold", padding: 14, paddingBottom: 10 },
-  mismatchRow: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 14, paddingVertical: 10, borderTopWidth: StyleSheet.hairlineWidth,
+  compareHeaderCell: { flex: 1, fontSize: 11, fontFamily: "Inter_700Bold", textAlign: "center" },
+  compareRow: {
+    flexDirection: "row", alignItems: "center",
+    paddingHorizontal: 14, paddingVertical: 11,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  mismatchHole: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
-  mismatchScore: { fontSize: 16, fontFamily: "Inter_700Bold" },
-  mismatchLabel: { fontSize: 10, fontFamily: "Inter_400Regular", marginTop: 2 },
+  compareHole: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  compareScore: { flex: 1, fontSize: 18, fontFamily: "Inter_700Bold", textAlign: "center" },
 });

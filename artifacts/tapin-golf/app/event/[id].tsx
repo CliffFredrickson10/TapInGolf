@@ -1792,14 +1792,24 @@ export default function EventDetailScreen() {
               leaderboard.map(div => (
                 <View key={div.division} style={{ marginBottom: 16 }}>
                   <Text style={[styles.divGroupTitle, { color: colors.foreground }]}>{div.division} Division</Text>
-                  {/* header */}
-                  <View style={[styles.lbHeader, { backgroundColor: colors.muted }]}>
-                    <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1 }]}>#</Text>
-                    <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 3 }]}>Player</Text>
-                    <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Gross</Text>
-                    <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Net</Text>
-                    <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Pts</Text>
-                  </View>
+                  {/* header — eclectic shows HC + Gross; regular shows Gross / Net / Pts */}
+                  {div.players.some((p: any) => p.holes) ? (
+                    <View style={[styles.lbHeader, { backgroundColor: colors.muted }]}>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1 }]}>#</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 3 }]}>Player</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>HC</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Gross</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}></Text>
+                    </View>
+                  ) : (
+                    <View style={[styles.lbHeader, { backgroundColor: colors.muted }]}>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1 }]}>#</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 3 }]}>Player</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Gross</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Net</Text>
+                      <Text style={[styles.lbHeaderText, { color: colors.mutedForeground, flex: 1, textAlign: "right" }]}>Pts</Text>
+                    </View>
+                  )}
                   {div.players.map(p => {
                     const isEclecticRow = !!(p.holes);
                     const isExpanded = expandedRinger === p.user_id;
@@ -1820,26 +1830,36 @@ export default function EventDetailScreen() {
                               <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 1 }}>{p.rounds} round{p.rounds !== 1 ? "s" : ""}</Text>
                             )}
                           </View>
-                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
-                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
-                          <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>
-                            {isEclecticRow ? (isExpanded ? "▲" : "▼") : (p.dq ? "—" : (p.points ?? "—"))}
-                          </Text>
+                          {isEclecticRow ? (
+                            <>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.mutedForeground }]}>{(p as any).handicap != null ? (p as any).handicap.toFixed(1) : "—"}</Text>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
+                              <Text style={[styles.lbStat, { color: colors.mutedForeground }]}>{isExpanded ? "▲" : "▼"}</Text>
+                            </>
+                          ) : (
+                            <>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.gross ?? "—")}</Text>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.net ?? "—")}</Text>
+                              <Text style={[styles.lbStat, { color: p.dq ? "#dc2626" : colors.foreground }]}>{p.dq ? "—" : (p.points ?? "—")}</Text>
+                            </>
+                          )}
                         </TouchableOpacity>
                         {isEclecticRow && isExpanded && (
                           <View style={{ backgroundColor: colors.muted + "80", borderRadius: 8, padding: 8, marginHorizontal: 4, marginBottom: 4 }}>
                             <Text style={{ fontSize: 10, fontFamily: "Inter_700Bold", color: colors.mutedForeground, marginBottom: 6, letterSpacing: 0.5 }}>BEST SCORES PER HOLE</Text>
-                            <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 4 }}>
-                              {Array.from({ length: 18 }, (_, i) => i + 1).map(h => {
-                                const score = holesBest[String(h)];
-                                return (
-                                  <View key={h} style={{ width: 36, alignItems: "center", backgroundColor: score != null ? colors.card : colors.border + "40", borderRadius: 6, padding: 4, borderWidth: 1, borderColor: score != null ? colors.primary + "40" : colors.border }}>
-                                    <Text style={{ fontSize: 8, color: colors.mutedForeground }}>{h}</Text>
-                                    <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: score != null ? colors.foreground : colors.mutedForeground }}>{score ?? "·"}</Text>
-                                  </View>
-                                );
-                              })}
-                            </View>
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                              <View style={{ flexDirection: "row", gap: 3 }}>
+                                {Array.from({ length: 18 }, (_, i) => i + 1).map(h => {
+                                  const score = holesBest[String(h)];
+                                  return (
+                                    <View key={h} style={{ width: 34, alignItems: "center", backgroundColor: score != null ? colors.card : colors.border + "40", borderRadius: 6, padding: 4, borderWidth: 1, borderColor: score != null ? colors.primary + "40" : colors.border }}>
+                                      <Text style={{ fontSize: 8, color: colors.mutedForeground }}>{h}</Text>
+                                      <Text style={{ fontSize: 13, fontFamily: "Inter_700Bold", color: score != null ? colors.foreground : colors.mutedForeground }}>{score ?? "·"}</Text>
+                                    </View>
+                                  );
+                                })}
+                              </View>
+                            </ScrollView>
                             <Text style={{ fontSize: 10, color: colors.mutedForeground, marginTop: 6 }}>
                               {Object.keys(holesBest).length}/18 holes · Tap row to collapse
                             </Text>

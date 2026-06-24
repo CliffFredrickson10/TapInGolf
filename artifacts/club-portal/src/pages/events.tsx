@@ -352,6 +352,10 @@ export default function Events() {
   const [eclecticBoards, setEclecticBoards] = useState<any[]>([]);
   const [eclecticBoardsLoading, setEclecticBoardsLoading] = useState(false);
   const [eclecticExpanded, setEclecticExpanded] = useState<number | null>(null);
+  const [eclecticTab, setEclecticTab] = useState<"leaderboard" | "rounds">("leaderboard");
+  const [eclecticSelectedPlayer, setEclecticSelectedPlayer] = useState<number | null>(null);
+  const [eclecticRounds, setEclecticRounds] = useState<any[]>([]);
+  const [eclecticRoundsLoading, setEclecticRoundsLoading] = useState(false);
   const [scoreRound, setScoreRound] = useState(1);
   const [editScores, setEditScores] = useState<Record<number, { gross: string; net: string; points: string }>>({});
   const [savingScores, setSavingScores] = useState(false);
@@ -621,6 +625,30 @@ export default function Events() {
     } catch {} finally { setEclecticBoardsLoading(false); }
   }, []);
 
+  const loadEclecticRounds = useCallback(async (evId: number, userId: number) => {
+    setEclecticRoundsLoading(true);
+    try {
+      const data = await api<{ rounds: any[] }>(`/api/events/${evId}/eclectic-rounds?userId=${userId}`);
+      setEclecticRounds(data.rounds ?? []);
+    } catch {} finally { setEclecticRoundsLoading(false); }
+  }, []);
+
+  const printEclecticLeaderboard = useCallback(() => {
+    if (!detail) return;
+    const hdrCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<th>${h}</th>`).join('');
+    const rows = eclecticBoards.map((b, i) => {
+      const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+      const holeCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<td>${holes[String(h)] ?? '·'}</td>`).join('');
+      const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
+      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_gross ?? '—'}</strong></td></tr>`;
+    }).join('');
+    const start = detail.event_date ? new Date(detail.event_date).toLocaleDateString('en-ZA', {day:'2-digit', month:'short', year:'numeric'}) : '';
+    const end = detail.end_date ? new Date(detail.end_date).toLocaleDateString('en-ZA', {day:'2-digit', month:'short', year:'numeric'}) : '';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${detail.name} — Eclectic Leaderboard</title><style>body{font-family:Arial,sans-serif;font-size:10px;margin:24px;color:#111}h2{font-size:15px;text-align:center;margin:0 0 12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px;margin-bottom:14px;font-size:10px}.ml{font-weight:bold}table{border-collapse:collapse;width:100%}th{background:#1a5c38;color:#fff;padding:4px 3px;font-size:9px;border:1px solid #0f3d24}td{border:1px solid #ccc;padding:3px;text-align:center;font-size:9px}td.name{text-align:left;padding-left:6px;min-width:110px;font-size:10px}tr:nth-child(even){background:#f0f7f3}</style></head><body><h2>Eclectic Leaderboard</h2><div class="meta"><div><span class="ml">Eclectic Name:</span> ${detail.name}</div><div><span class="ml">Start:</span> ${start}</div><div><span class="ml">Description:</span> ${detail.description ?? ''}</div><div><span class="ml">End:</span> ${end}</div></div><table><thead><tr><th>Rank</th><th style="text-align:left;padding-left:6px">Name</th>${hdrCells}<th>HC</th><th>Gross</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const w = window.open('', '_blank', 'width=1300,height=800');
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
+  }, [detail, eclecticBoards]);
+
   const loadInvites = useCallback(async (ev: GolfEvent) => {
     setInvitesLoading(true);
     try {
@@ -709,6 +737,12 @@ export default function Events() {
     setInviteResults([]);
     loadRegs(ev);
   };
+
+  useEffect(() => {
+    setEclecticSelectedPlayer(null);
+    setEclecticRounds([]);
+    setEclecticTab("leaderboard");
+  }, [detail?.id]);
 
   useEffect(() => {
     if (detail && detailTab === "draw")    loadDraw(detail, drawRound);
@@ -2355,64 +2389,133 @@ ${bodyHtml}
                   {scoresLoading || eclecticBoardsLoading ? <Skeleton className="h-32 w-full" /> : (
                     <div className="space-y-2">
                       {detail?.event_type === 'eclectic' ? (
-                        eclecticBoards.length === 0 ? (
-                          <p className="text-sm text-muted-foreground py-6 text-center">No rounds submitted yet. Players must submit scored rounds to appear here.</p>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="text-xs text-muted-foreground mb-3">Ringer board — best score per hole across all submitted rounds. Ordered by total gross.</p>
-                            {eclecticBoards.map((b, i) => {
-                              const holesBest: Record<string, number> = b.holes
-                                ? (typeof b.holes === 'string' ? JSON.parse(b.holes) : b.holes)
-                                : {};
-                              const isOpen = eclecticExpanded === b.user_id;
-                              const filled = Object.keys(holesBest).length;
-                              return (
-                                <Card key={b.user_id}>
-                                  <CardContent className="p-3">
-                                    <button
-                                      type="button"
-                                      className="w-full flex items-center gap-2 text-left"
-                                      onClick={() => setEclecticExpanded(isOpen ? null : b.user_id)}
-                                    >
-                                      <span className="text-xs font-bold text-muted-foreground w-5 text-center">{i + 1}</span>
-                                      <div className="flex-1">
-                                        <p className="font-semibold text-sm">{b.player_name}</p>
-                                        <p className="text-[11px] text-muted-foreground">{b.division ? `${b.division} Div · ` : ""}{b.rounds_counted} round{b.rounds_counted !== 1 ? "s" : ""} · {filled}/18 holes</p>
-                                      </div>
-                                      <div className="flex items-center gap-4 text-xs text-right">
-                                        <div>
-                                          <p className="font-bold text-sm">{b.total_gross ?? "—"}</p>
-                                          <p className="text-muted-foreground text-[10px]">Gross</p>
-                                        </div>
-                                        <div>
-                                          <p className="font-semibold text-sm">{b.total_net ?? "—"}</p>
-                                          <p className="text-muted-foreground text-[10px]">Nett</p>
-                                        </div>
-                                        <span className="text-muted-foreground text-xs">{isOpen ? "▲" : "▼"}</span>
-                                      </div>
-                                    </button>
-                                    {isOpen && (
-                                      <div className="mt-3 pt-3 border-t">
-                                        <div className="grid grid-cols-9 gap-1 mb-2">
-                                          {Array.from({ length: 18 }, (_, j) => j + 1).map(h => {
-                                            const score = holesBest[String(h)];
-                                            return (
-                                              <div key={h} className={`flex flex-col items-center rounded p-1 text-center text-[11px] ${score != null ? "bg-green-50 border border-green-200" : "bg-muted/40 border border-border"}`}>
-                                                <span className="text-muted-foreground text-[9px]">{h}</span>
-                                                <span className={`font-bold ${score != null ? "text-foreground" : "text-muted-foreground/30"}`}>{score ?? "·"}</span>
-                                              </div>
-                                            );
-                                          })}
-                                        </div>
-                                        <p className="text-[10px] text-muted-foreground">{filled}/18 holes recorded</p>
-                                      </div>
-                                    )}
-                                  </CardContent>
-                                </Card>
-                              );
-                            })}
+                        <div className="space-y-3">
+                          {/* Tab bar */}
+                          <div className="flex gap-0 border-b">
+                            {(["leaderboard", "rounds"] as const).map(t => (
+                              <button
+                                key={t}
+                                type="button"
+                                onClick={() => setEclecticTab(t)}
+                                className={`px-4 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${eclecticTab === t ? "border-[#1a5c38] text-[#1a5c38] font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+                              >
+                                {t === "leaderboard" ? "Leaderboard" : "Player Rounds"}
+                              </button>
+                            ))}
                           </div>
-                        )
+
+                          {/* ── Leaderboard tab ──────────────────────────────────── */}
+                          {eclecticTab === "leaderboard" && (
+                            eclecticBoards.length === 0 ? (
+                              <p className="text-sm text-muted-foreground py-6 text-center">No rounds submitted yet. Players must submit scored rounds to appear here.</p>
+                            ) : (
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <p className="text-xs text-muted-foreground">Best score per hole · Ordered by gross</p>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={printEclecticLeaderboard}>
+                                    <Printer className="h-3 w-3" />Print
+                                  </Button>
+                                </div>
+                                <div className="overflow-x-auto rounded border">
+                                  <table className="border-collapse text-xs" style={{minWidth: "max-content", width: "100%"}}>
+                                    <thead>
+                                      <tr className="bg-[#1a5c38] text-white">
+                                        <th className="px-2 py-2 font-semibold text-center w-8 sticky left-0 bg-[#1a5c38] z-10">#</th>
+                                        <th className="px-3 py-2 font-semibold text-left min-w-[130px] sticky left-8 bg-[#1a5c38] z-10">Name</th>
+                                        {Array.from({length: 18}, (_, j) => j + 1).map(h => (
+                                          <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
+                                        ))}
+                                        <th className="px-2 py-2 font-semibold text-center w-10">HC</th>
+                                        <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {eclecticBoards.map((b, i) => {
+                                        const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+                                        const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
+                                        return (
+                                          <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
+                                            <td className="px-2 py-1.5 text-center font-bold text-muted-foreground sticky left-0 bg-inherit z-[5]">{i + 1}</td>
+                                            <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-8 bg-inherit z-[5]">{b.player_name}</td>
+                                            {Array.from({length: 18}, (_, j) => j + 1).map(h => {
+                                              const s = holes[String(h)];
+                                              return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
+                                            })}
+                                            <td className="px-2 py-1.5 text-center text-muted-foreground">{hc}</td>
+                                            <td className="px-2 py-1.5 text-center font-bold">{b.total_gross ?? '—'}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </div>
+                            )
+                          )}
+
+                          {/* ── Player Rounds tab ────────────────────────────────── */}
+                          {eclecticTab === "rounds" && (
+                            <div className="space-y-3">
+                              <div className="flex items-center gap-2">
+                                <Label className="text-xs text-muted-foreground shrink-0">Player</Label>
+                                <Select
+                                  value={eclecticSelectedPlayer ? String(eclecticSelectedPlayer) : ""}
+                                  onValueChange={v => {
+                                    const uid = parseInt(v, 10);
+                                    setEclecticSelectedPlayer(uid);
+                                    if (detail) loadEclecticRounds(detail.id, uid);
+                                  }}
+                                >
+                                  <SelectTrigger className="h-8 w-56"><SelectValue placeholder="Select player…" /></SelectTrigger>
+                                  <SelectContent>
+                                    {eclecticBoards.map(b => (
+                                      <SelectItem key={b.user_id} value={String(b.user_id)}>{b.player_name}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              {!eclecticSelectedPlayer ? (
+                                <p className="text-sm text-muted-foreground py-4 text-center">Select a player to view their submitted rounds.</p>
+                              ) : eclecticRoundsLoading ? (
+                                <Skeleton className="h-24 w-full" />
+                              ) : eclecticRounds.length === 0 ? (
+                                <p className="text-sm text-muted-foreground py-4 text-center">No rounds found for this player.</p>
+                              ) : (
+                                <div className="overflow-x-auto rounded border">
+                                  <table className="border-collapse text-xs" style={{minWidth: "max-content", width: "100%"}}>
+                                    <thead>
+                                      <tr className="bg-[#1a5c38] text-white">
+                                        <th className="px-3 py-2 font-semibold text-left min-w-[160px] sticky left-0 bg-[#1a5c38] z-10">Tournament</th>
+                                        <th className="px-2 py-2 font-semibold text-center min-w-[80px] whitespace-nowrap">Date</th>
+                                        {Array.from({length: 18}, (_, j) => j + 1).map(h => (
+                                          <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
+                                        ))}
+                                        <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {eclecticRounds.map((r, i) => {
+                                        const hs: Record<string, number> = typeof r.hole_scores === 'string' ? JSON.parse(r.hole_scores) : (r.hole_scores ?? {});
+                                        const d = r.completed_at ? new Date(r.completed_at).toLocaleDateString('en-ZA', {day: '2-digit', month: 'short', year: 'numeric'}) : '—';
+                                        return (
+                                          <tr key={r.round_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
+                                            <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-0 bg-inherit z-[5]">{r.tournament_name}</td>
+                                            <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap">{d}</td>
+                                            {Array.from({length: 18}, (_, j) => j + 1).map(h => {
+                                              const s = hs[String(h)];
+                                              return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
+                                            })}
+                                            <td className="px-2 py-1.5 text-center font-bold">{r.total_gross ?? '—'}</td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       ) : regs.filter(r => r.status === "approved").length === 0 ? (
                         <p className="text-sm text-muted-foreground py-6 text-center">No confirmed players yet.</p>
                       ) : (() => {

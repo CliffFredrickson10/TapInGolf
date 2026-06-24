@@ -63639,7 +63639,8 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
   if (ev.event_type === "eclectic") {
     const boards = await query(
       `SELECT erb.user_id, u.name AS player_name, erb.division,
-          erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net
+          erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net,
+          erb.frozen_handicap
        FROM eclectic_ringer_board erb
        JOIN users u ON u.id = erb.user_id
        WHERE erb.event_id = ?
@@ -63665,6 +63666,7 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
         rounds: b.rounds_counted,
         holes: b.holes,
         holes_net: b.holes_net,
+        handicap: b.frozen_handicap != null ? parseFloat(b.frozen_handicap) : null,
         verified: 1,
         dq: false
       });
@@ -63765,7 +63767,7 @@ router3.get("/events/:id/eclectic-board", async (req, res) => {
   const boards = await query(
     `SELECT erb.user_id, u.name AS player_name, erb.division,
         erb.total_gross, erb.total_net, erb.rounds_counted,
-        erb.holes, erb.holes_net, erb.updated_at
+        erb.holes, erb.holes_net, erb.frozen_handicap, erb.updated_at
      FROM eclectic_ringer_board erb
      JOIN users u ON u.id = erb.user_id
      WHERE erb.event_id = ?
@@ -63773,6 +63775,66 @@ router3.get("/events/:id/eclectic-board", async (req, res) => {
     [evId]
   ).catch(() => []);
   res.json({ boards });
+});
+router3.get("/events/:id/eclectic-rounds", async (req, res) => {
+  const evId = parseInt(req.params.id, 10);
+  const userId = req.query.userId ? parseInt(String(req.query.userId), 10) : null;
+  const ev = await row(
+    "SELECT id, name, event_type, club_id, event_date, end_date FROM golf_events WHERE id = ?",
+    [evId]
+  );
+  if (!ev || ev.event_type !== "eclectic") {
+    res.status(404).json({ message: "Not an eclectic event" });
+    return;
+  }
+  const players = await query(
+    `SELECT u.id AS user_id, u.name AS player_name
+     FROM eclectic_ringer_board erb
+     JOIN users u ON u.id = erb.user_id
+     WHERE erb.event_id = ?
+     ORDER BY u.name`,
+    [evId]
+  ).catch(() => []);
+  if (!userId) {
+    res.json({ players, rounds: [] });
+    return;
+  }
+  const endDate = ev.end_date ?? ev.event_date;
+  const rounds = await query(
+    `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
+            COALESCE(ge.name, ?) AS tournament_name
+     FROM scoring_rounds sr
+     LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
+     WHERE sr.score_submitted = 1
+       AND sr.user_id = ?
+       AND (
+         sr.tournament_id = ?
+         OR (sr.club_id = ? AND sr.tournament_id IS NOT NULL
+             AND DATE(sr.started_at) BETWEEN ? AND ?)
+       )
+     ORDER BY sr.completed_at DESC`,
+    [ev.name, userId, evId, ev.club_id, ev.event_date, endDate]
+  ).catch(() => []);
+  if (rounds.length === 0) {
+    res.json({ players, rounds: [] });
+    return;
+  }
+  const roundIds = rounds.map((r) => r.round_id);
+  const holeRows = await query(
+    `SELECT round_id, hole_number, gross_score
+     FROM scoring_holes
+     WHERE round_id = ANY(?) AND gross_score IS NOT NULL AND is_nr = FALSE`,
+    [roundIds]
+  ).catch(() => []);
+  const holesByRound = {};
+  for (const h of holeRows) {
+    if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
+    holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
+  }
+  res.json({
+    players,
+    rounds: rounds.map((r) => ({ ...r, hole_scores: holesByRound[r.round_id] ?? {} }))
+  });
 });
 router3.get("/events/:id/partner-search", async (req, res) => {
   const user = await getUser(req);

@@ -69,7 +69,7 @@ const FORMAT_GROUPS: FormatGroup[] = [
       { key: "alliance",          label: "Alliance" },
       { key: "texas_scramble",    label: "Texas Scramble" },
       { key: "american_scramble", label: "American Scramble" },
-      { key: "chapman",           label: "Chapman (Pinehurst)" },
+      { key: "chapman",           label: "Greensomes (Chapman/Pinehurst)" },
     ],
   },
   {

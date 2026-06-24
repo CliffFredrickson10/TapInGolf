@@ -425,7 +425,7 @@ const CATEGORIES: Category[] = [
       },
       {
         key: "chapman",
-        label: "Chapman (Pinehurst)",
+        label: "Greensomes (Chapman/Pinehurst)",
         icon: "swap-vertical-outline",
         howItWorks:
           "Both partners tee off. Each then plays the other's drive. The team selects the better of the two second shots, and from there alternate shot is played to complete the hole (one player putts, the other plays the next shot, alternating).",

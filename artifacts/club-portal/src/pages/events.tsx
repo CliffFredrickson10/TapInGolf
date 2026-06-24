@@ -193,7 +193,7 @@ const FORMAT_LABELS: Record<string, string> = {
   the_ghost: "The Ghost",
   betterball_bonus_bogey: "Betterball Bonus Bogey",
   pinehurst_points: "Multiplication Betterball (Pinehurst)",
-  chapman: "Chapman (Pinehurst Alternate Shot)",
+  chapman: "Greensomes (Chapman/Pinehurst)",
   texas_scramble: "Texas Scramble",
   // Team
   american_scramble: "American Scramble",
@@ -2966,7 +2966,7 @@ ${bodyHtml}
                               <SelectItem value="the_ghost">The Ghost</SelectItem>
                               <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
                               <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
-                              <SelectItem value="chapman">Chapman (Pinehurst Alternate Shot)</SelectItem>
+                              <SelectItem value="chapman">Greensomes (Chapman/Pinehurst)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
                               <SelectItem value="alliance">Alliance</SelectItem>
@@ -3015,7 +3015,7 @@ ${bodyHtml}
                               <SelectItem value="the_ghost">The Ghost</SelectItem>
                               <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
                               <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
-                              <SelectItem value="chapman">Chapman (Pinehurst Alternate Shot)</SelectItem>
+                              <SelectItem value="chapman">Greensomes (Chapman/Pinehurst)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
                               <SelectItem value="alliance">Alliance</SelectItem>

@@ -78,7 +78,7 @@ const FORMAT_LABELS: Record<string, string> = {
   alliance:                    "Alliance",
   american_scramble:           "American Scramble",
   texas_scramble:              "Texas Scramble",
-  chapman:                     "Chapman (Pinehurst)",
+  chapman:                     "Greensomes (Chapman/Pinehurst)",
   singles_match_play:          "Singles Match Play",
   singles_stableford_match_play: "Singles Stableford Match Play",
   singles_gross_match_play:    "Singles Gross Match Play",

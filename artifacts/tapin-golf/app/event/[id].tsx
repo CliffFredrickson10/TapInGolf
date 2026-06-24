@@ -1829,7 +1829,7 @@ export default function EventDetailScreen() {
                             {isEclecticRow && p.rounds != null && (
                               <Text style={{ fontSize: 9, color: colors.mutedForeground, marginTop: 1 }}>{p.rounds} round{p.rounds !== 1 ? "s" : ""}</Text>
                             )}
-                            {!isEclecticRow && !p.dq && p.verified === 0 && (
+                            {!p.dq && p.verified === 0 && (
                               <View style={{ flexDirection: "row", alignItems: "center", gap: 3, marginTop: 2 }}>
                                 <View style={{ width: 5, height: 5, borderRadius: 3, backgroundColor: "#d97706" }} />
                                 <Text style={{ fontSize: 9, color: "#d97706", fontFamily: "Inter_600SemiBold" }}>Unverified</Text>

@@ -176,7 +176,12 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                     return (
                       <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
                         <td className="px-2 py-1.5 text-center font-bold text-muted-foreground sticky left-0 bg-inherit z-[5]">{i + 1}</td>
-                        <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-8 bg-inherit z-[5]">{b.player_name}</td>
+                        <td className="px-3 py-1.5 sticky left-8 bg-inherit z-[5]">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <span className="font-medium">{b.player_name}</span>
+                            {b.verified === 0 && <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded leading-none">⏳ Unverified</span>}
+                          </div>
+                        </td>
                         {Array.from({length: 18}, (_, j) => j + 1).map(h => {
                           const s = (holes as Record<string,number>)[String(h)];
                           return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
@@ -242,7 +247,12 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                       : '—';
                     return (
                       <tr key={r.round_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
-                        <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-0 bg-inherit z-[5]">{r.tournament_name}</td>
+                        <td className="px-3 py-1.5 sticky left-0 bg-inherit z-[5]">
+                          <div className="flex items-center gap-1.5 whitespace-nowrap">
+                            <span className="font-medium">{r.tournament_name}</span>
+                            {r.verified === 0 && <span className="text-[9px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded leading-none">⏳ Unverified</span>}
+                          </div>
+                        </td>
                         <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap">{d}</td>
                         {Array.from({length: 18}, (_, j) => j + 1).map(h => {
                           const s = hs[String(h)];

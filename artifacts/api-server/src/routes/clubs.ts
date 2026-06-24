@@ -1217,7 +1217,7 @@ router.delete("/events/:id/register", async (req, res): Promise<void> => {
 // GET /events/:id/leaderboard  — returns leaderboard grouped by division (team-aware)
 router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
   const evId = parseInt(req.params.id, 10);
-  const ev = await row<any>("SELECT id, scoring_enabled, format, event_type FROM golf_events WHERE id = ?", [evId]);
+  const ev = await row<any>("SELECT id, scoring_enabled, format, event_type, club_id, event_date, end_date FROM golf_events WHERE id = ?", [evId]);
   if (!ev) { res.status(404).json({ message: "Event not found" }); return; }
 
   // ── Eclectic leaderboard — reads from ringer board, not event_scores ─────
@@ -1232,6 +1232,23 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
        ORDER BY erb.division, erb.total_net ASC NULLS LAST`,
       [evId]
     ).catch(() => [] as any[]);
+
+    // Find which players have ANY unverified contributing round
+    const endDate2 = ev.end_date ?? ev.event_date;
+    const unverifiedUsers = new Set<number>();
+    if (boards.length > 0) {
+      const uvRows = await query<any>(
+        `SELECT DISTINCT es.user_id
+         FROM event_scores es
+         JOIN scoring_rounds sr ON sr.tournament_id = es.event_id AND sr.user_id = es.user_id
+         WHERE sr.score_submitted = 1
+           AND sr.club_id = ?
+           AND DATE(sr.started_at) BETWEEN ? AND ?
+           AND es.verified = 0`,
+        [ev.club_id, ev.event_date, endDate2]
+      ).catch(() => [] as any[]);
+      for (const row of uvRows) unverifiedUsers.add(row.user_id);
+    }
 
     const grouped: Record<string, any[]> = {};
     const divPositions: Record<string, number> = {};
@@ -1253,7 +1270,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
         holes: b.holes,
         holes_net: b.holes_net,
         handicap: hc,
-        verified: 1,
+        verified: unverifiedUsers.has(b.user_id) ? 0 : 1,
         dq: false,
       });
     }
@@ -1392,7 +1409,8 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
   const rounds = await query<any>(
     `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
             COALESCE(ge.name, ?) AS tournament_name,
-            es.hole_scores AS es_hole_scores
+            es.hole_scores AS es_hole_scores,
+            COALESCE(es.verified, 0) AS verified
      FROM scoring_rounds sr
      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
      LEFT JOIN event_scores es

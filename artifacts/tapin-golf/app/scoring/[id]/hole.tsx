@@ -677,11 +677,35 @@ export default function HoleEntryScreen() {
 
   // ── Save current hole and advance ────────────────────────────────────────
   const saveAndNext = async (isNr = false) => {
-    if (!isNr && gross == null) return;
-    setSaving(true);
     const isMP = round.format === "singles_match_play";
     const isBB = hasFourPlayers(round);
     const isMR = !isBB && !isMP && !!round.opponent_name;
+
+    if (!isNr) {
+      const missing: string[] = [];
+      if (gross == null)
+        missing.push("You");
+      if (isBB && round.partner_name && partnerGross == null)
+        missing.push(round.partner_name);
+      if ((isBB || isMP || isMR) && round.opponent_name && oppGross == null)
+        missing.push(round.opponent_name);
+      if ((isBB || isMR) && round.opponent2_name && opp2Gross == null)
+        missing.push(round.opponent2_name);
+
+      if (missing.length > 0) {
+        const isSelf = missing.length === 1 && missing[0] === "You";
+        Alert.alert(
+          "Score Required",
+          isSelf
+            ? "Please enter your score before proceeding."
+            : `Please enter a score for the following player${missing.length > 1 ? "s" : ""} before proceeding:\n\n${missing.join("\n")}`,
+          [{ text: "OK" }]
+        );
+        return;
+      }
+    }
+
+    setSaving(true);
     const body: Record<string, unknown> = {
       par: hole.par,
       strokeIndex: hole.stroke_index,
@@ -1304,7 +1328,7 @@ export default function HoleEntryScreen() {
         ) : (
           <TouchableOpacity
             onPress={() => saveAndNext(false)}
-            disabled={saving || gross == null}
+            disabled={saving}
             style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : "#1a3d28", borderWidth: gross != null ? 0 : 1.5, borderColor: "#2d6642", opacity: saving ? 0.7 : 1 }]}
           >
             {saving

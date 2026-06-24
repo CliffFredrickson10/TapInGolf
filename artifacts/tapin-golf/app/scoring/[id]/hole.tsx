@@ -92,6 +92,7 @@ function getStablefordMax(fmt: string, par: number, ha: number): number | null {
     // No cap — gross match play pickup is hole-concession, not a fixed formula
     case "singles_gross_match_play":
     case "betterball_gross_match_play":
+      return null;
     // Modified stableford: net double bogey = -3 pts (worst possible); nothing more to lose
     case "modified_stableford":
       return par + 2 + ha;

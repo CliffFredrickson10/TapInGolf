@@ -437,10 +437,12 @@ export default function MarkCardScreen() {
         <View style={styles.holeNumWrap}>
           <Text style={[styles.colLabel, { color: colors.mutedForeground }]}>Hole</Text>
         </View>
-        <Text style={[styles.colLabel, { flex: 1, textAlign: "center", color: GOLD }]}>Your Score</Text>
+        <Text style={[styles.colLabel, { flex: 1, textAlign: "center", color: GOLD }]}>
+          Your Score for {playerName.split(" ")[0]}
+        </Text>
         <View style={styles.matchIndicator} />
         <View style={styles.playerScoreWrap}>
-          <Text style={[styles.colLabel, { color: colors.primary }]}>{playerName.split(" ")[0]}'s Score</Text>
+          <Text style={[styles.colLabel, { textAlign: "center", color: colors.primary }]}>{playerName.split(" ")[0]}'s Score</Text>
         </View>
       </View>
 

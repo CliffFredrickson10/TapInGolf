@@ -14,7 +14,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import {
-  Trophy, Calendar, Users, ChevronDown, ChevronRight, Plus, Send,
+  Trophy, Calendar, Users, ChevronDown, ChevronRight, Plus, Send, Printer,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -38,8 +38,9 @@ interface RingerEntry {
   total_gross: number | null;
   total_net: number | null;
   rounds_counted: number;
-  holes: Record<string, number> | null;
-  holes_net: Record<string, number> | null;
+  frozen_handicap: number | null;
+  holes: Record<string, number> | string | null;
+  holes_net: Record<string, number> | string | null;
 }
 
 const EMPTY_FORM = {
@@ -82,90 +83,179 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-// ─── Ringer Board ─────────────────────────────────────────────────────────────
+// ─── Eclectic Board (2 tabs) ──────────────────────────────────────────────────
 
-function RingerBoard({ eventId }: { eventId: number }) {
-  const [boards, setBoards] = useState<RingerEntry[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<number | null>(null);
+function EclecticBoard({ event }: { event: EclecticEvent }) {
+  const [boards, setBoards]           = useState<RingerEntry[]>([]);
+  const [loading, setLoading]         = useState(true);
+  const [activeTab, setActiveTab]     = useState<"leaderboard" | "rounds">("leaderboard");
+  const [selectedPlayer, setSelectedPlayer] = useState<number | null>(null);
+  const [rounds, setRounds]           = useState<any[]>([]);
+  const [roundsLoading, setRoundsLoading] = useState(false);
 
   useEffect(() => {
     setLoading(true);
-    api<{ boards: RingerEntry[] }>(`/api/events/${eventId}/eclectic-board`)
+    api<{ boards: RingerEntry[] }>(`/api/events/${event.id}/eclectic-board`)
       .then(d => setBoards(d.boards ?? []))
       .catch(() => setBoards([]))
       .finally(() => setLoading(false));
-  }, [eventId]);
+  }, [event.id]);
+
+  const loadRounds = useCallback(async (userId: number) => {
+    setRoundsLoading(true);
+    try {
+      const data = await api<{ rounds: any[] }>(`/api/events/${event.id}/eclectic-rounds?userId=${userId}`);
+      setRounds(data.rounds ?? []);
+    } catch { setRounds([]); } finally { setRoundsLoading(false); }
+  }, [event.id]);
+
+  const handlePrint = useCallback(() => {
+    const hdrCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<th>${h}</th>`).join('');
+    const rows = boards.map((b, i) => {
+      const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {});
+      const holeCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<td>${(holes as Record<string,number>)[String(h)] ?? '·'}</td>`).join('');
+      const hc = b.frozen_handicap != null ? parseFloat(String(b.frozen_handicap)).toFixed(1) : '—';
+      return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_gross ?? '—'}</strong></td></tr>`;
+    }).join('');
+    const start = format(new Date(event.event_date), 'd MMM yyyy');
+    const end = event.end_date ? format(new Date(event.end_date), 'd MMM yyyy') : '';
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${event.name} — Eclectic Leaderboard</title><style>body{font-family:Arial,sans-serif;font-size:10px;margin:24px;color:#111}h2{font-size:15px;text-align:center;margin:0 0 12px}.meta{display:grid;grid-template-columns:1fr 1fr;gap:6px 40px;margin-bottom:14px;font-size:10px}.ml{font-weight:bold}table{border-collapse:collapse;width:100%}th{background:#1a5c38;color:#fff;padding:4px 3px;font-size:9px;border:1px solid #0f3d24}td{border:1px solid #ccc;padding:3px;text-align:center;font-size:9px}td.name{text-align:left;padding-left:6px;min-width:110px;font-size:10px}tr:nth-child(even){background:#f0f7f3}</style></head><body><h2>Eclectic Leaderboard</h2><div class="meta"><div><span class="ml">Eclectic Name:</span> ${event.name}</div><div><span class="ml">Start:</span> ${start}</div><div><span class="ml">Description:</span> ${event.description ?? ''}</div><div><span class="ml">End:</span> ${end}</div></div><table><thead><tr><th>Rank</th><th style="text-align:left;padding-left:6px">Name</th>${hdrCells}<th>HC</th><th>Gross</th></tr></thead><tbody>${rows}</tbody></table></body></html>`;
+    const w = window.open('', '_blank', 'width=1300,height=800');
+    if (w) { w.document.write(html); w.document.close(); setTimeout(() => w.print(), 500); }
+  }, [boards, event]);
 
   if (loading) return <Skeleton className="h-20 w-full mt-3" />;
-  if (boards.length === 0) return (
-    <p className="text-sm text-muted-foreground py-4 text-center">No rounds submitted yet.</p>
-  );
 
   return (
-    <div className="mt-3 space-y-1.5">
-      <p className="text-[11px] text-muted-foreground mb-2">
-        Best score per hole across all submitted rounds · ordered by total gross
-      </p>
-      {boards.map((b, i) => {
-        const holesBest: Record<string, number> = b.holes
-          ? (typeof b.holes === "string" ? JSON.parse(b.holes) : b.holes)
-          : {};
-        const filled = Object.keys(holesBest).length;
-        const isOpen = expanded === b.user_id;
-        return (
-          <div key={b.user_id} className="border rounded-lg overflow-hidden">
-            <button
-              type="button"
-              className="w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-muted/40 transition-colors"
-              onClick={() => setExpanded(isOpen ? null : b.user_id)}
-            >
-              <span className="text-xs font-bold text-muted-foreground w-5 text-center shrink-0">{i + 1}</span>
-              <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm truncate">{b.player_name}</p>
-                <p className="text-[11px] text-muted-foreground">
-                  {b.division ? `${b.division} Div · ` : ""}
-                  {b.rounds_counted} round{b.rounds_counted !== 1 ? "s" : ""} · {filled}/18 holes
-                </p>
-              </div>
-              <div className="flex items-center gap-4 text-xs text-right shrink-0">
-                <div>
-                  <p className="font-bold text-sm">{b.total_gross ?? "—"}</p>
-                  <p className="text-muted-foreground text-[10px]">Gross</p>
-                </div>
-                <div>
-                  <p className="font-semibold text-sm">{b.total_net ?? "—"}</p>
-                  <p className="text-muted-foreground text-[10px]">Nett</p>
-                </div>
-                {isOpen
-                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
-              </div>
-            </button>
-            {isOpen && (
-              <div className="px-3 pb-3 pt-1 border-t bg-muted/20">
-                <div className="grid grid-cols-9 gap-1">
-                  {Array.from({ length: 18 }, (_, j) => j + 1).map(h => {
-                    const score = holesBest[String(h)];
+    <div className="mt-3 space-y-3">
+      {/* ── Tab bar ─────────────────────────────────────────────────────── */}
+      <div className="flex gap-0 border-b">
+        {(["leaderboard", "rounds"] as const).map(t => (
+          <button
+            key={t}
+            type="button"
+            onClick={() => setActiveTab(t)}
+            className={`px-4 py-1.5 text-xs font-medium border-b-2 -mb-px transition-colors ${activeTab === t ? "border-[#1a5c38] text-[#1a5c38] font-semibold" : "border-transparent text-muted-foreground hover:text-foreground"}`}
+          >
+            {t === "leaderboard" ? "Leaderboard" : "Player Rounds"}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Leaderboard tab ─────────────────────────────────────────────── */}
+      {activeTab === "leaderboard" && (
+        boards.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">No rounds submitted yet.</p>
+        ) : (
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-[11px] text-muted-foreground">Best score per hole across all submitted rounds · ordered by gross</p>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={handlePrint}>
+                <Printer className="h-3 w-3" />Print
+              </Button>
+            </div>
+            <div className="overflow-x-auto rounded border">
+              <table className="border-collapse text-xs" style={{minWidth: "max-content", width: "100%"}}>
+                <thead>
+                  <tr className="bg-[#1a5c38] text-white">
+                    <th className="px-2 py-2 font-semibold text-center w-8 sticky left-0 bg-[#1a5c38] z-10">#</th>
+                    <th className="px-3 py-2 font-semibold text-left min-w-[130px] sticky left-8 bg-[#1a5c38] z-10">Name</th>
+                    {Array.from({length: 18}, (_, j) => j + 1).map(h => (
+                      <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
+                    ))}
+                    <th className="px-2 py-2 font-semibold text-center w-10">HC</th>
+                    <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {boards.map((b, i) => {
+                    const holes = typeof b.holes === 'string' ? JSON.parse(b.holes) : (b.holes ?? {}) as Record<string, number>;
+                    const hc = b.frozen_handicap != null ? parseFloat(String(b.frozen_handicap)).toFixed(1) : '—';
                     return (
-                      <div
-                        key={h}
-                        className={`flex flex-col items-center rounded p-1 text-center text-[11px] ${score != null ? "bg-green-50 border border-green-200" : "bg-background border border-border"}`}
-                      >
-                        <span className="text-muted-foreground text-[9px]">{h}</span>
-                        <span className={`font-bold ${score != null ? "text-foreground" : "text-muted-foreground/30"}`}>
-                          {score ?? "·"}
-                        </span>
-                      </div>
+                      <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
+                        <td className="px-2 py-1.5 text-center font-bold text-muted-foreground sticky left-0 bg-inherit z-[5]">{i + 1}</td>
+                        <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-8 bg-inherit z-[5]">{b.player_name}</td>
+                        {Array.from({length: 18}, (_, j) => j + 1).map(h => {
+                          const s = (holes as Record<string,number>)[String(h)];
+                          return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
+                        })}
+                        <td className="px-2 py-1.5 text-center text-muted-foreground">{hc}</td>
+                        <td className="px-2 py-1.5 text-center font-bold">{b.total_gross ?? '—'}</td>
+                      </tr>
                     );
                   })}
-                </div>
-                <p className="text-[10px] text-muted-foreground mt-2">{filled}/18 holes recorded</p>
-              </div>
-            )}
+                </tbody>
+              </table>
+            </div>
           </div>
-        );
-      })}
+        )
+      )}
+
+      {/* ── Player Rounds tab ───────────────────────────────────────────── */}
+      {activeTab === "rounds" && (
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <Label className="text-xs text-muted-foreground shrink-0">Player</Label>
+            <Select
+              value={selectedPlayer ? String(selectedPlayer) : ""}
+              onValueChange={v => {
+                const uid = parseInt(v, 10);
+                setSelectedPlayer(uid);
+                loadRounds(uid);
+              }}
+            >
+              <SelectTrigger className="h-8 w-56"><SelectValue placeholder="Select player…" /></SelectTrigger>
+              <SelectContent>
+                {boards.map(b => (
+                  <SelectItem key={b.user_id} value={String(b.user_id)}>{b.player_name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {!selectedPlayer ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">Select a player to view their submitted rounds.</p>
+          ) : roundsLoading ? (
+            <Skeleton className="h-24 w-full" />
+          ) : rounds.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No rounds found for this player.</p>
+          ) : (
+            <div className="overflow-x-auto rounded border">
+              <table className="border-collapse text-xs" style={{minWidth: "max-content", width: "100%"}}>
+                <thead>
+                  <tr className="bg-[#1a5c38] text-white">
+                    <th className="px-3 py-2 font-semibold text-left min-w-[160px] sticky left-0 bg-[#1a5c38] z-10">Tournament</th>
+                    <th className="px-2 py-2 font-semibold text-center min-w-[80px] whitespace-nowrap">Date</th>
+                    {Array.from({length: 18}, (_, j) => j + 1).map(h => (
+                      <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
+                    ))}
+                    <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rounds.map((r, i) => {
+                    const hs: Record<string, number> = typeof r.hole_scores === 'string' ? JSON.parse(r.hole_scores) : (r.hole_scores ?? {});
+                    const d = r.completed_at
+                      ? format(new Date(r.completed_at), 'd MMM yyyy')
+                      : '—';
+                    return (
+                      <tr key={r.round_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
+                        <td className="px-3 py-1.5 font-medium whitespace-nowrap sticky left-0 bg-inherit z-[5]">{r.tournament_name}</td>
+                        <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap">{d}</td>
+                        {Array.from({length: 18}, (_, j) => j + 1).map(h => {
+                          const s = hs[String(h)];
+                          return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
+                        })}
+                        <td className="px-2 py-1.5 text-center font-bold">{r.total_gross ?? '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -326,7 +416,7 @@ export default function EclecticPage() {
                           This competition is a draft. Publish it so club members can see it and submit scores via the mobile app.
                         </p>
                       )}
-                      <RingerBoard eventId={ev.id} />
+                      <EclecticBoard event={ev} />
                     </div>
                   )}
                 </CardContent>

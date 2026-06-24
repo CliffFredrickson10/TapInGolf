@@ -128,6 +128,19 @@ export function MenuDrawer({
       ],
     },
     {
+      title: "Rules & Formats",
+      items: [
+        {
+          icon: "book-outline",
+          label: "Rules & Formats",
+          sub: "Format explanations + R&A rule book",
+          iconColor: "#c8a84b",
+          iconBg: "#c8a84b15",
+          onPress: () => navigate("/rules"),
+        },
+      ],
+    },
+    {
       title: "Support",
       items: [
         {

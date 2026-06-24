@@ -295,6 +295,7 @@ export default function RoundCompleteScreen() {
   const [completing, setCompleting] = useState(false);
   const [eclecticImprovements, setEclecticImprovements] = useState<Array<{ hole: number; oldGross: number | null; newGross: number }>>([]);
   const [eclecticEventName, setEclecticEventName] = useState<string | null>(null);
+  const [pendingMarks, setPendingMarks] = useState<Array<{ id: number; player_name: string; tournament_name: string | null; club_name: string }>>([]);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -307,6 +308,14 @@ export default function RoundCompleteScreen() {
   }, [token, id]);
 
   useEffect(() => { loadRound(); }, [loadRound]);
+
+  const checkPendingMarks = useCallback(async () => {
+    if (!token) return;
+    try {
+      const res = await apiFetch("/scoring/pending-marks", token);
+      setPendingMarks(res.marks ?? []);
+    } catch {}
+  }, [token]);
 
   const onComplete = async () => {
     if (!round || completing) return;
@@ -324,6 +333,8 @@ export default function RoundCompleteScreen() {
         }
       } catch {}
       await loadRound();
+      // Check whether this player is someone else's marker
+      await checkPendingMarks();
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to complete round");
     } finally {
@@ -672,6 +683,23 @@ export default function RoundCompleteScreen() {
                 <Ionicons name="checkmark-circle" size={18} color="#16a34a" />
                 <Text style={[styles.footerBtnText, { color: "#16a34a" }]}>Score Submitted to Club ✓</Text>
               </View>
+            )}
+            {pendingMarks.length > 0 && (
+              <TouchableOpacity
+                onPress={() => router.push(`/scoring/${pendingMarks[0].id}/mark`)}
+                style={[styles.footerBtn, { backgroundColor: GOLD + "22", borderWidth: 1.5, borderColor: GOLD + "80" }]}
+              >
+                <Ionicons name="pencil" size={18} color={GOLD} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.footerBtnText, { color: GOLD, fontSize: 13 }]}>
+                    Mark {pendingMarks[0].player_name}'s Card
+                  </Text>
+                  <Text style={{ fontSize: 11, color: GOLD + "aa", fontFamily: "Inter_400Regular" }}>
+                    {pendingMarks[0].tournament_name ?? pendingMarks[0].club_name} · Tap to countersign
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={16} color={GOLD} />
+              </TouchableOpacity>
             )}
             <TouchableOpacity
               onPress={() => router.replace("/(tabs)/scoring")}

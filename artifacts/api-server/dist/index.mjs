@@ -69394,17 +69394,51 @@ router13.get("/admin/events/:id/scores", async (req, res) => {
   const roundFilter = round != null ? "AND s.round = ?" : "";
   const params = round != null ? [eventId, round] : [eventId];
   const scores = await query(
-    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified, s.verified_at,
+    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at,
+            s.verified, s.verified_at, s.marker_disputed,
             u.id as user_id, u.name as user_name, u.handicap,
-            r.division, r.frozen_handicap
+            r.division, r.frozen_handicap,
+            sr.id AS round_id, sr.marker_user_id,
+            mu.name AS marker_name, sr.marker_submitted_at
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
      JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN scoring_rounds sr ON sr.user_id = s.user_id AND sr.tournament_id = s.event_id
+                                 AND sr.score_submitted = 1
+     LEFT JOIN users mu ON mu.id = sr.marker_user_id
      WHERE s.event_id = ? ${roundFilter}
      ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
     params
   );
   res.json({ scores });
+});
+router13.post("/admin/events/:id/scores/verify", async (req, res) => {
+  const user = await getUser(req);
+  if (!isStaff(user)) {
+    res.status(403).json({ message: "Forbidden" });
+    return;
+  }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) {
+    res.status(400).json({ message: "club_id required" });
+    return;
+  }
+  const eventId = parseInt(req.params.id, 10);
+  const { userId, round = 1 } = req.body ?? {};
+  if (!userId) {
+    res.status(400).json({ message: "userId required" });
+    return;
+  }
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await run(
+    "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = ?",
+    [eventId, userId, round]
+  );
+  res.json({ ok: true });
 });
 router13.post("/admin/events/:id/scores", async (req, res) => {
   const user = await getUser(req);
@@ -72094,19 +72128,44 @@ router14.get("/portal/events/:id/scores", requireClubAuth2, async (req, res) => 
   const params = round != null ? [evId, round] : [evId];
   const scores = await query(
     `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            s.marker_disputed,
             s.team_id, et.name as team_name,
             s.dq, s.dq_reason, s.original_gross, s.original_net, s.original_points, s.corrected_at,
             u.id as user_id, u.name as user_name,
-            r.division, r.frozen_handicap
+            r.division, r.frozen_handicap,
+            sr.id AS round_id, sr.marker_user_id,
+            mu.name AS marker_name, sr.marker_submitted_at
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
      LEFT JOIN event_teams et ON et.id = s.team_id
+     LEFT JOIN scoring_rounds sr ON sr.user_id = s.user_id AND sr.tournament_id = s.event_id
+                                 AND sr.score_submitted = 1
+     LEFT JOIN users mu ON mu.id = sr.marker_user_id
      WHERE s.event_id = ? ${roundFilter}
      ORDER BY r.division ASC NULLS LAST, s.gross ASC NULLS LAST`,
     params
   );
   res.json(scores);
+});
+router14.post("/portal/events/:id/scores/verify", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const evId = Number(req.params.id);
+  const { userId, round = 1 } = req.body ?? {};
+  if (!userId) {
+    res.status(400).json({ message: "userId required" });
+    return;
+  }
+  const event = await row("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) {
+    res.status(404).json({ message: "Event not found" });
+    return;
+  }
+  await run(
+    "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = ?",
+    [evId, userId, round]
+  );
+  res.json({ ok: true });
 });
 router14.post("/portal/events/:id/scores", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -77292,6 +77351,7 @@ router23.post("/scoring/rounds", async (req, res) => {
         }
       }
     }
+    let markerUserId = null;
     const BETTERBALL_ALL = /* @__PURE__ */ new Set([
       "betterball_match_play",
       "fourball_stableford",
@@ -77347,6 +77407,7 @@ router23.post("/scoring/rounds", async (req, res) => {
             if (candidate && candidate.user_id !== user.id) m1 = candidate;
           }
           if (m1) {
+            markerUserId = m1.user_id ?? null;
             opponentName = m1.name;
             opponentPlayingHcp = req.body.opponentPlayingHcp != null ? Number(req.body.opponentPlayingHcp) : m1.handicap != null ? Math.round(Number(m1.handicap) * (Number(allowancePct) / 100)) : 0;
           }
@@ -77375,8 +77436,8 @@ router23.post("/scoring/rounds", async (req, res) => {
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
          tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
          partner_name, partner_playing_hcp, partner_tee_color,
-         opponent2_name, opponent2_playing_hcp, opponent2_tee_color)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -77396,7 +77457,8 @@ router23.post("/scoring/rounds", async (req, res) => {
       partnerTeeColor,
       opponent2Name,
       opponent2PlayingHcp,
-      opponent2TeeColor
+      opponent2TeeColor,
+      markerUserId
     ]);
     res.json({ id });
   } catch (err) {
@@ -78293,6 +78355,113 @@ router23.delete("/scoring/rounds/:id", async (req, res) => {
       return;
     }
     res.status(500).json({ message: "Failed to delete round" });
+  }
+});
+router23.get("/scoring/pending-marks", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const marks = await query(`
+      SELECT sr.id, sr.tournament_id, sr.club_id, sr.total_gross, sr.holes_played,
+             sr.completed_at, sr.format,
+             u.name AS player_name,
+             ge.name AS tournament_name,
+             c.name  AS club_name
+      FROM scoring_rounds sr
+      JOIN users u ON u.id = sr.user_id
+      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
+      LEFT JOIN clubs c ON c.id = sr.club_id
+      WHERE sr.marker_user_id = ?
+        AND sr.score_submitted = 1
+        AND sr.marker_submitted_at IS NULL
+      ORDER BY sr.completed_at DESC
+    `, [user.id]);
+    res.json({ marks });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    res.status(500).json({ message: "Failed to fetch pending marks" });
+  }
+});
+router23.post("/scoring/rounds/:roundId/marker-scores", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const roundId = parseInt(req.params.roundId, 10);
+    if (isNaN(roundId)) {
+      res.status(400).json({ message: "Invalid round" });
+      return;
+    }
+    const round = await row(
+      "SELECT * FROM scoring_rounds WHERE id = ? AND marker_user_id = ?",
+      [roundId, user.id]
+    );
+    if (!round) {
+      res.status(404).json({ message: "Round not found or you are not the assigned marker" });
+      return;
+    }
+    if (!round.score_submitted) {
+      res.status(400).json({ message: "Player has not submitted their score yet" });
+      return;
+    }
+    if (round.marker_submitted_at) {
+      res.status(400).json({ message: "Marker scores already submitted for this round" });
+      return;
+    }
+    const { holeScores } = req.body;
+    if (!holeScores || typeof holeScores !== "object") {
+      res.status(400).json({ message: "holeScores is required" });
+      return;
+    }
+    const markerGross = Object.values(holeScores).reduce(
+      (sum, s) => sum + Number(s),
+      0
+    );
+    const playerHoles = await query(
+      "SELECT hole_number, gross_score FROM scoring_holes WHERE round_id = ? AND is_nr = 0 AND gross_score IS NOT NULL",
+      [roundId]
+    );
+    const mismatches = [];
+    for (const ph of playerHoles) {
+      const ms = holeScores[String(ph.hole_number)];
+      if (ms !== void 0 && ph.gross_score != null && Number(ms) !== Number(ph.gross_score)) {
+        mismatches.push({ hole: ph.hole_number, playerScore: ph.gross_score, markerScore: Number(ms) });
+      }
+    }
+    const verified = mismatches.length === 0;
+    await run(
+      "UPDATE scoring_rounds SET marker_hole_scores = ?, marker_gross = ?, marker_submitted_at = NOW() WHERE id = ?",
+      [JSON.stringify(holeScores), markerGross, roundId]
+    );
+    if (round.tournament_id) {
+      if (verified) {
+        await run(
+          "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = 1",
+          [round.tournament_id, round.user_id]
+        );
+      } else {
+        await run(
+          "UPDATE event_scores SET marker_disputed = 1 WHERE event_id = ? AND user_id = ? AND round = 1",
+          [round.tournament_id, round.user_id]
+        );
+      }
+    }
+    res.json({ ok: true, verified, disputed: !verified, mismatches });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "marker scores error");
+    res.status(500).json({ message: "Failed to submit marker scores" });
   }
 });
 router23.get("/scoring/players/search", async (req, res) => {
@@ -79902,6 +80071,11 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_hole_scores JSONB");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_gross INT");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_submitted_at TIMESTAMP");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS marker_disputed SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

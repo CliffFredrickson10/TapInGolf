@@ -626,6 +626,7 @@ router.post("/scoring/rounds", async (req, res) => {
     }
 
     // For individual tournament formats, look up the player's marker from the tee slot
+    let markerUserId: number | null = null;
     const BETTERBALL_ALL = new Set([
       "betterball_match_play","fourball_stableford","fourball_gross_betterball",
       "fourball_net_betterball","shamble","best_ball_aggregate","high_low","daytona",
@@ -666,6 +667,7 @@ router.post("/scoring/rounds", async (req, res) => {
             if (candidate && candidate.user_id !== user.id) m1 = candidate;
           }
           if (m1) {
+            markerUserId = m1.user_id ?? null;
             opponentName = m1.name;
             opponentPlayingHcp = req.body.opponentPlayingHcp != null
               ? Number(req.body.opponentPlayingHcp)
@@ -704,13 +706,13 @@ router.post("/scoring/rounds", async (req, res) => {
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
          tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
          partner_name, partner_playing_hcp, partner_tee_color,
-         opponent2_name, opponent2_playing_hcp, opponent2_tee_color)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
         tournamentId, matchId, opponentName, opponentPlayingHcp, opponentTeeColor,
         partnerName, partnerPlayingHcp, partnerTeeColor,
-        opponent2Name, opponent2PlayingHcp, opponent2TeeColor]);
+        opponent2Name, opponent2PlayingHcp, opponent2TeeColor, markerUserId]);
 
     res.json({ id });
   } catch (err: any) {
@@ -1647,6 +1649,120 @@ router.delete("/scoring/rounds/:id", async (req, res) => {
   } catch (err: any) {
     if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
     res.status(500).json({ message: "Failed to delete round" });
+  }
+});
+
+// ─── GET /scoring/pending-marks ───────────────────────────────────────────────
+// Rounds where the current user is the assigned marker but hasn't yet countersigned
+
+router.get("/scoring/pending-marks", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+    const marks = await query<any>(`
+      SELECT sr.id, sr.tournament_id, sr.club_id, sr.total_gross, sr.holes_played,
+             sr.completed_at, sr.format,
+             u.name AS player_name,
+             ge.name AS tournament_name,
+             c.name  AS club_name
+      FROM scoring_rounds sr
+      JOIN users u ON u.id = sr.user_id
+      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
+      LEFT JOIN clubs c ON c.id = sr.club_id
+      WHERE sr.marker_user_id = ?
+        AND sr.score_submitted = 1
+        AND sr.marker_submitted_at IS NULL
+      ORDER BY sr.completed_at DESC
+    `, [user.id]);
+
+    res.json({ marks });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    res.status(500).json({ message: "Failed to fetch pending marks" });
+  }
+});
+
+// ─── POST /scoring/rounds/:roundId/marker-scores ───────────────────────────────
+// Marker submits their independently recorded version of the player's hole scores.
+// If all holes match the player's submitted scores → auto-verifies event_scores.verified = 1.
+// If any hole differs → sets event_scores.marker_disputed = 1 for portal adjudication.
+
+router.post("/scoring/rounds/:roundId/marker-scores", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+    const roundId = parseInt(req.params.roundId, 10);
+    if (isNaN(roundId)) { res.status(400).json({ message: "Invalid round" }); return; }
+
+    const round = await row<any>(
+      "SELECT * FROM scoring_rounds WHERE id = ? AND marker_user_id = ?",
+      [roundId, user.id]
+    );
+    if (!round) {
+      res.status(404).json({ message: "Round not found or you are not the assigned marker" }); return;
+    }
+    if (!round.score_submitted) {
+      res.status(400).json({ message: "Player has not submitted their score yet" }); return;
+    }
+    if (round.marker_submitted_at) {
+      res.status(400).json({ message: "Marker scores already submitted for this round" }); return;
+    }
+
+    const { holeScores } = req.body; // { "1": 4, "2": 5, … }
+    if (!holeScores || typeof holeScores !== "object") {
+      res.status(400).json({ message: "holeScores is required" }); return;
+    }
+
+    // Compute marker's total gross
+    const markerGross = Object.values(holeScores).reduce(
+      (sum: number, s: any) => sum + Number(s), 0
+    );
+
+    // Get player's submitted hole scores
+    const playerHoles = await query<any>(
+      "SELECT hole_number, gross_score FROM scoring_holes WHERE round_id = ? AND is_nr = 0 AND gross_score IS NOT NULL",
+      [roundId]
+    );
+
+    // Compare hole-by-hole
+    const mismatches: Array<{ hole: number; playerScore: number; markerScore: number }> = [];
+    for (const ph of playerHoles) {
+      const ms = holeScores[String(ph.hole_number)];
+      if (ms !== undefined && ph.gross_score != null && Number(ms) !== Number(ph.gross_score)) {
+        mismatches.push({ hole: ph.hole_number, playerScore: ph.gross_score, markerScore: Number(ms) });
+      }
+    }
+
+    const verified = mismatches.length === 0;
+
+    // Persist marker's card
+    await run(
+      "UPDATE scoring_rounds SET marker_hole_scores = ?, marker_gross = ?, marker_submitted_at = NOW() WHERE id = ?",
+      [JSON.stringify(holeScores), markerGross, roundId]
+    );
+
+    // Update event_scores
+    if (round.tournament_id) {
+      if (verified) {
+        await run(
+          "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = 1",
+          [round.tournament_id, round.user_id]
+        );
+      } else {
+        await run(
+          "UPDATE event_scores SET marker_disputed = 1 WHERE event_id = ? AND user_id = ? AND round = 1",
+          [round.tournament_id, round.user_id]
+        );
+      }
+    }
+
+    res.json({ ok: true, verified, disputed: !verified, mismatches });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    req.log?.error({ err }, "marker scores error");
+    res.status(500).json({ message: "Failed to submit marker scores" });
   }
 });
 

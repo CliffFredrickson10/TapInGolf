@@ -2292,19 +2292,40 @@ router.get("/portal/events/:id/scores", requireClubAuth, async (req: Request, re
   const params: any[] = round != null ? [evId, round] : [evId];
   const scores = await query<any>(
     `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified,
+            s.marker_disputed,
             s.team_id, et.name as team_name,
             s.dq, s.dq_reason, s.original_gross, s.original_net, s.original_points, s.corrected_at,
             u.id as user_id, u.name as user_name,
-            r.division, r.frozen_handicap
+            r.division, r.frozen_handicap,
+            sr.id AS round_id, sr.marker_user_id,
+            mu.name AS marker_name, sr.marker_submitted_at
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
      LEFT JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
      LEFT JOIN event_teams et ON et.id = s.team_id
+     LEFT JOIN scoring_rounds sr ON sr.user_id = s.user_id AND sr.tournament_id = s.event_id
+                                 AND sr.score_submitted = 1
+     LEFT JOIN users mu ON mu.id = sr.marker_user_id
      WHERE s.event_id = ? ${roundFilter}
      ORDER BY r.division ASC NULLS LAST, s.gross ASC NULLS LAST`,
     params
   );
   res.json(scores);
+});
+
+// POST /portal/events/:id/scores/verify — club adjudicates a disputed marker score
+router.post("/portal/events/:id/scores/verify", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club  = getClub(req);
+  const evId  = Number(req.params.id);
+  const { userId, round = 1 } = req.body ?? {};
+  if (!userId) { res.status(400).json({ message: "userId required" }); return; }
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [evId, club.id]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+  await run(
+    "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = ?",
+    [evId, userId, round]
+  );
+  res.json({ ok: true });
 });
 
 router.post("/portal/events/:id/scores", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

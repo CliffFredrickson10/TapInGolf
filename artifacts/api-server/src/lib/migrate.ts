@@ -1649,6 +1649,11 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_hole_scores JSONB");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_gross INT");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_submitted_at TIMESTAMP");
+  await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS marker_disputed SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
 
   await ddl(`

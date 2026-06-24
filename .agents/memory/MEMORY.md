@@ -5,3 +5,4 @@
 - [API route prefix convention](api-route-prefix.md) — Express routes are registered WITHOUT the /api prefix; the main router is mounted at /api in app init; routes must be /scoring/rounds not /api/scoring/rounds
 - [Auth token location](auth-token-location.md) — token lives on user.token (the User object), NOT as a top-level field on AuthContextType; use const token = user?.token after const { user } = useAuth()
 - [Scoring format keys and metrics](scoring-format-metrics.md) — each scoring format key has a fixed metric driver; betterball_match_play=net, singles_match_play=net, singles_stableford_match_play=pts, fourball_stableford=pts (isFourballNonMatch)
+- [Marker verification system](marker-verification.md) — marker countersign uses scoring_rounds.marker_user_id + marker_hole_scores; portal scores use /api/portal/events/:id/scores (NOT admin route); verify endpoint is POST /portal/events/:id/scores/verify

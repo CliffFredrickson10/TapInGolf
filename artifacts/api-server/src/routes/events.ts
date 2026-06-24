@@ -363,18 +363,49 @@ router.get("/admin/events/:id/scores", async (req, res): Promise<void> => {
   const params: any[] = round != null ? [eventId, round] : [eventId];
 
   const scores = await query<any>(
-    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at, s.verified, s.verified_at,
+    `SELECT s.id, s.round, s.gross, s.net, s.points, s.hole_scores, s.submitted_at,
+            s.verified, s.verified_at, s.marker_disputed,
             u.id as user_id, u.name as user_name, u.handicap,
-            r.division, r.frozen_handicap
+            r.division, r.frozen_handicap,
+            sr.id AS round_id, sr.marker_user_id,
+            mu.name AS marker_name, sr.marker_submitted_at
      FROM event_scores s
      JOIN users u ON u.id = s.user_id
      JOIN event_registrations r ON r.event_id = s.event_id AND r.user_id = s.user_id
+     LEFT JOIN scoring_rounds sr ON sr.user_id = s.user_id AND sr.tournament_id = s.event_id
+                                 AND sr.score_submitted = 1
+     LEFT JOIN users mu ON mu.id = sr.marker_user_id
      WHERE s.event_id = ? ${roundFilter}
      ORDER BY r.division ASC, s.gross ASC NULLS LAST`,
     params
   );
 
   res.json({ scores });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ADMIN: POST /admin/events/:id/scores/verify — club adjudicates a disputed score
+// Body: { userId, round? }
+// ─────────────────────────────────────────────────────────────────────────────
+router.post("/admin/events/:id/scores/verify", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!isStaff(user)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = effectiveClubId(user, req.query.club_id ?? req.body?.club_id);
+  if (clubId == null) { res.status(400).json({ message: "club_id required" }); return; }
+
+  const eventId = parseInt(req.params.id, 10);
+  const { userId, round = 1 } = req.body ?? {};
+  if (!userId) { res.status(400).json({ message: "userId required" }); return; }
+
+  const event = await row<any>("SELECT id FROM golf_events WHERE id = ? AND club_id = ?", [eventId, clubId]);
+  if (!event) { res.status(404).json({ message: "Event not found" }); return; }
+
+  await run(
+    "UPDATE event_scores SET verified = 1, marker_disputed = 0 WHERE event_id = ? AND user_id = ? AND round = ?",
+    [eventId, userId, round]
+  );
+
+  res.json({ ok: true });
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

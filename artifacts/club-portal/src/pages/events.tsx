@@ -111,6 +111,7 @@ interface Score {
   gross: number | null; net: number | null; points: number | null;
   division: string | null; frozen_handicap: number | null;
   hole_scores: Record<string, number> | null; verified: number;
+  marker_disputed: number; marker_name: string | null; marker_submitted_at: string | null;
   team_id: number | null; team_name: string | null;
   dq: boolean; dq_reason: string | null;
   original_gross: number | null; original_net: number | null; original_points: number | null;
@@ -363,6 +364,7 @@ export default function Events() {
   const [dqNet, setDqNet]       = useState("");
   const [dqPoints, setDqPoints] = useState("");
   const [dqSaving, setDqSaving] = useState(false);
+  const [verifySaving, setVerifySaving] = useState<number | null>(null);
 
   // Invite list (invitation_only events)
   const [invites, setInvites]               = useState<{ id: number; user_id: number; name: string; email: string; handicap_index: number | null }[]>([]);
@@ -1469,6 +1471,20 @@ ${bodyHtml}
       loadScores(detail, scoreRound);
     } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
     finally { setDqSaving(false); }
+  };
+
+  const verifyScore = async (userId: number, userName: string) => {
+    if (!detail) return;
+    setVerifySaving(userId);
+    try {
+      await api(`/api/portal/events/${detail.id}/scores/verify`, {
+        method: "POST",
+        body: JSON.stringify({ userId, round: scoreRound }),
+      });
+      toast({ title: `${userName}'s score verified`, description: "Score marked as verified." });
+      loadScores(detail, scoreRound);
+    } catch (e: any) { toast({ title: "Error", description: e.message, variant: "destructive" }); }
+    finally { setVerifySaving(null); }
   };
 
   const saveScores = async () => {
@@ -2582,10 +2598,17 @@ ${bodyHtml}
                                         <div className="flex items-center gap-1.5">
                                           <p className="font-medium text-xs">{r.user_name}</p>
                                           {isDQ && <span className="text-[10px] font-bold text-red-600 bg-red-100 px-1 py-0.5 rounded">DQ</span>}
+                                          {!isDQ && submitted?.marker_disputed === 1 && (
+                                            <span className="text-[10px] font-bold text-amber-600 bg-amber-50 border border-amber-200 px-1 py-0.5 rounded">⚠ Disputed</span>
+                                          )}
+                                          {!isDQ && submitted?.verified === 1 && submitted?.marker_disputed !== 1 && (
+                                            <span className="text-[10px] font-semibold text-green-700 bg-green-50 border border-green-200 px-1 py-0.5 rounded">✓ Verified</span>
+                                          )}
                                         </div>
                                         <p className="text-[11px] text-muted-foreground">
                                           {r.division ? `${r.division} Div` : "—"}
-                                          {submitted && !isDQ ? (submitted.verified ? " · ✓ Verified" : " · Submitted") : ""}
+                                          {submitted && !isDQ && submitted.marker_name ? ` · Marker: ${submitted.marker_name}` : ""}
+                                          {submitted && !isDQ && !submitted.marker_disputed && !submitted.verified && submitted.marker_name && !submitted.marker_submitted_at ? " · Awaiting marker" : ""}
                                           {isDQ && submitted?.dq_reason ? ` · ${submitted.dq_reason}` : ""}
                                         </p>
                                       </div>
@@ -2624,13 +2647,24 @@ ${bodyHtml}
                                           />
                                         ))
                                       )}
-                                      <Button size="sm" variant="ghost"
-                                        className="h-7 w-7 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
-                                        title="Disqualify player"
-                                        disabled={readOnly}
-                                        onClick={() => openDqDialog(r.user_id, r.user_name)}>
-                                        <span className="text-xs font-bold">DQ</span>
-                                      </Button>
+                                      <div className="flex flex-col gap-1">
+                                        {submitted?.marker_disputed === 1 && (
+                                          <Button size="sm" variant="ghost"
+                                            className="h-6 px-1.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-50 border border-amber-200"
+                                            title="Accept player's score and mark as verified"
+                                            disabled={readOnly || verifySaving === r.user_id}
+                                            onClick={() => verifyScore(r.user_id, r.user_name)}>
+                                            {verifySaving === r.user_id ? "…" : "Verify"}
+                                          </Button>
+                                        )}
+                                        <Button size="sm" variant="ghost"
+                                          className="h-6 w-6 p-0 text-red-500 hover:bg-red-50 hover:text-red-700"
+                                          title="Disqualify player"
+                                          disabled={readOnly}
+                                          onClick={() => openDqDialog(r.user_id, r.user_name)}>
+                                          <span className="text-[10px] font-bold">DQ</span>
+                                        </Button>
+                                      </div>
                                     </div>
                                   </CardContent>
                                 </Card>

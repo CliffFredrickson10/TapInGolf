@@ -299,6 +299,7 @@ export default function RoundCompleteScreen() {
   const [eclecticImprovements, setEclecticImprovements] = useState<Array<{ hole: number; oldGross: number | null; newGross: number }>>([]);
   const [eclecticEventName, setEclecticEventName] = useState<string | null>(null);
   const [pendingMarks, setPendingMarks] = useState<Array<{ id: number; player_name: string; tournament_name: string | null; club_name: string }>>([]);
+  const [resolving, setResolving] = useState(false);
 
   const loadRound = useCallback(async () => {
     if (!token || !id) return;
@@ -326,6 +327,21 @@ export default function RoundCompleteScreen() {
     checkPendingMarks();
     loadRound();
   }, [checkPendingMarks, loadRound]));
+
+  const resolveDispute = async (action: "accept" | "decline") => {
+    if (!round || resolving) return;
+    setResolving(true);
+    try {
+      await apiFetch(`/scoring/rounds/${id}/resolve-dispute`, token, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action }),
+      });
+      await loadRound(); // reload to reflect cleared dispute / updated scores
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to resolve dispute");
+    } finally { setResolving(false); }
+  };
 
   const onComplete = async () => {
     if (!round || completing) return;
@@ -710,7 +726,7 @@ export default function RoundCompleteScreen() {
                     </Text>
                   </View>
                   <Text style={{ fontSize: 11, color: "#dc2626aa", fontFamily: "Inter_400Regular", paddingLeft: 26 }}>
-                    {markerFirst} recorded different scores on {disputes.length} hole{disputes.length !== 1 ? "s" : ""}. Contact the club to resolve.
+                    {markerFirst} recorded different scores on {disputes.length} hole{disputes.length !== 1 ? "s" : ""}. Accept their corrections or send to the club.
                   </Text>
                   {disputes.length > 0 && (
                     <View style={{ marginTop: 4, borderTopWidth: 1, borderTopColor: "#dc262630", paddingTop: 8, gap: 0 }}>
@@ -731,6 +747,26 @@ export default function RoundCompleteScreen() {
                           </View>
                         );
                       })}
+                      <View style={{ flexDirection: "row", gap: 8, marginTop: 12 }}>
+                        <TouchableOpacity
+                          onPress={() => resolveDispute("decline")}
+                          disabled={resolving}
+                          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10, borderWidth: 1.5, borderColor: "#dc262660", backgroundColor: "#fff0" }}
+                        >
+                          <Ionicons name="flag-outline" size={15} color="#dc2626" />
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#dc2626" }}>Send to Club</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => resolveDispute("accept")}
+                          disabled={resolving}
+                          style={{ flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingVertical: 11, borderRadius: 10, backgroundColor: "#16a34a", opacity: resolving ? 0.6 : 1 }}
+                        >
+                          {resolving
+                            ? <ActivityIndicator size="small" color="#fff" />
+                            : <Ionicons name="checkmark-circle" size={15} color="#fff" />}
+                          <Text style={{ fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff" }}>Accept Scores</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   )}
                 </View>

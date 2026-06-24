@@ -1814,6 +1814,145 @@ router.post("/scoring/rounds/:roundId/marker-scores", async (req, res) => {
   }
 });
 
+// ─── POST /scoring/rounds/:roundId/resolve-dispute ────────────────────────────
+// Player accepts their marker's scores (corrects the disputed holes on their card)
+// or declines (leaves the dispute for the club to adjudicate).
+
+router.post("/scoring/rounds/:roundId/resolve-dispute", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+    const roundId = parseInt(req.params.roundId, 10);
+    if (isNaN(roundId)) { res.status(400).json({ message: "Invalid round" }); return; }
+
+    const { action } = req.body; // "accept" | "decline"
+    if (action !== "accept" && action !== "decline") {
+      res.status(400).json({ message: "action must be 'accept' or 'decline'" }); return;
+    }
+
+    // Only the round owner (the player) can resolve
+    const round = await row<any>(
+      "SELECT * FROM scoring_rounds WHERE id = ? AND user_id = ?",
+      [roundId, user.id]
+    );
+    if (!round) { res.status(404).json({ message: "Round not found" }); return; }
+    if (!round.marker_hole_scores) { res.status(400).json({ message: "No marker scores to resolve" }); return; }
+
+    if (action === "decline") {
+      // Escalate to club — mark as explicitly declined so the club portal knows
+      if (round.tournament_id) {
+        await run(
+          "UPDATE event_scores SET marker_disputed = 2 WHERE event_id = ? AND user_id = ? AND round = 1",
+          [round.tournament_id, user.id]
+        );
+      }
+      res.json({ ok: true, action: "decline" }); return;
+    }
+
+    // ── Accept: update scoring_holes with marker's values, recalculate totals ──
+
+    const markerScores: Record<string, number> = typeof round.marker_hole_scores === "string"
+      ? JSON.parse(round.marker_hole_scores)
+      : round.marker_hole_scores;
+
+    // Load current hole scores
+    const playerHoles = await query<any>(
+      "SELECT * FROM scoring_holes WHERE round_id = ? ORDER BY hole_number",
+      [roundId]
+    );
+
+    // Load scorecard for par + stroke_index
+    const scRows = await query<any>("SELECT holes FROM club_scorecards WHERE club_id = ?", [round.club_id]);
+    const rawHoles: any[] = scRows.length > 0 ? scRows[0].holes : defaultScorecard();
+    const scMap: Record<number, { par: number; stroke_index: number }> = {};
+    for (const h of rawHoles) scMap[h.number] = { par: h.par ?? 4, stroke_index: h.stroke_index ?? h.number };
+
+    const ph = round.playing_handicap ?? 0;
+    const fmt = round.format ?? "individual_stableford";
+
+    // Find disputed holes and update each one
+    const updatedHoles: Record<string, number> = {};
+    for (const playerHole of playerHoles) {
+      const hNum = playerHole.hole_number;
+      const ms = markerScores[String(hNum)];
+      if (ms === undefined) continue;
+      const newGross = Number(ms);
+      if (playerHole.is_nr || playerHole.gross_score == null) continue;
+      if (Number(playerHole.gross_score) === newGross) continue; // no change needed
+
+      const sc = scMap[hNum] ?? { par: 4, stroke_index: hNum };
+      const ha = getHA(sc.stroke_index, ph);
+      const stablefordMax = getStablefordMax(fmt, sc.par, ha);
+      const effectiveGross = stablefordMax != null ? Math.min(newGross, stablefordMax) : newGross;
+      const netScore = effectiveGross - ha;
+      const pts = calcFormatPts(fmt, effectiveGross, sc.par, ha);
+
+      await run(
+        `UPDATE scoring_holes SET gross_score = ?, net_score = ?, stableford_points = ? WHERE round_id = ? AND hole_number = ?`,
+        [newGross, netScore, pts, roundId, hNum]
+      );
+      updatedHoles[String(hNum)] = newGross;
+    }
+
+    // Recompute totals from all holes
+    const allHoles = await query<any>(
+      "SELECT gross_score, net_score, stableford_points, is_nr FROM scoring_holes WHERE round_id = ?",
+      [roundId]
+    );
+    const totalGross = allHoles.reduce((s: number, h: any) => s + (h.is_nr ? 0 : Number(h.gross_score ?? 0)), 0);
+    const totalNet   = allHoles.reduce((s: number, h: any) => s + (h.is_nr ? 0 : Number(h.net_score ?? 0)), 0);
+    const totalPts   = allHoles.reduce((s: number, h: any) => s + Number(h.stableford_points ?? 0), 0);
+
+    await run(
+      "UPDATE scoring_rounds SET total_gross = ?, total_net = ?, total_points = ? WHERE id = ?",
+      [totalGross, totalNet, totalPts, roundId]
+    );
+
+    // Update event_scores
+    if (round.tournament_id) {
+      // Merge accepted marker scores into current hole_scores JSON
+      const esRow = await row<any>(
+        "SELECT hole_scores FROM event_scores WHERE event_id = ? AND user_id = ? AND round = 1",
+        [round.tournament_id, user.id]
+      );
+      if (esRow) {
+        const existingHS: Record<string, number> = typeof esRow.hole_scores === "string"
+          ? JSON.parse(esRow.hole_scores)
+          : (esRow.hole_scores ?? {});
+        for (const [k, v] of Object.entries(updatedHoles)) existingHS[k] = v;
+
+        await run(
+          `UPDATE event_scores
+             SET hole_scores = ?, gross = ?, net = ?, points = ?,
+                 verified = 1, marker_disputed = 0
+           WHERE event_id = ? AND user_id = ? AND round = 1`,
+          [JSON.stringify(existingHS), totalGross, totalNet, totalPts, round.tournament_id, user.id]
+        );
+      }
+
+      // Notify the marker that the player accepted their scores
+      const evt = await row<any>("SELECT name FROM golf_events WHERE id = ?", [round.tournament_id]);
+      const markerUser = await row<any>("SELECT id, name FROM users WHERE id = ?", [round.marker_user_id]);
+      if (markerUser) {
+        saveUserNotification(
+          markerUser.id,
+          "score_accepted",
+          "Scorecard Correction Accepted ✓",
+          `${user.name} accepted your marker corrections for ${evt?.name ?? "their event"}. Their card has been updated.`,
+          { round_id: roundId, event_id: round.tournament_id }
+        );
+      }
+    }
+
+    res.json({ ok: true, action: "accept", updatedHoles });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    req.log?.error({ err }, "resolve dispute error");
+    res.status(500).json({ message: "Failed to resolve dispute" });
+  }
+});
+
 // ─── Player search — used by casual-play player picker in the mobile app ─────
 
 router.get("/scoring/players/search", async (req, res) => {

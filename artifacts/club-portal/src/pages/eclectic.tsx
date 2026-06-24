@@ -275,10 +275,12 @@ export default function EclecticPage() {
             return (
               <Card key={ev.id} className="overflow-hidden">
                 <CardContent className="p-0">
-                  <button
-                    type="button"
-                    className="w-full flex items-start gap-4 p-4 text-left hover:bg-muted/30 transition-colors"
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    className="w-full flex items-start gap-4 p-4 text-left hover:bg-muted/30 transition-colors cursor-pointer select-none"
                     onClick={() => setOpenEvent(isOpen ? null : ev.id)}
+                    onKeyDown={e => e.key === "Enter" && setOpenEvent(isOpen ? null : ev.id)}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -316,7 +318,7 @@ export default function EclecticPage() {
                         ? <ChevronDown className="h-4 w-4 text-muted-foreground" />
                         : <ChevronRight className="h-4 w-4 text-muted-foreground" />}
                     </div>
-                  </button>
+                  </div>
                   {isOpen && (
                     <div className="px-4 pb-4 border-t">
                       {isPendingPublish && (

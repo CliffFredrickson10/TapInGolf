@@ -1393,10 +1393,11 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
 
     // ── Auto-write to event_scores / eclectic ringer board ───────────────────
     const eclecticImprovements: Array<{ hole: number; oldGross: number | null; newGross: number }> = [];
+    let eclecticEventName: string | null = null;
     try {
       const fullRound = await row<any>("SELECT * FROM scoring_rounds WHERE id = ?", [roundId]);
       const ev = await row<any>(
-        "SELECT id, format, event_type, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
+        "SELECT id, club_id, format, event_type, scoring_enabled FROM golf_events WHERE id = ? AND status = 'active'",
         [round.tournament_id]
       );
       if (ev && ev.scoring_enabled && fullRound) {
@@ -1515,6 +1516,78 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
                 );
               }
             }
+
+            // ── Auto-feed active eclectic ringer board ─────────────────────
+            // Monthly medal (and any qualifying club tournament) automatically
+            // updates the club's active eclectic competition — the best score
+            // per hole from all submitted rounds builds the ringer board.
+            if (ev.club_id) {
+              const activeEclectic = await row<any>(
+                `SELECT id, name FROM golf_events
+                 WHERE club_id = ? AND event_type = 'eclectic' AND status = 'active'
+                   AND scoring_enabled = 1 AND event_date <= CURRENT_DATE
+                   AND COALESCE(end_date, event_date + INTERVAL '365 days') >= CURRENT_DATE
+                 LIMIT 1`,
+                [ev.club_id]
+              );
+              if (activeEclectic) {
+                const existingRinger = await row<any>(
+                  "SELECT id, holes, holes_net, rounds_counted FROM eclectic_ringer_board WHERE event_id = ? AND user_id = ?",
+                  [activeEclectic.id, user.id]
+                );
+                const curHolesE: Record<string, number> = existingRinger?.holes
+                  ? (typeof existingRinger.holes === 'string' ? JSON.parse(existingRinger.holes) : existingRinger.holes)
+                  : {};
+                const curHolesNetE: Record<string, number> = existingRinger?.holes_net
+                  ? (typeof existingRinger.holes_net === 'string' ? JSON.parse(existingRinger.holes_net) : existingRinger.holes_net)
+                  : {};
+                const newHolesE = { ...curHolesE };
+                const newHolesNetE = { ...curHolesNetE };
+                for (const h of holeRows) {
+                  if (h.is_nr || h.gross_score == null) continue;
+                  const k = String(h.hole_number);
+                  const oldG = curHolesE[k] != null ? Number(curHolesE[k]) : null;
+                  const newG = Number(h.gross_score);
+                  if (oldG === null || newG < oldG) {
+                    eclecticImprovements.push({ hole: h.hole_number, oldGross: oldG, newGross: newG });
+                    newHolesE[k] = newG;
+                  }
+                  if (h.net_score != null) {
+                    const oldN = curHolesNetE[k] != null ? Number(curHolesNetE[k]) : null;
+                    const newN = Number(h.net_score);
+                    if (oldN === null || newN < oldN) newHolesNetE[k] = newN;
+                  }
+                }
+                const totalGrossE = Object.keys(newHolesE).length > 0
+                  ? Object.values(newHolesE).reduce((s, v) => s + Number(v), 0) : null;
+                const totalNetE = Object.keys(newHolesNetE).length > 0
+                  ? Object.values(newHolesNetE).reduce((s, v) => s + Number(v), 0) : null;
+                const roundsNowE = (existingRinger?.rounds_counted ?? 0) + 1;
+                if (!existingRinger) {
+                  await exec(
+                    `INSERT INTO eclectic_ringer_board
+                       (event_id, user_id, holes, holes_net, total_gross, total_net,
+                        rounds_counted, division, frozen_handicap)
+                     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+                    [activeEclectic.id, user.id,
+                     JSON.stringify(newHolesE), JSON.stringify(newHolesNetE),
+                     totalGrossE, totalNetE, roundsNowE,
+                     reg.division, reg.frozen_handicap]
+                  );
+                } else {
+                  await exec(
+                    `UPDATE eclectic_ringer_board
+                       SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
+                           rounds_counted = ?, updated_at = NOW()
+                     WHERE event_id = ? AND user_id = ?`,
+                    [JSON.stringify(newHolesE), JSON.stringify(newHolesNetE),
+                     totalGrossE, totalNetE, roundsNowE,
+                     activeEclectic.id, user.id]
+                  );
+                }
+                eclecticEventName = activeEclectic.name;
+              }
+            }
           }
         }
       }
@@ -1522,7 +1595,7 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
       req.log?.warn({ err: autoErr }, "auto-submit to event_scores failed (non-fatal)");
     }
 
-    res.json({ ok: true, eclecticImprovements });
+    res.json({ ok: true, eclecticImprovements, eclecticEventName });
   } catch (err: any) {
     if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
     req.log?.error({ err }, "submit score error");

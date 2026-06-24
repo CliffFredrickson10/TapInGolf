@@ -772,13 +772,32 @@ router.get("/events/feed", async (req, res): Promise<void> => {
     if (allEvents.length > 0) {
       const ids = allEvents.map(e => e.id);
       const placeholders = ids.map(() => "?").join(",");
+
+      // 1. event_registrations (formal registrations)
       const regs = await query<any>(
         `SELECT event_id, id, status FROM event_registrations WHERE user_id = ? AND event_id IN (${placeholders})`,
         [userId, ...ids]
       );
       const regMap: Record<number, any> = {};
       for (const r of regs) regMap[r.event_id] = r;
-      for (const ev of allEvents) ev.user_registration = regMap[ev.id] ?? null;
+
+      // 2. Confirmed tee-slot bookings — covers players booked into a slot for an event
+      //    without a separate event_registrations row (e.g. monthly medals booked via tee sheet)
+      const slotBookings = await query<any>(
+        `SELECT DISTINCT pts.event_id, b.id
+         FROM bookings b
+         JOIN booking_players bp ON bp.booking_id = b.id
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+         WHERE bp.user_id = ? AND b.status = 'confirmed' AND pts.event_id IN (${placeholders})`,
+        [userId, ...ids]
+      );
+      const slotMap: Record<number, any> = {};
+      for (const s of slotBookings) slotMap[s.event_id] = { id: s.id, status: 'approved' };
+
+      // Merge: event_registration wins; fall back to tee-slot booking
+      for (const ev of allEvents) {
+        ev.user_registration = regMap[ev.id] ?? slotMap[ev.id] ?? null;
+      }
     }
   }
 

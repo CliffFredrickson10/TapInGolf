@@ -124,13 +124,10 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
     const clubId = parseInt(req.params.clubId);
     if (!clubId) { res.status(400).json({ message: "Invalid club id" }); return; }
 
-    // Surface tournaments where the requesting user has a confirmed spot OR
-    // is eligible to self-enter (open / members-only events without pre-registration):
+    // Surface tournaments where the requesting user has a confirmed spot:
     //   a) approved event_registrations entry (formal events), OR
     //   b) a confirmed booking on a tee slot exclusive to this event, OR
-    //   c) appears as player1_id or player2_id in any knockout_matches, OR
-    //   d) event is open/members_only with scoring enabled (monthly medals etc.) —
-    //      player self-registers on score submission; no prior approval needed
+    //   c) appears as player1_id or player2_id in any knockout_matches
     const tournaments = await query<any>(`
       SELECT id, name, event_date, end_date, format, format2, format_custom,
              knockout_type, knockout_scoring_format, restriction, event_type
@@ -153,11 +150,6 @@ router.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
           OR EXISTS (
             SELECT 1 FROM knockout_matches km
             WHERE km.event_id = ge.id AND (km.player1_id = ? OR km.player2_id = ?)
-          )
-          OR (
-            ge.restriction IN ('open', 'members_only')
-            AND ge.scoring_enabled = 1
-            AND ge.knockout_type IS NULL
           )
         )
       ORDER BY event_date ASC

@@ -63193,7 +63193,19 @@ router3.get("/events/feed", async (req, res) => {
       );
       const regMap = {};
       for (const r of regs) regMap[r.event_id] = r;
-      for (const ev of allEvents) ev.user_registration = regMap[ev.id] ?? null;
+      const slotBookings = await query(
+        `SELECT DISTINCT pts.event_id, b.id
+         FROM bookings b
+         JOIN booking_players bp ON bp.booking_id = b.id
+         JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+         WHERE bp.user_id = ? AND b.status = 'confirmed' AND pts.event_id IN (${placeholders})`,
+        [userId, ...ids]
+      );
+      const slotMap = {};
+      for (const s of slotBookings) slotMap[s.event_id] = { id: s.id, status: "approved" };
+      for (const ev of allEvents) {
+        ev.user_registration = regMap[ev.id] ?? slotMap[ev.id] ?? null;
+      }
     }
   }
   res.json({ home_club: homeClubEvents, open: openEvents });
@@ -76732,11 +76744,6 @@ router23.get("/scoring/clubs/:clubId/tournaments", async (req, res) => {
           OR EXISTS (
             SELECT 1 FROM knockout_matches km
             WHERE km.event_id = ge.id AND (km.player1_id = ? OR km.player2_id = ?)
-          )
-          OR (
-            ge.restriction IN ('open', 'members_only')
-            AND ge.scoring_enabled = 1
-            AND ge.knockout_type IS NULL
           )
         )
       ORDER BY event_date ASC

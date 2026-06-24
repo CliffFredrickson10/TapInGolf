@@ -93,6 +93,10 @@ function getStablefordMax(fmt: string, par: number, ha: number): number | null {
     case "singles_gross_match_play":
     case "betterball_gross_match_play":
     case "fourball_gross_betterball":
+    // No cap — scramble/alternate-shot formats use team stroke totals, not per-hole points
+    case "texas_scramble":
+    case "american_scramble":
+    case "chapman":
       return null;
     // Modified stableford: net double bogey = -3 pts (worst possible); nothing more to lose
     case "modified_stableford":
@@ -136,6 +140,9 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
     case "chairman":
     case "maximum_score":
     case "fourball_net_betterball":
+    case "texas_scramble":
+    case "american_scramble":
+    case "chapman":
       return 0;
     default:
       return Math.max(0, par + 2 - (gross - ha));
@@ -644,7 +651,7 @@ export default function HoleEntryScreen() {
   const ha = getHA(hole.stroke_index, ph);
   const oppHA = getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0);
   const isParOrBogeyFormat = round.format === "par_bogey" || round.format === "individual_par" || round.format === "individual_bogey";
-  const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman" || round.format === "maximum_score" || round.format === "fourball_net_betterball";
+  const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman" || round.format === "maximum_score" || round.format === "fourball_net_betterball" || round.format === "texas_scramble" || round.format === "american_scramble" || round.format === "chapman";
   const stablefordMax  = getStablefordMax(round.format ?? "individual_stableford", hole.par, ha);
   const effectiveGross = stablefordMax != null && gross != null ? Math.min(gross, stablefordMax) : gross;
   const pts      = effectiveGross != null ? calcFormatPts(round.format ?? "individual_stableford", effectiveGross, hole.par, ha) : null;

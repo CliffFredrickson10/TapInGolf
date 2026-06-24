@@ -67,7 +67,9 @@ const FORMAT_GROUPS: FormatGroup[] = [
     group: "Team (3–4 Players)",
     formats: [
       { key: "alliance",          label: "Alliance" },
+      { key: "texas_scramble",    label: "Texas Scramble" },
       { key: "american_scramble", label: "American Scramble" },
+      { key: "chapman",           label: "Chapman (Pinehurst)" },
     ],
   },
   {
@@ -90,7 +92,7 @@ const BETTERBALL_FORMATS = new Set([
   "fourball_stableford","fourball_gross_betterball","fourball_net_betterball",
   "betterball_match_play","shamble","best_ball_aggregate","high_low","daytona",
   "low_ball_total","the_ghost","betterball_bonus_bogey","pinehurst_points",
-  "alliance","american_scramble",
+  "alliance","american_scramble","texas_scramble","chapman",
 ]);
 
 export default function StartRoundScreen() {

@@ -46,19 +46,19 @@ const CATEGORIES: Category[] = [
         howScored:
           "Albatross (net −3) = 5 pts · Eagle (net −2) = 4 pts · Birdie (net −1) = 3 pts · Par = 2 pts · Bogey (net +1) = 1 pt · Double bogey or worse = 0 pts. Highest total points wins.",
         handicap:
-          "Your Playing Handicap (course handicap × allowance, typically 100%) is distributed across the 18 holes by stroke index. On holes where your stroke index is ≤ your playing handicap, you receive one extra stroke (or two if your handicap exceeds 18). This lowers your net score on those holes, potentially improving your points.",
+          "Your Playing Handicap is distributed across the 18 holes by stroke index. On holes where your stroke index ≤ your playing handicap you receive one extra stroke (two if handicap exceeds 18). This lowers your net score on those holes, improving your points tally.",
         pickup: "Pick up once you cannot score better than 0 points (net double bogey or worse).",
       },
       {
-        key: "individual_gross",
-        label: "Individual Gross (Stroke Play)",
+        key: "gross_stroke_play",
+        label: "Gross Stroke Play (Medal)",
         icon: "golf-outline",
         howItWorks:
           "The most traditional format. Every stroke on every hole counts. No handicap adjustment — pure gross scores.",
         howScored:
           "Total gross strokes for 18 holes. Lowest total wins. Used for scratch competitions and club championships.",
         handicap:
-          "Handicap does not apply. All players compete off scratch — gross scores only. This format is used for scratch competitions or when the committee decides not to apply handicaps.",
+          "Handicap does not apply. All players compete off scratch — gross scores only.",
         pickup: "No mandatory pickup — all strokes count.",
       },
       {
@@ -70,7 +70,7 @@ const CATEGORIES: Category[] = [
         howScored:
           "Net score = Gross score − Full handicap. Lowest net total wins.",
         handicap:
-          "Your full Course Handicap (100% allowance) is subtracted from your gross 18-hole total at the end of the round — not distributed per hole. A player with a course handicap of 18 deducts 18 strokes from their gross total to get their net score.",
+          "Your full Course Handicap (100% allowance) is subtracted from your gross 18-hole total at the end — not distributed per hole. A player with a handicap of 18 deducts 18 strokes from their gross total.",
         pickup: "No forced pickup — all strokes count towards your gross total.",
       },
       {
@@ -78,11 +78,11 @@ const CATEGORIES: Category[] = [
         label: "Par / Individual Par",
         icon: "remove-circle-outline",
         howItWorks:
-          "Match your net score against par on each hole. Think of it as a match against the course itself — you either win, halve, or lose each hole.",
+          "Match your net score against par on each hole — you either win, halve, or lose each hole against the course.",
         howScored:
-          "Net birdie or better = +1 · Net par = 0 (halve) · Net bogey or worse = −1. Total your hole results. A score of +2 means two holes up on the course.",
+          "Net birdie or better = +1 · Net par = 0 (halve) · Net bogey or worse = −1. A score of +2 means two holes up on the course.",
         handicap:
-          "Your Playing Handicap is distributed by stroke index, exactly like Stableford. You receive an extra stroke on the holes where your stroke index falls within your handicap, reducing your net score for that hole and giving you a better chance of halving or winning it against par.",
+          "Your Playing Handicap is distributed by stroke index, exactly like Stableford. You receive an extra stroke on holes where your stroke index falls within your handicap, reducing your net score and giving you a better chance of halving or winning the hole.",
         pickup: "Pick up when you can no longer beat net par (net bogey or worse secured).",
       },
       {
@@ -94,7 +94,7 @@ const CATEGORIES: Category[] = [
         howScored:
           "Net par or better = +1 · Net bogey = 0 · Net double bogey or worse = −1. Higher total wins.",
         handicap:
-          "Handicap strokes are applied per hole by stroke index, the same as Stableford. Because the target is one stroke more lenient than par, you receive slightly less benefit from your handicap strokes relative to a Par competition — you need to reach net bogey to break even rather than net par.",
+          "Handicap strokes are applied per hole by stroke index, the same as Stableford. Because the target is one stroke more lenient than par, you need to reach net bogey to break even.",
         pickup: "Pick up once you cannot beat net bogey (net double bogey secured).",
       },
       {
@@ -102,23 +102,23 @@ const CATEGORIES: Category[] = [
         label: "Modified Stableford",
         icon: "trending-up-outline",
         howItWorks:
-          "A high-risk, high-reward variation of Stableford that rewards eagles and albatrosses heavily and penalises double bogeys.",
+          "A high-risk, high-reward variation of Stableford that rewards eagles heavily and penalises double bogeys.",
         howScored:
           "Albatross or better = +8 · Eagle = +5 · Birdie = +2 · Par = 0 · Bogey = −1 · Double bogey or worse = −3. Highest total wins.",
         handicap:
-          "Handicap strokes are distributed per hole by stroke index, exactly as in standard Stableford. Your net score on each hole is compared against par. The same extra-stroke allocation applies — holes where your stroke index ≤ playing handicap receive one additional shot.",
-        pickup: "Pick up at net double bogey (−3 points — you cannot do worse).",
+          "Handicap strokes are distributed per hole by stroke index, exactly as in standard Stableford. Your net score on each hole is compared against par using the same extra-stroke allocation.",
+        pickup: "Pick up at net double bogey (−3 points — worst possible outcome per hole).",
       },
       {
         key: "maximum_score",
         label: "Maximum Score",
         icon: "arrow-up-circle-outline",
         howItWorks:
-          "Stroke play with a per-hole cap set by the committee (typically net double bogey or a fixed number like 8 or 10). Any score above the cap is recorded as the cap. Speeds up play.",
+          "Stroke play with a per-hole cap (typically net double bogey or a fixed number). Any score above the cap is recorded as the cap. Speeds up play.",
         howScored:
           "Add up all capped gross scores for 18 holes. Net score = Total − Full handicap. Lowest net wins.",
         handicap:
-          "The maximum per-hole score is usually defined in net terms (e.g. net double bogey = par + 2 + your stroke allocation on that hole). Your full course handicap is then deducted from the gross total at the end. Players with higher handicaps get a higher cap on each hole and a larger end deduction.",
+          "The cap is usually defined in net terms (par + 2 + your stroke allocation on that hole). Your full course handicap is then deducted from the gross total at the end.",
         pickup: "Stop playing once you've reached the committee's maximum score for that hole.",
       },
       {
@@ -126,7 +126,7 @@ const CATEGORIES: Category[] = [
         label: "Bonus Bogey",
         icon: "gift-outline",
         howItWorks:
-          "A points-based format similar to Stableford, but birdies and eagles score bonus points while bogeys lose points.",
+          "A points-based format where birdies and eagles earn bonus points while bogeys lose points.",
         howScored:
           "Eagle or better = +2 · Birdie = +1 · Par = 0 · Bogey = −1 · Double bogey or worse = −2. Highest total wins.",
         handicap:
@@ -138,11 +138,11 @@ const CATEGORIES: Category[] = [
         label: "Chairman's Prize",
         icon: "trophy-outline",
         howItWorks:
-          "A prestige net stroke-play competition — typically played off 3/4 or 7/8 handicap. The format itself is net stroke play with a club-specific handicap allowance.",
+          "A prestige net stroke-play competition, typically played off a reduced handicap allowance (3/4 or 7/8) set by the club.",
         howScored:
           "Net score = Gross − (handicap allowance). Lowest net wins.",
         handicap:
-          "The club sets a reduced handicap allowance — commonly 3/4 (75%) or 7/8 (87.5%) of your course handicap. This is deducted from your gross total at the end, not distributed per hole. The reduced allowance narrows the field and rewards better ball-strikers.",
+          "The club sets a reduced allowance — commonly 3/4 (75%) or 7/8 (87.5%) of your course handicap. This is deducted from your gross total at the end of the round, not distributed per hole.",
         pickup: "No forced pickup — all strokes count.",
       },
     ],
@@ -156,23 +156,23 @@ const CATEGORIES: Category[] = [
         label: "Singles Match Play",
         icon: "people-outline",
         howItWorks:
-          "You play hole by hole against one opponent. The player who wins the most holes wins — the total score doesn't matter. Net strokes per hole determine who wins each hole.",
+          "You play hole by hole against one opponent. The player who wins the most holes wins — the total score doesn't matter.",
         howScored:
-          "Win a hole = 1 up. Lose a hole = 1 down. Halve a hole = no change. The match ends when one player leads by more holes than remain (e.g. 3&2 = 3 up with 2 to play).",
+          "Win a hole = 1 up · Lose = 1 down · Halve = no change. Match ends when one player leads by more holes than remain (e.g. 3&2 = 3 up with 2 to play).",
         handicap:
-          "The lower-handicap player receives 0 strokes; the higher-handicap player receives the difference between the two course handicaps (typically at 100% allowance). These difference strokes are allocated to holes by stroke index — the higher-handicap player gets an extra stroke on the hardest holes. If the difference is more than 18, additional strokes go to the hardest holes again.",
-        pickup: "Concede at any point once the hole is lost. The match ends early when the result is mathematically decided.",
+          "The lower-handicap player gives the difference in course handicaps to the higher-handicap player. These strokes are allocated by stroke index — the higher-handicap player receives an extra stroke on the hardest holes, reducing their net score on those holes.",
+        pickup: "Concede at any point once the hole is lost. Match ends when the result is mathematically decided.",
       },
       {
         key: "singles_stableford_match_play",
         label: "Stableford Match Play",
         icon: "star-half-outline",
         howItWorks:
-          "Match play using Stableford points instead of gross/net strokes. Win the hole with more stableford points, halve with equal, lose with fewer.",
+          "Match play using Stableford points instead of gross/net strokes. Win the hole with more points, halve with equal, lose with fewer.",
         howScored:
-          "Same hole-by-hole win/lose/halve tracking as match play. The player with more holes won at the end wins the match.",
+          "Same hole-by-hole win/lose/halve tracking as match play. The player with more holes won at the end wins.",
         handicap:
-          "Each player's full playing handicap is applied per hole by stroke index (as in standard Stableford). The stableford points are calculated on each player's net score independently, and those points are then compared to determine who wins the hole.",
+          "Each player's full playing handicap is applied per hole by stroke index. Stableford points are calculated from each player's net score independently, and those points are then compared to determine who wins the hole.",
         pickup: "Pick up once you cannot score a point on the hole.",
       },
       {
@@ -184,7 +184,7 @@ const CATEGORIES: Category[] = [
         howScored:
           "Standard hole-by-hole win/lose/halve. Used for scratch match play competitions.",
         handicap:
-          "Handicap does not apply — gross scores only. Both players compete off scratch. Used in scratch leagues, club championships, and scratch knock-out competitions.",
+          "Handicap does not apply — gross scores only. Both players compete off scratch.",
         pickup: "Concede once the hole cannot be won.",
       },
     ],
@@ -198,36 +198,36 @@ const CATEGORIES: Category[] = [
         label: "Betterball Match Play (4BBB)",
         icon: "people-outline",
         howItWorks:
-          "Two teams of two. Each player plays their own ball. On each hole, the better net score from each team is compared — the team with the lower net score wins the hole.",
+          "Two teams of two. Each player plays their own ball. The better net score from each team per hole is compared — the team with the lower net score wins the hole.",
         howScored:
           "Match play hole-by-hole between the two teams' best balls. Team with the most holes won wins the match.",
         handicap:
-          "All four players receive their full course handicap distributed per hole by stroke index. Each player's net score is calculated individually. The best net score from each side is then compared to determine the hole result. Handicap strokes give higher-handicap players extra shots on specific holes.",
+          "All four players receive their full course handicap distributed per hole by stroke index. Each player's net score is calculated individually; the best net from each side is compared for the hole result.",
         pickup: "A player may pick up once their team's best ball has already won or halved the hole.",
       },
       {
         key: "fourball_stableford",
-        label: "Fourball Stableford",
+        label: "Fourball Stableford (4BBB)",
         icon: "star-outline",
         howItWorks:
-          "Teams of two. Both players play their own ball and score stableford points. The higher of the two partners' stableford points counts as the team score for that hole.",
+          "Teams of two. Both players score stableford points on their own ball. The higher of the two partners' points counts as the team score for that hole.",
         howScored:
-          "Best stableford points from either partner on each hole. Team with the highest total points over 18 holes wins.",
+          "Best stableford points from either partner per hole. Team with the highest total points over 18 holes wins.",
         handicap:
-          "Each partner uses their full playing handicap, distributed by stroke index. Both players score stableford points on their own net scores. The partner with more points on a given hole contributes that score — effectively the team always benefits from the better handicap interaction on each hole.",
-        pickup: "A player may pick up once the partner has already secured a better or equal points score for that hole.",
+          "Each partner uses their full playing handicap distributed by stroke index. The partner with more points on a given hole contributes that score — the team always benefits from the better handicap interaction on each hole.",
+        pickup: "A player may pick up once the partner has secured a better or equal score for that hole.",
       },
       {
         key: "fourball_net_betterball",
         label: "Fourball Net Betterball",
         icon: "ribbon-outline",
         howItWorks:
-          "Teams of two. Each player plays their own ball. The better net score between the two partners counts as the team score on each hole.",
+          "Teams of two. The better net score between the two partners counts as the team score on each hole.",
         howScored:
-          "Lowest net score per hole from either partner counts. Cumulative net score over 18 holes. Lowest team net wins.",
+          "Lowest net score per hole from either partner. Cumulative over 18 holes. Lowest team net wins.",
         handicap:
-          "Both players receive their full course handicap allocated by stroke index. The net score (gross minus strokes received on that hole) is calculated for each player, and the lower of the two is the team's score for that hole.",
-        pickup: "No forced pickup — all strokes count towards net scoring.",
+          "Both players receive their full course handicap per hole by stroke index. Net score (gross minus strokes received) is calculated per player per hole — the lower is the team's score.",
+        pickup: "No forced pickup — all strokes count.",
       },
       {
         key: "fourball_gross_betterball",
@@ -238,7 +238,7 @@ const CATEGORIES: Category[] = [
         howScored:
           "Best gross score per hole from either partner. Total over 18 holes. Lowest gross team total wins.",
         handicap:
-          "Handicap does not apply. Both players compete off scratch. The raw gross scores are compared between partners and between opposing teams.",
+          "Handicap does not apply. Both players compete off scratch.",
         pickup: "No forced pickup.",
       },
       {
@@ -246,11 +246,11 @@ const CATEGORIES: Category[] = [
         label: "Betterball Bonus Bogey",
         icon: "gift-outline",
         howItWorks:
-          "Teams of two playing bonus bogey format. Each player scores individually; the better points score per hole counts as the team score.",
+          "Teams of two playing bonus bogey. Each player scores individually; the better points score per hole counts as the team score.",
         howScored:
           "Eagle or better = +2 · Birdie = +1 · Par = 0 · Bogey = −1 · Double bogey or worse = −2. Best points from either partner per hole. Highest team total wins.",
         handicap:
-          "Each player's full playing handicap is distributed per hole by stroke index, just like individual Bonus Bogey. Points are calculated from each player's net score. The partner with the higher points tally on a given hole contributes that score to the team.",
+          "Each player's full playing handicap is distributed per hole by stroke index. Points are calculated from each player's net score. The partner with the higher points on a given hole contributes that score.",
         pickup: "Pick up once you cannot outscore your partner's already-secured points.",
       },
       {
@@ -258,47 +258,71 @@ const CATEGORIES: Category[] = [
         label: "Betterball Gross Match Play",
         icon: "swap-horizontal-outline",
         howItWorks:
-          "Head-to-head match play between two teams of two using gross scores. Best gross score from each team per hole determines who wins the hole — no handicap adjustments.",
+          "Head-to-head match play between two teams of two using gross scores. Best gross score from each team per hole determines who wins — no handicap adjustments.",
         howScored:
-          "Hole-by-hole team match play. The team with the best gross score on each hole wins it. Match ends when result is decided.",
+          "Hole-by-hole team match play. Best gross score from each pair compared per hole. Match ends when result is decided.",
         handicap:
-          "Handicap does not apply. All four players compete off scratch. The best gross score from each pair is compared per hole.",
+          "Handicap does not apply. All four players compete off scratch.",
         pickup: "Concede once both your and your partner's gross score cannot beat the opposition.",
+      },
+      {
+        key: "the_ghost",
+        label: "The Ghost",
+        icon: "person-remove-outline",
+        howItWorks:
+          "A betterball format where one player is paired with a 'ghost' — a fictional partner who always scores exactly par (2 stableford points) on every hole. The player competes with the ghost as their partner; the better score per hole counts.",
+        howScored:
+          "Your stableford points are compared to the ghost's 2 points (par) on each hole. The better of the two counts as the team score. Highest total over 18 holes wins.",
+        handicap:
+          "Your full playing handicap is applied per hole by stroke index, exactly as in individual Stableford. The ghost has no handicap — it always plays to par. This means your handicap strokes only benefit you and not the ghost partner.",
+        pickup: "Pick up once you cannot score better than 0 points and the ghost (par = 2 pts) already has the hole covered.",
+      },
+      {
+        key: "pinehurst_points",
+        label: "Multiplication Betterball (Pinehurst Points)",
+        icon: "close-circle-outline",
+        howItWorks:
+          "Teams of two. Both players score stableford points on their own ball per hole. Instead of taking the best score, the two partners' stableford points are MULTIPLIED together to give the team score for that hole.",
+        howScored:
+          "Example: Partner A scores 3 pts (birdie), Partner B scores 2 pts (par) → team score = 3 × 2 = 6. Eagle × Birdie = 4 × 3 = 12. Total multiplied points over 18 holes — highest wins.",
+        handicap:
+          "Both players receive their full playing handicap per hole by stroke index, as in standard Stableford. Net scores determine each player's stableford points, which are then multiplied. Higher handicap players benefit on their allocated holes just as in Stableford.",
+        pickup: "Pick up at net double bogey (0 points × any partner score = 0, so no further benefit from continuing).",
       },
       {
         key: "high_low",
         label: "High/Low",
         icon: "bar-chart-outline",
         howItWorks:
-          "A team format where two separate scores are recorded per team per hole: the HIGH ball (worst net score) and the LOW ball (best net score). Both count in different ways across the round.",
+          "A team format where two scores are recorded per team per hole: the HIGH ball (worst net) and the LOW ball (best net). Both scores contribute across the round in different ways.",
         howScored:
-          "Typically, low ball wins full points, high ball wins partial points. Final scores combine low-ball and high-ball tallies. Exact point allocations vary by competition.",
+          "Typically, the low ball wins full points and the high ball wins partial points. Final scores combine low-ball and high-ball tallies. Exact point allocations vary by competition.",
         handicap:
-          "Both players receive their full playing handicap distributed per hole. Net scores are calculated per player per hole. The lower net score is the 'low ball' and the higher net score is the 'high ball' for that hole. Higher-handicap players benefit on holes where they receive extra strokes.",
+          "Both players receive their full playing handicap per hole by stroke index. Net scores are calculated per player. The lower net is the 'low ball' and the higher net is the 'high ball' for that hole.",
         pickup: "Depends on the specific competition rules.",
       },
       {
         key: "daytona",
-        label: "Daytona",
+        label: "Daytona (Las Vegas)",
         icon: "speedometer-outline",
         howItWorks:
-          "A team format for two players. On each hole the best net score is the 'tens' digit and the worst is the 'units' digit, forming a two-digit number. Lower combined number is better.",
+          "A two-player format. On each hole the best net score is the 'tens' digit and the worst is the 'units' digit, forming a two-digit number. Lower is better.",
         howScored:
-          "Example: net scores of 4 and 6 = 46. Net scores of 3 and 5 = 35. Lowest 18-hole aggregate wins. Teams always arrange scores with the better score first.",
+          "Example: net scores of 4 and 6 = 46. Net scores of 3 and 5 = 35. Lowest 18-hole aggregate wins. The better score always goes first.",
         handicap:
-          "Both players use their full playing handicap distributed per hole by stroke index. Net scores (gross minus strokes received per hole) form the two digits. Higher-handicap players receiving strokes on a given hole will have a lower net score, which ideally becomes the 'tens' digit.",
-        pickup: "No forced pickup — both net scores contribute to the aggregate.",
+          "Both players use their full playing handicap distributed per hole by stroke index. Net scores form the two digits. Higher-handicap players receiving strokes on a hole will have a lower net score, ideally becoming the 'tens' digit.",
+        pickup: "No forced pickup — both net scores contribute.",
       },
       {
         key: "best_ball_aggregate",
         label: "Best Ball Aggregate",
         icon: "podium-outline",
         howItWorks:
-          "Teams of two or more. Each player plays their own ball. The best net score on each hole is added to a running team aggregate total.",
+          "Teams of two or more. Each player plays their own ball. The best net score on each hole is added to the running team aggregate total.",
         howScored:
           "Best net score per hole from any team member, summed over 18 holes. Lowest aggregate wins.",
         handicap:
-          "All players receive their full playing handicap distributed per hole by stroke index. Each player's net score per hole is calculated and the lowest among the team counts. The wider the spread of handicaps in a team, the more likely a different player benefits on each hole.",
+          "All players receive their full playing handicap per hole by stroke index. The lowest net score among the team counts each hole.",
         pickup: "No forced pickup.",
       },
       {
@@ -306,19 +330,55 @@ const CATEGORIES: Category[] = [
         label: "Low Ball Total",
         icon: "trending-down-outline",
         howItWorks:
-          "Similar to best-ball aggregate but specifically tracks the lowest gross or net ball from a group on each hole and accumulates it as the team's running total.",
+          "Tracks the lowest net score from a group on each hole and accumulates it as the team's running total.",
         howScored:
-          "Lowest (net) score per hole summed over 18 holes. Lowest total wins.",
+          "Lowest net score per hole summed over 18 holes. Lowest total wins.",
         handicap:
-          "Players receive their full playing handicap per hole by stroke index. The net scores are compared and the lowest counts. Similar to best ball aggregate — handicap strokes can shift which player holds the 'low ball' on any given hole.",
+          "Players receive their full playing handicap per hole by stroke index. Net scores are compared and the lowest counts.",
         pickup: "No forced pickup.",
       },
     ],
   },
   {
-    title: "Scramble Formats",
+    title: "Scramble & Team Formats",
     iconName: "shuffle-outline",
     formats: [
+      {
+        key: "alliance",
+        label: "Alliance",
+        icon: "layers-outline",
+        howItWorks:
+          "A stableford team format where a specific number of players' scores count per hole based on the hole's par: 1 score counts on par 3s, 2 scores on par 4s, and 3 scores on par 5s (for a 4-player team). All players play their own ball.",
+        howScored:
+          "Stableford points are scored individually per player. On each hole, the required number of best scores count as the team total. Highest aggregate stableford points over 18 holes wins.",
+        handicap:
+          "Each player receives their full playing handicap distributed by stroke index. Stableford points are calculated from each player's net score. Higher-handicap players contribute more on holes where they receive additional strokes.",
+        pickup: "Pick up once you cannot score better than 0 points (net double bogey or worse).",
+      },
+      {
+        key: "texas_scramble",
+        label: "Texas Scramble",
+        icon: "repeat-outline",
+        howItWorks:
+          "All players tee off, the best shot is selected, and all players play their next shot from that spot. This repeats for every shot until the ball is holed. A true full-team scramble.",
+        howScored:
+          "One team gross score per hole. Lowest team total over 18 holes wins. Some competitions require a minimum number of drives from each player to prevent one player dominating the tee.",
+        handicap:
+          "The team handicap is calculated from all players' individual handicaps — typically the sum divided by the number of players, then multiplied by an allowance (often 10–25%). This team net allowance is deducted from the gross team total at the end.",
+        pickup: "No pickup rule — the team selects the best ball each time and continues until holed.",
+      },
+      {
+        key: "american_scramble",
+        label: "American Scramble",
+        icon: "git-merge-outline",
+        howItWorks:
+          "Similar to Texas Scramble. All players tee off and the best drive is selected. But then each player plays their own second shot from that spot. The best second shot is selected and all play from there — this process repeats until holed.",
+        howScored:
+          "One team gross score per hole. Lowest team total over 18 holes wins.",
+        handicap:
+          "Team handicap is calculated from the combined individual handicaps using a set formula (commonly the total of all playing handicaps divided by the number of players, multiplied by an allowance percentage). Deducted from the team gross total at the end.",
+        pickup: "No pickup rule — the team plays until holed from the chosen spot.",
+      },
       {
         key: "shamble",
         label: "Shamble",
@@ -326,34 +386,22 @@ const CATEGORIES: Category[] = [
         howItWorks:
           "All players tee off. The team selects the best drive. From that spot, each player plays their own ball to the hole independently (unlike a full scramble where you re-select every shot).",
         howScored:
-          "Each player completes the hole individually from the chosen drive. The best net stableford score from the group counts as the team score for that hole.",
+          "Each player completes the hole from the chosen drive. The best net stableford score from the group counts as the team score for that hole.",
         handicap:
-          "Each player uses their own full playing handicap distributed per hole by stroke index, applied to their individual score from the chosen drive onward. Handicap strokes give higher-handicap players additional shots on specific holes, improving their net score contribution.",
+          "Each player uses their own full playing handicap distributed per hole by stroke index, applied to their individual score from the chosen drive onward.",
         pickup: "Pick up at net double bogey on your individual ball.",
       },
       {
-        key: "texas_scramble",
-        label: "Texas Scramble",
-        icon: "repeat-outline",
-        howItWorks:
-          "All players in the team tee off, the best shot is selected, and all players play from that spot. This repeats for every shot until the ball is holed. A true team scramble.",
-        howScored:
-          "One team gross score per hole. Total over 18. Lowest team gross (or net, depending on format) wins. Some variations require a minimum number of drives from each player.",
-        handicap:
-          "The team handicap is calculated from the combined individual handicaps using a set formula — commonly the sum of all playing handicaps divided by the number of players (e.g. 4 players: total ÷ 4), then multiplied by an allowance (often 10–25%). This team net handicap is deducted from the gross team total at the end of the round.",
-        pickup: "No pickup rule — the team selects the best ball and continues until holed.",
-      },
-      {
         key: "chapman",
-        label: "Chapman (Pinehurst)",
-        icon: "git-merge-outline",
+        label: "Chapman (Pinehurst Alternate Shot)",
+        icon: "swap-vertical-outline",
         howItWorks:
-          "Both partners tee off. Each then plays the other's drive. The team then selects the better of the two second shots, and from there alternate shot is played to complete the hole.",
+          "Both partners tee off. Each then plays the other's drive. The team selects the better of the two second shots, and from there alternate shot is played to complete the hole (one player putts, the other plays the next shot, alternating).",
         howScored:
-          "One net score per team per hole. Can be played as stroke play (aggregate net) or Stableford. Lowest net or highest Stableford points wins.",
+          "One net score per team per hole. Can be played as net stroke play (aggregate net) or Stableford. Lowest net or highest Stableford points wins.",
         handicap:
-          "The team handicap is typically the combined course handicaps of both players multiplied by a set allowance (commonly 50% of the lower handicap plus 50% of the higher). Because both players share each hole, the allowance is reduced compared to individual play. The combined team allowance is deducted from the gross team total.",
-        pickup: "Pick up once the hole is lost beyond recovery under the chosen scoring method.",
+          "The team handicap is typically the combined course handicaps of both players multiplied by a reduced allowance (commonly 50% of the lower handicap plus 50% of the higher). The combined team allowance is deducted from the gross team total at the end.",
+        pickup: "Pick up once the hole is lost beyond recovery.",
       },
     ],
   },

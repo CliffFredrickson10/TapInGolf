@@ -154,9 +154,9 @@ const PAIR_FORMATS_FE = new Set([
   "betterball", "fourball", "fourball_gross_betterball", "fourball_net_betterball",
   "betterball_match_play", "fourball_stableford", "shamble", "best_ball_aggregate",
   "high_low", "daytona", "low_ball_total", "the_ghost", "betterball_bonus_bogey",
-  "pinehurst_points",
+  "pinehurst_points", "chapman",
 ]);
-const GROUP_FORMATS_FE = new Set(["american_scramble", "scramble", "alliance"]);
+const GROUP_FORMATS_FE = new Set(["american_scramble", "scramble", "alliance", "texas_scramble"]);
 function isTeamFormatFE(f1: string, f2?: string | null) {
   return PAIR_FORMATS_FE.has(f1) || GROUP_FORMATS_FE.has(f1) || PAIR_FORMATS_FE.has(f2 ?? "") || GROUP_FORMATS_FE.has(f2 ?? "");
 }
@@ -193,6 +193,8 @@ const FORMAT_LABELS: Record<string, string> = {
   the_ghost: "The Ghost",
   betterball_bonus_bogey: "Betterball Bonus Bogey",
   pinehurst_points: "Multiplication Betterball (Pinehurst)",
+  chapman: "Chapman (Pinehurst Alternate Shot)",
+  texas_scramble: "Texas Scramble",
   // Team
   american_scramble: "American Scramble",
   // Other
@@ -2964,8 +2966,11 @@ ${bodyHtml}
                               <SelectItem value="the_ghost">The Ghost</SelectItem>
                               <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
                               <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                              <SelectItem value="chapman">Chapman (Pinehurst Alternate Shot)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
+                              <SelectItem value="alliance">Alliance</SelectItem>
+                              <SelectItem value="texas_scramble">Texas Scramble</SelectItem>
                               <SelectItem value="american_scramble">American Scramble</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Other</SelectLabel>
@@ -3010,8 +3015,11 @@ ${bodyHtml}
                               <SelectItem value="the_ghost">The Ghost</SelectItem>
                               <SelectItem value="betterball_bonus_bogey">Betterball Bonus Bogey</SelectItem>
                               <SelectItem value="pinehurst_points">Multiplication Betterball (Pinehurst)</SelectItem>
+                              <SelectItem value="chapman">Chapman (Pinehurst Alternate Shot)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Full-Group Team</SelectLabel>
+                              <SelectItem value="alliance">Alliance</SelectItem>
+                              <SelectItem value="texas_scramble">Texas Scramble</SelectItem>
                               <SelectItem value="american_scramble">American Scramble</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Other</SelectLabel>

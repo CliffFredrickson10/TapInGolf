@@ -34,6 +34,10 @@ function getStablefordMax(fmt: string, par: number, ha: number): number | null {
     case "betterball_gross_match_play":
     // No cap — modified stableford accumulates negative pts so there is no neutral pickup point
     case "modified_stableford":
+    // No cap — scramble/alternate-shot formats use team stroke totals, not per-hole points
+    case "texas_scramble":
+    case "american_scramble":
+    case "chapman":
       return null;
     // Par/bogey: pickup once the hole is definitively lost (R&A Rule 21.2)
     case "par_bogey":
@@ -71,6 +75,9 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
       return netVsPar <= 0 ? 1 : netVsPar === 1 ? 0 : -1;
     case "net_stroke_play":
     case "chairman":
+    case "texas_scramble":
+    case "american_scramble":
+    case "chapman":
       return 0;
     default:
       return Math.max(0, par + 2 - (gross - ha));
@@ -558,6 +565,7 @@ router.post("/scoring/rounds", async (req, res) => {
       "fourball_stableford", "fourball_gross_betterball", "fourball_net_betterball",
       "shamble", "best_ball_aggregate", "high_low", "daytona", "low_ball_total",
       "the_ghost", "betterball_bonus_bogey", "pinehurst_points",
+      "texas_scramble", "american_scramble", "chapman",
     ]);
     if (tournamentId && BETTERBALL_FORMATS_SET.has(format)) {
       const myReg = await row<any>(
@@ -621,7 +629,7 @@ router.post("/scoring/rounds", async (req, res) => {
       "betterball_match_play","fourball_stableford","fourball_gross_betterball",
       "fourball_net_betterball","shamble","best_ball_aggregate","high_low","daytona",
       "low_ball_total","the_ghost","betterball_bonus_bogey","pinehurst_points",
-      "alliance","american_scramble",
+      "alliance","american_scramble","texas_scramble","chapman",
     ]);
     const isIndividualTournamentRound = tournamentId &&
       format !== "singles_match_play" && !BETTERBALL_ALL.has(format);

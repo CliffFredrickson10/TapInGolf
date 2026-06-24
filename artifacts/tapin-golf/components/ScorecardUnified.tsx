@@ -61,6 +61,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
 
   /* ── Format flags ─────────────────────────────────────────── */
   const isBBFmt = ["fourball_stableford","fourball_gross_betterball",
+                   "fourball_net_betterball","betterball_bonus_bogey",
                    "betterball_match_play","betterball_gross_match_play",
                    "fourball_stableford_match_play"].includes(fmt);
   const isMP    = ["singles_match_play","singles_stableford_match_play",
@@ -70,9 +71,9 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const isBBStb = fmt === "fourball_stableford" || fmt === "fourball_stableford_match_play";
   const isBBGrs = fmt === "fourball_gross_betterball" || fmt === "betterball_gross_match_play";
   const isGrOnly  = fmt === "gross_stroke_play";
-  const isNetOny  = fmt === "net_stroke_play" || fmt === "chairman";
+  const isNetOny  = fmt === "net_stroke_play" || fmt === "chairman" || fmt === "fourball_net_betterball";
   const isPar     = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
-  const isBonusB  = fmt === "individual_bonus_bogey";
+  const isBonusB  = fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey";
   const isMod     = fmt === "modified_stableford";
   const isMaxSc = fmt === "maximum_score";
   const hasPH   = !!round.playerHoles;
@@ -197,19 +198,19 @@ export default function ScorecardUnified({ round, colors }: Props) {
     if (isBBFmt) {
       const bestOf = (x: number|null, y: number|null, hi: boolean) =>
         x == null ? y : y == null ? x : hi ? Math.max(x, y) : Math.min(x, y);
-      const hi = isBBStb;
+      const hi = isBBStb || isBonusB;  // higher score wins for pts-based formats
       const aHa2 = getHA(h.stroke_index, myHcp);
       const bHa2 = getHA(h.stroke_index, bHcp);
       const cHa2 = getHA(h.stroke_index, cHcp);
       const dHa2 = getHA(h.stroke_index, dHcp);
-      const aM = isBBGrs ? aG : isBBStb ? aR : (aG != null ? aG - aHa2 : null);
-      const bM = bG != null ? (isBBGrs ? bG : isBBStb ? bR : bG - bHa2) : null;
-      const cM = cG != null ? (isBBGrs ? cG : isBBStb ? cR : cG - cHa2) : null;
-      const dM = dG != null ? (isBBGrs ? dG : isBBStb ? dR : dG - dHa2) : null;
+      const aM = isBBGrs ? aG : (isBBStb || isBonusB) ? aR : (aG != null ? aG - aHa2 : null);
+      const bM = bG != null ? (isBBGrs ? bG : (isBBStb || isBonusB) ? bR : bG - bHa2) : null;
+      const cM = cG != null ? (isBBGrs ? cG : (isBBStb || isBonusB) ? cR : cG - cHa2) : null;
+      const dM = dG != null ? (isBBGrs ? dG : (isBBStb || isBonusB) ? dR : dG - dHa2) : null;
       const teamAB = bestOf(aM, bM, hi);
       const teamCD = bestOf(cM, dM, hi);
-      abPts = isBBStb ? teamAB : null;
-      cdPts = isBBStb ? teamCD : null;
+      abPts = (isBBStb || isBonusB) ? teamAB : null;
+      cdPts = (isBBStb || isBonusB) ? teamCD : null;
       if (teamAB != null && teamCD != null) {
         abWHL = (hi ? teamAB > teamCD : teamAB < teamCD) ? "W"
               : (hi ? teamCD > teamAB : teamCD < teamAB) ? "L" : "H";

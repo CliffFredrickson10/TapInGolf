@@ -89,9 +89,10 @@ function getStablefordMax(fmt: string, par: number, ha: number): number | null {
     // No cap — stroke play has no forced pickup without Model Local Rule E-3
     case "net_stroke_play":
     case "chairman":
-    // No cap — gross match play pickup is hole-concession, not a fixed formula
+    // No cap — gross match play/betterball pickup is hole-concession, not a net formula
     case "singles_gross_match_play":
     case "betterball_gross_match_play":
+    case "fourball_gross_betterball":
       return null;
     // Modified stableford: net double bogey = -3 pts (worst possible); nothing more to lose
     case "modified_stableford":
@@ -120,6 +121,7 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
       if (netVsPar === 1) return -1;
       return -3;
     case "individual_bonus_bogey":
+    case "betterball_bonus_bogey":
       if (netVsPar <= -2) return 2;   // eagle or better = +2
       if (netVsPar === -1) return 1;  // birdie = +1
       if (netVsPar === 0) return 0;   // par = 0 (level)
@@ -133,6 +135,7 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
     case "net_stroke_play":
     case "chairman":
     case "maximum_score":
+    case "fourball_net_betterball":
       return 0;
     default:
       return Math.max(0, par + 2 - (gross - ha));
@@ -144,6 +147,8 @@ function dotColorForFormat(fmt: string, pts: number | null, GOLD: string): strin
     return pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171";
   if (fmt === "modified_stableford")
     return pts >= 4 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 0 ? "#fb923c" : "#f87171";
+  if (fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey")
+    return pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171";
   return pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171";
 }
 function scoreName(gross: number, par: number): string {
@@ -632,7 +637,7 @@ export default function HoleEntryScreen() {
   const ha = getHA(hole.stroke_index, ph);
   const oppHA = getHA(hole.stroke_index, round.opponent_playing_hcp ?? 0);
   const isParOrBogeyFormat = round.format === "par_bogey" || round.format === "individual_par" || round.format === "individual_bogey";
-  const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman" || round.format === "maximum_score";
+  const isNetOnlyFormat    = round.format === "net_stroke_play" || round.format === "chairman" || round.format === "maximum_score" || round.format === "fourball_net_betterball";
   const stablefordMax  = getStablefordMax(round.format ?? "individual_stableford", hole.par, ha);
   const effectiveGross = stablefordMax != null && gross != null ? Math.min(gross, stablefordMax) : gross;
   const pts      = effectiveGross != null ? calcFormatPts(round.format ?? "individual_stableford", effectiveGross, hole.par, ha) : null;

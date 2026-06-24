@@ -42,12 +42,12 @@ const CATEGORIES: Category[] = [
         label: "Individual Stableford",
         icon: "star-outline",
         howItWorks:
-          "Each player plays their own ball throughout the round. Scores are converted into points based on how many strokes above or below net par you score on each hole.",
+          "Each player plays their own ball throughout the round. Scores are converted into points based on how many net strokes above or below par you score on each hole (R&A Rule 21.1).",
         howScored:
           "Albatross (net −3) = 5 pts · Eagle (net −2) = 4 pts · Birdie (net −1) = 3 pts · Par = 2 pts · Bogey (net +1) = 1 pt · Double bogey or worse = 0 pts. Highest total points wins.",
         handicap:
           "Your Playing Handicap is distributed across the 18 holes by stroke index. On holes where your stroke index ≤ your playing handicap you receive one extra stroke (two if handicap exceeds 18). This lowers your net score on those holes, improving your points tally.",
-        pickup: "Pick up once you cannot score better than 0 points (net double bogey or worse).",
+        pickup: "You may stop playing a hole once your score cannot be better than 0 points — i.e. once net double bogey is reached (R&A Rule 21.1b(2)). The app shows this indicator automatically.",
       },
       {
         key: "gross_stroke_play",
@@ -66,11 +66,11 @@ const CATEGORIES: Category[] = [
         label: "Net Stroke Play",
         icon: "calculator-outline",
         howItWorks:
-          "Same as stroke play but your full handicap is deducted from your gross total at the end of the round.",
+          "Same as stroke play but your course handicap (at the competition allowance) is deducted from your gross total at the end of the round.",
         howScored:
-          "Net score = Gross score − Full handicap. Lowest net total wins.",
+          "Net score = Gross score − Course Handicap. Lowest net total wins.",
         handicap:
-          "Your full Course Handicap (100% allowance) is subtracted from your gross 18-hole total at the end — not distributed per hole. A player with a handicap of 18 deducts 18 strokes from their gross total.",
+          "Your Course Handicap is subtracted from your gross 18-hole total at the end — not distributed per hole. The allowance (typically 95% for WHS competitions, 100% for casual play) is set by the competition committee. A player with a course handicap of 18 at 100% allowance deducts 18 strokes from their gross total.",
         pickup: "No forced pickup — all strokes count towards your gross total.",
       },
       {
@@ -78,48 +78,48 @@ const CATEGORIES: Category[] = [
         label: "Individual Par Competition",
         icon: "remove-circle-outline",
         howItWorks:
-          "Match your net score against par on each hole — you either win, halve, or lose each hole against the course.",
+          "Match your net score against par on each hole — you either win, halve, or lose each hole against the course (R&A Rule 21.2).",
         howScored:
-          "Net birdie or better = +1 · Net par = 0 (halve) · Net bogey or worse = −1. A score of +2 means two holes up on the course.",
+          "Better than net par = +1 (won hole) · Net par = 0 (halved) · Net bogey or worse = −1 (lost hole). A score of +2 means two holes up on the course.",
         handicap:
           "Your Playing Handicap is distributed by stroke index, exactly like Stableford. You receive an extra stroke on holes where your stroke index falls within your handicap, reducing your net score and giving you a better chance of halving or winning the hole.",
-        pickup: "Pick up when you can no longer beat net par (net bogey or worse secured).",
+        pickup: "You may stop playing once net par can no longer be reached (net bogey is secured — R&A Rule 21.2c).",
       },
       {
         key: "individual_bogey",
         label: "Individual Bogey Competition",
         icon: "remove-outline",
         howItWorks:
-          "Same concept as Par competition, but bogey (not par) is the target on each hole.",
+          "Same concept as Par competition, but bogey (not par) is the target on each hole (R&A Rule 21.2).",
         howScored:
-          "Net par or better = +1 · Net bogey = 0 · Net double bogey or worse = −1. Higher total wins.",
+          "Better than net bogey = +1 (won) · Net bogey = 0 (halved) · Net double bogey or worse = −1 (lost). Higher total wins.",
         handicap:
-          "Handicap strokes are applied per hole by stroke index, the same as Stableford. Because the target is one stroke more lenient than par, you need to reach net bogey to break even.",
-        pickup: "Pick up once you cannot beat net bogey (net double bogey secured).",
+          "Handicap strokes are applied per hole by stroke index, the same as Stableford. Because the target is one stroke more lenient than par, you need to reach net bogey to break even on the hole.",
+        pickup: "You may stop playing once net bogey can no longer be reached (net double bogey is secured — R&A Rule 21.2c).",
       },
       {
         key: "modified_stableford",
         label: "Modified Stableford",
         icon: "trending-up-outline",
         howItWorks:
-          "A high-risk, high-reward variation of Stableford that rewards eagles heavily and penalises double bogeys.",
+          "A high-risk, high-reward variation of Stableford that rewards eagles heavily and penalises bogeys. Unlike standard Stableford, good scores earn more points and bad scores lose points.",
         howScored:
-          "Albatross or better = +8 · Eagle = +5 · Birdie = +2 · Par = 0 · Bogey = −1 · Double bogey or worse = −3. Highest total wins.",
+          "Eagle or better (net −2 or less) = +4 · Birdie (net −1) = +2 · Par = 0 · Bogey (net +1) = −1 · Double bogey or worse = −3. Highest total wins. (Note: point scales vary by competition — some clubs use alternative scales set by the committee.)",
         handicap:
           "Handicap strokes are distributed per hole by stroke index, exactly as in standard Stableford. Your net score on each hole is compared against par using the same extra-stroke allocation.",
-        pickup: "Pick up at net double bogey (−3 points — worst possible outcome per hole).",
+        pickup: "You may pick up once net double bogey is reached (−3 points — the worst outcome; no further strokes can worsen your score for that hole).",
       },
       {
         key: "maximum_score",
         label: "Maximum Score",
         icon: "arrow-up-circle-outline",
         howItWorks:
-          "Stroke play with a per-hole cap (typically net double bogey or a fixed number). Any score above the cap is recorded as the cap. Speeds up play.",
+          "Stroke play with a per-hole cap set by the committee — typically net double bogey. Any score above the cap is recorded as the cap, then play continues on the next hole (R&A Rule 21.3).",
         howScored:
-          "Add up all capped gross scores for 18 holes. Net score = Total − Full handicap. Lowest net wins.",
+          "Add up all capped gross scores for 18 holes. Net score = Total − Course Handicap. Lowest net wins.",
         handicap:
-          "The cap is usually defined in net terms (par + 2 + your stroke allocation on that hole). Your full course handicap is then deducted from the gross total at the end.",
-        pickup: "Stop playing once you've reached the committee's maximum score for that hole.",
+          "The cap per hole is typically par + 2 + strokes received on that hole (net double bogey). Your course handicap is deducted from the gross total at the end of the round.",
+        pickup: "Stop playing and pick up once you've reached the committee's maximum score for that hole (R&A Rule 21.3b).",
       },
       {
         key: "individual_bonus_bogey",
@@ -156,12 +156,12 @@ const CATEGORIES: Category[] = [
         label: "Singles Match Play",
         icon: "people-outline",
         howItWorks:
-          "You play hole by hole against one opponent. The player who wins the most holes wins — the total score doesn't matter.",
+          "You play hole by hole against one opponent. The player who wins the most holes wins — the total score doesn't matter (R&A Rule 3.2).",
         howScored:
           "Win a hole = 1 up · Lose = 1 down · Halve = no change. Match ends when one player leads by more holes than remain (e.g. 3&2 = 3 up with 2 to play).",
         handicap:
           "The lower-handicap player gives the difference in course handicaps to the higher-handicap player. These strokes are allocated by stroke index — the higher-handicap player receives an extra stroke on the hardest holes, reducing their net score on those holes.",
-        pickup: "Concede at any point once the hole is lost. Match ends when the result is mathematically decided.",
+        pickup: "Either player may concede the other's next stroke, hole, or match at any time (R&A Rule 3.2b). Match ends when the result is mathematically decided.",
       },
       {
         key: "singles_stableford_match_play",
@@ -198,24 +198,24 @@ const CATEGORIES: Category[] = [
         label: "Betterball Match Play",
         icon: "people-outline",
         howItWorks:
-          "Two teams of two. Each player plays their own ball. The better net score from each team per hole is compared — the team with the lower net score wins the hole.",
+          "Two teams of two. Each player plays their own ball. The best net score from each team per hole is compared hole-by-hole (R&A Rule 23 — Four-Ball).",
         howScored:
-          "Match play hole-by-hole between the two teams' best balls. Team with the most holes won wins the match.",
+          "The lower net score from each team wins the hole. Match ends when one team leads by more holes than remain.",
         handicap:
           "All four players receive their full course handicap distributed per hole by stroke index. Each player's net score is calculated individually; the best net from each side is compared for the hole result.",
-        pickup: "A player may pick up once their team's best ball has already won or halved the hole.",
+        pickup: "A player may pick up their ball at any time when doing so cannot affect the outcome of the hole for their side (R&A Rule 23.3a).",
       },
       {
         key: "fourball_stableford",
         label: "Betterball Stableford (4BBB)",
         icon: "star-outline",
         howItWorks:
-          "Teams of two. Both players score stableford points on their own ball. The higher of the two partners' points counts as the team score for that hole.",
+          "Teams of two. Both players score stableford points on their own ball. The higher of the two partners' points counts as the team score for that hole (R&A Rule 23).",
         howScored:
           "Best stableford points from either partner per hole. Team with the highest total points over 18 holes wins.",
         handicap:
           "Each partner uses their full playing handicap distributed by stroke index. The partner with more points on a given hole contributes that score — the team always benefits from the better handicap interaction on each hole.",
-        pickup: "A player may pick up once the partner has secured a better or equal score for that hole.",
+        pickup: "A player may stop playing a hole when the partner has already secured a score equal to or better than any score the player can make (R&A Rule 23.3a).",
       },
       {
         key: "fourball_net_betterball",

@@ -639,7 +639,8 @@ export default function Events() {
     const rows = eclecticBoards.map((b, i) => {
       const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {});
       const holeCells = Array.from({length: 18}, (_, j) => j + 1).map(h => `<td>${holes[String(h)] ?? '·'}</td>`).join('');
-      const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
+      const rawHc = b.current_handicap ?? b.frozen_handicap;
+      const hc = rawHc != null ? parseFloat(String(rawHc)).toFixed(1) : '—';
       return `<tr><td>${i + 1}</td><td class="name">${b.player_name}</td>${holeCells}<td>${hc}</td><td><strong>${b.total_net ?? '—'}</strong></td></tr>`;
     }).join('');
     const start = detail.event_date ? new Date(detail.event_date).toLocaleDateString('en-ZA', {day:'2-digit', month:'short', year:'numeric'}) : '';
@@ -2432,7 +2433,8 @@ ${bodyHtml}
                                     <tbody>
                                       {eclecticBoards.map((b, i) => {
                                         const holes = typeof b.holes_net === 'string' ? JSON.parse(b.holes_net) : (b.holes_net ?? {});
-                                        const hc = b.frozen_handicap != null ? parseFloat(b.frozen_handicap).toFixed(1) : '—';
+                                        const rawHc = b.current_handicap ?? b.frozen_handicap;
+                                        const hc = rawHc != null ? parseFloat(String(rawHc)).toFixed(1) : '—';
                                         return (
                                           <tr key={b.user_id} className={i % 2 === 0 ? "bg-white" : "bg-green-50/40"}>
                                             <td className="px-2 py-1.5 text-center font-bold text-muted-foreground sticky left-0 bg-inherit z-[5]">{i + 1}</td>

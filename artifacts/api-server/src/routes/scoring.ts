@@ -1471,6 +1471,7 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
               : null;
             const roundsNow = (existing?.rounds_counted ?? 0) + 1;
 
+            const hcForBoard = fullRound.playing_handicap ?? reg.frozen_handicap ?? null;
             if (!existing) {
               await exec(
                 `INSERT INTO eclectic_ringer_board
@@ -1480,16 +1481,16 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
                 [ev.id, user.id,
                  JSON.stringify(newHoles), JSON.stringify(newHolesNet),
                  totalGross, totalNet, roundsNow,
-                 reg.division, reg.frozen_handicap]
+                 reg.division, hcForBoard]
               );
             } else {
               await exec(
                 `UPDATE eclectic_ringer_board
                    SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
-                       rounds_counted = ?, updated_at = NOW()
+                       rounds_counted = ?, frozen_handicap = ?, updated_at = NOW()
                  WHERE event_id = ? AND user_id = ?`,
                 [JSON.stringify(newHoles), JSON.stringify(newHolesNet),
-                 totalGross, totalNet, roundsNow,
+                 totalGross, totalNet, roundsNow, hcForBoard,
                  ev.id, user.id]
               );
             }
@@ -1578,6 +1579,7 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
                 const totalNetE = Object.keys(newHolesNetE).length > 0
                   ? Object.values(newHolesNetE).reduce((s, v) => s + Number(v), 0) : null;
                 const roundsNowE = (existingRinger?.rounds_counted ?? 0) + 1;
+                const hcForEclectic = fullRound.playing_handicap ?? reg.frozen_handicap ?? null;
                 if (!existingRinger) {
                   await exec(
                     `INSERT INTO eclectic_ringer_board
@@ -1587,16 +1589,16 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
                     [activeEclectic.id, user.id,
                      JSON.stringify(newHolesE), JSON.stringify(newHolesNetE),
                      totalGrossE, totalNetE, roundsNowE,
-                     reg.division, reg.frozen_handicap]
+                     reg.division, hcForEclectic]
                   );
                 } else {
                   await exec(
                     `UPDATE eclectic_ringer_board
                        SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
-                           rounds_counted = ?, updated_at = NOW()
+                           rounds_counted = ?, frozen_handicap = ?, updated_at = NOW()
                      WHERE event_id = ? AND user_id = ?`,
                     [JSON.stringify(newHolesE), JSON.stringify(newHolesNetE),
-                     totalGrossE, totalNetE, roundsNowE,
+                     totalGrossE, totalNetE, roundsNowE, hcForEclectic,
                      activeEclectic.id, user.id]
                   );
                 }

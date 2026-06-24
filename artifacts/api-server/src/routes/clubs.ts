@@ -1225,7 +1225,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
     const boards = await query<any>(
       `SELECT erb.user_id, u.name AS player_name, erb.division,
           erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net,
-          erb.frozen_handicap
+          erb.frozen_handicap, u.handicap AS current_handicap
        FROM eclectic_ringer_board erb
        JOIN users u ON u.id = erb.user_id
        WHERE erb.event_id = ?
@@ -1238,6 +1238,9 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
     for (const b of boards) {
       const d = b.division ?? "Open";
       if (!grouped[d]) { grouped[d] = []; divPositions[d] = 1; }
+      const hc = b.current_handicap != null ? parseFloat(b.current_handicap)
+               : b.frozen_handicap  != null ? parseFloat(b.frozen_handicap)
+               : null;
       grouped[d].push({
         user_id: b.user_id,
         player_name: b.player_name,
@@ -1249,7 +1252,7 @@ router.get("/events/:id/leaderboard", async (req, res): Promise<void> => {
         rounds: b.rounds_counted,
         holes: b.holes,
         holes_net: b.holes_net,
-        handicap: b.frozen_handicap != null ? parseFloat(b.frozen_handicap) : null,
+        handicap: hc,
         verified: 1,
         dq: false,
       });
@@ -1350,7 +1353,8 @@ router.get("/events/:id/eclectic-board", async (req, res): Promise<void> => {
   const boards = await query<any>(
     `SELECT erb.user_id, u.name AS player_name, erb.division,
         erb.total_gross, erb.total_net, erb.rounds_counted,
-        erb.holes, erb.holes_net, erb.frozen_handicap, erb.updated_at
+        erb.holes, erb.holes_net, erb.frozen_handicap,
+        u.handicap AS current_handicap, erb.updated_at
      FROM eclectic_ringer_board erb
      JOIN users u ON u.id = erb.user_id
      WHERE erb.event_id = ?

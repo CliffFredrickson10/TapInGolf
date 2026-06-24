@@ -515,6 +515,9 @@ export default function HoleEntryScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [showAbandonConfirm, setShowAbandonConfirm] = useState(false);
   const [abandoning, setAbandoning] = useState(false);
+  const [showHcpModal, setShowHcpModal] = useState(false);
+  const [hcpDraft, setHcpDraft] = useState({ my: 0, opp: 0, partner: 0, opp2: 0 });
+  const [savingHcp, setSavingHcp] = useState(false);
   const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
@@ -770,6 +773,38 @@ export default function HoleEntryScreen() {
 
   const onAbandon = () => setShowAbandonConfirm(true);
 
+  const openHcpModal = () => {
+    if (!round) return;
+    setHcpDraft({
+      my:      round.playing_handicap,
+      opp:     round.opponent_playing_hcp  ?? 0,
+      partner: round.partner_playing_hcp   ?? 0,
+      opp2:    round.opponent2_playing_hcp ?? 0,
+    });
+    setShowHcpModal(true);
+  };
+
+  const saveHcp = async () => {
+    setSavingHcp(true);
+    try {
+      await apiFetch(`/scoring/rounds/${id}/handicaps`, token, {
+        method: "PATCH",
+        body: JSON.stringify({
+          playingHandicap:     hcpDraft.my,
+          opponentPlayingHcp:  hcpDraft.opp,
+          partnerPlayingHcp:   hcpDraft.partner,
+          opponent2PlayingHcp: hcpDraft.opp2,
+        }),
+      });
+      setShowHcpModal(false);
+      await loadRound();
+    } catch (err: any) {
+      Alert.alert("Error", err.message || "Failed to update handicap");
+    } finally {
+      setSavingHcp(false);
+    }
+  };
+
   const doAbandon = async () => {
     setAbandoning(true);
     try {
@@ -915,9 +950,10 @@ export default function HoleEntryScreen() {
         {/* Hole identity */}
         <View style={[styles.holeHeader, { paddingTop: 20, paddingBottom: 4 }]}>
           <Text style={[styles.holeName, { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
-          <View style={styles.hcpChip}>
+          <TouchableOpacity style={[styles.hcpChip, { flexDirection: "row", alignItems: "center", gap: 5 }]} onPress={openHcpModal}>
             <Text style={styles.hcpChipText}>Playing HCP {ph < 0 ? `+${-ph}` : ph}</Text>
-          </View>
+            <Ionicons name="create-outline" size={12} color="#a3e4bc" />
+          </TouchableOpacity>
           <View style={styles.statsRow}>
             {[
               { label: "PAR",          value: String(hole.par),          accent: true },
@@ -1273,6 +1309,70 @@ export default function HoleEntryScreen() {
         )}
       </View>
 
+      {/* ── Handicap edit modal ── */}
+      <Modal
+        visible={showHcpModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowHcpModal(false)}
+      >
+        <View style={styles.abandonOverlay}>
+          <View style={[styles.abandonCard, { paddingHorizontal: 20 }]}>
+            <Ionicons name="golf-outline" size={32} color={GOLD} style={{ marginBottom: 10 }} />
+            <Text style={styles.abandonTitle}>Edit Handicaps</Text>
+            <Text style={[styles.abandonBody, { marginBottom: 18 }]}>
+              Correct a wrong handicap — all saved hole scores will recalculate automatically.
+            </Text>
+
+            {/* ── My HCP ── */}
+            {[
+              { label: "My Playing HCP",     key: "my"      as const, show: true },
+              { label: `${round.opponent_name ?? "Opponent"} HCP`, key: "opp" as const, show: !!round.opponent_name || isAnyMatch },
+              { label: `${round.partner_name ?? "Partner"} HCP`,   key: "partner" as const, show: isBetterball },
+              { label: `${round.opponent2_name ?? "Opponent 2"} HCP`, key: "opp2" as const, show: !!round.opponent2_name || isBetterball },
+            ].filter(r => r.show).map(row => (
+              <View key={row.key} style={styles.hcpRow}>
+                <Text style={styles.hcpRowLabel}>{row.label}</Text>
+                <View style={styles.hcpStepper}>
+                  <TouchableOpacity
+                    onPress={() => setHcpDraft(d => ({ ...d, [row.key]: Math.max(-10, d[row.key] - 1) }))}
+                    style={styles.hcpStepBtn}
+                  >
+                    <Text style={styles.hcpStepBtnText}>−</Text>
+                  </TouchableOpacity>
+                  <Text style={styles.hcpStepValue}>
+                    {hcpDraft[row.key] < 0 ? `+${-hcpDraft[row.key]}` : hcpDraft[row.key]}
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setHcpDraft(d => ({ ...d, [row.key]: Math.min(54, d[row.key] + 1) }))}
+                    style={styles.hcpStepBtn}
+                  >
+                    <Text style={styles.hcpStepBtnText}>+</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
+
+            <TouchableOpacity
+              onPress={saveHcp}
+              disabled={savingHcp}
+              style={[styles.abandonConfirmBtn, { backgroundColor: GREEN, marginTop: 18 }]}
+            >
+              {savingHcp
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={[styles.abandonConfirmText, { color: "#fff" }]}>Save Handicaps</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowHcpModal(false)}
+              style={styles.abandonCancelBtn}
+            >
+              <Text style={styles.abandonCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
       {/* ── Abandon confirmation overlay ── */}
       <Modal
         visible={showAbandonConfirm}
@@ -1471,4 +1571,22 @@ const styles = StyleSheet.create({
     paddingVertical: 14, alignItems: "center",
   },
   abandonCancelText: { fontSize: 15, fontFamily: "Inter_700Bold", color: "#fff" },
+  hcpRow: {
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    width: "100%", marginBottom: 12,
+  },
+  hcpRowLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff", flex: 1 },
+  hcpStepper: {
+    flexDirection: "row", alignItems: "center", gap: 0,
+    backgroundColor: "#071a0e", borderRadius: 12, borderWidth: 1, borderColor: BORDER, overflow: "hidden",
+  },
+  hcpStepBtn: {
+    width: 40, height: 40, alignItems: "center", justifyContent: "center",
+    backgroundColor: SURFACE,
+  },
+  hcpStepBtnText: { fontSize: 22, fontFamily: "Inter_700Bold", color: GOLD, lineHeight: 26 },
+  hcpStepValue: {
+    width: 44, textAlign: "center",
+    fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff",
+  },
 });

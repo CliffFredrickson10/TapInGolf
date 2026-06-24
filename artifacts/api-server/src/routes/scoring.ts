@@ -840,6 +840,61 @@ router.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
   }
 });
 
+// ─── Edit handicaps mid-round ─────────────────────────────────────────────────
+
+router.patch("/scoring/rounds/:id/handicaps", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    const roundId = parseInt(req.params.id);
+
+    const rounds = await query<any>(
+      "SELECT id, format, playing_handicap, opponent_playing_hcp, partner_playing_hcp, opponent2_playing_hcp FROM scoring_rounds WHERE id = ? AND user_id = ? AND status != 'abandoned'",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) { res.status(404).json({ message: "Round not found" }); return; }
+    const round = rounds[0];
+
+    const { playingHandicap, opponentPlayingHcp, partnerPlayingHcp, opponent2PlayingHcp } = req.body;
+
+    const newPlayingHcp = playingHandicap  != null ? Math.round(Number(playingHandicap))  : round.playing_handicap;
+    const newOppHcp     = opponentPlayingHcp  != null ? Math.round(Number(opponentPlayingHcp))  : round.opponent_playing_hcp;
+    const newPartnerHcp = partnerPlayingHcp   != null ? Math.round(Number(partnerPlayingHcp))   : round.partner_playing_hcp;
+    const newOpp2Hcp    = opponent2PlayingHcp != null ? Math.round(Number(opponent2PlayingHcp)) : round.opponent2_playing_hcp;
+
+    await exec(
+      "UPDATE scoring_rounds SET playing_handicap = ?, course_handicap = ?, opponent_playing_hcp = ?, partner_playing_hcp = ?, opponent2_playing_hcp = ? WHERE id = ?",
+      [newPlayingHcp, newPlayingHcp, newOppHcp, newPartnerHcp, newOpp2Hcp, roundId]
+    );
+
+    // Recalculate all stored hole scores whenever the primary player's handicap changes
+    if (newPlayingHcp !== Number(round.playing_handicap)) {
+      const holeRows = await query<any>(
+        "SELECT hole_number, par, stroke_index, gross_score FROM scoring_holes WHERE round_id = ? AND is_nr = 0 AND gross_score IS NOT NULL",
+        [roundId]
+      );
+      for (const h of holeRows) {
+        const ha = getHA(h.stroke_index, newPlayingHcp);
+        const fmt = round.format ?? "individual_stableford";
+        const stablefordMax = getStablefordMax(fmt, h.par, ha);
+        const effectiveGross = stablefordMax != null ? Math.min(h.gross_score, stablefordMax) : h.gross_score;
+        const netScore = effectiveGross - ha;
+        const pts = calcFormatPts(fmt, effectiveGross, h.par, ha);
+        await exec(
+          "UPDATE scoring_holes SET gross_score = ?, net_score = ?, stableford_points = ? WHERE round_id = ? AND hole_number = ?",
+          [effectiveGross, netScore, pts, roundId, h.hole_number]
+        );
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err: any) {
+    if (err?.message?.includes("Unauthorized")) { res.status(401).json({ message: "Unauthorized" }); return; }
+    req.log?.error({ err }, "edit handicap error");
+    res.status(500).json({ message: "Failed to update handicap" });
+  }
+});
+
 // ─── Complete round ───────────────────────────────────────────────────────────
 
 function getHALocal(si: number, ph: number): number {

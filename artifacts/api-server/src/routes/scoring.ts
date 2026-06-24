@@ -1506,11 +1506,10 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
               if (!existing) {
                 await exec(
                   `INSERT INTO event_scores
-                     (event_id, team_id, user_id, division, frozen_handicap, round,
+                     (event_id, team_id, user_id, round,
                       gross, net, points, hole_scores, verified)
-                   VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                   VALUES (?, ?, ?, 1, ?, ?, ?, ?, 0)`,
                   [round.tournament_id, reg.team_id, user.id,
-                   reg.division, reg.frozen_handicap,
                    gross, net, points, JSON.stringify(holeScores)]
                 );
               }
@@ -1522,11 +1521,10 @@ router.post("/scoring/rounds/:id/submit", async (req, res) => {
               if (!existing) {
                 await exec(
                   `INSERT INTO event_scores
-                     (event_id, user_id, division, frozen_handicap, round,
+                     (event_id, user_id, round,
                       gross, net, points, hole_scores, verified)
-                   VALUES (?, ?, ?, ?, 1, ?, ?, ?, ?, 0)`,
+                   VALUES (?, ?, 1, ?, ?, ?, ?, 0)`,
                   [round.tournament_id, user.id,
-                   reg.division, reg.frozen_handicap,
                    gross, net, points, JSON.stringify(holeScores)]
                 );
               }

@@ -21,6 +21,7 @@ import {
 import { format } from "date-fns";
 import { GenerateTeeTimesDialog } from "@/components/GenerateTeeTimesDialog";
 import KnockoutPage from "@/pages/knockout";
+import EclecticPage from "@/pages/eclectic";
 
 // ─── Official DQ Rules ─────────────────────────────────────────────────────
 
@@ -313,7 +314,7 @@ export default function Events() {
 
   const [events, setEvents]     = useState<GolfEvent[]>([]);
   const [loading, setLoading]   = useState(true);
-  const [pageTab, setPageTab] = useState<"tournaments" | "knockout">("tournaments");
+  const [pageTab, setPageTab] = useState<"tournaments" | "knockout" | "eclectic">("tournaments");
   const [eventsTab, setEventsTab] = useState<"upcoming" | "past" | "cancelled">("upcoming");
 
   // Detail sheet
@@ -1499,7 +1500,7 @@ ${bodyHtml}
     <div>
       {/* Page-level tab switcher */}
       <div className="px-8 pt-6 flex gap-1 border-b">
-        {(["tournaments", "knockout"] as const).map(tab => (
+        {(["tournaments", "knockout", "eclectic"] as const).map(tab => (
           <button
             key={tab}
             onClick={() => setPageTab(tab)}
@@ -1507,8 +1508,10 @@ ${bodyHtml}
           >
             {tab === "tournaments" ? (
               <><Calendar className="h-3.5 w-3.5" />Tournaments</>
-            ) : (
+            ) : tab === "knockout" ? (
               <><Swords className="h-3.5 w-3.5" />Knockout</>
+            ) : (
+              <><Trophy className="h-3.5 w-3.5" />Eclectic</>
             )}
           </button>
         ))}
@@ -1516,6 +1519,8 @@ ${bodyHtml}
 
       {pageTab === "knockout" ? (
         <KnockoutPage />
+      ) : pageTab === "eclectic" ? (
+        <EclecticPage />
       ) : (
       <div className="p-8 space-y-6">
       {/* Header */}

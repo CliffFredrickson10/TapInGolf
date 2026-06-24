@@ -624,6 +624,9 @@ export default function HoleEntryScreen() {
     flushQueue();
   }, [flushQueue, readQueue]);
 
+  // Auto-clear error banner when the user enters any score
+  useEffect(() => { setScoreError(null); }, [gross, partnerGross, oppGross, opp2Gross]);
+
   if (loading || !round) {
     const { width: sw, height: sh } = Dimensions.get("window");
     return (
@@ -654,9 +657,6 @@ export default function HoleEntryScreen() {
     }
     return sum;
   }, 0);
-
-  // Auto-clear error banner when the user enters any score
-  useEffect(() => { setScoreError(null); }, [gross, partnerGross, oppGross, opp2Gross]);
 
   const goToHole = (idx: number) => {
     setScoreError(null);

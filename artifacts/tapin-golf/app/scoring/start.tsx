@@ -727,30 +727,6 @@ export default function StartRoundScreen() {
                 )}
               </Section>
 
-              {/* Tee colour */}
-              <Section title="TEE COLOUR">
-                <View style={styles.teeRow}>
-                  {TEE_COLORS.map(t => (
-                    <TouchableOpacity
-                      key={t.key}
-                      onPress={() => setTeeColor(t.key)}
-                      style={[styles.teeBtn, {
-                        borderColor: teeColor === t.key ? colors.primary : colors.border,
-                        backgroundColor: teeColor === t.key ? colors.primary + "12" : colors.background,
-                      }]}
-                    >
-                      <View style={[styles.teeDot, {
-                        backgroundColor: t.hex,
-                        borderColor: t.key === "white" ? colors.border : "transparent",
-                      }]} />
-                      <Text style={[styles.teeLabel, { color: teeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: teeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>
-                        {t.label}
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
-                </View>
-              </Section>
-
               {/* Format */}
               <Section title="GAME FORMAT">
                 {linkedTournamentId ? (
@@ -995,7 +971,7 @@ export default function StartRoundScreen() {
               <Section title="HANDICAP">
                 <View style={{ gap: 14 }}>
                   {([
-                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: null as string | null, setTeeColor: null as ((v: string) => void) | null },
+                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: teeColor as string | null, setTeeColor: setTeeColor as ((v: string) => void) | null },
                     { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx, teeColor: partnerTeeColor, setTeeColor: setPartnerTeeColor },
                     { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
                     { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx, teeColor: opp2TeeColor, setTeeColor: setOpp2TeeColor },

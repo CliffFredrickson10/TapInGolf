@@ -819,6 +819,68 @@ export default function StartRoundScreen() {
                 )}
               </Section>
 
+              {/* Handicap */}
+              <Section title="HANDICAP">
+                <View style={{ gap: 14 }}>
+                  {([
+                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: teeColor as string | null, setTeeColor: setTeeColor as ((v: string) => void) | null },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx, teeColor: partnerTeeColor, setTeeColor: setPartnerTeeColor },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx, teeColor: opp2TeeColor, setTeeColor: setOpp2TeeColor },
+                  ])
+                    .filter(r => r.show)
+                    .map(r => (
+                      <View key={r.label}>
+                        <View style={styles.hcpLabelRow}>
+                          <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{r.label}</Text>
+                          <View style={[styles.hintChip, { backgroundColor: colors.muted }]}>
+                            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>{r.hint}</Text>
+                          </View>
+                        </View>
+                        {r.whsIdx != null && (
+                          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 6, fontFamily: "Inter_400Regular" }}>
+                            WHS Index on file: {r.whsIdx} — ask player for their course HCP from the HNA app
+                          </Text>
+                        )}
+                        <View style={[styles.stepperRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
+                          <TouchableOpacity
+                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.max(0, parseInt(v || "0") - 1))); }}
+                            style={[styles.stepperBtn, { borderColor: colors.border }]}
+                          >
+                            <Text style={[styles.stepperBtnText, { color: colors.foreground }]}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput
+                            value={r.value}
+                            onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) r.set(String(n)); }}
+                            style={[styles.stepperValue, { color: colors.primary }]}
+                            keyboardType="number-pad"
+                            textAlign="center"
+                            maxLength={2}
+                          />
+                          <TouchableOpacity
+                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.min(54, parseInt(v || "0") + 1))); }}
+                            style={[styles.stepperBtn, { borderColor: colors.primary, backgroundColor: colors.primary }]}
+                          >
+                            <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        {r.teeColor !== null && r.setTeeColor && (
+                          <View style={styles.miniTeeRow}>
+                            {TEE_COLORS.map(t => (
+                              <TouchableOpacity key={t.key} onPress={() => r.setTeeColor!(t.key)}
+                                style={[styles.miniTeeBtn, { borderColor: r.teeColor === t.key ? colors.primary : colors.border, backgroundColor: r.teeColor === t.key ? colors.primary + "12" : "transparent" }]}>
+                                <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
+                                <Text style={[styles.miniTeeLbl, { color: r.teeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: r.teeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
+                      </View>
+                    ))
+                  }
+                </View>
+              </Section>
+
               {/* ── Casual Players — only shown for non-tournament rounds ── */}
               {!linkedTournamentId && !!format && (
                 <Section title={isBetterball ? "PARTNER & OPPONENTS" : isMatchPlay ? "OPPONENT" : "MARKING FOR (OPTIONAL)"}>
@@ -967,67 +1029,6 @@ export default function StartRoundScreen() {
                 </Section>
               )}
 
-              {/* Handicap */}
-              <Section title="HANDICAP">
-                <View style={{ gap: 14 }}>
-                  {([
-                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: teeColor as string | null, setTeeColor: setTeeColor as ((v: string) => void) | null },
-                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx, teeColor: partnerTeeColor, setTeeColor: setPartnerTeeColor },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
-                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx, teeColor: opp2TeeColor, setTeeColor: setOpp2TeeColor },
-                  ])
-                    .filter(r => r.show)
-                    .map(r => (
-                      <View key={r.label}>
-                        <View style={styles.hcpLabelRow}>
-                          <Text style={[styles.fieldLabel, { color: colors.foreground }]}>{r.label}</Text>
-                          <View style={[styles.hintChip, { backgroundColor: colors.muted }]}>
-                            <Text style={[styles.hintText, { color: colors.mutedForeground }]}>{r.hint}</Text>
-                          </View>
-                        </View>
-                        {r.whsIdx != null && (
-                          <Text style={{ fontSize: 12, color: colors.mutedForeground, marginBottom: 6, fontFamily: "Inter_400Regular" }}>
-                            WHS Index on file: {r.whsIdx} — ask player for their course HCP from the HNA app
-                          </Text>
-                        )}
-                        <View style={[styles.stepperRow, { backgroundColor: colors.background, borderColor: colors.border }]}>
-                          <TouchableOpacity
-                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.max(0, parseInt(v || "0") - 1))); }}
-                            style={[styles.stepperBtn, { borderColor: colors.border }]}
-                          >
-                            <Text style={[styles.stepperBtnText, { color: colors.foreground }]}>−</Text>
-                          </TouchableOpacity>
-                          <TextInput
-                            value={r.value}
-                            onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) r.set(String(n)); }}
-                            style={[styles.stepperValue, { color: colors.primary }]}
-                            keyboardType="number-pad"
-                            textAlign="center"
-                            maxLength={2}
-                          />
-                          <TouchableOpacity
-                            onPress={() => { Haptics.selectionAsync(); r.set(v => String(Math.min(54, parseInt(v || "0") + 1))); }}
-                            style={[styles.stepperBtn, { borderColor: colors.primary, backgroundColor: colors.primary }]}
-                          >
-                            <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
-                          </TouchableOpacity>
-                        </View>
-                        {r.teeColor !== null && r.setTeeColor && (
-                          <View style={styles.miniTeeRow}>
-                            {TEE_COLORS.map(t => (
-                              <TouchableOpacity key={t.key} onPress={() => r.setTeeColor!(t.key)}
-                                style={[styles.miniTeeBtn, { borderColor: r.teeColor === t.key ? colors.primary : colors.border, backgroundColor: r.teeColor === t.key ? colors.primary + "12" : "transparent" }]}>
-                                <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
-                                <Text style={[styles.miniTeeLbl, { color: r.teeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: r.teeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    ))
-                  }
-                </View>
-              </Section>
             </>
           )}
         </ScrollView>

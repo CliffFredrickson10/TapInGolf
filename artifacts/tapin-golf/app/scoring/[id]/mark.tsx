@@ -98,10 +98,12 @@ export default function MarkCardScreen() {
   const back9  = sc.filter(h => h.number > 9);
 
   // Player's submitted score per hole (read-only reference)
+  // Use String(holeNum) to guarantee the key matches JSON-parsed string keys.
   const playerScore = (holeNum: number): number | null => {
-    const saved = round?.holes?.[holeNum];
+    const holes = round?.holes ?? {};
+    const saved = (holes as any)[String(holeNum)] ?? (holes as any)[holeNum];
     if (!saved || saved.is_nr || saved.gross_score == null) return null;
-    return saved.gross_score;
+    return Number(saved.gross_score);
   };
 
   const allFilled = sc.every(h => {
@@ -312,10 +314,9 @@ export default function MarkCardScreen() {
   }
 
   // ── Entry screen ────────────────────────────────────────────────────────────
-  const HoleRow = ({ h }: { h: ScorecardHole }) => {
+  const HoleRow = ({ h, ps }: { h: ScorecardHole; ps: number | null }) => {
     const myVal  = scores[String(h.number)] ?? "";
     const myNum  = parseInt(myVal);
-    const ps     = playerScore(h.number);
     const filled = myVal !== "" && !isNaN(myNum);
     const matches = filled && ps !== null && myNum === ps;
     const differs = filled && ps !== null && myNum !== ps;
@@ -359,13 +360,19 @@ export default function MarkCardScreen() {
           {!filled && <View style={{ width: 14 }} />}
         </View>
 
-        {/* Player's submitted score — always visible as reference */}
-        <View style={styles.playerScoreWrap}>
+        {/* Player's submitted score — static badge */}
+        <View style={[styles.playerScoreWrap, {
+          backgroundColor: ps === null ? colors.muted + "30" : differs ? RED_MISMATCH : GREEN_MATCH,
+          borderRadius: 10,
+          height: 42,
+          justifyContent: "center",
+        }]}>
           <Text style={[styles.playerScoreVal, {
-            color: ps === null ? colors.mutedForeground : differs ? RED_MISMATCH : colors.foreground,
+            color: ps === null ? colors.mutedForeground : "#fff",
             fontFamily: "Inter_700Bold",
+            textAlign: "center",
           }]}>
-            {ps ?? "—"}
+            {ps != null ? String(ps) : "—"}
           </Text>
         </View>
       </View>
@@ -461,7 +468,7 @@ export default function MarkCardScreen() {
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>FRONT 9</Text>
             </View>
-            {front9.map(h => <HoleRow key={h.number} h={h} />)}
+            {front9.map(h => <HoleRow key={h.number} h={h} ps={playerScore(h.number)} />)}
             <NineTotal holes={front9} />
           </View>
         )}
@@ -470,7 +477,7 @@ export default function MarkCardScreen() {
             <View style={[styles.sectionHeader, { borderBottomColor: colors.border }]}>
               <Text style={[styles.sectionLabel, { color: colors.mutedForeground }]}>BACK 9</Text>
             </View>
-            {back9.map(h => <HoleRow key={h.number} h={h} />)}
+            {back9.map(h => <HoleRow key={h.number} h={h} ps={playerScore(h.number)} />)}
             <NineTotal holes={back9} />
           </View>
         )}

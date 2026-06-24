@@ -361,9 +361,8 @@ export default function MarkCardScreen() {
 
         {/* Player's submitted score — always visible as reference */}
         <View style={styles.playerScoreWrap}>
-          <Text style={[styles.playerScoreLabel, { color: colors.mutedForeground }]}>{playerName.split(" ")[0]}</Text>
           <Text style={[styles.playerScoreVal, {
-            color: differs ? colors.primary : ps !== null ? colors.primary : colors.mutedForeground,
+            color: ps === null ? colors.mutedForeground : differs ? RED_MISMATCH : colors.foreground,
             fontFamily: "Inter_700Bold",
           }]}>
             {ps ?? "—"}

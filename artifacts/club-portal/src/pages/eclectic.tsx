@@ -236,12 +236,12 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                     {Array.from({length: 18}, (_, j) => j + 1).map(h => (
                       <th key={h} className="px-1 py-2 font-semibold text-center w-7">{h}</th>
                     ))}
-                    <th className="px-2 py-2 font-semibold text-center w-12">Gross</th>
+                    <th className="px-2 py-2 font-semibold text-center w-12">Nett</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rounds.map((r, i) => {
-                    const hs: Record<string, number> = typeof r.hole_scores === 'string' ? JSON.parse(r.hole_scores) : (r.hole_scores ?? {});
+                    const nhs: Record<string, number> = typeof r.nett_hole_scores === 'string' ? JSON.parse(r.nett_hole_scores) : (r.nett_hole_scores ?? {});
                     const d = r.completed_at
                       ? format(new Date(r.completed_at), 'd MMM yyyy')
                       : '—';
@@ -255,10 +255,10 @@ function EclecticBoard({ event }: { event: EclecticEvent }) {
                         </td>
                         <td className="px-2 py-1.5 text-center text-muted-foreground whitespace-nowrap">{d}</td>
                         {Array.from({length: 18}, (_, j) => j + 1).map(h => {
-                          const s = hs[String(h)];
+                          const s = nhs[String(h)];
                           return <td key={h} className={`px-1 py-1.5 text-center ${s != null ? "font-semibold" : "text-muted-foreground/30"}`}>{s ?? '·'}</td>;
                         })}
-                        <td className="px-2 py-1.5 text-center font-bold">{r.total_gross ?? '—'}</td>
+                        <td className="px-2 py-1.5 text-center font-bold">{r.total_net ?? '—'}</td>
                       </tr>
                     );
                   })}

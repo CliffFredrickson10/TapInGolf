@@ -1407,9 +1407,10 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
   const endDate = ev.end_date ?? ev.event_date;
 
   const rounds = await query<any>(
-    `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
+    `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.playing_handicap, sr.completed_at, sr.tournament_id,
             COALESCE(ge.name, ?) AS tournament_name,
             es.hole_scores AS es_hole_scores,
+            es.net AS total_net,
             COALESCE(es.verified, 0) AS verified
      FROM scoring_rounds sr
      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
@@ -1448,6 +1449,18 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
     }
   }
 
+  // Fetch club scorecard for stroke index (needed to compute nett per hole)
+  const scRows = await query<any>(
+    "SELECT holes FROM club_scorecards WHERE club_id = ?",
+    [ev.club_id]
+  ).catch(() => [] as any[]);
+  const rawHoles: any[] = scRows.length > 0 ? scRows[0].holes : [];
+  // Build hole→stroke_index lookup (1-indexed)
+  const strokeIndex: Record<number, number> = {};
+  for (const h of rawHoles) {
+    if (h.number != null && h.stroke_index != null) strokeIndex[Number(h.number)] = Number(h.stroke_index);
+  }
+
   res.json({
     players,
     rounds: rounds.map((r: any) => {
@@ -1457,13 +1470,11 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
           ? JSON.parse(r.es_hole_scores)
           : r.es_hole_scores;
         if (Array.isArray(parsed)) {
-          // Stored as a 0-indexed array — convert to 1-indexed object
           hs = {};
           (parsed as number[]).forEach((v, i) => {
             if (typeof v === 'number') hs[String(i + 1)] = v;
           });
         } else {
-          // Already a {hole: score} object
           hs = Object.fromEntries(
             Object.entries(parsed as Record<string, unknown>)
               .filter(([, v]) => typeof v === 'number')
@@ -1471,7 +1482,19 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
           );
         }
       }
-      return { ...r, hole_scores: hs };
+
+      // Compute nett per-hole: gross minus handicap strokes on that hole
+      const phcp = Math.round(Number(r.playing_handicap ?? 0));
+      const fullStrokes = Math.floor(phcp / 18);
+      const extraHoles = phcp % 18; // top-N holes by stroke index also get +1
+      const nettHoleScores: Record<string, number> = {};
+      for (const [hStr, gross] of Object.entries(hs)) {
+        const si = strokeIndex[Number(hStr)] ?? Number(hStr);
+        const shots = fullStrokes + (si <= extraHoles ? 1 : 0);
+        nettHoleScores[hStr] = (gross as number) - shots;
+      }
+
+      return { ...r, hole_scores: hs, nett_hole_scores: nettHoleScores };
     }),
   });
 });

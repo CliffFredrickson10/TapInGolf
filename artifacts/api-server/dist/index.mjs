@@ -63818,9 +63818,10 @@ router3.get("/events/:id/eclectic-rounds", async (req, res) => {
   }
   const endDate = ev.end_date ?? ev.event_date;
   const rounds = await query(
-    `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
+    `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.playing_handicap, sr.completed_at, sr.tournament_id,
             COALESCE(ge.name, ?) AS tournament_name,
             es.hole_scores AS es_hole_scores,
+            es.net AS total_net,
             COALESCE(es.verified, 0) AS verified
      FROM scoring_rounds sr
      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
@@ -63855,6 +63856,15 @@ router3.get("/events/:id/eclectic-rounds", async (req, res) => {
       holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
     }
   }
+  const scRows = await query(
+    "SELECT holes FROM club_scorecards WHERE club_id = ?",
+    [ev.club_id]
+  ).catch(() => []);
+  const rawHoles = scRows.length > 0 ? scRows[0].holes : [];
+  const strokeIndex = {};
+  for (const h of rawHoles) {
+    if (h.number != null && h.stroke_index != null) strokeIndex[Number(h.number)] = Number(h.stroke_index);
+  }
   res.json({
     players,
     rounds: rounds.map((r) => {
@@ -63872,7 +63882,16 @@ router3.get("/events/:id/eclectic-rounds", async (req, res) => {
           );
         }
       }
-      return { ...r, hole_scores: hs };
+      const phcp = Math.round(Number(r.playing_handicap ?? 0));
+      const fullStrokes = Math.floor(phcp / 18);
+      const extraHoles = phcp % 18;
+      const nettHoleScores = {};
+      for (const [hStr, gross] of Object.entries(hs)) {
+        const si = strokeIndex[Number(hStr)] ?? Number(hStr);
+        const shots = fullStrokes + (si <= extraHoles ? 1 : 0);
+        nettHoleScores[hStr] = gross - shots;
+      }
+      return { ...r, hole_scores: hs, nett_hole_scores: nettHoleScores };
     })
   });
 });

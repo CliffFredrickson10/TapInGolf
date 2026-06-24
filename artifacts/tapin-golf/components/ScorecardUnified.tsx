@@ -71,9 +71,10 @@ export default function ScorecardUnified({ round, colors }: Props) {
   const isBBStb = fmt === "fourball_stableford" || fmt === "fourball_stableford_match_play";
   const isBBGrs = fmt === "fourball_gross_betterball" || fmt === "betterball_gross_match_play";
   const isGrOnly   = fmt === "gross_stroke_play";
-  const isScramble  = ["texas_scramble","american_scramble","chapman"].includes(fmt);
+  const isScramble   = ["texas_scramble","american_scramble","chapman"].includes(fmt);
   const isShambleFmt = fmt === "shamble";
-  const isTeamFmt   = isScramble || isShambleFmt;
+  const isAllianceFmt = fmt === "alliance";
+  const isTeamFmt    = isScramble || isShambleFmt || isAllianceFmt;
   const isNetOny    = fmt === "net_stroke_play" || fmt === "chairman" || fmt === "fourball_net_betterball" || isScramble;
   const isPar      = ["par_bogey","individual_par","individual_bogey"].includes(fmt);
   const isBonusB   = fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey";
@@ -235,6 +236,18 @@ export default function ScorecardUnified({ round, colors }: Props) {
       const ptsList = ([aR, bR, cR, dR] as (number|null)[]).filter((r): r is number => r != null);
       if (ptsList.length > 0) {
         abPts = Math.max(...ptsList);
+        if (fr) abF9 += abPts; else abB9 += abPts;
+      }
+    }
+    // Alliance: sum of top N stableford pts — 1 on par 3, 2 on par 4, 3 on par 5
+    if (isAllianceFmt) {
+      const n = h.par <= 3 ? 1 : h.par === 4 ? 2 : 3;
+      const ptsList = ([aR, bR, cR, dR] as (number|null)[])
+        .filter((r): r is number => r != null)
+        .sort((a, b) => b - a)
+        .slice(0, n);
+      if (ptsList.length > 0) {
+        abPts = ptsList.reduce((s, p) => s + p, 0);
         if (fr) abF9 += abPts; else abB9 += abPts;
       }
     }
@@ -481,7 +494,7 @@ export default function ScorecardUnified({ round, colors }: Props) {
                 borderRightWidth: 1.5, borderRightColor: "rgba(255,255,255,0.4)",
                 paddingVertical: 4 }}>
                 <Text style={{ fontSize: 7, fontFamily: "Inter_700Bold",
-                  color: "rgba(255,255,255,0.7)" }}>{isTeamFmt ? "Best" : "A+B"}</Text>
+                  color: "rgba(255,255,255,0.7)" }}>{isTeamFmt ? "Result" : "A+B"}</Text>
               </View>
             )}
             {showC && PairHdr(cLabel)}

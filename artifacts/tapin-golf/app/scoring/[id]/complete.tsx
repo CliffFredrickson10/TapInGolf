@@ -359,7 +359,8 @@ export default function RoundCompleteScreen() {
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
   const isShambleRound  = round.format === "shamble";
-  const isScrambleFmt   = ["texas_scramble","american_scramble","chapman","shamble"].includes(round.format);
+  const isAllianceRound = round.format === "alliance";
+  const isScrambleFmt   = ["texas_scramble","american_scramble","chapman","shamble","alliance"].includes(round.format);
   let teamTotal = 0;
   let teamUnit: string | null = null;
   if (isScrambleFmt) {
@@ -369,12 +370,14 @@ export default function RoundCompleteScreen() {
       if (hcp <= 18) return si <= hcp ? 1 : 0;
       return 1 + (si <= hcp - 18 ? 1 : 0);
     };
+    const calcPts2 = (gross: number, par: number, ha: number) =>
+      Math.max(0, par + 2 - (gross - ha));
     sc.forEach(h => {
       const saved = holes[h.number];
-      if (isShambleRound) {
+      if (isShambleRound || isAllianceRound) {
         const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
         const myHA = getHA2(h.stroke_index, round.playing_handicap);
-        const myPts = myG != null ? Math.max(0, h.par + 2 - (myG - myHA)) : null;
+        const myPts = myG != null ? calcPts2(myG, h.par, myHA) : null;
         const others = ([
           { idx: 0, hcp: round.partner_playing_hcp   ?? round.playing_handicap },
           { idx: 1, hcp: round.opponent_playing_hcp  ?? 0 },
@@ -382,10 +385,16 @@ export default function RoundCompleteScreen() {
         ] as const).map(({ idx, hcp }) => {
           const s = ph[`${idx}_${h.number}`];
           if (!s || s.is_nr || s.gross_score == null) return null;
-          return Math.max(0, h.par + 2 - (s.gross_score - getHA2(h.stroke_index, hcp)));
+          return calcPts2(s.gross_score, h.par, getHA2(h.stroke_index, hcp));
         });
         const allPts = ([myPts, ...others] as (number | null)[]).filter((p): p is number => p != null);
-        if (allPts.length > 0) teamTotal += Math.max(...allPts);
+        if (isAllianceRound) {
+          const n = h.par <= 3 ? 1 : h.par === 4 ? 2 : 3;
+          const top = [...allPts].sort((a, b) => b - a).slice(0, n);
+          if (top.length > 0) teamTotal += top.reduce((s, p) => s + p, 0);
+        } else {
+          if (allPts.length > 0) teamTotal += Math.max(...allPts);
+        }
       } else {
         const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
         const others = ([0, 1, 2] as const).map(i => {
@@ -396,7 +405,7 @@ export default function RoundCompleteScreen() {
         if (allScores.length > 0) teamTotal += Math.min(...allScores);
       }
     });
-    teamUnit = isShambleRound ? "pts" : null;
+    teamUnit = (isShambleRound || isAllianceRound) ? "pts" : null;
   }
 
   const isMatchPlay  = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";

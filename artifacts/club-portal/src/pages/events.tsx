@@ -323,15 +323,6 @@ export default function Events() {
   // Registrations
   const [regs, setRegs]         = useState<Registration[]>([]);
   const [regsLoading, setRegsLoading] = useState(false);
-  // Mark-as-paid
-  const [markPaidReg, setMarkPaidReg]   = useState<Registration | null>(null);
-  const [markPaidMethod, setMarkPaidMethod] = useState("prepaid");
-  const [markPaidLoading, setMarkPaidLoading] = useState(false);
-  // Manual entry dialog
-  const [addEntryDlg, setAddEntryDlg]   = useState(false);
-  const [addEntryEmail, setAddEntryEmail] = useState("");
-  const [addEntryMethod, setAddEntryMethod] = useState("prepaid");
-  const [addEntryLoading, setAddEntryLoading] = useState(false);
 
   // Detail tee schedule
   const [detailTeeSlots, setDetailTeeSlots]           = useState<TeeSlot[]>([]);
@@ -1733,11 +1724,6 @@ ${bodyHtml}
                       )}
                     </div>
                   )}
-                  <div className="flex justify-end mb-2">
-                    <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => { setAddEntryEmail(""); setAddEntryMethod("prepaid"); setAddEntryDlg(true); }}>
-                      <UserPlus className="h-3.5 w-3.5" />Add Entry
-                    </Button>
-                  </div>
                   {regsLoading ? (
                     <Skeleton className="h-32 w-full" />
                   ) : regs.length === 0 ? (
@@ -1785,7 +1771,7 @@ ${bodyHtml}
                             <Card key={r.id} className={entryState === "rejected" ? "opacity-60" : ""}>
                               <CardContent className="p-3">
                                 <div className="flex items-center justify-between gap-3">
-                                  <div className="min-w-0 flex-1">
+                                  <div className="min-w-0">
                                     <div className="flex items-center gap-2 flex-wrap">
                                       <span className="font-medium text-sm">{r.user_name}</span>
                                       {r.division && <span className="text-xs bg-[#1a5c38]/10 text-[#1a5c38] px-2 py-0.5 rounded-full font-medium">{r.division} Div</span>}
@@ -1812,15 +1798,6 @@ ${bodyHtml}
                                       {r.registered_at ? ` · Entered ${new Date(r.registered_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}` : ""}
                                     </p>
                                   </div>
-                                  {entryState === "awaiting_payment" && (
-                                    <Button
-                                      size="sm" variant="outline"
-                                      className="h-7 text-xs shrink-0 border-amber-300 text-amber-700 hover:bg-amber-50"
-                                      onClick={() => { setMarkPaidReg(r); setMarkPaidMethod("prepaid"); }}
-                                    >
-                                      <CreditCard className="h-3 w-3 mr-1" />Mark Paid
-                                    </Button>
-                                  )}
                                 </div>
                               </CardContent>
                             </Card>
@@ -2155,134 +2132,6 @@ ${bodyHtml}
                       </div>
                     );
                   })()}
-
-                  {/* ── Mark as Paid dialog ──────────────────────────────────────── */}
-                  <Dialog open={!!markPaidReg} onOpenChange={open => { if (!open) setMarkPaidReg(null); }}>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <CreditCard className="h-4 w-4 text-[#1a5c38]" />Mark as Paid
-                        </DialogTitle>
-                        <DialogDescription asChild>
-                          <p className="text-sm text-muted-foreground pt-1">
-                            Mark <strong>{markPaidReg?.user_name}</strong>'s entry as paid. Select the payment method used.
-                          </p>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-3 py-2">
-                        <Select value={markPaidMethod} onValueChange={setMarkPaidMethod}>
-                          <SelectTrigger className="h-9 text-sm">
-                            <SelectValue placeholder="Payment method" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="prepaid">Prepaid Round</SelectItem>
-                            <SelectItem value="cash">Cash</SelectItem>
-                            <SelectItem value="card">Card</SelectItem>
-                            <SelectItem value="stitch">Stitch (EFT / Card)</SelectItem>
-                            <SelectItem value="wallet">TapIn Wallet</SelectItem>
-                            <SelectItem value="manual">Other / Manual</SelectItem>
-                          </SelectContent>
-                        </Select>
-                      </div>
-                      <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={() => setMarkPaidReg(null)}>Cancel</Button>
-                        <Button
-                          className="bg-[#1a5c38] hover:bg-[#154d30] text-white"
-                          disabled={markPaidLoading}
-                          onClick={async () => {
-                            if (!markPaidReg || !detail) return;
-                            setMarkPaidLoading(true);
-                            try {
-                              await api(`/api/portal/events/${detail.id}/registrations/${markPaidReg.id}/mark-paid`, {
-                                method: "PATCH", body: JSON.stringify({ payment_method: markPaidMethod }),
-                              });
-                              toast({ title: "Payment recorded", description: `${markPaidReg.user_name} marked as paid (${markPaidMethod}).` });
-                              setMarkPaidReg(null);
-                              loadRegs(detail);
-                            } catch (e: any) {
-                              toast({ title: "Error", description: e?.message ?? "Failed to update", variant: "destructive" });
-                            } finally { setMarkPaidLoading(false); }
-                          }}
-                        >
-                          {markPaidLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Check className="h-4 w-4 mr-1" />}
-                          Confirm Payment
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
-
-                  {/* ── Add Entry dialog ─────────────────────────────────────────── */}
-                  <Dialog open={addEntryDlg} onOpenChange={open => { if (!open) setAddEntryDlg(false); }}>
-                    <DialogContent className="max-w-sm">
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <UserPlus className="h-4 w-4 text-[#1a5c38]" />Add Entry
-                        </DialogTitle>
-                        <DialogDescription asChild>
-                          <p className="text-sm text-muted-foreground pt-1">
-                            Manually register a player by their TapIn account email.
-                          </p>
-                        </DialogDescription>
-                      </DialogHeader>
-                      <div className="space-y-3 py-2">
-                        <div>
-                          <Label className="text-xs mb-1 block">Player Email</Label>
-                          <Input
-                            type="email" placeholder="player@email.com"
-                            value={addEntryEmail} onChange={e => setAddEntryEmail(e.target.value)}
-                            className="h-9 text-sm"
-                          />
-                        </div>
-                        {detail?.payment_required && (
-                          <div>
-                            <Label className="text-xs mb-1 block">Payment Method <span className="text-muted-foreground">(leave blank if unpaid)</span></Label>
-                            <Select value={addEntryMethod} onValueChange={setAddEntryMethod}>
-                              <SelectTrigger className="h-9 text-sm">
-                                <SelectValue placeholder="Select method or leave unpaid" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="">Unpaid — awaiting payment</SelectItem>
-                                <SelectItem value="prepaid">Prepaid Round</SelectItem>
-                                <SelectItem value="cash">Cash</SelectItem>
-                                <SelectItem value="card">Card</SelectItem>
-                                <SelectItem value="stitch">Stitch (EFT / Card)</SelectItem>
-                                <SelectItem value="wallet">TapIn Wallet</SelectItem>
-                                <SelectItem value="manual">Other / Manual</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        )}
-                      </div>
-                      <DialogFooter className="gap-2 sm:gap-0">
-                        <Button variant="outline" onClick={() => setAddEntryDlg(false)}>Cancel</Button>
-                        <Button
-                          className="bg-[#1a5c38] hover:bg-[#154d30] text-white"
-                          disabled={addEntryLoading || !addEntryEmail.trim()}
-                          onClick={async () => {
-                            if (!detail) return;
-                            setAddEntryLoading(true);
-                            try {
-                              await api(`/api/portal/events/${detail.id}/registrations/manual`, {
-                                method: "POST",
-                                body: JSON.stringify({
-                                  email: addEntryEmail.trim(),
-                                  payment_method: addEntryMethod || undefined,
-                                }),
-                              });
-                              toast({ title: "Entry added", description: `${addEntryEmail.trim()} has been registered.` });
-                              setAddEntryDlg(false);
-                              loadRegs(detail);
-                            } catch (e: any) {
-                              toast({ title: "Error", description: e?.message ?? "Failed to add entry", variant: "destructive" });
-                            } finally { setAddEntryLoading(false); }
-                          }}
-                        >
-                          {addEntryLoading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <UserPlus className="h-4 w-4 mr-1" />}
-                          Add Entry
-                        </Button>
-                      </DialogFooter>
-                    </DialogContent>
-                  </Dialog>
 
                   {/* Re-generate warning dialog */}
                   <Dialog open={regenWarnDlg} onOpenChange={setRegenWarnDlg}>

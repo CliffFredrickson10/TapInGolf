@@ -12,6 +12,39 @@ import { getUserTierPrices } from "../lib/pricing";
 const router: IRouter = Router();
 
 /**
+ * When a booking for a portal tee slot that belongs to a tournament is confirmed,
+ * automatically register the player in that tournament and mark them as paid.
+ * This is fire-and-forget — booking confirmation is never blocked by this.
+ */
+async function syncEventRegistration(bookingId: number): Promise<void> {
+  try {
+    const bk = await row<any>(
+      `SELECT b.user_id, b.payment_method, pts.event_id
+       FROM bookings b
+       JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       WHERE b.id = ? AND pts.event_id IS NOT NULL`,
+      [bookingId]
+    );
+    if (!bk?.event_id) return;
+
+    const ev = await row<any>("SELECT id FROM golf_events WHERE id = ? AND status = 'active'", [bk.event_id]);
+    if (!ev) return;
+
+    const u = await row<any>("SELECT handicap FROM users WHERE id = ?", [bk.user_id]);
+    await exec(
+      `INSERT INTO event_registrations (event_id, user_id, status, frozen_handicap, payment_status, payment_method, paid_at)
+       VALUES (?, ?, 'approved', ?, 'paid', ?, NOW())
+       ON CONFLICT (event_id, user_id) DO UPDATE
+         SET status         = 'approved',
+             payment_status = 'paid',
+             payment_method = EXCLUDED.payment_method,
+             paid_at        = COALESCE(event_registrations.paid_at, EXCLUDED.paid_at)`,
+      [bk.event_id, bk.user_id, u?.handicap ?? null, bk.payment_method ?? "manual"]
+    );
+  } catch {}
+}
+
+/**
  * Verify a Svix webhook signature (used by Stitch Express) without the svix SDK.
  * Signed content is `{id}.{timestamp}.{rawBody}`, HMAC-SHA256'd with the
  * base64-decoded secret (the part after the `whsec_` prefix). The svix-signature
@@ -960,6 +993,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
   if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
     fireInvoiceEmail(bookingId).catch(() => {});
+    syncEventRegistration(bookingId).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
@@ -1277,6 +1311,7 @@ router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => 
     [bookingId, bookingId]
   );
   fireInvoiceEmail(bookingId).catch(() => {});
+  syncEventRegistration(bookingId).catch(() => {});
 
   res.json({ confirmed: true, status: "confirmed" });
 });
@@ -1633,6 +1668,7 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
       );
       // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
       fireInvoiceEmail(bookingId).catch(() => {});
+      syncEventRegistration(bookingId).catch(() => {});
     }
   }
 

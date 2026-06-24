@@ -37,10 +37,13 @@ type Round = {
   holes: Record<number, SavedHole>;
   opponent_name?: string | null;
   opponent_playing_hcp?: number;
+  opponent_tee_color?: string | null;
   partner_name?: string | null;
   partner_playing_hcp?: number;
+  partner_tee_color?: string | null;
   opponent2_name?: string | null;
   opponent2_playing_hcp?: number;
+  opponent2_tee_color?: string | null;
   match_id?: number | null;
   match_result?: string | null;
   match_status?: string | null;
@@ -475,17 +478,45 @@ export default function RoundCompleteScreen() {
 
         {/* Round info */}
         <View style={[styles.roundInfo, { backgroundColor: colors.card, borderColor: colors.border }]}>
-          {[
-            { label: "Format", value: FORMAT_LABELS[round.format] ?? round.format },
-            { label: "Tee", value: round.tee_color.charAt(0).toUpperCase() + round.tee_color.slice(1) },
-            { label: "Course HCP", value: round.course_handicap < 0 ? `+${-round.course_handicap}` : String(round.course_handicap) },
-            { label: "Playing HCP", value: round.playing_handicap < 0 ? `+${-round.playing_handicap}` : String(round.playing_handicap) },
-            { label: "Allowance", value: `${round.allowance_pct}%` },
-            { label: "Date", value: new Date(round.started_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" }) },
-          ].map((row, i) => (
-            <View key={row.label} style={[styles.infoRow, { borderBottomColor: colors.border, borderBottomWidth: i < 5 ? StyleSheet.hairlineWidth : 0 }]}>
-              <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>{row.label}</Text>
-              <Text style={[styles.infoValue, { color: colors.foreground }]}>{row.value}</Text>
+          {/* Format row */}
+          <View style={[styles.infoRow, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Format</Text>
+            <Text style={[styles.infoValue, { color: colors.foreground }]}>{FORMAT_LABELS[round.format] ?? round.format}</Text>
+          </View>
+          {/* Date row */}
+          <View style={[styles.infoRow, { borderBottomColor: colors.border, borderBottomWidth: StyleSheet.hairlineWidth }]}>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground }]}>Date</Text>
+            <Text style={[styles.infoValue, { color: colors.foreground }]}>{new Date(round.started_at).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" })}</Text>
+          </View>
+          {/* Players section label */}
+          <View style={[styles.infoRow, { paddingBottom: 2 }]}>
+            <Text style={[styles.infoLabel, { color: colors.mutedForeground, fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 0.8 }]}>PLAYERS</Text>
+          </View>
+          {/* One row per player */}
+          {([
+            { name: user?.name ?? "Me",         hcp: round.course_handicap,         tee: round.tee_color,                  accent: colors.primary },
+            ...(round.partner_name   ? [{ name: round.partner_name,   hcp: round.partner_playing_hcp   ?? 0, tee: round.partner_tee_color   ?? "white", accent: "#22c55e" }] : []),
+            ...(round.opponent_name  ? [{ name: round.opponent_name,  hcp: round.opponent_playing_hcp  ?? 0, tee: round.opponent_tee_color  ?? "white", accent: "#f87171" }] : []),
+            ...(round.opponent2_name ? [{ name: round.opponent2_name, hcp: round.opponent2_playing_hcp ?? 0, tee: round.opponent2_tee_color ?? "white", accent: "#fb923c" }] : []),
+          ] as { name: string; hcp: number; tee: string; accent: string }[]).map((p, i, arr) => (
+            <View key={p.name + i} style={[styles.playerCard, { borderBottomWidth: i < arr.length - 1 ? StyleSheet.hairlineWidth : 0, borderBottomColor: colors.border }]}>
+              <View style={[styles.playerAvatar, { backgroundColor: p.accent + "22" }]}>
+                <Ionicons name="person" size={13} color={p.accent} />
+              </View>
+              <Text style={[styles.playerName, { color: colors.foreground }]} numberOfLines={1}>{p.name}</Text>
+              <Text style={[styles.playerMeta, { color: colors.mutedForeground }]}>
+                HCP {p.hcp < 0 ? `+${-p.hcp}` : p.hcp}
+              </Text>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 5 }}>
+                <View style={[styles.playerTeeDot, {
+                  backgroundColor: TEE_HEX[p.tee] ?? "#fff",
+                  borderWidth: p.tee === "white" ? StyleSheet.hairlineWidth : 0,
+                  borderColor: colors.border,
+                }]} />
+                <Text style={[styles.playerMeta, { color: colors.mutedForeground }]}>
+                  {p.tee.charAt(0).toUpperCase() + p.tee.slice(1)}
+                </Text>
+              </View>
             </View>
           ))}
         </View>
@@ -544,6 +575,9 @@ export default function RoundCompleteScreen() {
 }
 
 const GOLD = "#c8a84b";
+const TEE_HEX: Record<string, string> = {
+  yellow: "#F5C518", white: "#FFFFFF", blue: "#3B82F6", red: "#EF4444",
+};
 
 const bbStyles = StyleSheet.create({
   headerRow: { flexDirection: "row", paddingHorizontal: 6, paddingVertical: 7, borderRadius: 10, marginBottom: 2 },
@@ -598,4 +632,9 @@ const styles = StyleSheet.create({
   footer: { paddingHorizontal: 16, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
   footerBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderRadius: 16, paddingVertical: 15 },
   footerBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  playerCard: { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 14, paddingVertical: 11 },
+  playerAvatar: { width: 28, height: 28, borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  playerName: { flex: 1, fontSize: 13, fontFamily: "Inter_600SemiBold" },
+  playerMeta: { fontSize: 12, fontFamily: "Inter_400Regular" },
+  playerTeeDot: { width: 14, height: 14, borderRadius: 7 },
 });

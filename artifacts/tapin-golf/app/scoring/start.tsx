@@ -160,6 +160,9 @@ export default function StartRoundScreen() {
   const [oppHcp, setOppHcp] = useState("0");
   const [partnerHcp, setPartnerHcp] = useState("0");
   const [opp2Hcp, setOpp2Hcp] = useState("0");
+  const [oppTeeColor, setOppTeeColor]         = useState("white");
+  const [partnerTeeColor, setPartnerTeeColor] = useState("white");
+  const [opp2TeeColor, setOpp2TeeColor]       = useState("white");
   // WHS Index from DB — shown as reference only, NOT used as course handicap
   const [oppWhsIdx, setOppWhsIdx] = useState<number | null>(null);
   const [partnerWhsIdx, setPartnerWhsIdx] = useState<number | null>(null);
@@ -414,6 +417,9 @@ export default function StartRoundScreen() {
             partnerPlayingHcp:   parseInt(partnerHcp)  || 0,
             opponent2PlayingHcp: parseInt(opp2Hcp)    || 0,
           } : {}),
+          opponentTeeColor:  oppTeeColor,
+          partnerTeeColor:   partnerTeeColor,
+          opponent2TeeColor: opp2TeeColor,
           ...(!linkedTournamentId && casualPartner  ? { partnerName:   casualPartner.name,  partnerPlayingHcp:   parseInt(casualPartner.hcp)  || 0 } : {}),
           ...(!linkedTournamentId && casualOpp1     ? { opponentName:  casualOpp1.name,     opponentPlayingHcp:  parseInt(casualOpp1.hcp)     || 0 } : {}),
           ...(!linkedTournamentId && casualOpp2     ? { opponent2Name: casualOpp2.name,     opponent2PlayingHcp: parseInt(casualOpp2.hcp)     || 0 } : {}),
@@ -860,25 +866,36 @@ export default function StartRoundScreen() {
                     <>
                       <Text style={[styles.casualSubhead, { color: colors.mutedForeground }]}>PARTNER</Text>
                       {casualPartner ? (
-                        <View style={[styles.casualCard, { borderColor: colors.primary + "50", backgroundColor: colors.primary + "0c" }]}>
-                          <View style={[styles.casualAvatar, { backgroundColor: colors.primary + "25" }]}>
-                            <Ionicons name="person" size={15} color={colors.primary} />
-                          </View>
-                          <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualPartner.name}</Text>
-                          {!casualPartner.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
-                          <View style={[styles.miniStepper, { borderColor: colors.border }]}>
-                            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
-                              <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                        <>
+                          <View style={[styles.casualCard, { borderColor: colors.primary + "50", backgroundColor: colors.primary + "0c" }]}>
+                            <View style={[styles.casualAvatar, { backgroundColor: colors.primary + "25" }]}>
+                              <Ionicons name="person" size={15} color={colors.primary} />
+                            </View>
+                            <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualPartner.name}</Text>
+                            {!casualPartner.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                            <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                                <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                              </TouchableOpacity>
+                              <TextInput value={casualPartner.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualPartner(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: colors.primary }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                              <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
+                                <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                              </TouchableOpacity>
+                            </View>
+                            <TouchableOpacity onPress={() => setCasualPartner(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                              <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
                             </TouchableOpacity>
-                            <TextInput value={casualPartner.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualPartner(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: colors.primary }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
-                            <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualPartner(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: colors.primary, borderColor: colors.primary }]}>
-                              <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
-                            </TouchableOpacity>
                           </View>
-                          <TouchableOpacity onPress={() => setCasualPartner(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                            <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
-                          </TouchableOpacity>
-                        </View>
+                          <View style={styles.miniTeeRow}>
+                            {TEE_COLORS.map(t => (
+                              <TouchableOpacity key={t.key} onPress={() => setPartnerTeeColor(t.key)}
+                                style={[styles.miniTeeBtn, { borderColor: partnerTeeColor === t.key ? colors.primary : colors.border, backgroundColor: partnerTeeColor === t.key ? colors.primary + "12" : "transparent" }]}>
+                                <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
+                                <Text style={[styles.miniTeeLbl, { color: partnerTeeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: partnerTeeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </>
                       ) : (
                         <TouchableOpacity onPress={() => openPicker("partner")} style={[styles.addPlayerBtn, { borderColor: colors.primary + "60", backgroundColor: colors.primary + "08" }]}>
                           <Ionicons name="person-add-outline" size={17} color={colors.primary} />
@@ -892,25 +909,36 @@ export default function StartRoundScreen() {
 
                   {/* Opp1 / Marker1 */}
                   {casualOpp1 ? (
-                    <View style={[styles.casualCard, { borderColor: (isBetterball ? "#ea580c" : "#60a5fa") + "50", backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "0c" }]}>
-                      <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "25" }]}>
-                        <Ionicons name="person" size={15} color={isBetterball ? "#ea580c" : "#60a5fa"} />
-                      </View>
-                      <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp1.name}</Text>
-                      {!casualOpp1.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
-                      <View style={[styles.miniStepper, { borderColor: colors.border }]}>
-                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
-                          <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                    <>
+                      <View style={[styles.casualCard, { borderColor: (isBetterball ? "#ea580c" : "#60a5fa") + "50", backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "0c" }]}>
+                        <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#ea580c" : "#60a5fa") + "25" }]}>
+                          <Ionicons name="person" size={15} color={isBetterball ? "#ea580c" : "#60a5fa"} />
+                        </View>
+                        <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp1.name}</Text>
+                        {!casualOpp1.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                        <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                            <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput value={casualOpp1.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp1(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#ea580c" : "#60a5fa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#ea580c" : "#60a5fa", borderColor: isBetterball ? "#ea580c" : "#60a5fa" }]}>
+                            <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => { setCasualOpp1(null); setCasualOpp2(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
                         </TouchableOpacity>
-                        <TextInput value={casualOpp1.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp1(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#ea580c" : "#60a5fa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
-                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp1(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#ea580c" : "#60a5fa", borderColor: isBetterball ? "#ea580c" : "#60a5fa" }]}>
-                          <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
-                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity onPress={() => { setCasualOpp1(null); setCasualOpp2(null); }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    </View>
+                      <View style={styles.miniTeeRow}>
+                        {TEE_COLORS.map(t => (
+                          <TouchableOpacity key={t.key} onPress={() => setOppTeeColor(t.key)}
+                            style={[styles.miniTeeBtn, { borderColor: oppTeeColor === t.key ? colors.primary : colors.border, backgroundColor: oppTeeColor === t.key ? colors.primary + "12" : "transparent" }]}>
+                            <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
+                            <Text style={[styles.miniTeeLbl, { color: oppTeeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: oppTeeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
                   ) : (
                     <TouchableOpacity onPress={() => openPicker("opp1")} style={[styles.addPlayerBtn, { borderColor: colors.border }]}>
                       <Ionicons name="person-add-outline" size={17} color={colors.mutedForeground} />
@@ -922,25 +950,36 @@ export default function StartRoundScreen() {
 
                   {/* Opp2 / Marker2 — not shown for singles match play (one opponent only) */}
                   {casualOpp1 && !isMatchPlay && (casualOpp2 ? (
-                    <View style={[styles.casualCard, { borderColor: (isBetterball ? "#dc2626" : "#a78bfa") + "50", backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "0c" }]}>
-                      <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "25" }]}>
-                        <Ionicons name="person" size={15} color={isBetterball ? "#dc2626" : "#a78bfa"} />
-                      </View>
-                      <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp2.name}</Text>
-                      {!casualOpp2.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
-                      <View style={[styles.miniStepper, { borderColor: colors.border }]}>
-                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
-                          <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                    <>
+                      <View style={[styles.casualCard, { borderColor: (isBetterball ? "#dc2626" : "#a78bfa") + "50", backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "0c" }]}>
+                        <View style={[styles.casualAvatar, { backgroundColor: (isBetterball ? "#dc2626" : "#a78bfa") + "25" }]}>
+                          <Ionicons name="person" size={15} color={isBetterball ? "#dc2626" : "#a78bfa"} />
+                        </View>
+                        <Text style={[styles.casualCardName, { color: colors.foreground }]} numberOfLines={1}>{casualOpp2.name}</Text>
+                        {!casualOpp2.userId && <View style={styles.guestBadge}><Text style={styles.guestBadgeTxt}>GUEST</Text></View>}
+                        <View style={[styles.miniStepper, { borderColor: colors.border }]}>
+                          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.max(0, parseInt(p.hcp || "0") - 1)) } : null); }} style={styles.miniStepBtn}>
+                            <Text style={[styles.miniStepTxt, { color: colors.foreground }]}>−</Text>
+                          </TouchableOpacity>
+                          <TextInput value={casualOpp2.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp2(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#dc2626" : "#a78bfa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
+                          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#dc2626" : "#a78bfa", borderColor: isBetterball ? "#dc2626" : "#a78bfa" }]}>
+                            <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
+                          </TouchableOpacity>
+                        </View>
+                        <TouchableOpacity onPress={() => setCasualOpp2(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                          <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
                         </TouchableOpacity>
-                        <TextInput value={casualOpp2.hcp} onChangeText={v => { const n = parseInt(v.replace(/\D/g, "") || "0"); if (n <= 54) setCasualOpp2(p => p ? { ...p, hcp: String(n) } : null); }} style={[styles.miniStepVal, { color: isBetterball ? "#dc2626" : "#a78bfa" }]} keyboardType="number-pad" textAlign="center" maxLength={2} />
-                        <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setCasualOpp2(p => p ? { ...p, hcp: String(Math.min(54, parseInt(p.hcp || "0") + 1)) } : null); }} style={[styles.miniStepBtn, { backgroundColor: isBetterball ? "#dc2626" : "#a78bfa", borderColor: isBetterball ? "#dc2626" : "#a78bfa" }]}>
-                          <Text style={[styles.miniStepTxt, { color: "#fff" }]}>+</Text>
-                        </TouchableOpacity>
                       </View>
-                      <TouchableOpacity onPress={() => setCasualOpp2(null)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                        <Ionicons name="close-circle" size={20} color={colors.mutedForeground} />
-                      </TouchableOpacity>
-                    </View>
+                      <View style={styles.miniTeeRow}>
+                        {TEE_COLORS.map(t => (
+                          <TouchableOpacity key={t.key} onPress={() => setOpp2TeeColor(t.key)}
+                            style={[styles.miniTeeBtn, { borderColor: opp2TeeColor === t.key ? colors.primary : colors.border, backgroundColor: opp2TeeColor === t.key ? colors.primary + "12" : "transparent" }]}>
+                            <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
+                            <Text style={[styles.miniTeeLbl, { color: opp2TeeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: opp2TeeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
                   ) : (
                     <TouchableOpacity onPress={() => openPicker("opp2")} style={[styles.addPlayerBtn, { borderColor: colors.border }]}>
                       <Ionicons name="person-add-outline" size={17} color={colors.mutedForeground} />
@@ -955,13 +994,12 @@ export default function StartRoundScreen() {
               {/* Handicap */}
               <Section title="HANDICAP">
                 <View style={{ gap: 14 }}>
-                  {/* Helper to render a stepper row */}
                   {([
-                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null },
-                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx },
-                    { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx },
-                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx },
-                  ] as { label: string; hint: string; value: string; set: React.Dispatch<React.SetStateAction<string>>; show: boolean; whsIdx: number | null }[])
+                    { label: "Your Course Handicap", hint: "Required — whole number", value: courseHcp, set: setCourseHcp, show: true, whsIdx: null, teeColor: null as string | null, setTeeColor: null as ((v: string) => void) | null },
+                    { label: `${matchOpponent?.partnerName ?? "Partner"} (Course HCP)`, hint: "Required — enter from HNA app", value: partnerHcp, set: setPartnerHcp, show: isBetterball && !!matchOpponent?.partnerName, whsIdx: partnerWhsIdx, teeColor: partnerTeeColor, setTeeColor: setPartnerTeeColor },
+                    { label: `${matchOpponent?.opponentName ?? "Opponent / Marker"} (Course HCP)`, hint: "Required — enter from HNA app", value: oppHcp, set: setOppHcp, show: !!matchOpponent?.opponentName, whsIdx: oppWhsIdx, teeColor: oppTeeColor, setTeeColor: setOppTeeColor },
+                    { label: `${matchOpponent?.opp2Name ?? "Opponent 2 / Marker 2"} (Course HCP)`, hint: "Required — enter from HNA app", value: opp2Hcp, set: setOpp2Hcp, show: !!matchOpponent?.opp2Name, whsIdx: opp2WhsIdx, teeColor: opp2TeeColor, setTeeColor: setOpp2TeeColor },
+                  ])
                     .filter(r => r.show)
                     .map(r => (
                       <View key={r.label}>
@@ -998,6 +1036,17 @@ export default function StartRoundScreen() {
                             <Text style={[styles.stepperBtnText, { color: "#fff" }]}>+</Text>
                           </TouchableOpacity>
                         </View>
+                        {r.teeColor !== null && r.setTeeColor && (
+                          <View style={styles.miniTeeRow}>
+                            {TEE_COLORS.map(t => (
+                              <TouchableOpacity key={t.key} onPress={() => r.setTeeColor!(t.key)}
+                                style={[styles.miniTeeBtn, { borderColor: r.teeColor === t.key ? colors.primary : colors.border, backgroundColor: r.teeColor === t.key ? colors.primary + "12" : "transparent" }]}>
+                                <View style={[styles.miniTeeDot, { backgroundColor: t.hex, borderWidth: t.key === "white" ? 1 : 0, borderColor: colors.border }]} />
+                                <Text style={[styles.miniTeeLbl, { color: r.teeColor === t.key ? colors.primary : colors.mutedForeground, fontFamily: r.teeColor === t.key ? "Inter_700Bold" : "Inter_400Regular" }]}>{t.label}</Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        )}
                       </View>
                     ))
                   }
@@ -1301,6 +1350,10 @@ const styles = StyleSheet.create({
     borderRadius: 12, borderWidth: 1.5, borderStyle: "dashed", paddingVertical: 12, marginBottom: 8,
   },
   addPlayerTxt: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  miniTeeRow: { flexDirection: "row", gap: 6, marginTop: 6, marginBottom: 8, flexWrap: "wrap" },
+  miniTeeBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5 },
+  miniTeeDot: { width: 12, height: 12, borderRadius: 6 },
+  miniTeeLbl: { fontSize: 11 },
 
   // Player picker modal
   pickerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },

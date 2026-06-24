@@ -1646,6 +1646,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_name VARCHAR(100)");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_result VARCHAR(10) CHECK (match_result IN ('won','lost','halved'))");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
 
   await ddl(`

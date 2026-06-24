@@ -77149,12 +77149,16 @@ router23.post("/scoring/rounds", async (req, res) => {
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]
     );
+    const opponentTeeColor = req.body.opponentTeeColor ?? "white";
+    const partnerTeeColor = req.body.partnerTeeColor ?? "white";
+    const opponent2TeeColor = req.body.opponent2TeeColor ?? "white";
     const [{ id }] = await query(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp,
-         partner_name, partner_playing_hcp, opponent2_name, opponent2_playing_hcp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
+         partner_name, partner_playing_hcp, partner_tee_color,
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -77168,10 +77172,13 @@ router23.post("/scoring/rounds", async (req, res) => {
       matchId,
       opponentName,
       opponentPlayingHcp,
+      opponentTeeColor,
       partnerName,
       partnerPlayingHcp,
+      partnerTeeColor,
       opponent2Name,
-      opponent2PlayingHcp
+      opponent2PlayingHcp,
+      opponent2TeeColor
     ]);
     res.json({ id });
   } catch (err) {
@@ -79293,6 +79300,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_name VARCHAR(100)");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_playing_hcp INT NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS match_result VARCHAR(10) CHECK (match_result IN ('won','lost','halved'))");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

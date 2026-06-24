@@ -686,16 +686,22 @@ router.post("/scoring/rounds", async (req, res) => {
       [user.id]
     );
 
+    const opponentTeeColor  = req.body.opponentTeeColor  ?? "white";
+    const partnerTeeColor   = req.body.partnerTeeColor   ?? "white";
+    const opponent2TeeColor = req.body.opponent2TeeColor ?? "white";
+
     const [{ id }] = await query<{ id: number }>(`
       INSERT INTO scoring_rounds
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
-         tournament_id, match_id, opponent_name, opponent_playing_hcp,
-         partner_name, partner_playing_hcp, opponent2_name, opponent2_playing_hcp)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
+         partner_name, partner_playing_hcp, partner_tee_color,
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
-        tournamentId, matchId, opponentName, opponentPlayingHcp,
-        partnerName, partnerPlayingHcp, opponent2Name, opponent2PlayingHcp]);
+        tournamentId, matchId, opponentName, opponentPlayingHcp, opponentTeeColor,
+        partnerName, partnerPlayingHcp, partnerTeeColor,
+        opponent2Name, opponent2PlayingHcp, opponent2TeeColor]);
 
     res.json({ id });
   } catch (err: any) {

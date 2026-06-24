@@ -2773,10 +2773,10 @@ ${bodyHtml}
                                         ))
                                       )}
                                       <div className="flex flex-col gap-1">
-                                        {submitted?.marker_disputed === 1 && (
+                                        {submitted && !submitted.verified && (
                                           <Button size="sm" variant="ghost"
-                                            className="h-6 px-1.5 text-[10px] font-semibold text-amber-700 hover:bg-amber-50 border border-amber-200"
-                                            title="Accept player's score and mark as verified"
+                                            className={`h-6 px-1.5 text-[10px] font-semibold border ${submitted.marker_disputed === 1 ? "text-amber-700 hover:bg-amber-50 border-amber-200" : "text-green-700 hover:bg-green-50 border-green-200"}`}
+                                            title={submitted.marker_disputed === 1 ? "Accept player's score and mark as verified" : "Manually verify this score"}
                                             disabled={readOnly || verifySaving === r.user_id}
                                             onClick={() => verifyScore(r.user_id, r.user_name)}>
                                             {verifySaving === r.user_id ? "…" : "Verify"}

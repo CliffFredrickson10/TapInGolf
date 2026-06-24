@@ -63,7 +63,6 @@ const FORMAT_LABELS: Record<string, string> = {
   individual_bonus_bogey:      "Individual Bonus Bogey",
   chairman:                    "Chairman (The Perch)",
   maximum_score:               "Maximum Score",
-  eclectic:                    "Eclectic",
   fourball_stableford:         "Betterball Stableford (4BBB)",
   fourball_gross_betterball:   "Four-Ball Gross Betterball",
   fourball_net_betterball:     "Four-Ball Net Betterball",

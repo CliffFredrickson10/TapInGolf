@@ -79,7 +79,7 @@ const FORMAT_LABELS: Record<string, string> = {
   modified_stableford: "Individual Modified Stableford", par_bogey: "Par / Bogey",
   maximum_score: "Maximum Score", chairman: "Chairman (The Perch)",
   individual_bonus_bogey: "Individual Bonus Bogey", individual_par: "Individual Par",
-  individual_bogey: "Individual Bogey", eclectic: "Eclectic (Multi-Round)",
+  individual_bogey: "Individual Bogey",
   // Legacy keys
   stroke_play: "Stroke Play", stableford: "Stableford", match_play: "Match Play",
   fourball: "Fourball", scramble: "Scramble", alliance: "Alliance", bogey: "Bogey",

@@ -211,7 +211,6 @@ const FORMAT_LABELS: Record<string, string> = {
   individual_bonus_bogey: "Individual Bonus Bogey",
   individual_par: "Individual Par Competition",
   individual_bogey: "Individual Bogey Competition",
-  eclectic: "Eclectic (Multi-Round)",
   // Betterball / Two-Player Team
   fourball_gross_betterball: "Four-Ball Gross Betterball",
   fourball_net_betterball: "Four-Ball Net Betterball",
@@ -239,7 +238,7 @@ function fmtFormat(ev: { format: string; format_custom?: string | null }) {
 }
 const TYPE_LABELS: Record<string, string> = {
   competition: "Competition", open_day: "Open Day", corporate: "Corporate",
-  social: "Social", other: "Other",
+  social: "Social", eclectic: "Eclectic (Ringer Board)", other: "Other",
 };
 const RESTRICT_LABELS: Record<string, string> = {
   open: "Open", members_only: "Members Only", invitation_only: "Invite Only", whs_players_only: "WHS Index Players Only",
@@ -3031,7 +3030,7 @@ ${bodyHtml}
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
                         <Label>Tournament Type</Label>
-                        <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v }))}>
+                        <Select value={form.event_type} onValueChange={v => setForm(f => ({ ...f, event_type: v, ...(v === 'eclectic' ? { format: 'net_stroke_play' } : {}) }))}>
                           <SelectTrigger><SelectValue /></SelectTrigger>
                           <SelectContent>
                             {Object.entries(TYPE_LABELS).map(([k, v]) => <SelectItem key={k} value={k}>{v}</SelectItem>)}
@@ -3053,7 +3052,13 @@ ${bodyHtml}
                   {/* ━━━ STEP 1: FORMAT ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}
                   {wizardStep === 1 && (<>
                     <p className="text-sm text-muted-foreground">Choose the playing format(s) for this tournament.</p>
-                    <div className="grid grid-cols-2 gap-3">
+                    {form.event_type === 'eclectic' && (
+                      <div className="rounded-lg border bg-muted/40 p-4 space-y-1">
+                        <p className="text-sm font-medium">Format locked: Nett Stroke Play (Medal)</p>
+                        <p className="text-xs text-muted-foreground">Eclectic competitions always use Individual Nett Stroke Play. Each player's best score per hole is tracked across all submitted rounds.</p>
+                      </div>
+                    )}
+                    <div className={`grid grid-cols-2 gap-3${form.event_type === 'eclectic' ? ' hidden' : ''}`}>
                       <div className="space-y-1.5">
                         <Label>Format 1 *</Label>
                         <Select value={form.format} onValueChange={v => setForm(f => ({ ...f, format: v, format_custom: v !== "other" ? f.format_custom : "" }))}>
@@ -3070,7 +3075,6 @@ ${bodyHtml}
                               <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
                               <SelectItem value="individual_par">Individual Par Competition</SelectItem>
                               <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
-                              <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Betterball / Two-Player Team</SelectLabel>
                               <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>
@@ -3119,7 +3123,6 @@ ${bodyHtml}
                               <SelectItem value="individual_bonus_bogey">Individual Bonus Bogey</SelectItem>
                               <SelectItem value="individual_par">Individual Par Competition</SelectItem>
                               <SelectItem value="individual_bogey">Individual Bogey Competition</SelectItem>
-                              <SelectItem value="eclectic">Eclectic (Multi-Round)</SelectItem>
                             </SelectGroup>
                             <SelectGroup><SelectLabel>Betterball / Two-Player Team</SelectLabel>
                               <SelectItem value="fourball_gross_betterball">Four-Ball Gross Betterball</SelectItem>

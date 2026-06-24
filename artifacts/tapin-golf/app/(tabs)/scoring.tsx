@@ -53,7 +53,6 @@ const FORMAT_LABELS: Record<string, string> = {
   singles_stableford_match_play: "Singles Stableford Match Play",
   american_scramble: "American Scramble",
   shamble: "Shamble",
-  eclectic: "Eclectic",
   modified_stableford: "Modified Stableford",
   chairman: "Chairman (The Perch)",
   maximum_score: "Maximum Score",

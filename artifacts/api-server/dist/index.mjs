@@ -63640,11 +63640,11 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
     const boards = await query(
       `SELECT erb.user_id, u.name AS player_name, erb.division,
           erb.total_gross, erb.total_net, erb.rounds_counted, erb.holes, erb.holes_net,
-          erb.frozen_handicap
+          erb.frozen_handicap, u.handicap AS current_handicap
        FROM eclectic_ringer_board erb
        JOIN users u ON u.id = erb.user_id
        WHERE erb.event_id = ?
-       ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+       ORDER BY erb.division, erb.total_net ASC NULLS LAST`,
       [evId]
     ).catch(() => []);
     const grouped2 = {};
@@ -63655,6 +63655,7 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
         grouped2[d] = [];
         divPositions[d] = 1;
       }
+      const hc = b.current_handicap != null ? parseFloat(b.current_handicap) : b.frozen_handicap != null ? parseFloat(b.frozen_handicap) : null;
       grouped2[d].push({
         user_id: b.user_id,
         player_name: b.player_name,
@@ -63666,7 +63667,7 @@ router3.get("/events/:id/leaderboard", async (req, res) => {
         rounds: b.rounds_counted,
         holes: b.holes,
         holes_net: b.holes_net,
-        handicap: b.frozen_handicap != null ? parseFloat(b.frozen_handicap) : null,
+        handicap: hc,
         verified: 1,
         dq: false
       });
@@ -63767,11 +63768,12 @@ router3.get("/events/:id/eclectic-board", async (req, res) => {
   const boards = await query(
     `SELECT erb.user_id, u.name AS player_name, erb.division,
         erb.total_gross, erb.total_net, erb.rounds_counted,
-        erb.holes, erb.holes_net, erb.frozen_handicap, erb.updated_at
+        erb.holes, erb.holes_net, erb.frozen_handicap,
+        u.handicap AS current_handicap, erb.updated_at
      FROM eclectic_ringer_board erb
      JOIN users u ON u.id = erb.user_id
      WHERE erb.event_id = ?
-     ORDER BY erb.division, erb.total_gross ASC NULLS LAST`,
+     ORDER BY erb.division, erb.total_net ASC NULLS LAST`,
     [evId]
   ).catch(() => []);
   res.json({ boards });
@@ -63802,9 +63804,12 @@ router3.get("/events/:id/eclectic-rounds", async (req, res) => {
   const endDate = ev.end_date ?? ev.event_date;
   const rounds = await query(
     `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
-            COALESCE(ge.name, ?) AS tournament_name
+            COALESCE(ge.name, ?) AS tournament_name,
+            es.hole_scores AS es_hole_scores
      FROM scoring_rounds sr
      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
+     LEFT JOIN event_scores es
+           ON es.event_id = sr.tournament_id AND es.user_id = sr.user_id
      WHERE sr.score_submitted = 1
        AND sr.user_id = ?
        AND (
@@ -63819,21 +63824,40 @@ router3.get("/events/:id/eclectic-rounds", async (req, res) => {
     res.json({ players, rounds: [] });
     return;
   }
-  const roundIds = rounds.map((r) => r.round_id);
-  const holeRows = await query(
-    `SELECT round_id, hole_number, gross_score
-     FROM scoring_holes
-     WHERE round_id = ANY(?) AND gross_score IS NOT NULL AND is_nr = FALSE`,
-    [roundIds]
-  ).catch(() => []);
+  const missingIds = rounds.filter((r) => !r.es_hole_scores).map((r) => r.round_id);
   const holesByRound = {};
-  for (const h of holeRows) {
-    if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
-    holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
+  if (missingIds.length > 0) {
+    const ph2 = missingIds.map(() => "?").join(",");
+    const holeRows = await query(
+      `SELECT round_id, hole_number, gross_score
+       FROM scoring_holes
+       WHERE round_id IN (${ph2}) AND gross_score IS NOT NULL AND is_nr = 0`,
+      missingIds
+    ).catch(() => []);
+    for (const h of holeRows) {
+      if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
+      holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
+    }
   }
   res.json({
     players,
-    rounds: rounds.map((r) => ({ ...r, hole_scores: holesByRound[r.round_id] ?? {} }))
+    rounds: rounds.map((r) => {
+      let hs = holesByRound[r.round_id] ?? {};
+      if (r.es_hole_scores) {
+        const parsed = typeof r.es_hole_scores === "string" ? JSON.parse(r.es_hole_scores) : r.es_hole_scores;
+        if (Array.isArray(parsed)) {
+          hs = {};
+          parsed.forEach((v, i) => {
+            if (typeof v === "number") hs[String(i + 1)] = v;
+          });
+        } else {
+          hs = Object.fromEntries(
+            Object.entries(parsed).filter(([, v]) => typeof v === "number").map(([k, v]) => [k, v])
+          );
+        }
+      }
+      return { ...r, hole_scores: hs };
+    })
   });
 });
 router3.get("/events/:id/partner-search", async (req, res) => {
@@ -78199,6 +78223,7 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
             const totalGross = Object.keys(newHoles).length > 0 ? Object.values(newHoles).reduce((s, v) => s + Number(v), 0) : null;
             const totalNet = Object.keys(newHolesNet).length > 0 ? Object.values(newHolesNet).reduce((s, v) => s + Number(v), 0) : null;
             const roundsNow = (existing?.rounds_counted ?? 0) + 1;
+            const hcForBoard = fullRound.playing_handicap ?? reg.frozen_handicap ?? null;
             if (!existing) {
               await exec(
                 `INSERT INTO eclectic_ringer_board
@@ -78214,14 +78239,14 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
                   totalNet,
                   roundsNow,
                   reg.division,
-                  reg.frozen_handicap
+                  hcForBoard
                 ]
               );
             } else {
               await exec(
                 `UPDATE eclectic_ringer_board
                    SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
-                       rounds_counted = ?, updated_at = NOW()
+                       rounds_counted = ?, frozen_handicap = ?, updated_at = NOW()
                  WHERE event_id = ? AND user_id = ?`,
                 [
                   JSON.stringify(newHoles),
@@ -78229,6 +78254,7 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
                   totalGross,
                   totalNet,
                   roundsNow,
+                  hcForBoard,
                   ev.id,
                   user.id
                 ]
@@ -78322,6 +78348,7 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
                 const totalGrossE = Object.keys(newHolesE).length > 0 ? Object.values(newHolesE).reduce((s, v) => s + Number(v), 0) : null;
                 const totalNetE = Object.keys(newHolesNetE).length > 0 ? Object.values(newHolesNetE).reduce((s, v) => s + Number(v), 0) : null;
                 const roundsNowE = (existingRinger?.rounds_counted ?? 0) + 1;
+                const hcForEclectic = fullRound.playing_handicap ?? reg.frozen_handicap ?? null;
                 if (!existingRinger) {
                   await exec(
                     `INSERT INTO eclectic_ringer_board
@@ -78337,14 +78364,14 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
                       totalNetE,
                       roundsNowE,
                       reg.division,
-                      reg.frozen_handicap
+                      hcForEclectic
                     ]
                   );
                 } else {
                   await exec(
                     `UPDATE eclectic_ringer_board
                        SET holes = ?, holes_net = ?, total_gross = ?, total_net = ?,
-                           rounds_counted = ?, updated_at = NOW()
+                           rounds_counted = ?, frozen_handicap = ?, updated_at = NOW()
                      WHERE event_id = ? AND user_id = ?`,
                     [
                       JSON.stringify(newHolesE),
@@ -78352,6 +78379,7 @@ router23.post("/scoring/rounds/:id/submit", async (req, res) => {
                       totalGrossE,
                       totalNetE,
                       roundsNowE,
+                      hcForEclectic,
                       activeEclectic.id,
                       user.id
                     ]

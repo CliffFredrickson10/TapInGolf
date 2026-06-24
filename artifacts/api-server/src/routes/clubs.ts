@@ -1391,9 +1391,12 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
 
   const rounds = await query<any>(
     `SELECT sr.id AS round_id, sr.user_id, sr.total_gross, sr.completed_at, sr.tournament_id,
-            COALESCE(ge.name, ?) AS tournament_name
+            COALESCE(ge.name, ?) AS tournament_name,
+            es.hole_scores AS es_hole_scores
      FROM scoring_rounds sr
      LEFT JOIN golf_events ge ON ge.id = sr.tournament_id
+     LEFT JOIN event_scores es
+           ON es.event_id = sr.tournament_id AND es.user_id = sr.user_id
      WHERE sr.score_submitted = 1
        AND sr.user_id = ?
        AND (
@@ -1407,33 +1410,51 @@ router.get("/events/:id/eclectic-rounds", async (req, res): Promise<void> => {
 
   if (rounds.length === 0) { res.json({ players, rounds: [] }); return; }
 
-  const roundIds = rounds.map((r: any) => r.round_id);
-  const placeholders = roundIds.map(() => '?').join(',');
-  const holeRows = await query<any>(
-    `SELECT round_id, hole_number, gross_score, net_score
-     FROM scoring_holes
-     WHERE round_id IN (${placeholders}) AND gross_score IS NOT NULL AND is_nr = FALSE`,
-    roundIds
-  ).catch(() => [] as any[]);
+  // Fall back to scoring_holes for rounds without event_scores
+  const missingIds = rounds
+    .filter((r: any) => !r.es_hole_scores)
+    .map((r: any) => r.round_id);
 
   const holesByRound: Record<number, Record<string, number>> = {};
-  const holesNetByRound: Record<number, Record<string, number>> = {};
-  for (const h of holeRows) {
-    if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
-    holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
-    if (h.net_score != null) {
-      if (!holesNetByRound[h.round_id]) holesNetByRound[h.round_id] = {};
-      holesNetByRound[h.round_id][String(h.hole_number)] = h.net_score;
+  if (missingIds.length > 0) {
+    const ph2 = missingIds.map(() => '?').join(',');
+    const holeRows = await query<any>(
+      `SELECT round_id, hole_number, gross_score
+       FROM scoring_holes
+       WHERE round_id IN (${ph2}) AND gross_score IS NOT NULL AND is_nr = 0`,
+      missingIds
+    ).catch(() => [] as any[]);
+    for (const h of holeRows) {
+      if (!holesByRound[h.round_id]) holesByRound[h.round_id] = {};
+      holesByRound[h.round_id][String(h.hole_number)] = h.gross_score;
     }
   }
 
   res.json({
     players,
-    rounds: rounds.map((r: any) => ({
-      ...r,
-      hole_scores: holesByRound[r.round_id] ?? {},
-      hole_scores_net: holesNetByRound[r.round_id] ?? {},
-    })),
+    rounds: rounds.map((r: any) => {
+      let hs: Record<string, number> = holesByRound[r.round_id] ?? {};
+      if (r.es_hole_scores) {
+        const parsed = typeof r.es_hole_scores === 'string'
+          ? JSON.parse(r.es_hole_scores)
+          : r.es_hole_scores;
+        if (Array.isArray(parsed)) {
+          // Stored as a 0-indexed array — convert to 1-indexed object
+          hs = {};
+          (parsed as number[]).forEach((v, i) => {
+            if (typeof v === 'number') hs[String(i + 1)] = v;
+          });
+        } else {
+          // Already a {hole: score} object
+          hs = Object.fromEntries(
+            Object.entries(parsed as Record<string, unknown>)
+              .filter(([, v]) => typeof v === 'number')
+              .map(([k, v]) => [k, v as number])
+          );
+        }
+      }
+      return { ...r, hole_scores: hs };
+    }),
   });
 });
 

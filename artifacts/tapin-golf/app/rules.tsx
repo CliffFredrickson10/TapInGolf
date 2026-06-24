@@ -436,7 +436,7 @@ export default function RulesScreen() {
         {/* R&A Rule Book link */}
         <TouchableOpacity
           style={s.rnaCard}
-          onPress={() => Linking.openURL("https://www.randa.org/rog/2024/en/the-rules-of-golf")}
+          onPress={() => Linking.openURL("https://www.randa.org/rules/rules-of-golf-home")}
           activeOpacity={0.8}
         >
           <View style={s.rnaLeft}>

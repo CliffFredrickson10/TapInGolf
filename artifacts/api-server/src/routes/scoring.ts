@@ -735,6 +735,7 @@ router.get("/scoring/rounds/:id", async (req, res) => {
       SELECT r.*, c.name AS club_name, c.location AS club_location, c.logo_url AS club_logo_url,
              e.name AS tournament_name,
              u.name AS player_name,
+             um.name AS marker_name,
              km.status      AS match_status,
              km.dispute     AS match_dispute,
              km.winner_id   AS match_winner_id,
@@ -743,6 +744,7 @@ router.get("/scoring/rounds/:id", async (req, res) => {
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
       JOIN users u ON u.id = r.user_id
+      LEFT JOIN users um ON um.id = r.marker_user_id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       LEFT JOIN knockout_matches km ON km.id = r.match_id
       LEFT JOIN event_scores es ON es.event_id = r.tournament_id AND es.user_id = r.user_id

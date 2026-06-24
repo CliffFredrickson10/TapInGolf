@@ -33,6 +33,9 @@ type Round = {
   started_at: string; completed_at: string | null;
   tournament_id: number | null; tournament_name: string | null;
   score_submitted: number;
+  score_disputed?: number;
+  marker_name?: string | null;
+  marker_hole_scores?: Record<string, number> | null;
   scorecard: ScorecardHole[];
   holes: Record<number, SavedHole>;
   opponent_name?: string | null;
@@ -691,17 +694,48 @@ export default function RoundCompleteScreen() {
                 <Text style={[styles.footerBtnText, { color: "#16a34a" }]}>Score Submitted to Club ✓</Text>
               </View>
             )}
-            {round.tournament_id && round.score_disputed === 1 && (
-              <View style={[styles.footerBtn, { backgroundColor: "#dc262622", borderWidth: 1.5, borderColor: "#dc262660", flexDirection: "column", alignItems: "flex-start", gap: 2 }]}>
-                <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
-                  <Ionicons name="warning" size={18} color="#dc2626" />
-                  <Text style={[styles.footerBtnText, { color: "#dc2626" }]}>Score Disputed ⚠</Text>
+            {round.tournament_id && round.score_disputed === 1 && (() => {
+              const mhs = round.marker_hole_scores ?? {};
+              const disputes = Object.keys(mhs)
+                .map(k => ({ hole: Number(k), markerScore: Number(mhs[k]), myScore: round.holes[Number(k)]?.gross_score ?? null }))
+                .filter(d => d.myScore !== null && d.markerScore !== d.myScore)
+                .sort((a, b) => a.hole - b.hole);
+              const markerFirst = (round.marker_name ?? "Your marker").split(" ")[0];
+              return (
+                <View style={{ backgroundColor: "#dc262608", borderWidth: 1.5, borderColor: "#dc262640", borderRadius: 12, padding: 12, gap: 8 }}>
+                  <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+                    <Ionicons name="warning" size={18} color="#dc2626" />
+                    <Text style={[styles.footerBtnText, { color: "#dc2626" }]}>
+                      {disputes.length} Score{disputes.length !== 1 ? "s" : ""} Disputed ⚠
+                    </Text>
+                  </View>
+                  <Text style={{ fontSize: 11, color: "#dc2626aa", fontFamily: "Inter_400Regular", paddingLeft: 26 }}>
+                    {markerFirst} recorded different scores on {disputes.length} hole{disputes.length !== 1 ? "s" : ""}. Contact the club to resolve.
+                  </Text>
+                  {disputes.length > 0 && (
+                    <View style={{ marginTop: 4, borderTopWidth: 1, borderTopColor: "#dc262630", paddingTop: 8, gap: 0 }}>
+                      <View style={{ flexDirection: "row", paddingHorizontal: 4, paddingBottom: 4 }}>
+                        <Text style={{ width: 52, fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc262680" }}>HOLE</Text>
+                        <Text style={{ flex: 1, fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc262680", textAlign: "center" }}>YOU</Text>
+                        <Text style={{ flex: 1, fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc262680", textAlign: "center" }}>{markerFirst.toUpperCase()}</Text>
+                        <Text style={{ width: 40, fontSize: 10, fontFamily: "Inter_700Bold", color: "#dc262680", textAlign: "center" }}>DIFF</Text>
+                      </View>
+                      {disputes.map(d => {
+                        const diff = d.markerScore - (d.myScore ?? 0);
+                        return (
+                          <View key={d.hole} style={{ flexDirection: "row", paddingHorizontal: 4, paddingVertical: 5, borderTopWidth: 1, borderTopColor: "#dc262618" }}>
+                            <Text style={{ width: 52, fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#dc2626" }}>Hole {d.hole}</Text>
+                            <Text style={{ flex: 1, fontSize: 15, fontFamily: "Inter_700Bold", color: GOLD, textAlign: "center" }}>{d.myScore}</Text>
+                            <Text style={{ flex: 1, fontSize: 15, fontFamily: "Inter_700Bold", color: "#dc2626", textAlign: "center" }}>{d.markerScore}</Text>
+                            <Text style={{ width: 40, fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#dc2626", textAlign: "center" }}>{diff > 0 ? `+${diff}` : `${diff}`}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
                 </View>
-                <Text style={{ fontSize: 11, color: "#dc2626aa", fontFamily: "Inter_400Regular", paddingLeft: 26 }}>
-                  Your marker recorded different scores on some holes. Contact the club to resolve.
-                </Text>
-              </View>
-            )}
+              );
+            })()}
             {pendingMarks.length > 0 && (
               <TouchableOpacity
                 onPress={() => router.push(`/scoring/${pendingMarks[0].id}/mark`)}

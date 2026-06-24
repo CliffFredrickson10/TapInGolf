@@ -358,20 +358,45 @@ export default function RoundCompleteScreen() {
 
   const holesScored = sc.filter(h => holes[h.number] != null).length;
 
-  const isScrambleFmt = ["texas_scramble","american_scramble","chapman"].includes(round.format);
+  const isShambleRound  = round.format === "shamble";
+  const isScrambleFmt   = ["texas_scramble","american_scramble","chapman","shamble"].includes(round.format);
   let teamTotal = 0;
+  let teamUnit: string | null = null;
   if (isScrambleFmt) {
     const ph = round.playerHoles ?? {};
+    const getHA2 = (si: number, hcp: number): number => {
+      if (hcp <= 0) return 0;
+      if (hcp <= 18) return si <= hcp ? 1 : 0;
+      return 1 + (si <= hcp - 18 ? 1 : 0);
+    };
     sc.forEach(h => {
       const saved = holes[h.number];
-      const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
-      const others = ([0, 1, 2] as const).map(i => {
-        const s = ph[`${i}_${h.number}`];
-        return (s && !s.is_nr && s.gross_score != null) ? s.gross_score : null;
-      });
-      const allScores = ([myG, ...others] as (number | null)[]).filter((g): g is number => g != null);
-      if (allScores.length > 0) teamTotal += Math.min(...allScores);
+      if (isShambleRound) {
+        const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
+        const myHA = getHA2(h.stroke_index, round.playing_handicap);
+        const myPts = myG != null ? Math.max(0, h.par + 2 - (myG - myHA)) : null;
+        const others = ([
+          { idx: 0, hcp: round.partner_playing_hcp   ?? round.playing_handicap },
+          { idx: 1, hcp: round.opponent_playing_hcp  ?? 0 },
+          { idx: 2, hcp: round.opponent2_playing_hcp ?? 0 },
+        ] as const).map(({ idx, hcp }) => {
+          const s = ph[`${idx}_${h.number}`];
+          if (!s || s.is_nr || s.gross_score == null) return null;
+          return Math.max(0, h.par + 2 - (s.gross_score - getHA2(h.stroke_index, hcp)));
+        });
+        const allPts = ([myPts, ...others] as (number | null)[]).filter((p): p is number => p != null);
+        if (allPts.length > 0) teamTotal += Math.max(...allPts);
+      } else {
+        const myG = (saved && !saved.is_nr && saved.gross_score != null) ? saved.gross_score : null;
+        const others = ([0, 1, 2] as const).map(i => {
+          const s = ph[`${i}_${h.number}`];
+          return (s && !s.is_nr && s.gross_score != null) ? s.gross_score : null;
+        });
+        const allScores = ([myG, ...others] as (number | null)[]).filter((g): g is number => g != null);
+        if (allScores.length > 0) teamTotal += Math.min(...allScores);
+      }
     });
+    teamUnit = isShambleRound ? "pts" : null;
   }
 
   const isMatchPlay  = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
@@ -423,7 +448,7 @@ export default function RoundCompleteScreen() {
         <View style={[styles.summaryRow, { backgroundColor: colors.primary + "08", borderBottomColor: colors.border }]}>
           {(isScrambleFmt
             ? [
-                { label: "Team", value: String(teamTotal || "—"), unit: null, highlight: true },
+                { label: "Team", value: String(teamTotal || "—"), unit: teamUnit, highlight: true },
                 { label: "My Gross", value: String(totalGross), unit: null, highlight: false },
                 { label: "My Net", value: String(totalNet), unit: null, highlight: false },
                 { label: "Holes", value: String(holesScored), unit: `/ ${sc.length}`, highlight: false },

@@ -1133,11 +1133,6 @@ export default function StartRoundScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              {startingHole !== 1 && (
-                <Text style={[styles.holeNote, { color: colors.mutedForeground }]}>
-                  Shotgun start — scoring begins on hole {startingHole} and wraps around automatically.
-                </Text>
-              )}
             </Section>
           )}
         </ScrollView>

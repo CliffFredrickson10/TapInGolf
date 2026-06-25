@@ -167,6 +167,32 @@ export default function BetterballHoleScreen() {
     } catch (err: any) { Alert.alert("Error", err.message || "Failed to complete"); }
   };
 
+  const clearHoleScore = () => {
+    if (!round.holes[hole.number]) return;
+    Alert.alert(
+      "Clear Score",
+      `Remove the saved score for hole ${hole.number}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, { method: "DELETE" });
+            } catch { /* best-effort */ }
+            const updatedHoles = { ...round.holes };
+            delete updatedHoles[hole.number];
+            setRound({ ...round, holes: updatedHoles });
+            setG0(null);
+            setG1(null);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   const PlayerCard = ({ g, setG, ha, pts, isWinner, idx, name }: { g: number|null; setG: (v: number|null)=>void; ha: number; pts: number|null; isWinner: boolean; idx: number; name: string }) => {
     const color = PLAYER_COLORS[idx];
     const initials = name.split(" ").slice(0,2).map(w=>w[0]?.toUpperCase()??"").join("");
@@ -271,7 +297,19 @@ export default function BetterballHoleScreen() {
 
       {/* Hole identity */}
       <View style={styles.holeHeader}>
-        <Text style={styles.nowLabel}>NOW SCORING</Text>
+        <View style={{ flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={styles.nowLabel}>NOW SCORING</Text>
+          {round.holes[hole.number] != null && (
+            <TouchableOpacity
+              onPress={clearHoleScore}
+              hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
+              style={{ flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: "#f8717140", backgroundColor: "#f8717110" }}
+            >
+              <Ionicons name="trash-outline" size={12} color="#f87171" />
+              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#f87171" }}>Clear</Text>
+            </TouchableOpacity>
+          )}
+        </View>
         <Text style={styles.holeName}>HOLE {hole.number}</Text>
         <View style={styles.statsRow}>
           {[{l:"PAR",v:String(hole.par),a:true},{l:"SI",v:String(hole.stroke_index),a:false},{l:"DIST",v:hole.distance_m?`${hole.distance_m}m`:"—",a:false}].map(s=>(

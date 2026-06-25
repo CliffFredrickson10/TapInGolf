@@ -814,6 +814,46 @@ export default function HoleEntryScreen() {
     }
   };
 
+  const clearHoleScore = () => {
+    const savedHole = round.holes[hole.number];
+    if (!savedHole) return;
+    Alert.alert(
+      "Clear Score",
+      `Remove the saved score for hole ${hole.number}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Clear",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, { method: "DELETE" });
+            } catch {
+              // best-effort — clear locally regardless
+            }
+            const updatedHoles = { ...round.holes };
+            delete updatedHoles[hole.number];
+            const updatedPlayerHoles = { ...(round.playerHoles ?? {}) };
+            delete updatedPlayerHoles[`0_${hole.number}`];
+            delete updatedPlayerHoles[`1_${hole.number}`];
+            delete updatedPlayerHoles[`2_${hole.number}`];
+            setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
+            setGross(null);
+            setPartnerGross(null);
+            setOppGross(null);
+            setOpp2Gross(null);
+            // Remove from offline queue if queued
+            const queue = await readQueue();
+            const updated = queue.filter(q => q.holeNumber !== hole.number);
+            await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
+            setPendingCount(updated.length);
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          },
+        },
+      ]
+    );
+  };
+
   const confirmAndFinish = () => {
     router.replace(`/scoring/${id}/complete`);
   };
@@ -1045,6 +1085,16 @@ export default function HoleEntryScreen() {
           <Text style={[styles.sectionLabel, { color: GREEN }]}>
             {isBetterball ? "YOUR TEAM" : "YOUR SCORE"}
           </Text>
+          {round.holes[hole.number] != null && (
+            <TouchableOpacity
+              onPress={clearHoleScore}
+              hitSlop={{ top: 10, bottom: 10, left: 12, right: 12 }}
+              style={{ marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 4, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, borderWidth: 1, borderColor: "#f8717140", backgroundColor: "#f8717110" }}
+            >
+              <Ionicons name="trash-outline" size={12} color="#f87171" />
+              <Text style={{ fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#f87171" }}>Clear</Text>
+            </TouchableOpacity>
+          )}
         </View>
 
         <View style={[styles.teamGroupBox, { borderColor: isBetterball ? "#1a5c3860" : "#16a34a40" }]}>

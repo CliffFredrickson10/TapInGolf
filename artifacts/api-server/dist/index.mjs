@@ -77743,6 +77743,39 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
     res.status(500).json({ message: "Failed to save hole score" });
   }
 });
+router23.delete("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
+  try {
+    const user = await getUser(req);
+    if (!user) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    const roundId = parseInt(req.params.id);
+    const holeNum = parseInt(req.params.holeNum);
+    const rounds = await query(
+      "SELECT id FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      [roundId, user.id]
+    );
+    if (rounds.length === 0) {
+      res.status(404).json({ message: "Active round not found" });
+      return;
+    }
+    await exec("DELETE FROM scoring_holes WHERE round_id = ? AND hole_number = ?", [roundId, holeNum]);
+    await exec("DELETE FROM scoring_player_holes WHERE round_id = ? AND hole_number = ?", [roundId, holeNum]);
+    await run(
+      "UPDATE scoring_rounds SET holes_played = (SELECT COUNT(*) FROM scoring_holes WHERE round_id = ?) WHERE id = ?",
+      [roundId, roundId]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    if (err?.message?.includes("Unauthorized")) {
+      res.status(401).json({ message: "Unauthorized" });
+      return;
+    }
+    req.log?.error({ err }, "clear hole error");
+    res.status(500).json({ message: "Failed to clear hole score" });
+  }
+});
 router23.patch("/scoring/rounds/:id/handicaps", async (req, res) => {
   try {
     const user = await getUser(req);

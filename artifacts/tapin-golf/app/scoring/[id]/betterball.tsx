@@ -19,12 +19,12 @@ import { apiFetch } from "@/lib/api";
 import GolfBallLoader from "@/components/GolfBallLoader";
 import { AppHeader } from "@/components/AppHeader";
 
-const DARK_BG  = "#0d1f14";
-const SURFACE  = "#162a1e";
-const BORDER   = "#1f3826";
+const DARK_BG  = "#f2f6f3";
+const SURFACE  = "#ffffff";
+const BORDER   = "#c8ddd2";
 const GREEN    = "#1a5c38";
 const GOLD     = "#c8a84b";
-const MUTED_FG = "#4a6550";
+const MUTED_FG = "#5a7265";
 
 const PLAYER_COLORS = ["#3b82f6", "#a855f7"];
 
@@ -44,7 +44,7 @@ type Round = {
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
 function calcPts(gross: number, par: number, ha: number) { return Math.max(0,par+2-(gross-ha)); }
 function scoreName(g: number, p: number) { if(g===1) return "Hole-in-one"; const d=g-p; if(d<=-2) return "Eagle"; if(d===-1) return "Birdie"; if(d===0) return "Par"; if(d===1) return "Bogey"; if(d===2) return "Double"; return `+${d}`; }
-function scoreColor(g: number, p: number) { const d=g-p; if(d<=-2) return GOLD; if(d===-1) return "#22c55e"; if(d===0) return "#a3e4bc"; if(d===1) return "#fb923c"; return "#f87171"; }
+function scoreColor(g: number, p: number) { const d=g-p; if(d<=-2) return GOLD; if(d===-1) return "#22c55e"; if(d===0) return "#1a5c38"; if(d===1) return "#fb923c"; return "#f87171"; }
 
 export default function BetterballHoleScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -187,11 +187,11 @@ export default function BetterballHoleScreen() {
             {g != null ? (
               <>
                 <Text style={[styles.miniScore, { color: scoreColor(g, hole.par) }]}>{g}</Text>
-                <Text style={styles.miniScoreLabel}>{scoreName(g,hole.par)} · net {g-ha} · <Text style={{ color: pts!=null?(pts>=3?"#22c55e":pts>=2?GOLD:pts>=1?"#fb923c":"#f87171"):"#fff", fontFamily: "Inter_700Bold" }}>{pts}pts</Text></Text>
+                <Text style={styles.miniScoreLabel}>{scoreName(g,hole.par)} · net {g-ha} · <Text style={{ color: pts!=null?(pts>=3?"#22c55e":pts>=2?GOLD:pts>=1?"#fb923c":"#f87171"):MUTED_FG, fontFamily: "Inter_700Bold" }}>{pts}pts</Text></Text>
               </>
-            ) : <Text style={[styles.miniScore, { color: SURFACE }]}>—</Text>}
+            ) : <Text style={[styles.miniScore, { color: BORDER }]}>—</Text>}
           </View>
-          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setG(g==null?hole.par+1:Math.min(15,g+1)); }} style={[styles.miniStepBtn, { borderColor: GREEN, backgroundColor: "#1a4028" }]}>
+          <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setG(g==null?hole.par+1:Math.min(15,g+1)); }} style={[styles.miniStepBtn, { borderColor: GREEN, backgroundColor: "#e8f5ee" }]}>
             <Text style={[styles.miniStepText, { color: "#22c55e" }]}>+</Text>
           </TouchableOpacity>
         </View>
@@ -201,8 +201,8 @@ export default function BetterballHoleScreen() {
             const active = g===val;
             const qc = val<hole.par?"#22c55e":val===hole.par?GOLD:val===hole.par+1?"#fb923c":"#f87171";
             return (
-              <TouchableOpacity key={off} onPress={() => { Haptics.selectionAsync(); setG(val); }} style={[styles.quickBtn, { backgroundColor: active?qc+"33":DARK_BG, borderColor: active?qc:BORDER }]}>
-                <Text style={[styles.quickScore, { color: active?qc:"#fff" }]}>{val}</Text>
+              <TouchableOpacity key={off} onPress={() => { Haptics.selectionAsync(); setG(val); }} style={[styles.quickBtn, { backgroundColor: active?qc+"33":SURFACE, borderColor: active?qc:BORDER }]}>
+                <Text style={[styles.quickScore, { color: active?qc:"#1a1f1c" }]}>{val}</Text>
               </TouchableOpacity>
             );
           })}
@@ -220,7 +220,7 @@ export default function BetterballHoleScreen() {
       {/* Top bar */}
       <View style={styles.topBar}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-          <Ionicons name="arrow-back" size={20} color="#fff" />
+          <Ionicons name="arrow-back" size={20} color={GREEN} />
         </TouchableOpacity>
         <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name} · Betterball</Text>
         <TouchableOpacity onPress={() => router.push(`/scoring/${id}/complete`)} style={styles.backBtn}>
@@ -250,10 +250,10 @@ export default function BetterballHoleScreen() {
           const saved = round.holes[h.number];
           const active = i===holeIdx;
           const p = saved?.stableford_points;
-          const dotBg = active?"#fff":saved?(p!=null&&p>=3?"#22c55e":p!=null&&p>=2?GOLD:p!=null&&p>=1?"#fb923c":"#f87171"):SURFACE;
+          const dotBg = active?GREEN:saved?(p!=null&&p>=3?"#22c55e":p!=null&&p>=2?GOLD:p!=null&&p>=1?"#fb923c":"#f87171"):SURFACE;
           return (
-            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active?"#fff":BORDER, height: active?36:28 }]}>
-              <Text style={{ fontSize: active?12:10, fontFamily: "Inter_700Bold", color: active?DARK_BG:saved?"#fff":MUTED_FG }}>{h.number}</Text>
+            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active?GREEN:BORDER, height: active?36:28 }]}>
+              <Text style={{ fontSize: active?12:10, fontFamily: "Inter_700Bold", color: active?"#fff":saved?"#fff":MUTED_FG }}>{h.number}</Text>
             </TouchableOpacity>
           );
         })}
@@ -267,7 +267,7 @@ export default function BetterballHoleScreen() {
         <View style={styles.statsRow}>
           {[{l:"PAR",v:String(hole.par),a:true},{l:"SI",v:String(hole.stroke_index),a:false},{l:"DIST",v:hole.distance_m?`${hole.distance_m}m`:"—",a:false}].map(s=>(
             <View key={s.l} style={[styles.statCard,{backgroundColor:s.a?GOLD+"22":SURFACE,borderColor:s.a?GOLD+"60":BORDER}]}>
-              <Text style={[styles.statValue,{color:s.a?GOLD:"#fff"}]}>{s.v}</Text>
+              <Text style={[styles.statValue,{color:s.a?GOLD:"#111b16"}]}>{s.v}</Text>
               <Text style={styles.statLabel}>{s.l}</Text>
             </View>
           ))}
@@ -296,7 +296,7 @@ export default function BetterballHoleScreen() {
         <TouchableOpacity onPress={() => saveAndNext(true)} disabled={saving} style={[styles.nrBtn, { borderColor: BORDER }]}>
           <Text style={[styles.nrText, { color: MUTED_FG }]}>NR / Pickup</Text>
         </TouchableOpacity>
-        <TouchableOpacity onPress={() => saveAndNext(false)} disabled={saving||(g0==null&&g1==null)} style={[styles.nextBtn, { backgroundColor: (g0!=null||g1!=null)?GREEN:SURFACE, opacity: saving?0.7:1 }]}>
+        <TouchableOpacity onPress={() => saveAndNext(false)} disabled={saving||(g0==null&&g1==null)} style={[styles.nextBtn, { backgroundColor: GREEN, opacity: saving?0.7:(g0!=null||g1!=null)?1:0.35 }]}>
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>{holeIdx<sc.length-1?"Save · Next →":"Finish Round 🏁"}</Text>}
         </TouchableOpacity>
       </View>
@@ -309,17 +309,17 @@ const styles = StyleSheet.create({
   vsTeam: { flex:1,flexDirection:"row",alignItems:"center",gap:6 },
   vsAvatar: { width:24,height:24,borderRadius:12,alignItems:"center",justifyContent:"center",borderWidth:1,borderColor:DARK_BG },
   vsAvatarText: { fontSize:10,fontFamily:"Inter_700Bold",color:"#fff" },
-  vsTeamName: { flex:1,fontSize:12,fontFamily:"Inter_600SemiBold",color:"#fff" },
+  vsTeamName: { flex:1,fontSize:12,fontFamily:"Inter_600SemiBold",color:"#111b16" },
   vsLabel: { fontSize:11,fontFamily:"Inter_700Bold",color:GOLD,paddingHorizontal:8 },
   topBar: { flexDirection:"row",alignItems:"center",paddingHorizontal:16,paddingVertical:8,gap:10 },
   backBtn: { width:36,height:36,borderRadius:10,backgroundColor:SURFACE,alignItems:"center",justifyContent:"center" },
-  topBarClub: { flex:1,fontSize:13,fontFamily:"Inter_600SemiBold",color:"#a3e4bc",textAlign:"center" },
+  topBarClub: { flex:1,fontSize:13,fontFamily:"Inter_600SemiBold",color:"#1a5c38",textAlign:"center" },
   holeStrip: { paddingHorizontal:16,paddingBottom:4,gap:4,alignItems:"center" },
   holeChip: { width:38,borderRadius:8,borderWidth:1,alignItems:"center",justifyContent:"center",marginRight:4 },
   stripMeta: { textAlign:"center",fontSize:11,color:MUTED_FG,fontFamily:"Inter_400Regular",marginBottom:4 },
   holeHeader: { alignItems:"center",paddingHorizontal:20,paddingTop:4,paddingBottom:8 },
   nowLabel: { fontSize:10,fontFamily:"Inter_700Bold",color:GOLD,letterSpacing:2 },
-  holeName: { fontSize:60,fontFamily:"Inter_700Bold",color:"#fff",lineHeight:64,letterSpacing:-2 },
+  holeName: { fontSize:60,fontFamily:"Inter_700Bold",color:"#111b16",lineHeight:64,letterSpacing:-2 },
   statsRow: { flexDirection:"row",gap:8,marginTop:4 },
   statCard: { flex:1,borderRadius:12,padding:8,alignItems:"center",borderWidth:1 },
   statValue: { fontSize:15,fontFamily:"Inter_700Bold" },
@@ -329,7 +329,7 @@ const styles = StyleSheet.create({
   playerRow: { flexDirection:"row",alignItems:"center",gap:10 },
   playerAvatar: { width:34,height:34,borderRadius:17,alignItems:"center",justifyContent:"center" },
   playerInitials: { fontSize:12,fontFamily:"Inter_700Bold",color:"#fff" },
-  playerName: { fontSize:14,fontFamily:"Inter_700Bold",color:"#fff" },
+  playerName: { fontSize:14,fontFamily:"Inter_700Bold",color:"#111b16" },
   playerMeta: { fontSize:11,color:MUTED_FG,fontFamily:"Inter_400Regular" },
   bestBallBadge: { paddingHorizontal:10,paddingVertical:3,borderRadius:20,borderWidth:1 },
   bestBallText: { fontSize:11,fontFamily:"Inter_700Bold" },

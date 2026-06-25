@@ -22,12 +22,12 @@ import GolfBallLoader from "@/components/GolfBallLoader";
 import { AppHeader } from "@/components/AppHeader";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
-const DARK_BG   = "#0d1f14";
-const SURFACE   = "#162a1e";
-const BORDER    = "#1f3826";
+const DARK_BG   = "#f2f6f3";
+const SURFACE   = "#ffffff";
+const BORDER    = "#c8ddd2";
 const GREEN     = "#1a5c38";
 const GOLD      = "#c8a84b";
-const MUTED_FG  = "#4a6550";
+const MUTED_FG  = "#5a7265";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type ScorecardHole = {
@@ -175,7 +175,7 @@ function scoreColor(gross: number, par: number): string {
   const d = gross - par;
   if (d <= -2) return GOLD;
   if (d === -1) return "#22c55e";
-  if (d === 0) return "#a3e4bc";
+  if (d === 0) return "#1a5c38";
   if (d === 1) return "#fb923c";
   return "#f87171";
 }
@@ -463,7 +463,7 @@ function BbPlayerInput({
               <Text style={styles.scoreNet}>Net {g - playerHA}</Text>
             </>
           ) : (
-            <Text style={[styles.scoreValue, { color: SURFACE, fontSize: 60, lineHeight: 64 }]}>—</Text>
+            <Text style={[styles.scoreValue, { color: BORDER, fontSize: 60, lineHeight: 64 }]}>—</Text>
           )}
         </View>
         <TouchableOpacity
@@ -484,7 +484,7 @@ function BbPlayerInput({
           return (
             <TouchableOpacity key={offset} onPress={() => { Haptics.selectionAsync(); sg(val); }}
               style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}>
-              <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+              <Text style={[styles.quickBtnScore, { color: active ? qColor : "#1a1f1c" }]}>{val}</Text>
               <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
             </TouchableOpacity>
           );
@@ -495,8 +495,8 @@ function BbPlayerInput({
           return (
             <TouchableOpacity key="pickup" onPress={() => { Haptics.selectionAsync(); sg(maxGross); }}
               style={[styles.quickBtn, { backgroundColor: active ? MUTED_FG + "33" : SURFACE, borderColor: active ? MUTED_FG : BORDER, width: 80 }]}>
-              <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{maxGross}</Text>
-              <Text style={[styles.quickBtnLabel, { color: active ? "#fff" : MUTED_FG }]}>Pickup</Text>
+              <Text style={[styles.quickBtnScore, { color: active ? "#1a1f1c" : MUTED_FG, fontSize: 11 }]}>{maxGross}</Text>
+              <Text style={[styles.quickBtnLabel, { color: active ? "#1a1f1c" : MUTED_FG }]}>Pickup</Text>
             </TouchableOpacity>
           );
         })()}
@@ -905,7 +905,7 @@ export default function HoleEntryScreen() {
         {/* Row 1: back + club name */}
         <View style={styles.topBarRow1}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
-            <Ionicons name="arrow-back" size={20} color="#fff" />
+            <Ionicons name="arrow-back" size={20} color={GREEN} />
           </TouchableOpacity>
           <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
         </View>
@@ -913,10 +913,10 @@ export default function HoleEntryScreen() {
         <View style={styles.topBarRow2}>
           <TouchableOpacity
             onPress={onAbandon}
-            style={[styles.topActionBtn, { borderColor: "rgba(255,255,255,0.2)" }]}
+            style={[styles.topActionBtn, { borderColor: "rgba(0,0,0,0.15)" }]}
           >
-            <Ionicons name="close-circle-outline" size={13} color="rgba(255,255,255,0.55)" />
-            <Text style={[styles.topActionText, { color: "rgba(255,255,255,0.55)" }]}>Abandon</Text>
+            <Ionicons name="close-circle-outline" size={13} color="rgba(0,0,0,0.4)" />
+            <Text style={[styles.topActionText, { color: "rgba(0,0,0,0.4)" }]}>Abandon</Text>
           </TouchableOpacity>
           <TouchableOpacity
             onPress={confirmAndFinish}
@@ -949,12 +949,12 @@ export default function HoleEntryScreen() {
           const active = i === holeIdx;
           const played = saved != null;
           const p = played && !saved.is_nr ? (saved.stableford_points ?? 0) : null;
-          const dotBg = active ? "#fff"
+          const dotBg = active ? GREEN
             : played ? dotColorForFormat(round.format ?? "", p, GOLD)
             : SURFACE;
           return (
-            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? "#fff" : BORDER, height: active ? 36 : 28 }]}>
-              <Text style={{ fontSize: active ? 12 : 10, fontFamily: "Inter_700Bold", color: active ? DARK_BG : played ? "#fff" : MUTED_FG }}>
+            <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active ? GREEN : BORDER, height: active ? 36 : 28 }]}>
+              <Text style={{ fontSize: active ? 12 : 10, fontFamily: "Inter_700Bold", color: active ? "#fff" : played ? "#fff" : MUTED_FG }}>
                 {h.number}
               </Text>
             </TouchableOpacity>
@@ -994,7 +994,7 @@ export default function HoleEntryScreen() {
           <Text style={[styles.holeName, { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
           <TouchableOpacity style={[styles.hcpChip, { flexDirection: "row", alignItems: "center", gap: 5 }]} onPress={openHcpModal}>
             <Text style={styles.hcpChipText}>Playing HCP {ph < 0 ? `+${-ph}` : ph}</Text>
-            <Ionicons name="create-outline" size={12} color="#a3e4bc" />
+            <Ionicons name="create-outline" size={12} color="#1a5c38" />
           </TouchableOpacity>
           <View style={styles.statsRow}>
             {[
@@ -1004,7 +1004,7 @@ export default function HoleEntryScreen() {
               { label: "STROKES",      value: ha > 0 ? `+${ha}` : "0", accent: ha > 0 },
             ].map(s => (
               <View key={s.label} style={[styles.statCard, { backgroundColor: s.accent ? GOLD + "22" : SURFACE, borderColor: s.accent ? GOLD + "60" : BORDER }]}>
-                <Text style={[styles.statValue, { color: s.accent ? GOLD : "#fff" }]}>{s.value}</Text>
+                <Text style={[styles.statValue, { color: s.accent ? GOLD : "#111b16" }]}>{s.value}</Text>
                 <Text style={styles.statLabel}>{s.label}</Text>
               </View>
             ))}
@@ -1033,7 +1033,7 @@ export default function HoleEntryScreen() {
         </View>
 
         <View style={[styles.teamGroupBox, { borderColor: isBetterball ? "#1a5c3860" : "#22c55e40" }]}>
-          <View style={[styles.stepperSection, { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#071a0e" }]}>
+          <View style={[styles.stepperSection, { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#eef5f0" }]}>
             {isBetterball && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
                 <View style={[styles.sectionDot, { backgroundColor: "#22c55e" }]} />
@@ -1073,12 +1073,12 @@ export default function HoleEntryScreen() {
                     </Text>
                   </>
                 ) : (
-                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : SURFACE, fontSize: 60, lineHeight: 64 }]}>—</Text>
+                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : BORDER, fontSize: 60, lineHeight: 64 }]}>—</Text>
                 )}
               </View>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#1a4028", width: 52, height: 52, borderRadius: 26 }]}
+                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#e8f5ee", width: 52, height: 52, borderRadius: 26 }]}
               >
                 <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: 24 }]}>+</Text>
               </TouchableOpacity>
@@ -1103,7 +1103,7 @@ export default function HoleEntryScreen() {
                     onPress={() => { Haptics.selectionAsync(); setGross(val); }}
                     style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                   >
-                    <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                    <Text style={[styles.quickBtnScore, { color: active ? qColor : "#1a1f1c" }]}>{val}</Text>
                     <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
                   </TouchableOpacity>
                 );
@@ -1118,8 +1118,8 @@ export default function HoleEntryScreen() {
                     onPress={() => { Haptics.selectionAsync(); setGross(pickupVal); }}
                     style={[styles.quickBtn, { backgroundColor: active ? MUTED_FG + "33" : SURFACE, borderColor: active ? MUTED_FG : BORDER, width: 80 }]}
                   >
-                    <Text style={[styles.quickBtnScore, { color: active ? "#fff" : MUTED_FG, fontSize: 11 }]}>{pickupVal}</Text>
-                    <Text style={[styles.quickBtnLabel, { color: active ? "#fff" : MUTED_FG }]}>Pickup</Text>
+                    <Text style={[styles.quickBtnScore, { color: active ? "#1a1f1c" : MUTED_FG, fontSize: 11 }]}>{pickupVal}</Text>
+                    <Text style={[styles.quickBtnLabel, { color: active ? "#1a1f1c" : MUTED_FG }]}>Pickup</Text>
                   </TouchableOpacity>
                 );
               })()}
@@ -1132,7 +1132,7 @@ export default function HoleEntryScreen() {
               <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER, marginHorizontal: 8 }} />
               <BbPlayerInput flat
                 label={round.partner_name ?? "Partner"}
-                color="#c8a84b" bgColor="#17130a"
+                color="#c8a84b" bgColor="#fdf8ee"
                 gross={partnerGross} setGross={setPartnerGross}
                 ha={partnerHA} par={hole.par} isBest={bbTeamWinner === 1}
                 quickRef={partnerQuickRef}
@@ -1179,7 +1179,7 @@ export default function HoleEntryScreen() {
             <View style={styles.oppGroupBox}>
               <BbPlayerInput flat
                 label={round.opponent_name ?? "Marker"}
-                color="#60a5fa" bgColor="#060e1a"
+                color="#60a5fa" bgColor="#eef1f8"
                 gross={oppGross} setGross={setOppGross}
                 ha={oppHA} par={hole.par}
                 quickRef={opp1QuickRef}
@@ -1190,7 +1190,7 @@ export default function HoleEntryScreen() {
                   <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
                   <BbPlayerInput flat
                     label={round.opponent2_name}
-                    color="#a78bfa" bgColor="#0d0819"
+                    color="#a78bfa" bgColor="#f5f0fc"
                     gross={opp2Gross} setGross={setOpp2Gross}
                     ha={opp2HA} par={hole.par}
                     quickRef={opp2QuickRef}
@@ -1222,7 +1222,7 @@ export default function HoleEntryScreen() {
               <View style={styles.oppGroupBox}>
                 <BbPlayerInput flat
                   label={round.opponent_name ?? "Opp 1"}
-                  color="#ef4444" bgColor="#180606"
+                  color="#ef4444" bgColor="#fef2f2"
                   gross={oppGross} setGross={setOppGross}
                   ha={oppHA} par={hole.par} isBest={bbOppWinner === 0}
                   quickRef={opp1QuickRef}
@@ -1231,7 +1231,7 @@ export default function HoleEntryScreen() {
                 <View style={{ height: StyleSheet.hairlineWidth, backgroundColor: BORDER }} />
                 <BbPlayerInput flat
                   label={round.opponent2_name ?? "Opp 2"}
-                  color="#60a5fa" bgColor="#060f18"
+                  color="#60a5fa" bgColor="#eef2fb"
                   gross={opp2Gross} setGross={setOpp2Gross}
                   ha={opp2HA} par={hole.par} isBest={bbOppWinner === 1}
                   quickRef={opp2QuickRef}
@@ -1264,14 +1264,14 @@ export default function HoleEntryScreen() {
                         <Text style={styles.scoreNet}>Net {oppGross - oppHA}</Text>
                       </>
                     ) : (
-                      <Text style={[styles.scoreValue, { color: SURFACE, fontSize: 60, lineHeight: 64 }]}>—</Text>
+                      <Text style={[styles.scoreValue, { color: BORDER, fontSize: 60, lineHeight: 64 }]}>—</Text>
                     )}
                   </View>
                   <TouchableOpacity
                     onPress={() => { Haptics.selectionAsync(); setOppGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                    style={[styles.stepBtn, { borderColor: "#a78bfa", backgroundColor: "#2d1f4a", width: 52, height: 52, borderRadius: 26 }]}
+                    style={[styles.stepBtn, { borderColor: "#7c3aed", backgroundColor: "#f3eeff", width: 52, height: 52, borderRadius: 26 }]}
                   >
-                    <Text style={[styles.stepBtnText, { color: "#a78bfa", fontSize: 24 }]}>+</Text>
+                    <Text style={[styles.stepBtnText, { color: "#7c3aed", fontSize: 24 }]}>+</Text>
                   </TouchableOpacity>
                 </View>
 
@@ -1294,7 +1294,7 @@ export default function HoleEntryScreen() {
                         onPress={() => { Haptics.selectionAsync(); setOppGross(val); }}
                         style={[styles.quickBtn, { backgroundColor: active ? qColor + "33" : SURFACE, borderColor: active ? qColor : BORDER }]}
                       >
-                        <Text style={[styles.quickBtnScore, { color: active ? qColor : "#fff" }]}>{val}</Text>
+                        <Text style={[styles.quickBtnScore, { color: active ? qColor : "#1a1f1c" }]}>{val}</Text>
                         <Text style={[styles.quickBtnLabel, { color: active ? qColor : MUTED_FG }]}>{scoreLabel}</Text>
                       </TouchableOpacity>
                     );
@@ -1321,9 +1321,9 @@ export default function HoleEntryScreen() {
           <TouchableOpacity
             onPress={() => goToHole(holeIdx - 1)}
             disabled={saving}
-            style={[styles.prevBtn, { backgroundColor: "#1a3d28", borderColor: "#2d6642" }]}
+            style={[styles.prevBtn, { backgroundColor: "#e8f5ee", borderColor: "#9dc4ae" }]}
           >
-            <Text style={[styles.prevBtnText, { color: "#fff" }]}>← Previous Hole</Text>
+            <Text style={[styles.prevBtnText, { color: "#1a5c38" }]}>← Previous Hole</Text>
           </TouchableOpacity>
         )}
         {isAnyMatch && matchSt?.decided ? (
@@ -1349,7 +1349,7 @@ export default function HoleEntryScreen() {
           <TouchableOpacity
             onPress={() => saveAndNext(false)}
             disabled={saving}
-            style={[styles.nextBtn, { backgroundColor: gross != null ? GREEN : "#1a3d28", borderWidth: gross != null ? 0 : 1.5, borderColor: "#2d6642", opacity: saving ? 0.7 : 1 }]}
+            style={[styles.nextBtn, { backgroundColor: GREEN, borderWidth: 0, opacity: saving ? 0.7 : gross != null ? 1 : 0.45 }]}
           >
             {saving
               ? <ActivityIndicator color="#fff" />
@@ -1432,7 +1432,7 @@ export default function HoleEntryScreen() {
       >
         <View style={styles.abandonOverlay}>
           <View style={styles.abandonCard}>
-            <Ionicons name="cloud-offline-outline" size={36} color="rgba(255,255,255,0.4)" style={{ marginBottom: 12 }} />
+            <Ionicons name="cloud-offline-outline" size={36} color="rgba(0,0,0,0.25)" style={{ marginBottom: 12 }} />
             <Text style={styles.abandonTitle}>Abandon Round?</Text>
             <Text style={styles.abandonBody}>
               The round will be marked as abandoned with no result recorded. This cannot be undone.
@@ -1475,7 +1475,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center", flexShrink: 0,
   },
   topBarClub: {
-    flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#a3e4bc",
+    flex: 1, fontSize: 14, fontFamily: "Inter_600SemiBold", color: "#1a5c38",
   },
   cardBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,
@@ -1504,7 +1504,7 @@ const styles = StyleSheet.create({
     fontSize: 10, fontFamily: "Inter_700Bold", color: GOLD, letterSpacing: 2,
   },
   holeName: {
-    fontSize: 72, fontFamily: "Inter_700Bold", color: "#fff",
+    fontSize: 72, fontFamily: "Inter_700Bold", color: "#111b16",
     lineHeight: 76, letterSpacing: -2,
   },
   hcpChip: {
@@ -1512,7 +1512,7 @@ const styles = StyleSheet.create({
     backgroundColor: GREEN + "66", borderWidth: 1, borderColor: GREEN,
     marginTop: -4, marginBottom: 6,
   },
-  hcpChipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#a3e4bc" },
+  hcpChipText: { fontSize: 11, fontFamily: "Inter_600SemiBold", color: "#1a5c38" },
   statsRow: {
     flexDirection: "row", gap: 8, marginTop: 4,
   },
@@ -1536,7 +1536,7 @@ const styles = StyleSheet.create({
     alignItems: "center", justifyContent: "center",
   },
   stepBtnMinus: { backgroundColor: "transparent" },
-  stepBtnPlus: { backgroundColor: "#1a4028" },
+  stepBtnPlus: { backgroundColor: "#e8f5ee" },
   stepBtnText: { fontSize: 30, fontFamily: "Inter_400Regular", lineHeight: 36 },
   scoreDisplay: { flex: 1, alignItems: "center" },
   scoreValue: { fontSize: 84, fontFamily: "Inter_700Bold", lineHeight: 88, letterSpacing: -3 },
@@ -1563,7 +1563,7 @@ const styles = StyleSheet.create({
   sectionLabel: { fontSize: 10, fontFamily: "Inter_700Bold", letterSpacing: 1.5 },
   oppStepperSection: {
     borderTopWidth: 0,
-    backgroundColor: "#1a0e2e",
+    backgroundColor: "#fef2f2",
     borderRadius: 16,
     marginHorizontal: 12,
     paddingVertical: 8,
@@ -1617,7 +1617,7 @@ const styles = StyleSheet.create({
     padding: 28, alignItems: "center",
   },
   abandonTitle: {
-    fontSize: 20, fontFamily: "Inter_700Bold", color: "#fff", marginBottom: 10,
+    fontSize: 20, fontFamily: "Inter_700Bold", color: "#111b16", marginBottom: 10,
   },
   abandonBody: {
     fontSize: 14, fontFamily: "Inter_400Regular", color: MUTED_FG,
@@ -1637,10 +1637,10 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     width: "100%", marginBottom: 12,
   },
-  hcpRowLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#fff", flex: 1 },
+  hcpRowLabel: { fontSize: 13, fontFamily: "Inter_600SemiBold", color: "#111b16", flex: 1 },
   hcpStepper: {
     flexDirection: "row", alignItems: "center", gap: 0,
-    backgroundColor: "#071a0e", borderRadius: 12, borderWidth: 1, borderColor: BORDER, overflow: "hidden",
+    backgroundColor: "#f0f4f1", borderRadius: 12, borderWidth: 1, borderColor: BORDER, overflow: "hidden",
   },
   hcpStepBtn: {
     width: 40, height: 40, alignItems: "center", justifyContent: "center",
@@ -1649,6 +1649,6 @@ const styles = StyleSheet.create({
   hcpStepBtnText: { fontSize: 22, fontFamily: "Inter_700Bold", color: GOLD, lineHeight: 26 },
   hcpStepValue: {
     width: 44, textAlign: "center",
-    fontSize: 17, fontFamily: "Inter_700Bold", color: "#fff",
+    fontSize: 17, fontFamily: "Inter_700Bold", color: "#111b16",
   },
 });

@@ -156,14 +156,17 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
-  // Only load the Inter fonts here — @expo/vector-icons v15 self-loads its own
-  // font in componentDidMount, so pre-loading Ionicons.font via useFonts is not
-  // needed and can interfere with Expo Go's font cache.
+  // Pre-load the Ionicons font explicitly using the direct TTF path.
+  // In @expo/vector-icons v15 the font family name changed to 'ionicons'
+  // (lowercase). The component self-loads, but that fails silently in Expo Go —
+  // explicitly loading it here ensures it is registered before any icons render.
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    ionicons: require("@expo/vector-icons/build/vendor/react-native-vector-icons/Fonts/Ionicons.ttf"),
   });
 
   useEffect(() => {

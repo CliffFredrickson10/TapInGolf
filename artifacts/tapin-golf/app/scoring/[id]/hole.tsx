@@ -815,38 +815,39 @@ export default function HoleEntryScreen() {
   };
 
   const clearHoleScore = () => {
-    const savedHole = round.holes[hole.number];
-    if (!savedHole) return;
+    if (!round.holes[hole.number]) return;
+    const targetHoleNum = hole.number;
+    const targetHoleIdx = holeIdx;
     Alert.alert(
       "Clear Score",
-      `Remove the saved score for hole ${hole.number}?`,
+      `Remove the saved score for hole ${targetHoleNum}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
-            try {
-              await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, { method: "DELETE" });
-            } catch {
-              // best-effort — clear locally regardless
-            }
-            const updatedHoles = { ...round.holes };
-            delete updatedHoles[hole.number];
-            const updatedPlayerHoles = { ...(round.playerHoles ?? {}) };
-            delete updatedPlayerHoles[`0_${hole.number}`];
-            delete updatedPlayerHoles[`1_${hole.number}`];
-            delete updatedPlayerHoles[`2_${hole.number}`];
-            setRound({ ...round, holes: updatedHoles, playerHoles: updatedPlayerHoles });
+            // Optimistic local update — clear immediately so UI responds
             setGross(null);
             setPartnerGross(null);
             setOppGross(null);
             setOpp2Gross(null);
-            // Remove from offline queue if queued
-            const queue = await readQueue();
-            const updated = queue.filter(q => q.holeNumber !== hole.number);
-            await AsyncStorage.setItem(QUEUE_KEY, JSON.stringify(updated));
-            setPendingCount(updated.length);
+            setRound(prev => {
+              if (!prev) return prev;
+              const updatedHoles = { ...prev.holes };
+              delete (updatedHoles as any)[targetHoleNum];
+              const updatedPlayerHoles = { ...(prev.playerHoles ?? {}) };
+              delete updatedPlayerHoles[`0_${targetHoleNum}`];
+              delete updatedPlayerHoles[`1_${targetHoleNum}`];
+              delete updatedPlayerHoles[`2_${targetHoleNum}`];
+              return { ...prev, holes: updatedHoles, playerHoles: updatedPlayerHoles };
+            });
+            // Persist to server
+            try {
+              await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
+            } catch { /* best-effort */ }
+            // Stay on same hole after clear
+            setHoleIdx(targetHoleIdx);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           },
         },

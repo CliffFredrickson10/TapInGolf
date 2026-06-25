@@ -169,23 +169,29 @@ export default function BetterballHoleScreen() {
 
   const clearHoleScore = () => {
     if (!round.holes[hole.number]) return;
+    const targetHoleNum = hole.number;
+    const targetHoleIdx = holeIdx;
     Alert.alert(
       "Clear Score",
-      `Remove the saved score for hole ${hole.number}?`,
+      `Remove the saved score for hole ${targetHoleNum}?`,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
-            try {
-              await apiFetch(`/scoring/rounds/${id}/holes/${hole.number}`, token, { method: "DELETE" });
-            } catch { /* best-effort */ }
-            const updatedHoles = { ...round.holes };
-            delete updatedHoles[hole.number];
-            setRound({ ...round, holes: updatedHoles });
             setG0(null);
             setG1(null);
+            setRound(prev => {
+              if (!prev) return prev;
+              const updatedHoles = { ...prev.holes };
+              delete (updatedHoles as any)[targetHoleNum];
+              return { ...prev, holes: updatedHoles };
+            });
+            try {
+              await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
+            } catch { /* best-effort */ }
+            setHoleIdx(targetHoleIdx);
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           },
         },

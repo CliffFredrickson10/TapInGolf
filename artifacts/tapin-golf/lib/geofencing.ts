@@ -1,5 +1,4 @@
 import * as Location from "expo-location";
-import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import { Platform } from "react-native";
 
@@ -10,6 +9,8 @@ export const GEOFENCE_TASK = "TAPIN_GEOFENCE";
 // -----------------------------------------------------------------
 // Background task — MUST be defined at module load time (top-level)
 // This file must be imported once in the app root (_layout.tsx)
+// expo-notifications is required lazily inside the callback to avoid
+// the module-level console.error it logs in Expo Go (SDK 53+).
 // -----------------------------------------------------------------
 TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
   if (error) return;
@@ -24,6 +25,13 @@ TaskManager.defineTask(GEOFENCE_TASK, async ({ data, error }: any) => {
   let meta: { type: string; clubName: string; clubId: number };
   try {
     meta = JSON.parse(region.identifier);
+  } catch {
+    return;
+  }
+
+  let Notifications: typeof import("expo-notifications");
+  try {
+    Notifications = require("expo-notifications");
   } catch {
     return;
   }

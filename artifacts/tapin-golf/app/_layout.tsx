@@ -5,10 +5,9 @@ import {
   Inter_700Bold,
   useFonts,
 } from "@expo-google-fonts/inter";
-import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import Constants from "expo-constants";
-import * as Notifications from "expo-notifications";
+import type { EventSubscription } from "expo-notifications";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import React, { useEffect, useRef } from "react";
@@ -28,29 +27,40 @@ import "@/lib/initAdmob";
 
 SplashScreen.preventAutoHideAsync();
 
-// Remote push notifications were removed from Expo Go in SDK 53 — skip setup
-// when running inside Expo Go to avoid the console error and font-load disruption.
+// Remote push notifications (and their handler) were removed from Expo Go in SDK 53.
+// Use a runtime require() so the expo-notifications module is never imported at the
+// module level in Expo Go — doing so causes an uncatchable console.error on init.
 const isExpoGo = Constants.appOwnership === "expo";
 
 if (!isExpoGo) {
-  Notifications.setNotificationHandler({
-    handleNotification: async () => ({
-      shouldShowAlert: true,
-      shouldPlaySound: true,
-      shouldSetBadge: true,
-    }),
-  });
+  try {
+    const Notifications = require("expo-notifications");
+    Notifications.setNotificationHandler({
+      handleNotification: async () => ({
+        shouldShowAlert: true,
+        shouldPlaySound: true,
+        shouldSetBadge: true,
+      }),
+    });
+  } catch {}
 }
 
 const queryClient = new QueryClient();
 
 function RootLayoutNav() {
-  const notificationListener = useRef<Notifications.EventSubscription>();
-  const responseListener = useRef<Notifications.EventSubscription>();
+  const notificationListener = useRef<EventSubscription>();
+  const responseListener = useRef<EventSubscription>();
 
   useEffect(() => {
     // Notification listeners are not available in Expo Go (SDK 53+)
     if (isExpoGo) return;
+
+    let Notifications: typeof import("expo-notifications");
+    try {
+      Notifications = require("expo-notifications");
+    } catch {
+      return;
+    }
 
     // Foreground notification received
     notificationListener.current = Notifications.addNotificationReceivedListener(() => {
@@ -146,12 +156,14 @@ function RootLayoutNav() {
 }
 
 export default function RootLayout() {
+  // Only load the Inter fonts here — @expo/vector-icons v15 self-loads its own
+  // font in componentDidMount, so pre-loading Ionicons.font via useFonts is not
+  // needed and can interfere with Expo Go's font cache.
   const [fontsLoaded, fontError] = useFonts({
     Inter_400Regular,
     Inter_500Medium,
     Inter_600SemiBold,
     Inter_700Bold,
-    ...Ionicons.font,
   });
 
   useEffect(() => {

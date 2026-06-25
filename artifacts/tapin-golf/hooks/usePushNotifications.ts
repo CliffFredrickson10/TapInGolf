@@ -1,11 +1,12 @@
 import Constants from "expo-constants";
 import * as Device from "expo-device";
-import * as Notifications from "expo-notifications";
 import { Platform } from "react-native";
 import { apiFetch } from "@/lib/api";
 
 // Remote push notifications were removed from Expo Go in SDK 53.
 // Skip registration entirely when running inside Expo Go.
+// expo-notifications is required lazily so its module-level console.error
+// (which fires in Expo Go just from importing it) is never triggered.
 const isExpoGo = Constants.appOwnership === "expo";
 
 export async function registerForPushNotifications(userToken: string): Promise<void> {
@@ -13,6 +14,8 @@ export async function registerForPushNotifications(userToken: string): Promise<v
     if (Platform.OS === "web") return;
     if (!Device.isDevice) return;
     if (isExpoGo) return;
+
+    const Notifications: typeof import("expo-notifications") = require("expo-notifications");
 
     const { status: existing } = await Notifications.getPermissionsAsync();
     let finalStatus = existing;

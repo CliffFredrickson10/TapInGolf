@@ -561,6 +561,8 @@ export default function HoleEntryScreen() {
       // Singles opponent uses oppStepperSection (marginHorizontal:12, no border) → scrollX
       opp1QuickRef.current?.scrollTo({ x: isBbRound ? bbScrollX : scrollX, animated: false });
       opp2QuickRef.current?.scrollTo({ x: bbScrollX, animated: false });
+      // Keep hole strip centred on the active chip
+      holeStripRef.current?.scrollTo({ x: Math.max(0, (holeIdx - 3) * 42), animated: false });
     }, 80);
   }, [holeIdx, round]);
 

@@ -95,6 +95,13 @@ export default function BetterballHoleScreen() {
 
   useEffect(() => { loadRound(); }, [loadRound]);
 
+  useEffect(() => {
+    if (loading) return;
+    setTimeout(() => {
+      stripRef.current?.scrollTo({ x: Math.max(0, (holeIdx - 3) * 42), animated: false });
+    }, 80);
+  }, [holeIdx, loading]);
+
   if (loading || !round) {
     const { width: sw, height: sh } = Dimensions.get("window");
     return <View style={{ width: sw, height: sh, backgroundColor: DARK_BG, alignItems: "center", justifyContent: "center" }}><GolfBallLoader size={60} /></View>;

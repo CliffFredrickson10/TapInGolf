@@ -168,9 +168,10 @@ export default function BetterballHoleScreen() {
   };
 
   const clearHoleScore = () => {
-    if (!round.holes[hole.number]) return;
     const targetHoleNum = hole.number;
     const targetHoleIdx = holeIdx;
+    const savedHole = Object.values(round.holes).find(h => h.hole_number === targetHoleNum);
+    if (!savedHole) return;
     Alert.alert(
       "Clear Score",
       `Remove the saved score for hole ${targetHoleNum}?`,
@@ -180,18 +181,20 @@ export default function BetterballHoleScreen() {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
-            setG0(null);
-            setG1(null);
-            setRound(prev => {
-              if (!prev) return prev;
-              const updatedHoles = { ...prev.holes };
-              delete (updatedHoles as any)[targetHoleNum];
-              return { ...prev, holes: updatedHoles };
-            });
             try {
               await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
             } catch { /* best-effort */ }
-            setHoleIdx(targetHoleIdx);
+            if (!token || !id) return;
+            try {
+              const data = await apiFetch(`/scoring/rounds/${id}`, token);
+              setRound(data);
+              const sc: ScorecardHole[] = data.scorecard ?? [];
+              const idx = sc.findIndex((h: ScorecardHole) => h.number === targetHoleNum);
+              const backIdx = idx >= 0 ? idx : targetHoleIdx;
+              setHoleIdx(backIdx);
+              setG0(null);
+              setG1(null);
+            } catch { /* ignore */ }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           },
         },

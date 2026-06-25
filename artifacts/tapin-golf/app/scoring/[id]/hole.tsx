@@ -815,9 +815,12 @@ export default function HoleEntryScreen() {
   };
 
   const clearHoleScore = () => {
-    if (!round.holes[hole.number]) return;
     const targetHoleNum = hole.number;
     const targetHoleIdx = holeIdx;
+    const savedHole = Object.values(round.holes).find(
+      h => h.hole_number === targetHoleNum
+    );
+    if (!savedHole) return;
     Alert.alert(
       "Clear Score",
       `Remove the saved score for hole ${targetHoleNum}?`,
@@ -827,27 +830,24 @@ export default function HoleEntryScreen() {
           text: "Clear",
           style: "destructive",
           onPress: async () => {
-            // Optimistic local update — clear immediately so UI responds
-            setGross(null);
-            setPartnerGross(null);
-            setOppGross(null);
-            setOpp2Gross(null);
-            setRound(prev => {
-              if (!prev) return prev;
-              const updatedHoles = { ...prev.holes };
-              delete (updatedHoles as any)[targetHoleNum];
-              const updatedPlayerHoles = { ...(prev.playerHoles ?? {}) };
-              delete updatedPlayerHoles[`0_${targetHoleNum}`];
-              delete updatedPlayerHoles[`1_${targetHoleNum}`];
-              delete updatedPlayerHoles[`2_${targetHoleNum}`];
-              return { ...prev, holes: updatedHoles, playerHoles: updatedPlayerHoles };
-            });
-            // Persist to server
             try {
               await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
             } catch { /* best-effort */ }
-            // Stay on same hole after clear
-            setHoleIdx(targetHoleIdx);
+            // Re-fetch round from server — guaranteed fresh state
+            if (!token || !id) return;
+            try {
+              const data = await apiFetch(`/scoring/rounds/${id}`, token);
+              setRound(data);
+              // Stay on the cleared hole
+              const sc: ScorecardHole[] = data.scorecard ?? [];
+              const idx = sc.findIndex(h => h.number === targetHoleNum);
+              const backIdx = idx >= 0 ? idx : targetHoleIdx;
+              setHoleIdx(backIdx);
+              setGross(null);
+              setPartnerGross(null);
+              setOppGross(null);
+              setOpp2Gross(null);
+            } catch { /* ignore */ }
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           },
         },

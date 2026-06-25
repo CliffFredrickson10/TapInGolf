@@ -78880,6 +78880,9 @@ app.use(import_express26.default.json());
 app.use(import_express26.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
 app.use("/api/logos", import_express26.default.static(logosDir));
+app.get("/", (_req, res) => {
+  res.json({ ok: true, service: "TapIn Golf API", ts: Date.now() });
+});
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });

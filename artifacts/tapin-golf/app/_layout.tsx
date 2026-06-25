@@ -7,6 +7,7 @@ import {
 } from "@expo-google-fonts/inter";
 import { Ionicons } from "@expo/vector-icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import Constants from "expo-constants";
 import * as Notifications from "expo-notifications";
 import { router, Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
@@ -27,13 +28,19 @@ import "@/lib/initAdmob";
 
 SplashScreen.preventAutoHideAsync();
 
-Notifications.setNotificationHandler({
-  handleNotification: async () => ({
-    shouldShowAlert: true,
-    shouldPlaySound: true,
-    shouldSetBadge: true,
-  }),
-});
+// Remote push notifications were removed from Expo Go in SDK 53 — skip setup
+// when running inside Expo Go to avoid the console error and font-load disruption.
+const isExpoGo = Constants.appOwnership === "expo";
+
+if (!isExpoGo) {
+  Notifications.setNotificationHandler({
+    handleNotification: async () => ({
+      shouldShowAlert: true,
+      shouldPlaySound: true,
+      shouldSetBadge: true,
+    }),
+  });
+}
 
 const queryClient = new QueryClient();
 
@@ -42,6 +49,9 @@ function RootLayoutNav() {
   const responseListener = useRef<Notifications.EventSubscription>();
 
   useEffect(() => {
+    // Notification listeners are not available in Expo Go (SDK 53+)
+    if (isExpoGo) return;
+
     // Foreground notification received
     notificationListener.current = Notifications.addNotificationReceivedListener(() => {
       // Notification arrives while app is open — handled by setNotificationHandler above

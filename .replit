@@ -39,3 +39,8 @@ externalPort = 3003
 
 [userenv.development]
 STITCH_WEBHOOK_SECRET = "z10qkGUXNQ7bGxy0vIY9dhOwMxSSJczSa1mqp4HLPYjturmBLRErPe+rzUErrUHe"
+
+[deployment]
+deploymentTarget = "autoscale"
+run = ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
+build = ["pnpm", "--filter", "@workspace/api-server", "run", "build"]

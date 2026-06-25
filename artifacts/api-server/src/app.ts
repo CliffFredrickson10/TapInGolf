@@ -43,7 +43,11 @@ app.use(express.urlencoded({ extended: true }));
 const logosDir = path.resolve(__dirname, "../logos");
 app.use("/api/logos", express.static(logosDir));
 
-// Health check — used by mobile keep-alive ping and uptime monitors
+// Health check — used by mobile keep-alive ping, uptime monitors, and the
+// Replit deployment probe (which hits GET / by default).
+app.get("/", (_req, res) => {
+  res.json({ ok: true, service: "TapIn Golf API", ts: Date.now() });
+});
 app.get("/api/health", (_req, res) => {
   res.json({ ok: true, ts: Date.now() });
 });

@@ -569,14 +569,24 @@ export default function HoleEntryScreen() {
     try {
       const data = await apiFetch(`/scoring/rounds/${id}`, token);
       setRound(data);
-      // Start at first unscored hole
       const scorecard: ScorecardHole[] = data.scorecard ?? [];
       const holes: Record<number, SavedHole> = data.holes ?? {};
-      const firstUnsaved = scorecard.findIndex((h: ScorecardHole) => !holes[h.number]);
       const isNewRound = Object.keys(holes).length === 0;
       const startHoleNum = startHole ? parseInt(startHole as string, 10) : 1;
-      const preferredIdx = isNewRound ? scorecard.findIndex((h: ScorecardHole) => h.number === startHoleNum) : -1;
-      const startIdx = firstUnsaved >= 0 ? (isNewRound && preferredIdx >= 0 ? preferredIdx : firstUnsaved) : scorecard.length - 1;
+      let startIdx: number;
+      if (isNewRound) {
+        // New round: respect shotgun start hole
+        const preferred = scorecard.findIndex((h: ScorecardHole) => h.number === startHoleNum);
+        startIdx = preferred >= 0 ? preferred : 0;
+      } else {
+        // Resuming: go to the hole after the last scored one (handles shotgun & normal)
+        const scoredIdxs = scorecard
+          .map((h, i) => (holes[h.number] ? i : -1))
+          .filter(i => i >= 0);
+        const lastScored = Math.max(...scoredIdxs);
+        const nextIdx = (lastScored + 1) % scorecard.length;
+        startIdx = !holes[scorecard[nextIdx]?.number] ? nextIdx : lastScored;
+      }
       setHoleIdx(startIdx);
       setGross(holes[scorecard[startIdx]?.number]?.gross_score ?? null);
       const ph0 = data.playerHoles as Record<string, any> | undefined;

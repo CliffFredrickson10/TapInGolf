@@ -71,11 +71,18 @@ export default function BetterballHoleScreen() {
       setRound(data);
       const sc: ScorecardHole[] = data.scorecard ?? [];
       const holes: Record<number, SavedHole> = data.holes ?? {};
-      const first = sc.findIndex((h: ScorecardHole) => !holes[h.number]);
       const isNewRound = Object.keys(holes).length === 0;
       const startHoleNum = startHole ? parseInt(startHole as string, 10) : 1;
-      const preferredIdx = isNewRound ? sc.findIndex((h: ScorecardHole) => h.number === startHoleNum) : -1;
-      const startIdx = first >= 0 ? (isNewRound && preferredIdx >= 0 ? preferredIdx : first) : sc.length - 1;
+      let startIdx: number;
+      if (isNewRound) {
+        const preferred = sc.findIndex((h: ScorecardHole) => h.number === startHoleNum);
+        startIdx = preferred >= 0 ? preferred : 0;
+      } else {
+        const scoredIdxs = sc.map((h, i) => (holes[h.number] ? i : -1)).filter(i => i >= 0);
+        const lastScored = Math.max(...scoredIdxs);
+        const nextIdx = (lastScored + 1) % sc.length;
+        startIdx = !holes[sc[nextIdx]?.number] ? nextIdx : lastScored;
+      }
       setHoleIdx(startIdx);
       setG0(data.playerHoles?.[`0_${sc[startIdx]?.number}`]?.gross_score ?? null);
       setG1(data.playerHoles?.[`1_${sc[startIdx]?.number}`]?.gross_score ?? null);

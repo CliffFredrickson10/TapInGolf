@@ -141,7 +141,9 @@ export default function ScoringScreen() {
     return (
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <AppHeader />
-        <GolfBallLoader />
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <GolfBallLoader />
+        </View>
       </View>
     );
   }

@@ -6,6 +6,7 @@ import {
   ActivityIndicator,
   Alert,
   Dimensions,
+  Modal,
   ScrollView,
   StyleSheet,
   Text,
@@ -59,6 +60,8 @@ export default function BetterballHoleScreen() {
   const [g0, setG0] = useState<number | null>(null);
   const [g1, setG1] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const stripRef = useRef<ScrollView>(null);
 
   const loadRound = useCallback(async () => {
@@ -168,38 +171,29 @@ export default function BetterballHoleScreen() {
   };
 
   const clearHoleScore = () => {
+    if (!Object.values(round.holes).find(h => h.hole_number === hole.number)) return;
+    setShowClearConfirm(true);
+  };
+
+  const doClearHole = async () => {
     const targetHoleNum = hole.number;
     const targetHoleIdx = holeIdx;
-    const savedHole = Object.values(round.holes).find(h => h.hole_number === targetHoleNum);
-    if (!savedHole) return;
-    Alert.alert(
-      "Clear Score",
-      `Remove the saved score for hole ${targetHoleNum}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
-            } catch { /* best-effort */ }
-            if (!token || !id) return;
-            try {
-              const data = await apiFetch(`/scoring/rounds/${id}`, token);
-              setRound(data);
-              const sc: ScorecardHole[] = data.scorecard ?? [];
-              const idx = sc.findIndex((h: ScorecardHole) => h.number === targetHoleNum);
-              const backIdx = idx >= 0 ? idx : targetHoleIdx;
-              setHoleIdx(backIdx);
-              setG0(null);
-              setG1(null);
-            } catch { /* ignore */ }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
+    setClearing(true);
+    try {
+      await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
+    } catch { /* best-effort */ }
+    try {
+      const data = await apiFetch(`/scoring/rounds/${id}`, token);
+      setRound(data);
+      const sc: ScorecardHole[] = data.scorecard ?? [];
+      const idx = sc.findIndex((h: ScorecardHole) => h.number === targetHoleNum);
+      setHoleIdx(idx >= 0 ? idx : targetHoleIdx);
+      setG0(null);
+      setG1(null);
+    } catch { /* ignore */ }
+    setClearing(false);
+    setShowClearConfirm(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const PlayerCard = ({ g, setG, ha, pts, isWinner, idx, name }: { g: number|null; setG: (v: number|null)=>void; ha: number; pts: number|null; isWinner: boolean; idx: number; name: string }) => {
@@ -356,6 +350,30 @@ export default function BetterballHoleScreen() {
           {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>{sc.filter(h=>h.number!==hole.number&&round.holes[h.number]==null).length===0?"Finish Round 🏁":"Save · Next →"}</Text>}
         </TouchableOpacity>
       </View>
+
+      {/* ── Clear score confirmation overlay ── */}
+      <Modal
+        visible={showClearConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClearConfirm(false)}
+      >
+        <View style={styles.overlay}>
+          <View style={styles.overlayCard}>
+            <Ionicons name="trash-outline" size={36} color="rgba(0,0,0,0.25)" style={{ marginBottom: 12 }} />
+            <Text style={styles.overlayTitle}>Clear Score?</Text>
+            <Text style={styles.overlayBody}>
+              Remove the saved score for hole {hole?.number}? You can re-enter it afterwards.
+            </Text>
+            <TouchableOpacity onPress={doClearHole} disabled={clearing} style={[styles.overlayConfirmBtn, { backgroundColor: "#dc2626" }]}>
+              {clearing ? <ActivityIndicator color="#fff" /> : <Text style={styles.overlayConfirmText}>Clear Score</Text>}
+            </TouchableOpacity>
+            <TouchableOpacity onPress={() => setShowClearConfirm(false)} style={styles.overlayCancelBtn}>
+              <Text style={styles.overlayCancelText}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -407,4 +425,12 @@ const styles = StyleSheet.create({
   nrText: { fontSize:13,fontFamily:"Inter_600SemiBold" },
   nextBtn: { flex:3,paddingVertical:15,borderRadius:16,alignItems:"center" },
   nextText: { fontSize:16,fontFamily:"Inter_700Bold",color:"#fff" },
+  overlay: { flex:1,backgroundColor:"rgba(0,0,0,0.45)",alignItems:"center",justifyContent:"center",padding:24 },
+  overlayCard: { backgroundColor:"#fff",borderRadius:20,padding:24,width:"100%",maxWidth:340,alignItems:"center" },
+  overlayTitle: { fontSize:20,fontFamily:"Inter_700Bold",color:"#111b16",marginBottom:8 },
+  overlayBody: { fontSize:14,fontFamily:"Inter_400Regular",color:"#555",textAlign:"center",marginBottom:20,lineHeight:20 },
+  overlayConfirmBtn: { width:"100%",paddingVertical:15,borderRadius:14,alignItems:"center",marginBottom:10 },
+  overlayConfirmText: { fontSize:16,fontFamily:"Inter_700Bold",color:"#fff" },
+  overlayCancelBtn: { width:"100%",paddingVertical:13,borderRadius:14,alignItems:"center",backgroundColor:"#f3f4f6" },
+  overlayCancelText: { fontSize:15,fontFamily:"Inter_600SemiBold",color:"#374151" },
 });

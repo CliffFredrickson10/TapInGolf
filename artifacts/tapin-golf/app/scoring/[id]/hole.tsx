@@ -527,6 +527,8 @@ export default function HoleEntryScreen() {
   const [hcpDraft, setHcpDraft] = useState({ my: 0, opp: 0, partner: 0, opp2: 0 });
   const [scoreError, setScoreError] = useState<string | null>(null);
   const [savingHcp, setSavingHcp] = useState(false);
+  const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [clearing, setClearing] = useState(false);
   const mainScrollRef = useRef<ScrollView>(null);
   const holeStripRef = useRef<ScrollView>(null);
   const quickRowRef = useRef<ScrollView>(null);
@@ -815,44 +817,31 @@ export default function HoleEntryScreen() {
   };
 
   const clearHoleScore = () => {
+    if (!Object.values(round.holes).find(h => h.hole_number === hole.number)) return;
+    setShowClearConfirm(true);
+  };
+
+  const doClearHole = async () => {
     const targetHoleNum = hole.number;
     const targetHoleIdx = holeIdx;
-    const savedHole = Object.values(round.holes).find(
-      h => h.hole_number === targetHoleNum
-    );
-    if (!savedHole) return;
-    Alert.alert(
-      "Clear Score",
-      `Remove the saved score for hole ${targetHoleNum}?`,
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Clear",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
-            } catch { /* best-effort */ }
-            // Re-fetch round from server — guaranteed fresh state
-            if (!token || !id) return;
-            try {
-              const data = await apiFetch(`/scoring/rounds/${id}`, token);
-              setRound(data);
-              // Stay on the cleared hole
-              const sc: ScorecardHole[] = data.scorecard ?? [];
-              const idx = sc.findIndex(h => h.number === targetHoleNum);
-              const backIdx = idx >= 0 ? idx : targetHoleIdx;
-              setHoleIdx(backIdx);
-              setGross(null);
-              setPartnerGross(null);
-              setOppGross(null);
-              setOpp2Gross(null);
-            } catch { /* ignore */ }
-            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          },
-        },
-      ]
-    );
+    setClearing(true);
+    try {
+      await apiFetch(`/scoring/rounds/${id}/holes/${targetHoleNum}`, token, { method: "DELETE" });
+    } catch { /* best-effort */ }
+    try {
+      const data = await apiFetch(`/scoring/rounds/${id}`, token);
+      setRound(data);
+      const sc: ScorecardHole[] = data.scorecard ?? [];
+      const idx = sc.findIndex(h => h.number === targetHoleNum);
+      setHoleIdx(idx >= 0 ? idx : targetHoleIdx);
+      setGross(null);
+      setPartnerGross(null);
+      setOppGross(null);
+      setOpp2Gross(null);
+    } catch { /* ignore */ }
+    setClearing(false);
+    setShowClearConfirm(false);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
   };
 
   const confirmAndFinish = () => {
@@ -1518,6 +1507,40 @@ export default function HoleEntryScreen() {
               style={styles.abandonCancelBtn}
             >
               <Text style={styles.abandonCancelText}>Keep Playing</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* ── Clear score confirmation overlay ── */}
+      <Modal
+        visible={showClearConfirm}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowClearConfirm(false)}
+      >
+        <View style={styles.abandonOverlay}>
+          <View style={styles.abandonCard}>
+            <Ionicons name="trash-outline" size={36} color="rgba(0,0,0,0.25)" style={{ marginBottom: 12 }} />
+            <Text style={styles.abandonTitle}>Clear Score?</Text>
+            <Text style={styles.abandonBody}>
+              Remove the saved score for hole {hole?.number}? You can re-enter it afterwards.
+            </Text>
+            <TouchableOpacity
+              onPress={doClearHole}
+              disabled={clearing}
+              style={[styles.abandonConfirmBtn, { backgroundColor: "#dc2626" }]}
+            >
+              {clearing
+                ? <ActivityIndicator color="#fff" />
+                : <Text style={styles.abandonConfirmText}>Clear Score</Text>
+              }
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => setShowClearConfirm(false)}
+              style={styles.abandonCancelBtn}
+            >
+              <Text style={styles.abandonCancelText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>

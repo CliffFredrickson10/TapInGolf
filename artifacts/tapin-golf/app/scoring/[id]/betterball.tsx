@@ -44,10 +44,10 @@ type Round = {
 function getHA(si: number, ph: number) { if (ph<=0) return 0; if (ph<=18) return si<=ph?1:0; return 1+(si<=ph-18?1:0); }
 function calcPts(gross: number, par: number, ha: number) { return Math.max(0,par+2-(gross-ha)); }
 function scoreName(g: number, p: number) { if(g===1) return "Hole-in-one"; const d=g-p; if(d<=-2) return "Eagle"; if(d===-1) return "Birdie"; if(d===0) return "Par"; if(d===1) return "Bogey"; if(d===2) return "Double"; return `+${d}`; }
-function scoreColor(g: number, p: number) { const d=g-p; if(d<=-2) return GOLD; if(d===-1) return "#22c55e"; if(d===0) return "#1a5c38"; if(d===1) return "#fb923c"; return "#f87171"; }
+function scoreColor(g: number, p: number) { const d=g-p; if(d<=-2) return GOLD; if(d===-1) return "#16a34a"; if(d===0) return "#1a5c38"; if(d===1) return "#fb923c"; return "#f87171"; }
 
 export default function BetterballHoleScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, startHole } = useLocalSearchParams<{ id: string; startHole?: string }>();
   const { user } = useAuth();
   const token = user?.token;
   const myName = user?.name ?? "You";
@@ -69,7 +69,10 @@ export default function BetterballHoleScreen() {
       const sc: ScorecardHole[] = data.scorecard ?? [];
       const holes: Record<number, SavedHole> = data.holes ?? {};
       const first = sc.findIndex((h: ScorecardHole) => !holes[h.number]);
-      const startIdx = first >= 0 ? first : sc.length - 1;
+      const isNewRound = Object.keys(holes).length === 0;
+      const startHoleNum = startHole ? parseInt(startHole as string, 10) : 1;
+      const preferredIdx = isNewRound ? sc.findIndex((h: ScorecardHole) => h.number === startHoleNum) : -1;
+      const startIdx = first >= 0 ? (isNewRound && preferredIdx >= 0 ? preferredIdx : first) : sc.length - 1;
       setHoleIdx(startIdx);
       setG0(data.playerHoles?.[`0_${sc[startIdx]?.number}`]?.gross_score ?? null);
       setG1(data.playerHoles?.[`1_${sc[startIdx]?.number}`]?.gross_score ?? null);
@@ -138,13 +141,19 @@ export default function BetterballHoleScreen() {
       };
       setRound({ ...round, holes: updatedHoles });
 
-      if (holeIdx < sc.length - 1) {
-        goToHole(holeIdx + 1);
+      // Advance to next unsaved hole (wraps for shotgun starts)
+      let nextIdx = -1;
+      for (let i = 1; i <= sc.length; i++) {
+        const candidate = (holeIdx + i) % sc.length;
+        if (updatedHoles[sc[candidate].number] == null) {
+          nextIdx = candidate;
+          break;
+        }
+      }
+      if (nextIdx === -1) {
+        router.replace(`/scoring/${id}/complete`);
       } else {
-        Alert.alert("Round Complete?", "Finish the round?", [
-          { text: "Not Yet", style: "cancel" },
-          { text: "Finish", onPress: finishRound },
-        ]);
+        goToHole(nextIdx);
       }
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to save");
@@ -187,19 +196,19 @@ export default function BetterballHoleScreen() {
             {g != null ? (
               <>
                 <Text style={[styles.miniScore, { color: scoreColor(g, hole.par) }]}>{g}</Text>
-                <Text style={styles.miniScoreLabel}>{scoreName(g,hole.par)} · net {g-ha} · <Text style={{ color: pts!=null?(pts>=3?"#22c55e":pts>=2?GOLD:pts>=1?"#fb923c":"#f87171"):MUTED_FG, fontFamily: "Inter_700Bold" }}>{pts}pts</Text></Text>
+                <Text style={styles.miniScoreLabel}>{scoreName(g,hole.par)} · net {g-ha} · <Text style={{ color: pts!=null?(pts>=3?"#16a34a":pts>=2?GOLD:pts>=1?"#fb923c":"#f87171"):MUTED_FG, fontFamily: "Inter_700Bold" }}>{pts}pts</Text></Text>
               </>
             ) : <Text style={[styles.miniScore, { color: BORDER }]}>—</Text>}
           </View>
           <TouchableOpacity onPress={() => { Haptics.selectionAsync(); setG(g==null?hole.par+1:Math.min(15,g+1)); }} style={[styles.miniStepBtn, { borderColor: GREEN, backgroundColor: "#e8f5ee" }]}>
-            <Text style={[styles.miniStepText, { color: "#22c55e" }]}>+</Text>
+            <Text style={[styles.miniStepText, { color: "#16a34a" }]}>+</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.quickRow}>
           {[-1,0,1,2,3].map(off => {
             const val = hole.par+off;
             const active = g===val;
-            const qc = val<hole.par?"#22c55e":val===hole.par?GOLD:val===hole.par+1?"#fb923c":"#f87171";
+            const qc = val<hole.par?"#16a34a":val===hole.par?GOLD:val===hole.par+1?"#fb923c":"#f87171";
             return (
               <TouchableOpacity key={off} onPress={() => { Haptics.selectionAsync(); setG(val); }} style={[styles.quickBtn, { backgroundColor: active?qc+"33":SURFACE, borderColor: active?qc:BORDER }]}>
                 <Text style={[styles.quickScore, { color: active?qc:"#1a1f1c" }]}>{val}</Text>
@@ -250,7 +259,7 @@ export default function BetterballHoleScreen() {
           const saved = round.holes[h.number];
           const active = i===holeIdx;
           const p = saved?.stableford_points;
-          const dotBg = active?GREEN:saved?(p!=null&&p>=3?"#22c55e":p!=null&&p>=2?GOLD:p!=null&&p>=1?"#fb923c":"#f87171"):SURFACE;
+          const dotBg = active?GREEN:saved?(p!=null&&p>=3?"#16a34a":p!=null&&p>=2?GOLD:p!=null&&p>=1?"#fb923c":"#f87171"):SURFACE;
           return (
             <TouchableOpacity key={h.number} onPress={() => goToHole(i)} style={[styles.holeChip, { backgroundColor: dotBg, borderColor: active?GREEN:BORDER, height: active?36:28 }]}>
               <Text style={{ fontSize: active?12:10, fontFamily: "Inter_700Bold", color: active?"#fff":saved?"#fff":MUTED_FG }}>{h.number}</Text>
@@ -285,7 +294,7 @@ export default function BetterballHoleScreen() {
               <Text style={styles.bbRunning}>Running: {runningPts + bbPts} pts</Text>
             </View>
             <View style={{ alignItems: "flex-end" }}>
-              <Text style={[styles.bbPts, { color: bbPts>=3?"#22c55e":bbPts>=2?GOLD:bbPts>=1?"#fb923c":"#f87171" }]}>{bbPts}</Text>
+              <Text style={[styles.bbPts, { color: bbPts>=3?"#16a34a":bbPts>=2?GOLD:bbPts>=1?"#fb923c":"#f87171" }]}>{bbPts}</Text>
               <Text style={styles.bbPtsLabel}>pts this hole</Text>
             </View>
           </View>
@@ -297,7 +306,7 @@ export default function BetterballHoleScreen() {
           <Text style={[styles.nrText, { color: MUTED_FG }]}>NR / Pickup</Text>
         </TouchableOpacity>
         <TouchableOpacity onPress={() => saveAndNext(false)} disabled={saving||(g0==null&&g1==null)} style={[styles.nextBtn, { backgroundColor: GREEN, opacity: saving?0.7:(g0!=null||g1!=null)?1:0.35 }]}>
-          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>{holeIdx<sc.length-1?"Save · Next →":"Finish Round 🏁"}</Text>}
+          {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.nextText}>{sc.filter(h=>h.number!==hole.number&&round.holes[h.number]==null).length===0?"Finish Round 🏁":"Save · Next →"}</Text>}
         </TouchableOpacity>
       </View>
     </View>

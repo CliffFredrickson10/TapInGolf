@@ -152,12 +152,12 @@ function calcFormatPts(fmt: string, gross: number, par: number, ha: number): num
 function dotColorForFormat(fmt: string, pts: number | null, GOLD: string): string {
   if (pts == null) return "#f87171";
   if (fmt === "par_bogey" || fmt === "individual_par" || fmt === "individual_bogey")
-    return pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171";
+    return pts > 0 ? "#16a34a" : pts === 0 ? GOLD : "#f87171";
   if (fmt === "modified_stableford")
-    return pts >= 4 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 0 ? "#fb923c" : "#f87171";
+    return pts >= 4 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 0 ? "#fb923c" : "#f87171";
   if (fmt === "individual_bonus_bogey" || fmt === "betterball_bonus_bogey")
-    return pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171";
-  return pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171";
+    return pts > 0 ? "#16a34a" : pts === 0 ? GOLD : "#f87171";
+  return pts >= 3 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171";
 }
 function scoreName(gross: number, par: number): string {
   if (gross === 1) return "Hole-in-one";
@@ -174,7 +174,7 @@ function scoreName(gross: number, par: number): string {
 function scoreColor(gross: number, par: number): string {
   const d = gross - par;
   if (d <= -2) return GOLD;
-  if (d === -1) return "#22c55e";
+  if (d === -1) return "#16a34a";
   if (d === 0) return "#1a5c38";
   if (d === 1) return "#fb923c";
   return "#f87171";
@@ -209,17 +209,17 @@ function calcMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie (Down)`,    color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -247,17 +247,17 @@ function calcStablefardSinglesMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -280,17 +280,17 @@ function calcGrossMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie (Down)`,    color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -327,17 +327,17 @@ function calcBetterballMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -370,17 +370,17 @@ function calcBetterballGrossMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -417,17 +417,17 @@ function calcBetterballStablefordMatchStatus(
   const holesRemaining = sc.length - holesPlayed;
   const holesUp        = won - lost;
   if (holesPlayed > 0 && holesUp > holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Won ${holesUp}&${holesRemaining}`,   color: "#16a34a" };
   if (holesPlayed > 0 && -holesUp > holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: true,  label: `Lost ${-holesUp}&${holesRemaining}`, color: "#f87171" };
   if (holesPlayed === 0 || holesUp === 0)
     return { holesUp: 0, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "All Square", color: GOLD };
   if (holesUp > 0 && holesUp === holesRemaining)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `Dormie ${holesUp}`, color: "#16a34a" };
   if (holesUp < 0 && -holesUp === holesRemaining)
     return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: "Dormie (Down)", color: "#f87171" };
   if (holesUp > 0)
-    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#22c55e" };
+    return { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${holesUp} UP`,    color: "#16a34a" };
   return   { holesUp, holesPlayed, holesRemaining, won, lost, halved, decided: false, label: `${-holesUp} DOWN`, color: "#f87171" };
 }
 
@@ -478,7 +478,7 @@ function BbPlayerInput({
           const val = par + offset;
           if (val < 1) return null;
           const active = g === val;
-          const qColor = val < par ? "#22c55e" : val === par ? GOLD : val === par + 1 ? "#fb923c" : "#f87171";
+          const qColor = val < par ? "#16a34a" : val === par ? GOLD : val === par + 1 ? "#fb923c" : "#f87171";
           const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
           const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
           return (
@@ -507,7 +507,7 @@ function BbPlayerInput({
 
 // ─── Component ───────────────────────────────────────────────────────────────
 export default function HoleEntryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, startHole } = useLocalSearchParams<{ id: string; startHole?: string }>();
   const { user } = useAuth();
   const token = user?.token;
   const insets = useSafeAreaInsets();
@@ -571,7 +571,10 @@ export default function HoleEntryScreen() {
       const scorecard: ScorecardHole[] = data.scorecard ?? [];
       const holes: Record<number, SavedHole> = data.holes ?? {};
       const firstUnsaved = scorecard.findIndex((h: ScorecardHole) => !holes[h.number]);
-      const startIdx = firstUnsaved >= 0 ? firstUnsaved : scorecard.length - 1;
+      const isNewRound = Object.keys(holes).length === 0;
+      const startHoleNum = startHole ? parseInt(startHole as string, 10) : 1;
+      const preferredIdx = isNewRound ? scorecard.findIndex((h: ScorecardHole) => h.number === startHoleNum) : -1;
+      const startIdx = firstUnsaved >= 0 ? (isNewRound && preferredIdx >= 0 ? preferredIdx : firstUnsaved) : scorecard.length - 1;
       setHoleIdx(startIdx);
       setGross(holes[scorecard[startIdx]?.number]?.gross_score ?? null);
       const ph0 = data.playerHoles as Record<string, any> | undefined;
@@ -795,10 +798,19 @@ export default function HoleEntryScreen() {
       setSaving(false);
     }
 
-    if (holeIdx < scorecard.length - 1) {
-      goToHole(holeIdx + 1);
-    } else {
+    // Advance to next unsaved hole (wraps around for shotgun starts)
+    let nextIdx = -1;
+    for (let i = 1; i <= scorecard.length; i++) {
+      const candidate = (holeIdx + i) % scorecard.length;
+      if (updatedHoles[scorecard[candidate].number] == null) {
+        nextIdx = candidate;
+        break;
+      }
+    }
+    if (nextIdx === -1) {
       router.replace(`/scoring/${id}/complete`);
+    } else {
+      goToHole(nextIdx);
     }
   };
 
@@ -850,7 +862,7 @@ export default function HoleEntryScreen() {
     router.replace("/(tabs)/scoring");
   };
 
-  const isLastHole         = holeIdx === scorecard.length - 1;
+  const isLastUnsaved      = scorecard.filter(h => h.number !== hole.number && round.holes[h.number] == null).length === 0;
   const isMatchPlay        = round.format === "singles_match_play" || round.format === "singles_stableford_match_play" || round.format === "singles_gross_match_play";
   const isKnockoutBetterball = round.format === "betterball_match_play" || round.format === "betterball_gross_match_play" || round.format === "fourball_stableford_match_play";
   // isBetterball = any round with 4-player input (knockout betterball OR regular betterball with group)
@@ -932,6 +944,13 @@ export default function HoleEntryScreen() {
             <Ionicons name="list" size={13} color={GOLD} />
             <Text style={[styles.topActionText, { color: GOLD }]}>Scorecard</Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            onPress={openHcpModal}
+            style={[styles.topActionBtn, { borderColor: GREEN + "55" }]}
+          >
+            <Ionicons name="golf-outline" size={13} color={GREEN} />
+            <Text style={[styles.topActionText, { color: GREEN }]}>HCP {ph < 0 ? `+${-ph}` : ph}</Text>
+          </TouchableOpacity>
         </View>
       </View>
 
@@ -992,10 +1011,6 @@ export default function HoleEntryScreen() {
         {/* Hole identity */}
         <View style={[styles.holeHeader, { paddingTop: 20, paddingBottom: 4 }]}>
           <Text style={[styles.holeName, { fontSize: 44, lineHeight: 48 }]}>HOLE {hole.number}</Text>
-          <TouchableOpacity style={[styles.hcpChip, { flexDirection: "row", alignItems: "center", gap: 5 }]} onPress={openHcpModal}>
-            <Text style={styles.hcpChipText}>Playing HCP {ph < 0 ? `+${-ph}` : ph}</Text>
-            <Ionicons name="create-outline" size={12} color="#1a5c38" />
-          </TouchableOpacity>
           <View style={styles.statsRow}>
             {[
               { label: "PAR",          value: String(hole.par),          accent: true },
@@ -1032,12 +1047,12 @@ export default function HoleEntryScreen() {
           </Text>
         </View>
 
-        <View style={[styles.teamGroupBox, { borderColor: isBetterball ? "#1a5c3860" : "#22c55e40" }]}>
+        <View style={[styles.teamGroupBox, { borderColor: isBetterball ? "#1a5c3860" : "#16a34a40" }]}>
           <View style={[styles.stepperSection, { paddingHorizontal: 0, paddingVertical: 8, backgroundColor: "#eef5f0" }]}>
             {isBetterball && (
               <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 6, paddingLeft: 16 }}>
-                <View style={[styles.sectionDot, { backgroundColor: "#22c55e" }]} />
-                <Text style={[styles.sectionLabel, { color: "#22c55e" }]}>{(user?.name ?? "You").toUpperCase()}</Text>
+                <View style={[styles.sectionDot, { backgroundColor: "#16a34a" }]} />
+                <Text style={[styles.sectionLabel, { color: "#16a34a" }]}>{(user?.name ?? "You").toUpperCase()}</Text>
               </View>
             )}
             {!isBetterball && (
@@ -1055,15 +1070,15 @@ export default function HoleEntryScreen() {
             <View style={[styles.stepper, isBetterball && { paddingHorizontal: 16 }]}>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.max(1, v - 1)); }}
-                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e55" : BORDER, width: 52, height: 52, borderRadius: 26 }]}
+                style={[styles.stepBtn, styles.stepBtnMinus, { borderColor: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#16a34a55" : BORDER, width: 52, height: 52, borderRadius: 26 }]}
               >
-                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#22c55e99" : MUTED_FG, fontSize: 24 }]}>−</Text>
+                <Text style={[styles.stepBtnText, { color: gross != null && gross > 1 ? "#f87171" : isBetterball ? "#16a34a99" : MUTED_FG, fontSize: 24 }]}>−</Text>
               </TouchableOpacity>
               <View style={styles.scoreDisplay}>
                 {gross != null ? (
                   <>
                     <Text style={[styles.scoreValue, { color: scoreColor(gross, hole.par), fontSize: 60, lineHeight: 64 }]}>{gross}</Text>
-                    <Text style={[styles.scoreNet, isBetterball && { color: "#22c55e80" }]}>
+                    <Text style={[styles.scoreNet, isBetterball && { color: "#16a34a80" }]}>
                       {`Net ${netScore ?? "—"}`}
                       {!isBetterball && !isNetOnlyFormat && (
                         isParOrBogeyFormat
@@ -1073,14 +1088,14 @@ export default function HoleEntryScreen() {
                     </Text>
                   </>
                 ) : (
-                  <Text style={[styles.scoreValue, { color: isBetterball ? "#22c55e30" : BORDER, fontSize: 60, lineHeight: 64 }]}>—</Text>
+                  <Text style={[styles.scoreValue, { color: isBetterball ? "#16a34a30" : BORDER, fontSize: 60, lineHeight: 64 }]}>—</Text>
                 )}
               </View>
               <TouchableOpacity
                 onPress={() => { Haptics.selectionAsync(); setGross(v => v == null ? hole.par + 1 : Math.min(15, v + 1)); }}
-                style={[styles.stepBtn, { borderColor: "#22c55e", backgroundColor: isBetterball ? "#22c55e33" : "#e8f5ee", width: 52, height: 52, borderRadius: 26 }]}
+                style={[styles.stepBtn, { borderColor: "#16a34a", backgroundColor: isBetterball ? "#16a34a33" : "#e8f5ee", width: 52, height: 52, borderRadius: 26 }]}
               >
-                <Text style={[styles.stepBtnText, { color: "#22c55e", fontSize: 24 }]}>+</Text>
+                <Text style={[styles.stepBtnText, { color: "#16a34a", fontSize: 24 }]}>+</Text>
               </TouchableOpacity>
             </View>
 
@@ -1094,7 +1109,7 @@ export default function HoleEntryScreen() {
                 const val = hole.par + offset;
                 if (val < 1) return null;
                 const active = gross === val;
-                const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+                const qColor = val < hole.par ? "#16a34a" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
                 const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
                 const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                 return (
@@ -1148,8 +1163,8 @@ export default function HoleEntryScreen() {
           const ptsLabel = isBonusBogey ? "Bonus Bogey Points" : "Stableford Points";
           const ptsTxt   = isBonusBogey ? (pts > 0 ? `+${pts}` : `${pts}`) : String(pts);
           const ptsClr   = isBonusBogey
-            ? (pts > 0 ? "#22c55e" : pts === 0 ? GOLD : "#f87171")
-            : (pts >= 3 ? "#22c55e" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171");
+            ? (pts > 0 ? "#16a34a" : pts === 0 ? GOLD : "#f87171")
+            : (pts >= 3 ? "#16a34a" : pts >= 2 ? GOLD : pts >= 1 ? "#fb923c" : "#f87171");
           return (
             <View style={styles.ptsSummary}>
               <Text style={styles.ptsSummaryLabel}>{ptsLabel}</Text>
@@ -1165,7 +1180,7 @@ export default function HoleEntryScreen() {
               <Text style={styles.ptsSummaryLabel}>Best Ball Points</Text>
               <Text style={{ fontSize: 11, color: MUTED_FG, fontFamily: "Inter_400Regular", marginTop: 2 }}>Running: {runningBbPts + bbPts} pts</Text>
             </View>
-            <Text style={[styles.ptsSummaryValue, { color: bbPts >= 3 ? "#22c55e" : bbPts >= 2 ? GOLD : bbPts >= 1 ? "#fb923c" : "#f87171" }]}>{bbPts}</Text>
+            <Text style={[styles.ptsSummaryValue, { color: bbPts >= 3 ? "#16a34a" : bbPts >= 2 ? GOLD : bbPts >= 1 ? "#fb923c" : "#f87171" }]}>{bbPts}</Text>
           </View>
         )}
 
@@ -1285,7 +1300,7 @@ export default function HoleEntryScreen() {
                     const val = hole.par + offset;
                     if (val < 1) return null;
                     const active = oppGross === val;
-                    const qColor = val < hole.par ? "#22c55e" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
+                    const qColor = val < hole.par ? "#16a34a" : val === hole.par ? GOLD : val === hole.par + 1 ? "#fb923c" : "#f87171";
                     const labelMap: Record<number, string> = { [-4]: "Condor", [-3]: "Albatross", [-2]: "Eagle", [-1]: "Birdie", [0]: "Par", [1]: "Bogey", [2]: "Double", [3]: "+3", [4]: "+4", [5]: "+5" };
                     const scoreLabel = val === 1 ? "Hole-in-one" : labelMap[offset];
                     return (
@@ -1334,7 +1349,7 @@ export default function HoleEntryScreen() {
           >
             <Text style={styles.nextBtnText}>End Match 🏆</Text>
           </TouchableOpacity>
-        ) : isLastHole ? (
+        ) : isLastUnsaved ? (
           <TouchableOpacity
             onPress={() => gross != null ? saveAndNext(false) : confirmAndFinish()}
             disabled={saving}

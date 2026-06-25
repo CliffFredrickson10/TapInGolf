@@ -172,6 +172,7 @@ export default function StartRoundScreen() {
   const [expandedGroup, setExpandedGroup] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showTournamentPicker, setShowTournamentPicker] = useState(false);
+  const [startingHole, setStartingHole] = useState(1);
   const selectedFormatLabel = ALL_FORMATS.find(f => f.key === format)?.label ?? format;
   const linkedTournament = tournaments.find(t => t.id === linkedTournamentId) ?? null;
   const isBetterball = BETTERBALL_FORMATS.has(format);
@@ -450,7 +451,7 @@ export default function StartRoundScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.replace(`/scoring/${data.id}/hole`);
+      router.replace(`/scoring/${data.id}/hole?startHole=${startingHole}`);
     } catch (err: any) {
       Alert.alert("Error", err.message || "Failed to start round");
     } finally {
@@ -1114,6 +1115,31 @@ export default function StartRoundScreen() {
 
             </>
           )}
+
+          {/* Starting Hole */}
+          {selectedClub && (
+            <Section title="STARTING HOLE">
+              <View style={styles.holeGrid}>
+                {Array.from({ length: 18 }, (_, i) => i + 1).map(h => (
+                  <TouchableOpacity
+                    key={h}
+                    onPress={() => { Haptics.selectionAsync(); setStartingHole(h); }}
+                    style={[styles.holeBtn, {
+                      backgroundColor: startingHole === h ? colors.primary : "transparent",
+                      borderColor: startingHole === h ? colors.primary : colors.border,
+                    }]}
+                  >
+                    <Text style={[styles.holeBtnText, { color: startingHole === h ? "#fff" : colors.foreground }]}>{h}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              {startingHole !== 1 && (
+                <Text style={[styles.holeNote, { color: colors.mutedForeground }]}>
+                  Shotgun start — scoring begins on hole {startingHole} and wraps around automatically.
+                </Text>
+              )}
+            </Section>
+          )}
         </ScrollView>
       </KeyboardAvoidingView>
 
@@ -1414,6 +1440,12 @@ const styles = StyleSheet.create({
   miniTeeBtn: { flexDirection: "row", alignItems: "center", gap: 5, paddingHorizontal: 10, paddingVertical: 5, borderRadius: 8, borderWidth: 1.5 },
   miniTeeDot: { width: 12, height: 12, borderRadius: 6 },
   miniTeeLbl: { fontSize: 11 },
+
+  // Starting hole
+  holeGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8, paddingVertical: 4 },
+  holeBtn: { width: 46, height: 46, borderRadius: 10, borderWidth: 1.5, alignItems: "center", justifyContent: "center" },
+  holeBtnText: { fontSize: 15, fontFamily: "Inter_700Bold" },
+  holeNote: { fontSize: 12, fontFamily: "Inter_400Regular", marginTop: 8, lineHeight: 18 },
 
   // Player picker modal
   pickerOverlay: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", justifyContent: "flex-end" },

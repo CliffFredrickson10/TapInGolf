@@ -956,12 +956,19 @@ export default function HoleEntryScreen() {
       <AppHeader />
       {/* Top bar — back + club name + round controls */}
       <View style={[styles.topBar, { paddingTop: 8 }]}>
-        {/* Row 1: back + club name */}
+        {/* Row 1: back + club name + HCP */}
         <View style={styles.topBarRow1}>
           <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
             <Ionicons name="arrow-back" size={20} color={GREEN} />
           </TouchableOpacity>
           <Text style={styles.topBarClub} numberOfLines={1}>{round.club_name}</Text>
+          <TouchableOpacity
+            onPress={openHcpModal}
+            style={[styles.topActionBtn, { borderColor: GREEN + "55" }]}
+          >
+            <Ionicons name="golf-outline" size={13} color={GREEN} />
+            <Text style={[styles.topActionText, { color: GREEN }]}>HCP {ph < 0 ? `+${-ph}` : ph}</Text>
+          </TouchableOpacity>
         </View>
         {/* Row 2: action buttons */}
         <View style={styles.topBarRow2}>
@@ -985,13 +992,6 @@ export default function HoleEntryScreen() {
           >
             <Ionicons name="list" size={13} color={GOLD} />
             <Text style={[styles.topActionText, { color: GOLD }]}>Scorecard</Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            onPress={openHcpModal}
-            style={[styles.topActionBtn, { borderColor: GREEN + "55" }]}
-          >
-            <Ionicons name="golf-outline" size={13} color={GREEN} />
-            <Text style={[styles.topActionText, { color: GREEN }]}>HCP {ph < 0 ? `+${-ph}` : ph}</Text>
           </TouchableOpacity>
         </View>
       </View>

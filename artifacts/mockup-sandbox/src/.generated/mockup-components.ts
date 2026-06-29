@@ -14,5 +14,10 @@ export const modules: ModuleMap = {
   "./components/mockups/scoring/ScorecardProgress.tsx": () => import("../components/mockups/scoring/ScorecardProgress.tsx"),
   "./components/mockups/scoring/StartRound.tsx": () => import("../components/mockups/scoring/StartRound.tsx"),
   "./components/mockups/shotgun/ShotgunCreation.tsx": () => import("../components/mockups/shotgun/ShotgunCreation.tsx"),
-  "./components/mockups/shotgun/ShotgunDraw.tsx": () => import("../components/mockups/shotgun/ShotgunDraw.tsx")
+  "./components/mockups/shotgun/ShotgunDraw.tsx": () => import("../components/mockups/shotgun/ShotgunDraw.tsx"),
+  "./components/mockups/store-screenshots/BookTeetime.tsx": () => import("../components/mockups/store-screenshots/BookTeetime.tsx"),
+  "./components/mockups/store-screenshots/Discover.tsx": () => import("../components/mockups/store-screenshots/Discover.tsx"),
+  "./components/mockups/store-screenshots/Scoring.tsx": () => import("../components/mockups/store-screenshots/Scoring.tsx"),
+  "./components/mockups/store-screenshots/SplitBill.tsx": () => import("../components/mockups/store-screenshots/SplitBill.tsx"),
+  "./components/mockups/store-screenshots/Tournaments.tsx": () => import("../components/mockups/store-screenshots/Tournaments.tsx")
 };

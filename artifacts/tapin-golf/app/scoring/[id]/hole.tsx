@@ -1569,7 +1569,7 @@ const styles = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 8,
   },
   topBarRow2: {
-    flexDirection: "row", alignItems: "center", gap: 8,
+    flexDirection: "row", alignItems: "center", gap: 8, flexWrap: "wrap",
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 10, backgroundColor: SURFACE,

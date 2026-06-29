@@ -449,32 +449,16 @@ export default function MyGolfScreen() {
       ) : (
         /* ── Content screen ── */
         <>
-          {/* Back + pill selector */}
-          <View style={[styles.pillWrap, { backgroundColor: colors.card, borderColor: colors.border }]}>
+          {/* Back button only */}
+          <View style={styles.backRow}>
             <TouchableOpacity
-              style={styles.pillBack}
+              style={[styles.backBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
               onPress={() => { Haptics.selectionAsync(); setActiveTab(null); }}
               activeOpacity={0.75}
             >
-              <Ionicons name="arrow-back" size={16} color={colors.mutedForeground} />
+              <Ionicons name="arrow-back" size={18} color={colors.foreground} />
+              <Text style={[styles.backLabel, { color: colors.foreground }]}>Back</Text>
             </TouchableOpacity>
-            {CHOICES.map(({ key, label, icon }) => (
-              <TouchableOpacity
-                key={key}
-                style={[styles.pillBtn, activeTab === key && { backgroundColor: colors.primary }]}
-                onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
-                activeOpacity={0.8}
-              >
-                <Ionicons
-                  name={activeTab === key ? icon : `${icon}-outline` as any}
-                  size={15}
-                  color={activeTab === key ? "#fff" : colors.mutedForeground}
-                />
-                <Text style={[styles.pillText, { color: activeTab === key ? "#fff" : colors.mutedForeground }]}>
-                  {label}
-                </Text>
-              </TouchableOpacity>
-            ))}
           </View>
 
           {activeTab === "bookings"
@@ -513,26 +497,22 @@ const styles = StyleSheet.create({
   choiceLabel: { fontSize: 17, fontFamily: "Inter_700Bold" },
   choiceSub:   { fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
 
-  pillWrap: {
+  backRow: {
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 4,
+  },
+  backBtn: {
     flexDirection: "row",
     alignItems: "center",
-    marginHorizontal: 16,
-    marginTop: 12,
-    marginBottom: 8,
-    borderRadius: 12,
+    alignSelf: "flex-start",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    borderRadius: 10,
     borderWidth: 1,
-    padding: 4,
-    gap: 2,
   },
-  pillBack: {
-    width: 34, height: 34, borderRadius: 8,
-    alignItems: "center", justifyContent: "center",
-  },
-  pillBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 10, borderRadius: 9,
-  },
-  pillText: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
+  backLabel: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
 
   segRow: {
     flexDirection: "row",

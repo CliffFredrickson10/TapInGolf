@@ -307,18 +307,24 @@ export default function EventDetailScreen() {
       };
       setBracketData(enriched);
       setBracketLoaded(true);
-      // Auto-select the user's active round (lowest round with a pending/in_progress match
-      // where the user is a player). Fall back to round 1 if none found.
-      if (data?.rounds?.length > 0) {
-        const uid = user?.id;
-        const activeMatch = uid
-          ? enriched.matches.find(m =>
-              (m.status === "pending" || m.status === "in_progress") &&
-              (m.player1_id === uid || m.player2_id === uid ||
-               m.player1_partner_id === uid || m.player2_partner_id === uid)
-            )
-          : null;
-        setBracketRound(activeMatch ? activeMatch.round_number : data.rounds[0].round_number);
+      // Auto-select the user's active flight and round.
+      // Check main bracket first; if no active main match, check consolation.
+      const uid = user?.id;
+      const isActive = (m: any) =>
+        (m.status === "pending" || m.status === "in_progress") &&
+        (m.player1_id === uid || m.player2_id === uid ||
+         m.player1_partner_id === uid || m.player2_partner_id === uid);
+      const activeMainMatch = uid ? enriched.matches.find(isActive) : null;
+      const activeConsoMatch = !activeMainMatch && uid
+        ? enriched.consolation_matches.find(isActive)
+        : null;
+      if (activeConsoMatch) {
+        setBracketFlight("consolation");
+        setBracketRound(activeConsoMatch.round_number);
+      } else if (activeMainMatch) {
+        setBracketRound(activeMainMatch.round_number);
+      } else if (data?.rounds?.length > 0) {
+        setBracketRound(data.rounds[0].round_number);
       }
     } catch {
       setBracketLoaded(true);

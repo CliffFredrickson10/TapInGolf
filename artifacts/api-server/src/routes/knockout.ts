@@ -1185,9 +1185,21 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
       await run(`UPDATE knockout_matches SET ${loserField} = ? WHERE id = ?`, [loserId, match.loser_next_match_id]);
       const cm = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
       if (cm?.player1_id && cm?.player2_id) {
+        // Both consolation slots filled — activate and check for a lone-player bye scenario
         await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+        await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+      } else {
+        // Only one slot filled; only auto-advance if exactly one loser-feeder maps to this match
+        // (i.e. it is a consolation bye slot, not waiting for a second loser)
+        const loserFeederCount = await row<any>(
+          "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",
+          [match.loser_next_match_id]
+        );
+        if (Number(loserFeederCount?.cnt ?? 0) <= 1) {
+          await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+        }
+        // else: two losers expected, only one arrived — wait for second
       }
-      await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
     }
   }
 
@@ -1454,9 +1466,20 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
         await run(`UPDATE knockout_matches SET ${loserField} = ? WHERE id = ?`, [loserId, match.loser_next_match_id]);
         const cm = await row<any>("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
         if (cm?.player1_id && cm?.player2_id) {
+          // Both consolation slots filled — activate and check for a lone-player bye scenario
           await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+          await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+        } else {
+          // Only one slot filled; only auto-advance if exactly one loser-feeder maps here
+          // (consolation bye) — not when waiting for a second loser
+          const loserFeederCount = await row<any>(
+            "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",
+            [match.loser_next_match_id]
+          );
+          if (Number(loserFeederCount?.cnt ?? 0) <= 1) {
+            await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+          }
         }
-        await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
       }
     }
 

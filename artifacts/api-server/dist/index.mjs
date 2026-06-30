@@ -76589,8 +76589,16 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
       const cm = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
       if (cm?.player1_id && cm?.player2_id) {
         await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+        await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+      } else {
+        const loserFeederCount = await row(
+          "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",
+          [match.loser_next_match_id]
+        );
+        if (Number(loserFeederCount?.cnt ?? 0) <= 1) {
+          await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+        }
       }
-      await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
     }
   }
   res.json({ ok: true });
@@ -76826,8 +76834,16 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
         const cm = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
         if (cm?.player1_id && cm?.player2_id) {
           await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+          await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+        } else {
+          const loserFeederCount = await row(
+            "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",
+            [match.loser_next_match_id]
+          );
+          if (Number(loserFeederCount?.cnt ?? 0) <= 1) {
+            await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+          }
         }
-        await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
       }
     }
     res.json({ ok: true, status: "complete", winner_id: winnerId });

@@ -430,6 +430,140 @@ describe("POST /portal/knockout/:id/generate — seeded draw ordering", () => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
+// 5-real-match consolation bracket (cN=5, cByes=3, cTotalRounds=3)
+//
+// With cN=5 real R1 matches:
+//   ck=3, cSize=8, cByes=3, cTotalRounds=3, cr1Count=4
+//   consolation R1 match 0  (m=0) → isConsoBye=true  → exactly 1 loser link
+//   consolation R1 match 1  (m=1) → isConsoBye=true  → exactly 1 loser link
+//   consolation R1 match 2  (m=2) → isConsoBye=true  → exactly 1 loser link
+//   consolation R1 match 3  (m=3) → isConsoBye=false → exactly 2 loser links
+//   total loser links = 5 = cN  (no player left without a route)
+//
+// exec call order (base=1):
+//   main  : R1-round(1), R2-round(2), R1m0(11), R1m1(12), R2m0(21)      [5 calls]
+//   consol: cR1-round(31), cR2-round(32), cR3-round(33),                 [3 calls]
+//           cR1m0(41 bye), cR1m1(42 bye), cR1m2(43 bye), cR1m3(44 real), [4 calls]
+//           cR2m0(51), cR2m1(52),                                         [2 calls]
+//           cR3m0/final(61)                                               [1 call]
+//                                                                  total consolation: 10
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — 5-real-match consolation bracket (cN=5, cByes=3)", () => {
+  function stubExecConsolation5Real(base = 1) {
+    mExec
+      .mockResolvedValueOnce(base)       // main knockout_rounds round 1
+      .mockResolvedValueOnce(base + 1)   // main knockout_rounds round 2
+      .mockResolvedValueOnce(base + 10)  // main R1 match 0
+      .mockResolvedValueOnce(base + 11)  // main R1 match 1
+      .mockResolvedValueOnce(base + 20)  // main R2 match
+      .mockResolvedValueOnce(base + 30)  // consolation round 1
+      .mockResolvedValueOnce(base + 31)  // consolation round 2
+      .mockResolvedValueOnce(base + 32)  // consolation round 3
+      .mockResolvedValueOnce(base + 40)  // consolation R1 match 0 — bye slot (m=0)
+      .mockResolvedValueOnce(base + 41)  // consolation R1 match 1 — bye slot (m=1)
+      .mockResolvedValueOnce(base + 42)  // consolation R1 match 2 — bye slot (m=2)
+      .mockResolvedValueOnce(base + 43)  // consolation R1 match 3 — real slot (m=3)
+      .mockResolvedValueOnce(base + 50)  // consolation R2 match 0
+      .mockResolvedValueOnce(base + 51)  // consolation R2 match 1
+      .mockResolvedValueOnce(base + 60); // consolation R3 match (final)
+  }
+
+  function stubQueriesConsolation5Real() {
+    mQuery.mockResolvedValueOnce([]);           // live-consolation guard → clear
+    mQuery.mockResolvedValueOnce(FOUR_MEMBERS); // members (4-player main bracket)
+    // r1RealMatches: cN=5 forces cByes=3 in the consolation bracket
+    mQuery.mockResolvedValueOnce([
+      { id: 101 }, { id: 102 }, { id: 103 }, { id: 104 }, { id: 105 },
+    ]);
+  }
+
+  it("each bye slot (m=0,1,2) gets exactly one loser_next_match_id link", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation5Real();
+    stubExecConsolation5Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    // Bye-slot consolation match IDs: base+40=41, base+41=42, base+42=43
+    const byeSlotIds = [1 + 40, 1 + 41, 1 + 42]; // [41, 42, 43]
+    for (const byeSlotId of byeSlotIds) {
+      const linksToSlot = mRun.mock.calls.filter(([sql, params]) =>
+        String(sql).includes("loser_next_match_id") &&
+        Array.isArray(params) && params[0] === byeSlotId
+      );
+      expect(linksToSlot.length).toBe(1);
+    }
+  });
+
+  it("real consolation slot (m=3, m≥cByes) gets exactly two loser_next_match_id links", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation5Real();
+    stubExecConsolation5Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    // Real-slot consolation match ID: base+43=44
+    const realSlotId = 1 + 43; // 44
+    const linksToRealSlot = mRun.mock.calls.filter(([sql, params]) =>
+      String(sql).includes("loser_next_match_id") &&
+      Array.isArray(params) && params[0] === realSlotId
+    );
+
+    expect(linksToRealSlot.length).toBe(2);
+    // The two losers must land in different slot positions (top vs bottom)
+    const positions = linksToRealSlot.map(([sql]) => {
+      if (String(sql).includes("'top'"))    return "top";
+      if (String(sql).includes("'bottom'")) return "bottom";
+      return "unknown";
+    });
+    expect(positions).toContain("top");
+    expect(positions).toContain("bottom");
+  });
+
+  it("total loser links equals cN=5 and all 5 r1 match IDs appear exactly once", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation5Real();
+    stubExecConsolation5Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    const allLoserLinks = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("loser_next_match_id")
+    );
+
+    // cN=5 → every R1 loser must have exactly one route into consolation
+    expect(allLoserLinks.length).toBe(5);
+
+    // Each of the 5 real R1 matches (IDs 101–105) must appear as a target
+    // exactly once — no match is linked twice, no match is skipped
+    const targetMatchIds = allLoserLinks.map(([_sql, params]) =>
+      Array.isArray(params) ? params[1] : null
+    );
+    expect(targetMatchIds).toContain(101);
+    expect(targetMatchIds).toContain(102);
+    expect(targetMatchIds).toContain(103);
+    expect(targetMatchIds).toContain(104);
+    expect(targetMatchIds).toContain(105);
+    expect(new Set(targetMatchIds).size).toBe(5); // no duplicate links
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
 // Bye-heavy consolation bracket (cByes > 0)
 //
 // With cN=3 real R1 matches:

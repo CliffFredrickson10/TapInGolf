@@ -174,7 +174,7 @@ export default function EventDetailScreen() {
 
   // Knockout bracket state
   type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
-  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; player1_id: number | null; player1_name: string | null; player1_partner_id: number | null; player1_partner_name: string | null; player1_team_name: string | null; player2_id: number | null; player2_name: string | null; player2_partner_id: number | null; player2_partner_name: string | null; player2_team_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
+  type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; bracket?: string; player1_id: number | null; player1_name: string | null; player1_partner_id: number | null; player1_partner_name: string | null; player1_team_name: string | null; player2_id: number | null; player2_name: string | null; player2_partner_id: number | null; player2_partner_name: string | null; player2_team_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
   type BracketData = {
     rounds: KnockoutRound[]; matches: KnockoutMatch[];
     consolation_rounds: KnockoutRound[]; consolation_matches: KnockoutMatch[];
@@ -1211,11 +1211,18 @@ export default function EventDetailScreen() {
                 const opponentId    = isMySideP1 ? myMatch.player2_id : myMatch.player1_id;
                 const opponentChatName = isMySideP1 ? myMatch.player2_name : myMatch.player1_name;
                 return (
-                  <View style={[styles.ctaCard, { backgroundColor: colors.primary + "10", borderColor: colors.primary + "40" }]}>
+                  <View style={[styles.ctaCard, { backgroundColor: myMatch.bracket === "consolation" ? "#7c3aed10" : colors.primary + "10", borderColor: myMatch.bracket === "consolation" ? "#7c3aed40" : colors.primary + "40" }]}>
                     <View style={styles.statusRow}>
-                      <Ionicons name="trophy-outline" size={20} color={colors.primary} />
+                      <Ionicons name="trophy-outline" size={20} color={myMatch.bracket === "consolation" ? "#7c3aed" : colors.primary} />
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.ctaTitle, { color: colors.primary }]}>Your next match — {myRound?.label ?? "upcoming"}</Text>
+                        {myMatch.bracket === "consolation" && (
+                          <View style={{ flexDirection: "row", marginBottom: 4 }}>
+                            <View style={{ backgroundColor: "#7c3aed18", borderRadius: 6, borderWidth: 1, borderColor: "#7c3aed50", paddingHorizontal: 8, paddingVertical: 3 }}>
+                              <Text style={{ fontSize: 10, fontWeight: "800", color: "#7c3aed", letterSpacing: 0.5 }}>🥇 PLATE FLIGHT</Text>
+                            </View>
+                          </View>
+                        )}
+                        <Text style={[styles.ctaTitle, { color: myMatch.bracket === "consolation" ? "#7c3aed" : colors.primary }]}>Your next match — {myRound?.label ?? "upcoming"}</Text>
                         {isTeam && myPartner && (
                           <Text style={[styles.ctaNote, { color: colors.mutedForeground, marginTop: 1 }]}>
                             Partner: <Text style={{ fontWeight: "700", color: colors.foreground }}>{myPartner}</Text>
@@ -2201,6 +2208,13 @@ export default function EventDetailScreen() {
                         borderWidth: isMyMatch || disputed ? 2 : 1,
                         marginBottom: 0, gap: 0, padding: 10,
                       }]}>
+                        {m.bracket === "consolation" && (
+                          <View style={{ flexDirection: "row", marginBottom: 5 }}>
+                            <View style={{ backgroundColor: "#7c3aed18", borderRadius: 5, borderWidth: 1, borderColor: "#7c3aed50", paddingHorizontal: 7, paddingVertical: 2 }}>
+                              <Text style={{ fontSize: 8, fontWeight: "800", color: "#7c3aed", letterSpacing: 0.3 }}>🥇 PLATE FLIGHT</Text>
+                            </View>
+                          </View>
+                        )}
                         <View style={{ flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                           <Text style={{ fontSize: 10, color: colors.mutedForeground, fontWeight: "600" }}>M{m.match_sequence}</Text>
                           <View style={{ flexDirection: "row", gap: 4 }}>

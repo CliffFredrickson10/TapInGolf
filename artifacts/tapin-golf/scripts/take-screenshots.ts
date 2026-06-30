@@ -19,7 +19,7 @@
  */
 
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
-import { spawn, spawnSync, type ChildProcess } from "child_process";
+import { spawn, spawnSync, execSync, type ChildProcess } from "child_process";
 import { mkdirSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
@@ -344,28 +344,28 @@ async function captureScreen(
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 /**
- * Ensures the Playwright Chromium browser is installed.
- * Runs `playwright install chromium` if the executable is not yet present.
- * This makes `pnpm run screenshots` work in a clean install without a
- * separate setup step.
+ * Returns the path to a usable Chromium executable.
+ * Prefers the system Chromium installed via Nix (avoids missing-library issues
+ * in the Replit sandbox). Falls back to the Playwright-managed binary.
  */
-async function ensureChromium() {
+function resolveChromiumPath(): string | undefined {
   try {
-    // executablePath() throws if the browser is not installed
-    chromium.executablePath();
-    verbose("Chromium already installed.");
-  } catch {
-    log("Chromium not found — installing (one-time, ~120 MB)…");
-    const result = spawnSync("npx", ["playwright", "install", "chromium"], {
-      cwd: ROOT,
-      stdio: "inherit",
-      env: process.env,
-    });
-    if (result.status !== 0) {
-      throw new Error("playwright install chromium failed. Run it manually: npx playwright install chromium");
+    const path = execSync("which chromium 2>/dev/null || which chromium-browser 2>/dev/null", { encoding: "utf8" }).trim();
+    if (path) {
+      verbose(`Using system Chromium: ${path}`);
+      return path;
     }
-    log("Chromium installed.");
+  } catch {
+    // not found on PATH
   }
+  try {
+    const path = chromium.executablePath();
+    verbose(`Using Playwright Chromium: ${path}`);
+    return path;
+  } catch {
+    // not installed
+  }
+  return undefined;
 }
 
 async function main() {
@@ -373,14 +373,16 @@ async function main() {
 
   log(`Capturing ${targetScreens.length} screen(s) × ${targetDevices.length} device(s) = ${targetScreens.length * targetDevices.length} screenshot(s).`);
 
-  // Ensure Chromium is installed (downloads it on first run if absent)
-  await ensureChromium();
+  const executablePath = resolveChromiumPath();
+  if (!executablePath) {
+    throw new Error("No Chromium found. Run: pnpm exec playwright install chromium");
+  }
 
   // Start (or locate) the Expo web server
   const baseUrl = await ensureServer();
 
   // Launch headless Chromium
-  const browser: Browser = await chromium.launch({ headless: true });
+  const browser: Browser = await chromium.launch({ headless: true, executablePath });
 
   const results: CaptureResult[] = [];
 

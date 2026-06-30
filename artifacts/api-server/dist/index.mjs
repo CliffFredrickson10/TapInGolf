@@ -80743,12 +80743,83 @@ async function seedAdOfferings() {
     END$$
   `);
 }
+async function seedScreenshotAccount() {
+  const existing = await row(
+    "SELECT id FROM users WHERE email = 'screenshot@tapingolf.co.za'"
+  );
+  if (existing) return;
+  const bcrypt = await Promise.resolve().then(() => (init_bcryptjs(), bcryptjs_exports));
+  const pwHash = await bcrypt.hash("Screenshot2026!", 10);
+  const userId = await exec(
+    `INSERT INTO users
+       (name, email, password_hash, phone, handicap, role, gender, home_province, terms_accepted_at)
+     VALUES (?, ?, ?, ?, ?, 'golfer', 'male', 'Gauteng', NOW())`,
+    ["Alex Golfer", "screenshot@tapingolf.co.za", pwHash, "+27821234567", 12]
+  );
+  const friendHash = await bcrypt.hash("Friend2026!", 10);
+  const friendId = await exec(
+    `INSERT INTO users (name, email, password_hash, phone, handicap, role, gender, home_province)
+     VALUES (?, ?, ?, ?, ?, 'golfer', 'female', 'Gauteng')`,
+    ["Sam Caddy", "sam.caddy.screenshot@tapingolf.co.za", friendHash, "+27831234567", 18]
+  );
+  await exec(
+    `INSERT INTO friendships (requester_id, addressee_id, status) VALUES (?, ?, 'accepted')`,
+    [userId, friendId]
+  );
+  const club = await row("SELECT id FROM clubs WHERE name = 'Glendower Golf Club' LIMIT 1");
+  const clubId = club?.id ?? 1;
+  const teeDate = /* @__PURE__ */ new Date();
+  teeDate.setDate(teeDate.getDate() + 3);
+  const teeDateStr = teeDate.toISOString().slice(0, 10);
+  const bookingRef = `SCR${Date.now().toString(36).toUpperCase()}`;
+  const slotId = await exec(
+    `INSERT INTO portal_tee_slots
+       (club_id, date, tee_time, session_type, tee_start_type, max_players, player_count, is_active)
+     VALUES (?, ?, '08:00', 'AM', 'first_tee', 4, 2, 1)`,
+    [clubId, teeDateStr]
+  );
+  const bookingId = await exec(
+    `INSERT INTO bookings
+       (user_id, portal_slot_id, players, split_bill, total_amount, my_amount, booking_ref,
+        payment_method, status, holes, cart_fee, platform_fee, discount_amount)
+     VALUES (?, ?, 2, 0, 1300.00, 1300.00, ?, 'stitch', 'confirmed', 18, 200.00, 65.00, 0)`,
+    [userId, slotId, bookingRef]
+  );
+  const roundId = await exec(
+    `INSERT INTO scoring_rounds
+       (user_id, club_id, tee_color, format, course_handicap, playing_handicap,
+        allowance_pct, status, holes_played, total_gross, total_points)
+     VALUES (?, ?, 'yellow', 'individual_stableford', 12, 11, 100, 'active', 9, 45, 19)`,
+    [userId, clubId]
+  );
+  const holes = [
+    [1, 4, 7, 5, 5, 1],
+    [2, 3, 15, 4, 3, 2],
+    [3, 5, 3, 6, 5, 2],
+    [4, 4, 11, 4, 4, 2],
+    [5, 4, 1, 5, 4, 1],
+    [6, 3, 17, 3, 3, 2],
+    [7, 5, 5, 6, 5, 2],
+    [8, 4, 13, 5, 5, 1],
+    [9, 4, 9, 4, 4, 2]
+  ];
+  for (const [holeNum, par, si, gross, net, pts] of holes) {
+    await exec(
+      `INSERT INTO scoring_holes
+         (round_id, hole_number, par, stroke_index, gross_score, net_score, stableford_points)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [roundId, holeNum, par, si, gross, net, pts]
+    );
+  }
+  logger.info({ userId, bookingId, roundId }, "Screenshot test account seeded");
+}
 async function migrate() {
   await applyLateAlters();
   await createSchema();
   logger.info("PostgreSQL schema ready");
   await seedData();
   await seedAdOfferings();
+  await seedScreenshotAccount();
   await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

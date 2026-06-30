@@ -9,11 +9,11 @@ channel = "stable-25_05"
 
 [[ports]]
 localPort = 8080
-externalPort = 80
+externalPort = 8080
 
 [[ports]]
 localPort = 8081
-externalPort = 8081
+externalPort = 80
 
 [[ports]]
 localPort = 8082
@@ -44,6 +44,8 @@ externalPort = 3003
 [userenv.development]
 STITCH_WEBHOOK_SECRET = "z10qkGUXNQ7bGxy0vIY9dhOwMxSSJczSa1mqp4HLPYjturmBLRErPe+rzUErrUHe"
 
+[userenv.shared]
+
 [deployment]
 deploymentTarget = "autoscale"
 run = ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
@@ -52,3 +54,5 @@ build = ["bash", "-c", "pnpm --filter @workspace/api-server run build && pnpm --
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 120000
+
+[workflows]

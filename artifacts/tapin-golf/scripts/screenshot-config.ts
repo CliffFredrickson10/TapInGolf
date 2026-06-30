@@ -30,14 +30,19 @@
  *   SCREENSHOT_TOKEN="$(node -e "require('./lib/genToken')(1)")" pnpm run screenshots
  */
 export const MOCK_USER = {
-  id: 1,
+  id: 123,
   name: "Alex Golfer",
-  email: "alex@tapingolf.co.za",
+  email: "screenshot@tapingolf.co.za",
   phone: "+27821234567",
   role: "golfer" as const,
-  club_id: 1,
+  club_id: null,
   // Real token from SCREENSHOT_TOKEN env var takes precedence over the placeholder.
   // Set this env var to a valid token from a seeded test account for live data.
+  // To refresh the token (it expires every 30 days) run:
+  //   curl -s -X POST http://localhost:8080/api/auth/login \
+  //     -H "Content-Type: application/json" \
+  //     -d '{"email":"screenshot@tapingolf.co.za","password":"Screenshot2026!"}' \
+  //     | node -e "process.stdin||(process.stdin=require('stream').Readable.from([]));let d='';process.stdin.on('data',c=>d+=c).on('end',()=>console.log(JSON.parse(d).user.token))"
   token: process.env.SCREENSHOT_TOKEN ?? "MOCK_TOKEN_FOR_SCREENSHOTS",
   handicap: 12,
   gender: "male" as const,
@@ -58,8 +63,8 @@ export const MOCK_USER = {
  *   SELECT id FROM bookings LIMIT 5;
  */
 export const SEED_IDS = {
-  clubId: 1,
-  bookingId: 1,
+  clubId: 142,      // Glendower Golf Club (seeded screenshot club)
+  bookingId: 148,   // Screenshot test account's confirmed upcoming booking
   eventId: 1,
 };
 

@@ -76643,23 +76643,6 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
           await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
         }
         await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
-        if (!cmFresh2.notification_sent_at) {
-          const ev2 = await row("SELECT name FROM golf_events WHERE id = ?", [evId]);
-          const deadline = cmFresh2.round_deadline ? ` by ${cmFresh2.round_deadline instanceof Date ? cmFresh2.round_deadline.toISOString().slice(0, 10) : String(cmFresh2.round_deadline).slice(0, 10)}` : "";
-          const pushMsgs = [];
-          for (const [pid, opp, tok] of [
-            [cmFresh2.player1_id, cmFresh2.player2_name, cmFresh2.p1_token],
-            [cmFresh2.player2_id, cmFresh2.player1_name, cmFresh2.p2_token]
-          ]) {
-            const title = `${ev2?.name ?? "Knockout"} \u2014 Plate Flight match ready`;
-            const body = `You play ${opp} in the ${cmFresh2.round_label}. Tap to view the bracket.${deadline ? " Complete" + deadline + "." : ""}`;
-            const data = { type: "knockout_next_match", eventId: evId, matchId: match.loser_next_match_id };
-            await saveUserNotification(pid, "knockout_next_match", title, body, data);
-            if (tok?.startsWith("ExponentPushToken[")) pushMsgs.push({ to: tok, sound: "default", title, body, data });
-          }
-          if (pushMsgs.length) sendPushNotifications(pushMsgs);
-          await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
-        }
       } else {
         const loserFeederCount = await row(
           "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",
@@ -76971,22 +76954,6 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
             await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
           }
           await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
-          if (!cmFresh2.notification_sent_at) {
-            const deadline = cmFresh2.round_deadline ? ` by ${cmFresh2.round_deadline instanceof Date ? cmFresh2.round_deadline.toISOString().slice(0, 10) : String(cmFresh2.round_deadline).slice(0, 10)}` : "";
-            const pushMsgs = [];
-            for (const [pid, opp, tok] of [
-              [cmFresh2.player1_id, cmFresh2.player2_name, cmFresh2.p1_token],
-              [cmFresh2.player2_id, cmFresh2.player1_name, cmFresh2.p2_token]
-            ]) {
-              const title = `${ev.name} \u2014 Plate Flight match ready`;
-              const body = `You play ${opp} in the ${cmFresh2.round_label}. Tap to view the bracket.${deadline ? " Complete" + deadline + "." : ""}`;
-              const data = { type: "knockout_next_match", eventId: evId, matchId: match.loser_next_match_id };
-              await saveUserNotification(pid, "knockout_next_match", title, body, data);
-              if (tok?.startsWith("ExponentPushToken[")) pushMsgs.push({ to: tok, sound: "default", title, body, data });
-            }
-            if (pushMsgs.length) sendPushNotifications(pushMsgs);
-            await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
-          }
         } else {
           const loserFeederCount = await row(
             "SELECT COUNT(*) as cnt FROM knockout_matches WHERE loser_next_match_id = ?",

@@ -112,6 +112,15 @@ export default function PaymentScreen() {
           if (!cancelled) handleSuccess();
           return;
         }
+        // Organizer path: drive confirmation server-side. confirm-payment now
+        // verifies the payment with Stitch, so this self-heals any brief lag
+        // between the success redirect and Stitch reporting PAID — without the
+        // user having to retry (which would mint a second payment link).
+        if (!isPlayerPay && status === "pending" && !cancelled && !handled.current) {
+          try {
+            await apiFetch(`/bookings/${booking_id}/confirm-payment`, user.token, { method: "POST" });
+          } catch {}
+        }
       } catch {}
       if (!cancelled && !handled.current) {
         pollTimer.current = setTimeout(poll, 3000);

@@ -1181,6 +1181,48 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
   res.json({ payment_url: pr.url, amount, booking_id: id });
 });
 
+// Resume an abandoned organizer payment. When the organizer creates a Stitch /
+// pay-at-club booking but never completes the hosted payment, the booking stays
+// 'pending'. This re-issues a fresh payment link for the SAME booking using the
+// original merchantReference (<bookingId>) so the existing confirm-payment and
+// webhook flow confirms the booking on return.
+router.post("/bookings/:id/resume-payment", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) { res.status(400).json({ message: "Invalid booking id" }); return; }
+
+  const booking = await row<any>(
+    "SELECT id, user_id, status, payment_method, my_amount FROM bookings WHERE id = ?",
+    [id]
+  );
+  if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
+  if (booking.user_id !== user.id) { res.status(403).json({ message: "Only the organizer can complete this payment" }); return; }
+  if (booking.status !== "pending") {
+    res.status(409).json({ message: `This booking is already ${booking.status}.` }); return;
+  }
+  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club") {
+    res.status(400).json({ message: "This booking cannot be paid online." }); return;
+  }
+
+  const amount = parseFloat(booking.my_amount);
+  if (!(amount > 0)) { res.status(400).json({ message: "Nothing left to pay on this booking." }); return; }
+
+  const host = req.get("host") ?? "";
+  const pr = await createStitchPayment({
+    amount,
+    payerName:         user.name,
+    payerEmail:        user.email,
+    merchantReference: String(id),
+    redirectUrl:       `https://${host}/booking/success`,
+  });
+  await exec("UPDATE bookings SET stitch_payment_id = ? WHERE id = ?", [pr.id, id]);
+
+  res.json({ payment_url: pr.url, amount, booking_id: id });
+});
+
 router.put("/bookings/:id/player-paid", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
@@ -1299,12 +1341,33 @@ router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => 
     return;
   }
 
-  // Trust the success redirect: Stitch only redirects to the success URL after
-  // a real payment. The user must own the booking (checked above). The webhook
-  // will arrive too (and is idempotent), but this path is the reliable fallback
-  // for dev where the webhook URL or secret may be stale.
+  // Verify the payment with Stitch before confirming. The success redirect
+  // alone is not proof of payment (a user can navigate to it directly), so we
+  // query Stitch by the stored payment id and require a PAID/COMPLETED status
+  // whose merchantReference matches this booking. This works in dev too (it
+  // queries Stitch directly rather than relying on the webhook).
+  if (!booking.stitch_payment_id) {
+    res.status(402).json({ confirmed: false, message: "No payment to verify for this booking" });
+    return;
+  }
 
-  // Payment confirmed — run the same logic the webhook would run
+  let detail;
+  try {
+    detail = await getStitchPayment(String(booking.stitch_payment_id));
+  } catch (e: any) {
+    res.status(502).json({ confirmed: false, message: "Could not verify payment with Stitch" });
+    return;
+  }
+
+  const payStatus = (detail?.status ?? "").toUpperCase();
+  const refMatches = (detail?.merchantReference ?? "") === String(bookingId);
+  if (!detail || (payStatus !== "PAID" && payStatus !== "COMPLETED") || !refMatches) {
+    res.status(402).json({ confirmed: false, status: booking.status, message: "Payment not completed yet" });
+    return;
+  }
+
+  // Payment verified — run the same logic the webhook would run. The status
+  // guard keeps this idempotent and prevents resurrecting a cancelled booking.
   await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
   await run(
     "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
@@ -1661,14 +1724,23 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         );
       }
     } else {
-      await run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
-      await run(
-        "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-        [bookingId, bookingId]
+      // Idempotent + state-safe: only the delivery that flips pending→confirmed
+      // marks the organizer paid and fires side effects. The guard prevents
+      // duplicate/retried webhooks from re-confirming and prevents resurrecting
+      // a booking that was already cancelled (e.g. by the stale-pending cleanup).
+      const claimed = await run(
+        "UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
+        [bookingId]
       );
-      // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
-      fireInvoiceEmail(bookingId).catch(() => {});
-      syncEventRegistration(bookingId).catch(() => {});
+      if (claimed === 1) {
+        await run(
+          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+          [bookingId, bookingId]
+        );
+        // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
+        fireInvoiceEmail(bookingId).catch(() => {});
+        syncEventRegistration(bookingId).catch(() => {});
+      }
     }
   }
 

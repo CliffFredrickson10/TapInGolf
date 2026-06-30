@@ -65227,6 +65227,54 @@ router4.post("/bookings/:id/pay", async (req, res) => {
   });
   res.json({ payment_url: pr.url, amount, booking_id: id });
 });
+router4.post("/bookings/:id/resume-payment", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  const id = parseInt(rawId, 10);
+  if (isNaN(id)) {
+    res.status(400).json({ message: "Invalid booking id" });
+    return;
+  }
+  const booking = await row(
+    "SELECT id, user_id, status, payment_method, my_amount FROM bookings WHERE id = ?",
+    [id]
+  );
+  if (!booking) {
+    res.status(404).json({ message: "Booking not found" });
+    return;
+  }
+  if (booking.user_id !== user.id) {
+    res.status(403).json({ message: "Only the organizer can complete this payment" });
+    return;
+  }
+  if (booking.status !== "pending") {
+    res.status(409).json({ message: `This booking is already ${booking.status}.` });
+    return;
+  }
+  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club") {
+    res.status(400).json({ message: "This booking cannot be paid online." });
+    return;
+  }
+  const amount = parseFloat(booking.my_amount);
+  if (!(amount > 0)) {
+    res.status(400).json({ message: "Nothing left to pay on this booking." });
+    return;
+  }
+  const host = req.get("host") ?? "";
+  const pr = await createStitchPayment({
+    amount,
+    payerName: user.name,
+    payerEmail: user.email,
+    merchantReference: String(id),
+    redirectUrl: `https://${host}/booking/success`
+  });
+  await exec("UPDATE bookings SET stitch_payment_id = ? WHERE id = ?", [pr.id, id]);
+  res.json({ payment_url: pr.url, amount, booking_id: id });
+});
 router4.put("/bookings/:id/player-paid", async (req, res) => {
   const user = await getUser(req);
   if (!user) {
@@ -65340,6 +65388,23 @@ router4.post("/bookings/:id/confirm-payment", async (req, res) => {
   }
   if (booking.status === "confirmed" || booking.status === "completed") {
     res.json({ confirmed: true, status: booking.status });
+    return;
+  }
+  if (!booking.stitch_payment_id) {
+    res.status(402).json({ confirmed: false, message: "No payment to verify for this booking" });
+    return;
+  }
+  let detail;
+  try {
+    detail = await getStitchPayment(String(booking.stitch_payment_id));
+  } catch (e) {
+    res.status(502).json({ confirmed: false, message: "Could not verify payment with Stitch" });
+    return;
+  }
+  const payStatus = (detail?.status ?? "").toUpperCase();
+  const refMatches = (detail?.merchantReference ?? "") === String(bookingId);
+  if (!detail || payStatus !== "PAID" && payStatus !== "COMPLETED" || !refMatches) {
+    res.status(402).json({ confirmed: false, status: booking.status, message: "Payment not completed yet" });
     return;
   }
   await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
@@ -65701,15 +65766,20 @@ router4.post("/stitch/webhook", async (req, res) => {
         );
       }
     } else {
-      await run("UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
-      await run(
-        "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-        [bookingId, bookingId]
+      const claimed = await run(
+        "UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
+        [bookingId]
       );
-      fireInvoiceEmail(bookingId).catch(() => {
-      });
-      syncEventRegistration(bookingId).catch(() => {
-      });
+      if (claimed === 1) {
+        await run(
+          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+          [bookingId, bookingId]
+        );
+        fireInvoiceEmail(bookingId).catch(() => {
+        });
+        syncEventRegistration(bookingId).catch(() => {
+        });
+      }
     }
   }
   res.status(200).json({ received: true });

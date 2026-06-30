@@ -21,6 +21,7 @@ import { Booking } from "@/components/BookingCard";
 
 interface BookingDetail extends Booking {
   role?: "organizer" | "invited";
+  payment_method?: string;
   my_paid?: boolean;
   players_list?: Array<{ name: string; email: string; paid: boolean; amount: number }>;
   club_id?: number;
@@ -161,6 +162,24 @@ export default function BookingDetailScreen() {
     }
   };
 
+  const handleResumePayment = async () => {
+    if (!user || !booking) return;
+    setPayLoading(true);
+    setPayError(null);
+    try {
+      const data = await apiFetch(`/bookings/${booking.id}/resume-payment`, user.token, {
+        method: "POST",
+      });
+      if (data.payment_url) {
+        router.push({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: booking.id } });
+      }
+    } catch (e: any) {
+      setPayError(e?.message ?? "Could not start payment. Please try again.");
+    } finally {
+      setPayLoading(false);
+    }
+  };
+
   if (loading) {
     return <View style={[styles.center, { backgroundColor: colors.background }]}><GolfBallLoader /></View>;
   }
@@ -178,6 +197,10 @@ export default function BookingDetailScreen() {
   const statusColor = STATUS_COLORS[booking.status] ?? colors.mutedForeground;
   const isInvited = booking.role === "invited";
   const needsPayment = isInvited && !booking.my_paid && booking.status === "confirmed";
+  const organizerNeedsPayment =
+    !isInvited &&
+    booking.status === "pending" &&
+    (booking.payment_method === "stitch" || booking.payment_method === "pay_at_club");
 
   const formatDate = (raw: string) => {
     try {
@@ -378,6 +401,36 @@ export default function BookingDetailScreen() {
             <Text style={[styles.policiesLinkText, { color: colors.primary }]}>View Booking Policies</Text>
             <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
           </TouchableOpacity>
+        )}
+
+        {/* Complete payment — organizer abandoned the online payment */}
+        {organizerNeedsPayment && (
+          <View style={[styles.payCard, { backgroundColor: colors.card, borderColor: colors.accent + "55" }]}>
+            <View style={styles.payCardHeader}>
+              <Ionicons name="time-outline" size={20} color={colors.accent} />
+              <Text style={[styles.payCardTitle, { color: colors.foreground }]}>Complete payment</Text>
+              <Text style={[styles.payCardAmount, { color: colors.accent }]}>
+                R{(booking.my_amount ?? 0).toFixed(2)}
+              </Text>
+            </View>
+            <Text style={[styles.payOptionSub, { color: colors.mutedForeground, marginTop: -4 }]}>
+              Your booking is reserved but not yet confirmed. Complete payment to secure your tee time.
+            </Text>
+
+            {payError && (
+              <Text style={{ color: "#e53935", fontSize: 13, marginTop: 4 }}>{payError}</Text>
+            )}
+
+            <TouchableOpacity
+              style={[styles.payConfirmBtn, { backgroundColor: payLoading ? colors.muted : colors.accent }]}
+              onPress={handleResumePayment}
+              disabled={payLoading}
+            >
+              <Text style={styles.payConfirmText}>
+                {payLoading ? "Processing…" : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via Stitch`}
+              </Text>
+            </TouchableOpacity>
+          </View>
         )}
 
         {/* Pay your share */}

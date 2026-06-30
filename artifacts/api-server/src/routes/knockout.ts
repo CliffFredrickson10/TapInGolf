@@ -1249,26 +1249,6 @@ router.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req:
         }
 
         await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
-        // Notify both Plate Flight players (guard against double-fire with notification_sent_at)
-        if (!cmFresh.notification_sent_at) {
-          const ev2 = await row<any>("SELECT name FROM golf_events WHERE id = ?", [evId]);
-          const deadline = cmFresh.round_deadline
-            ? ` by ${cmFresh.round_deadline instanceof Date ? cmFresh.round_deadline.toISOString().slice(0, 10) : String(cmFresh.round_deadline).slice(0, 10)}`
-            : "";
-          const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
-          for (const [pid, opp, tok] of [
-            [cmFresh.player1_id, cmFresh.player2_name, cmFresh.p1_token],
-            [cmFresh.player2_id, cmFresh.player1_name, cmFresh.p2_token],
-          ] as [number, string, string | null][]) {
-            const title = `${ev2?.name ?? "Knockout"} — Plate Flight match ready`;
-            const body  = `You play ${opp} in the ${cmFresh.round_label}. Tap to view the bracket.${deadline ? " Complete" + deadline + "." : ""}`;
-            const data  = { type: "knockout_next_match", eventId: evId, matchId: match.loser_next_match_id };
-            await saveUserNotification(pid, "knockout_next_match", title, body, data);
-            if (tok?.startsWith("ExponentPushToken[")) pushMsgs.push({ to: tok, sound: "default", title, body, data });
-          }
-          if (pushMsgs.length) sendPushNotifications(pushMsgs);
-          await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
-        }
       } else {
         // Only one slot filled; only auto-advance if exactly one loser-feeder maps to this match
         // (i.e. it is a consolation bye slot, not waiting for a second loser)
@@ -1621,25 +1601,6 @@ router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request,
           }
 
           await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
-          // Notify both Plate Flight players (notification_sent_at guards against double-fire)
-          if (!cmFresh.notification_sent_at) {
-            const deadline = cmFresh.round_deadline
-              ? ` by ${cmFresh.round_deadline instanceof Date ? cmFresh.round_deadline.toISOString().slice(0, 10) : String(cmFresh.round_deadline).slice(0, 10)}`
-              : "";
-            const pushMsgs: Parameters<typeof sendPushNotifications>[0] = [];
-            for (const [pid, opp, tok] of [
-              [cmFresh.player1_id, cmFresh.player2_name, cmFresh.p1_token],
-              [cmFresh.player2_id, cmFresh.player1_name, cmFresh.p2_token],
-            ] as [number, string, string | null][]) {
-              const title = `${ev.name} — Plate Flight match ready`;
-              const body  = `You play ${opp} in the ${cmFresh.round_label}. Tap to view the bracket.${deadline ? " Complete" + deadline + "." : ""}`;
-              const data  = { type: "knockout_next_match", eventId: evId, matchId: match.loser_next_match_id };
-              await saveUserNotification(pid, "knockout_next_match", title, body, data);
-              if (tok?.startsWith("ExponentPushToken[")) pushMsgs.push({ to: tok, sound: "default", title, body, data });
-            }
-            if (pushMsgs.length) sendPushNotifications(pushMsgs);
-            await run("UPDATE knockout_matches SET notification_sent_at = NOW() WHERE id = ?", [match.loser_next_match_id]);
-          }
         } else {
           // Only one slot filled; only auto-advance if exactly one loser-feeder maps here
           // (consolation bye) — not when waiting for a second loser

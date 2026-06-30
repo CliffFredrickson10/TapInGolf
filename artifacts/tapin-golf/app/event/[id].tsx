@@ -1177,18 +1177,26 @@ export default function EventDetailScreen() {
             {/* Knockout: next match card */}
             {isKnockout && bracketLoaded && bracketData && (() => {
               const isTeam = event?.format === "knockout_team";
-              const myMatch = bracketData.matches.find(m =>
+              const allMatches = [
+                ...bracketData.matches,
+                ...(bracketData.consolation_matches ?? []),
+              ];
+              const myMatch = allMatches.find(m =>
                 (m.player1_id === user?.id || m.player2_id === user?.id ||
                  m.player1_partner_id === user?.id || m.player2_partner_id === user?.id) &&
                 m.status !== "complete" && m.status !== "bye"
               );
-              const myDoneMatch = !myMatch && bracketData.matches.find(m =>
+              const myDoneMatch = !myMatch && allMatches.find(m =>
                 (m.player1_id === user?.id || m.player2_id === user?.id ||
                  m.player1_partner_id === user?.id || m.player2_partner_id === user?.id) &&
                 m.status === "complete"
               );
+              const allRounds = [
+                ...bracketData.rounds,
+                ...(bracketData.consolation_rounds ?? []),
+              ];
               const myRound = myMatch
-                ? bracketData.rounds.find(r => r.id === myMatch.round_id)
+                ? allRounds.find(r => r.id === myMatch.round_id)
                 : null;
               if (myMatch) {
                 const isMySideP1 = myMatch.player1_id === user?.id || myMatch.player1_partner_id === user?.id;

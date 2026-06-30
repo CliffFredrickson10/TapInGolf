@@ -754,6 +754,24 @@ router.post("/portal/knockout/:id/generate", requireClubAuth, async (req: Reques
   );
   if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
 
+  // ── Guard: block regeneration if consolation matches are already live ──────
+  if (ev.consolation_enabled) {
+    const liveConsolation = await query<any>(
+      `SELECT id FROM knockout_matches
+       WHERE event_id = ? AND bracket = 'consolation'
+         AND status IN ('in_progress', 'complete')
+       LIMIT 1`,
+      [evId]
+    );
+    if (liveConsolation.length > 0) {
+      res.status(409).json({
+        message:
+          "Plate Flight matches are already in progress — clear consolation results before regenerating",
+      });
+      return;
+    }
+  }
+
   const { draw_method = ev.knockout_draw_method ?? "random", round_deadlines = [] } = req.body ?? {};
 
   // ── Participant list: betterball uses paired teams; singles uses all members ─

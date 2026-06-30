@@ -26,6 +26,7 @@ interface KnockoutEvent {
   knockout_pairing_deadline: string | null;
   singles_entry_deadline: string | null;
   bracket_ready_notified_at: string | null;
+  consolation_enabled: boolean;
   status: string;
   member_count: number;
   pair_count: number;
@@ -88,6 +89,7 @@ const EMPTY_FORM = {
   pairing_deadline: "",
   singles_entry_deadline: "",
   knockout_scoring_format: "individual_stableford",
+  consolation_enabled: false,
 };
 
 function fmtDate(d: string | null | undefined) {
@@ -348,6 +350,25 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
                   Members can opt out until this date. Leave blank to include all active members automatically.
                 </p>
               </div>
+            </div>
+          )}
+
+          {/* Consolation (Plate Flight) toggle — singles only */}
+          {form.knockout_type === "individual" && (
+            <div className="flex items-start gap-3 rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/5 px-3 py-3">
+              <input
+                type="checkbox"
+                id="consolation_enabled"
+                checked={form.consolation_enabled}
+                onChange={e => setForm(f => ({ ...f, consolation_enabled: e.target.checked }))}
+                className="mt-0.5 h-4 w-4 rounded accent-[#7c3aed] cursor-pointer"
+              />
+              <label htmlFor="consolation_enabled" className="cursor-pointer space-y-0.5">
+                <span className="text-xs font-semibold text-[#7c3aed]">🥇 Add Plate Flight (Consolation bracket)</span>
+                <p className="text-[11px] text-[#7c3aed]/70 leading-snug">
+                  First-round losers drop into a parallel bracket. Best of both worlds — no player is eliminated after one loss.
+                </p>
+              </label>
             </div>
           )}
 

@@ -1761,6 +1761,13 @@ async function seedAdOfferings(): Promise<void> {
     )
   `);
   await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
+
+  // ── Consolation bracket (Plate Flight) ───────────────────────────────────
+  await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+  await ddl(`ALTER TABLE knockout_rounds ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
 }
 
 export async function migrate(): Promise<void> {

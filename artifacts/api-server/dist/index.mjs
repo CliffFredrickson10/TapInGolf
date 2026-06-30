@@ -75539,7 +75539,7 @@ router22.get("/portal/knockout", requireClubAuth, async (req, res) => {
 });
 router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   const club = getClub(req);
-  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline, knockout_scoring_format } = req.body ?? {};
+  const { name, event_date, end_date, knockout_type = "individual", draw_method = "random", description, pairing_deadline, singles_entry_deadline, knockout_scoring_format, consolation_enabled } = req.body ?? {};
   if (!name?.trim()) {
     res.status(400).json({ message: "Name is required" });
     return;
@@ -75554,11 +75554,12 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
   }
   const format = knockout_type === "team" ? "knockout_team" : "knockout_individual";
   const scoringFmt = knockout_scoring_format || "stableford";
+  const useConsolation = knockout_type !== "team" && !!consolation_enabled;
   const id = await exec(
     `INSERT INTO golf_events
        (club_id, name, description, event_date, end_date, format, knockout_type, knockout_draw_method,
-        knockout_pairing_deadline, singles_entry_deadline, knockout_scoring_format, status, scoring_enabled, entries_required, payment_required, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
+        knockout_pairing_deadline, singles_entry_deadline, knockout_scoring_format, consolation_enabled, status, scoring_enabled, entries_required, payment_required, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'active', 0, 0, 0, ?)`,
     [
       club.id,
       name.trim(),
@@ -75571,6 +75572,7 @@ router22.post("/portal/knockout", requireClubAuth, async (req, res) => {
       pairing_deadline || null,
       singles_entry_deadline || null,
       scoringFmt,
+      useConsolation,
       club.id
     ]
   );
@@ -76357,12 +76359,84 @@ router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res)
       await run("UPDATE knockout_rounds SET is_complete = 1 WHERE id = ?", [r1RoundId]);
     }
   }
+  if (ev.consolation_enabled && ev.knockout_type !== "team") {
+    const r1RealMatches = await query(
+      "SELECT id FROM knockout_matches WHERE round_id = ? AND status != 'bye' ORDER BY match_sequence ASC",
+      [r1RoundId]
+    );
+    const cN = r1RealMatches.length;
+    if (cN >= 2) {
+      const ck = Math.ceil(Math.log2(Math.max(cN, 2)));
+      const cSize = Math.pow(2, ck);
+      const cByes = cSize - cN;
+      const cTotalRounds = ck;
+      const cLabels = getRoundLabels(cTotalRounds);
+      const cRoundIds = [];
+      for (let r = 0; r < cTotalRounds; r++) {
+        const rid = await exec(
+          "INSERT INTO knockout_rounds (event_id, round_number, label, deadline, bracket) VALUES (?, ?, ?, NULL, 'consolation')",
+          [evId, r + 1, `Plate \xB7 ${cLabels[r]}`]
+        );
+        cRoundIds.push(rid);
+      }
+      const cr1RoundId = cRoundIds[0];
+      const cr1Count = cSize / 2;
+      const cr1Ids = [];
+      let loserIdx = 0;
+      for (let m = 0; m < cr1Count; m++) {
+        const isConsoBye = m < cByes;
+        const cr1Id = await exec(
+          `INSERT INTO knockout_matches (event_id, round_id, match_sequence, status, slot_position, bracket)
+           VALUES (?, ?, ?, 'pending', ?, 'consolation')`,
+          [evId, cr1RoundId, m, m % 2 === 0 ? "top" : "bottom"]
+        );
+        cr1Ids.push(cr1Id);
+        if (isConsoBye) {
+          const mm = r1RealMatches[loserIdx++];
+          if (mm) await run(
+            "UPDATE knockout_matches SET loser_next_match_id = ?, loser_slot_position = 'top' WHERE id = ?",
+            [cr1Id, mm.id]
+          );
+        } else {
+          const mm1 = r1RealMatches[loserIdx++];
+          const mm2 = r1RealMatches[loserIdx++];
+          if (mm1) await run(
+            "UPDATE knockout_matches SET loser_next_match_id = ?, loser_slot_position = 'top' WHERE id = ?",
+            [cr1Id, mm1.id]
+          );
+          if (mm2) await run(
+            "UPDATE knockout_matches SET loser_next_match_id = ?, loser_slot_position = 'bottom' WHERE id = ?",
+            [cr1Id, mm2.id]
+          );
+        }
+      }
+      let prevCIds = cr1Ids;
+      for (let r = 1; r < cTotalRounds; r++) {
+        const count = cSize / Math.pow(2, r + 1);
+        const thisIds = [];
+        for (let m = 0; m < count; m++) {
+          const mid = await exec(
+            `INSERT INTO knockout_matches (event_id, round_id, match_sequence, status, slot_position, bracket)
+             VALUES (?, ?, ?, 'pending', ?, 'consolation')`,
+            [evId, cRoundIds[r], m, m % 2 === 0 ? "top" : "bottom"]
+          );
+          thisIds.push(mid);
+          const f1 = prevCIds[m * 2];
+          const f2 = prevCIds[m * 2 + 1];
+          if (f1 != null) await run("UPDATE knockout_matches SET next_match_id = ? WHERE id = ?", [mid, f1]);
+          if (f2 != null) await run("UPDATE knockout_matches SET next_match_id = ? WHERE id = ?", [mid, f2]);
+        }
+        prevCIds = thisIds;
+      }
+    }
+  }
   res.json({
     ok: true,
     bracket_size: size,
     bye_count: byes,
     total_rounds: totalRounds,
-    member_count: N
+    member_count: N,
+    consolation_enabled: !!ev.consolation_enabled
   });
 });
 router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) => {
@@ -76377,8 +76451,7 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
     return;
   }
   const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
-  const matches = await query(
-    `SELECT km.*,
+  const MATCH_SELECT = `SELECT km.*,
             p1.name as player1_name, p1.handicap as player1_handicap,
             p2.name as player2_name, p2.handicap as player2_handicap,
             w.name as winner_name,
@@ -76399,42 +76472,24 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
      LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
      LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
-     ORDER BY km.round_id ASC, km.match_sequence ASC`,
-    [evId]
-  );
+     ORDER BY km.round_id ASC, km.match_sequence ASC`;
+  const matches = await query(MATCH_SELECT, [evId]);
   const pendingUnopposed = matches.filter(
     (m) => m.status !== "complete" && m.status !== "bye" && (m.player1_id && !m.player2_id || !m.player1_id && m.player2_id)
   );
   for (const m of pendingUnopposed) {
     await autoAdvanceIfUnopposed(evId, m.id);
   }
-  const finalMatches = pendingUnopposed.length > 0 ? await query(
-    `SELECT km.*,
-                p1.name as player1_name, p1.handicap as player1_handicap,
-                p2.name as player2_name, p2.handicap as player2_handicap,
-                w.name as winner_name,
-                p1partner.id   as player1_partner_id,   p1partner.name as player1_partner_name,
-                p2partner.id   as player2_partner_id,   p2partner.name as player2_partner_name,
-                p1t.name       as player1_team_name,
-                p2t.name       as player2_team_name
-         FROM knockout_matches km
-         LEFT JOIN users p1 ON p1.id = km.player1_id
-         LEFT JOIN users p2 ON p2.id = km.player2_id
-         LEFT JOIN users w  ON w.id  = km.winner_id
-         LEFT JOIN event_registrations p1reg ON p1reg.user_id = km.player1_id AND p1reg.event_id = km.event_id
-         LEFT JOIN event_teams p1t ON p1t.id = p1reg.team_id
-         LEFT JOIN event_registrations p1pr ON p1pr.team_id = p1reg.team_id AND p1pr.user_id != km.player1_id AND p1pr.event_id = km.event_id
-         LEFT JOIN users p1partner ON p1partner.id = p1pr.user_id
-         LEFT JOIN event_registrations p2reg ON p2reg.user_id = km.player2_id AND p2reg.event_id = km.event_id
-         LEFT JOIN event_teams p2t ON p2t.id = p2reg.team_id
-         LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
-         LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
-         WHERE km.event_id = ?
-         ORDER BY km.round_id ASC, km.match_sequence ASC`,
-    [evId]
-  ) : matches;
-  const finalMatch = finalMatches[finalMatches.length - 1];
-  const champion = finalMatch?.status === "complete" ? finalMatch.winner_name ?? null : null;
+  const finalMatches = pendingUnopposed.length > 0 ? await query(MATCH_SELECT, [evId]) : matches;
+  const mainRounds = rounds.filter((r) => (r.bracket ?? "main") === "main");
+  const consolationRounds = rounds.filter((r) => r.bracket === "consolation");
+  const mainMatches = finalMatches.filter((m) => (m.bracket ?? "main") === "main");
+  const consolationMatches = finalMatches.filter((m) => m.bracket === "consolation");
+  const mainFinalMatch = mainMatches[mainMatches.length - 1];
+  const champion = mainFinalMatch?.status === "complete" ? mainFinalMatch.winner_name ?? null : null;
+  const cFinalMatch = consolationMatches[consolationMatches.length - 1];
+  const plate_champion = cFinalMatch?.status === "complete" ? cFinalMatch.winner_name ?? null : null;
+  const fmtDeadline = (r) => r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null;
   res.json({
     event: {
       id: ev.id,
@@ -76442,14 +76497,21 @@ router22.get("/portal/knockout/:id/bracket", requireClubAuth, async (req, res) =
       format: ev.format,
       knockout_type: ev.knockout_type,
       knockout_draw_method: ev.knockout_draw_method,
-      club_name: club.name
+      club_name: club.name,
+      consolation_enabled: !!ev.consolation_enabled
     },
-    rounds: rounds.map((r) => ({
+    rounds: mainRounds.map((r) => ({
       ...r,
-      deadline: r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null,
-      matches: finalMatches.filter((m) => m.round_id === r.id)
+      deadline: fmtDeadline(r),
+      matches: mainMatches.filter((m) => m.round_id === r.id)
     })),
-    champion
+    consolation_rounds: consolationRounds.map((r) => ({
+      ...r,
+      deadline: fmtDeadline(r),
+      matches: consolationMatches.filter((m) => m.round_id === r.id)
+    })),
+    champion,
+    plate_champion
   });
 });
 router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (req, res) => {
@@ -76518,6 +76580,18 @@ router22.put("/portal/knockout/:id/matches/:matchId", requireClubAuth, async (re
   }
   if (match.next_match_id) {
     await autoAdvanceIfUnopposed(evId, match.next_match_id);
+  }
+  if (winner_id && match.loser_next_match_id) {
+    const loserId = winner_id === match.player1_id ? match.player2_id : match.player1_id;
+    if (loserId) {
+      const loserField = match.loser_slot_position === "bottom" ? "player2_id" : "player1_id";
+      await run(`UPDATE knockout_matches SET ${loserField} = ? WHERE id = ?`, [loserId, match.loser_next_match_id]);
+      const cm = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
+      if (cm?.player1_id && cm?.player2_id) {
+        await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+      }
+      await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+    }
   }
   res.json({ ok: true });
 });
@@ -76744,6 +76818,18 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
     if (match.next_match_id) {
       await autoAdvanceIfUnopposed(evId, match.next_match_id);
     }
+    if (match.loser_next_match_id) {
+      const loserId = winnerId === match.player1_id ? match.player2_id : match.player1_id;
+      if (loserId) {
+        const loserField = match.loser_slot_position === "bottom" ? "player2_id" : "player1_id";
+        await run(`UPDATE knockout_matches SET ${loserField} = ? WHERE id = ?`, [loserId, match.loser_next_match_id]);
+        const cm = await row("SELECT * FROM knockout_matches WHERE id = ?", [match.loser_next_match_id]);
+        if (cm?.player1_id && cm?.player2_id) {
+          await run("UPDATE knockout_matches SET status = 'in_progress' WHERE id = ?", [match.loser_next_match_id]);
+        }
+        await autoAdvanceIfUnopposed(evId, match.loser_next_match_id);
+      }
+    }
     res.json({ ok: true, status: "complete", winner_id: winnerId });
     return;
   }
@@ -76762,10 +76848,10 @@ router22.post("/events/:id/knockout/matches/:matchId/result", async (req, res) =
 });
 router22.get("/events/:id/knockout/bracket", async (req, res) => {
   const evId = Number(req.params.id);
+  const ev = await row("SELECT id, consolation_enabled FROM golf_events WHERE id = ?", [evId]);
   const rounds = await query("SELECT * FROM knockout_rounds WHERE event_id = ? ORDER BY round_number ASC", [evId]);
-  const matches = await query(
-    `SELECT km.id, km.round_id, km.match_sequence, km.slot_position, km.status, km.score,
-            km.player1_id, p1.name as player1_name,
+  const PUB_MATCH_SELECT = `SELECT km.id, km.round_id, km.match_sequence, km.slot_position, km.status, km.score,
+            km.bracket, km.player1_id, p1.name as player1_name,
             km.player2_id, p2.name as player2_name,
             km.winner_id, w.name as winner_name,
             km.next_match_id, km.notification_sent_at,
@@ -76787,18 +76873,25 @@ router22.get("/events/:id/knockout/bracket", async (req, res) => {
      LEFT JOIN event_registrations p2pr ON p2pr.team_id = p2reg.team_id AND p2pr.user_id != km.player2_id AND p2pr.event_id = km.event_id
      LEFT JOIN users p2partner ON p2partner.id = p2pr.user_id
      WHERE km.event_id = ?
-     ORDER BY km.round_id ASC, km.match_sequence ASC`,
-    [evId]
-  );
-  const finalMatch = matches[matches.length - 1];
-  const champion = finalMatch?.status === "complete" ? finalMatch.winner_name ?? null : null;
+     ORDER BY km.round_id ASC, km.match_sequence ASC`;
+  const matches = await query(PUB_MATCH_SELECT, [evId]);
+  const mainRounds = rounds.filter((r) => (r.bracket ?? "main") === "main");
+  const consolationRounds = rounds.filter((r) => r.bracket === "consolation");
+  const mainMatches = matches.filter((m) => (m.bracket ?? "main") === "main");
+  const consolationMatches = matches.filter((m) => m.bracket === "consolation");
+  const mainFinalMatch = mainMatches[mainMatches.length - 1];
+  const champion = mainFinalMatch?.status === "complete" ? mainFinalMatch.winner_name ?? null : null;
+  const cFinalMatch = consolationMatches[consolationMatches.length - 1];
+  const plate_champion = cFinalMatch?.status === "complete" ? cFinalMatch.winner_name ?? null : null;
+  const fmtDl = (r) => r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null;
   res.json({
-    rounds: rounds.map((r) => ({
-      ...r,
-      deadline: r.deadline ? r.deadline instanceof Date ? r.deadline.toISOString().slice(0, 10) : String(r.deadline).slice(0, 10) : null
-    })),
-    matches,
-    champion
+    rounds: mainRounds.map((r) => ({ ...r, deadline: fmtDl(r) })),
+    matches: mainMatches,
+    consolation_rounds: consolationRounds.map((r) => ({ ...r, deadline: fmtDl(r) })),
+    consolation_matches: consolationMatches,
+    consolation_enabled: !!ev?.consolation_enabled,
+    champion,
+    plate_champion
   });
 });
 router22.get("/knockout/my-active-matches", async (req, res) => {
@@ -80495,6 +80588,11 @@ async function seedAdOfferings() {
     )
   `);
   await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
+  await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
+  await ddl(`ALTER TABLE knockout_rounds ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
+  await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
 }
 async function migrate() {
   await applyLateAlters();

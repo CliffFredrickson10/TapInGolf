@@ -62,8 +62,11 @@ interface KnockoutRound {
 }
 
 interface BracketData {
-  event: { id: number; name: string; format: string; knockout_type: string | null; knockout_draw_method: string | null; club_name: string | null };
+  event: { id: number; name: string; format: string; knockout_type: string | null; knockout_draw_method: string | null; club_name: string | null; consolation_enabled?: boolean };
   rounds: KnockoutRound[];
+  consolation_rounds?: KnockoutRound[];
+  champion?: string | null;
+  plate_champion?: string | null;
 }
 
 // ── Subcomponents ─────────────────────────────────────────────────────────────
@@ -463,8 +466,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const [editScore, setEditScore]       = useState<KnockoutMatch | null>(null);
   const [showGenerate, setShowGenerate] = useState(false);
   const [publishing, setPublishing]     = useState(false);
-  const [showPrintMenu, setShowPrintMenu] = useState(false);
-  const [fitToPage, setFitToPage]         = useState(true);
+  const [showPrintMenu, setShowPrintMenu]     = useState(false);
+  const [fitToPage, setFitToPage]             = useState(true);
+  const [bracketFlight, setBracketFlight]     = useState<"main" | "consolation">("main");
 
   // Paper sizes (landscape) — available print area in px at 96dpi with 10mm margins each side
   const PRINT_SIZES = [
@@ -725,13 +729,16 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   }
 
   // Compute layout
-  const rounds       = data!.rounds;
-  const numR1        = rounds[0]!.matches.length;
-  const positions    = computePositions(numR1);
-  const numRounds    = positions.length;
-  const canvasH      = numR1 * (CARD_H + SLOT_GAP) - SLOT_GAP;
-  const canvasW      = numRounds * (CARD_W + COL_GAP) + 130;
-  const isPublished  = rounds.some(r => r.matches.some(m => m.notification_sent_at != null));
+  const hasConsolation = (data!.consolation_rounds?.length ?? 0) > 0;
+  const displayRounds  = bracketFlight === "consolation" && hasConsolation ? (data!.consolation_rounds ?? []) : data!.rounds;
+  const flightChampion = bracketFlight === "consolation" ? data!.plate_champion : data!.champion;
+  const rounds         = displayRounds;  // alias so all existing code below works unchanged
+  const numR1          = rounds[0]!.matches.length;
+  const positions      = computePositions(numR1);
+  const numRounds      = positions.length;
+  const canvasH        = numR1 * (CARD_H + SLOT_GAP) - SLOT_GAP;
+  const canvasW        = numRounds * (CARD_W + COL_GAP) + 130;
+  const isPublished    = data!.rounds.some(r => r.matches.some(m => m.notification_sent_at != null));
 
   return (
     <div style={{ fontFamily: "system-ui, sans-serif" }}>
@@ -756,9 +763,31 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         </div>
       )}
 
+      {/* Flight switcher — Championship vs Plate */}
+      {hasConsolation && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 12 }}>
+          {([["main", "🏆 Championship"], ["consolation", "🥇 Plate Flight"]] as const).map(([flight, label]) => (
+            <button
+              key={flight}
+              onClick={() => setBracketFlight(flight)}
+              style={{
+                padding: "6px 16px", fontSize: 12, fontWeight: 700, borderRadius: 20,
+                border: `2px solid ${bracketFlight === flight ? (flight === "consolation" ? "#7c3aed" : GREEN) : "#e5e7eb"}`,
+                background: bracketFlight === flight ? (flight === "consolation" ? "#7c3aed12" : "#f0faf4") : "#fff",
+                color: bracketFlight === flight ? (flight === "consolation" ? "#7c3aed" : GREEN) : "#6b7280",
+                cursor: "pointer",
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Disputes banner */}
       {(() => {
-        const disputed = rounds.flatMap(r => r.matches.filter(m => m.dispute));
+        const allRoundsForDisputes = [...data!.rounds, ...(data!.consolation_rounds ?? [])];
+        const disputed = allRoundsForDisputes.flatMap(r => r.matches.filter(m => m.dispute));
         if (disputed.length === 0) return null;
         return (
           <div style={{ background: "#fff7ed", border: "1.5px solid #fb923c", borderRadius: 8, padding: "10px 14px", marginBottom: 10 }}>
@@ -769,7 +798,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
               </span>
             </div>
             {disputed.map(m => {
-              const round = rounds.find(r => r.matches.some(x => x.id === m.id));
+              const round = allRoundsForDisputes.find(r => r.matches.some(x => x.id === m.id));
               return (
                 <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "5px 0", borderTop: "1px solid #fed7aa" }}>
                   <span style={{ fontSize: 11, color: "#9a3412", fontWeight: 600, minWidth: 70 }}>{round?.label ?? "Round"}</span>
@@ -884,7 +913,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             </div>
           ))}
           <div style={{ position: "absolute", left: colX(numRounds) + 8, top: 0, width: 110 }}>
-            <span style={{ fontSize: 11, fontWeight: 700, color: GOLD }}>🏆 Champion</span>
+            <span style={{ fontSize: 11, fontWeight: 700, color: bracketFlight === "consolation" ? "#7c3aed" : GOLD }}>
+              {bracketFlight === "consolation" ? "🥇 Plate Champion" : "🏆 Champion"}
+            </span>
           </div>
         </div>
 
@@ -931,18 +962,19 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
 
           {/* Champion box */}
           {(() => {
-            const finalPos = positions[numRounds - 1]?.[0];
+            const finalPos  = positions[numRounds - 1]?.[0];
             if (!finalPos) return null;
-            const lastMatch = rounds[numRounds - 1]?.matches[0];
-            const champion  = lastMatch?.winner_name ?? null;
+            const trophy    = bracketFlight === "consolation" ? "🥇" : "🏆";
+            const trophyCol = bracketFlight === "consolation" ? "#7c3aed" : GOLD;
+            const title     = bracketFlight === "consolation" ? "Plate Champion" : "Champion";
             return (
               <div style={{ position: "absolute", left: colX(numRounds) + 8, top: finalPos.topY - 4, width: 110 }}>
-                <div style={{ border: `2px solid ${GOLD}`, borderRadius: 12, padding: "10px 8px", background: `${GOLD}15`, textAlign: "center" }}>
-                  <div style={{ fontSize: 20 }}>🏆</div>
-                  <div style={{ fontSize: 10, fontWeight: 700, color: GOLD, marginTop: 4 }}>
-                    {champion ?? "Champion"}
+                <div style={{ border: `2px solid ${trophyCol}`, borderRadius: 12, padding: "10px 8px", background: `${trophyCol}15`, textAlign: "center" }}>
+                  <div style={{ fontSize: 20 }}>{trophy}</div>
+                  <div style={{ fontSize: 10, fontWeight: 700, color: trophyCol, marginTop: 4 }}>
+                    {flightChampion ?? title}
                   </div>
-                  {champion && <div style={{ fontSize: 9, color: GREEN, fontWeight: 600, marginTop: 2 }}>{champion}</div>}
+                  {flightChampion && <div style={{ fontSize: 9, color: trophyCol, fontWeight: 600, marginTop: 2 }}>{flightChampion}</div>}
                 </div>
               </div>
             );

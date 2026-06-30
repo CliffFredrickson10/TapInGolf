@@ -175,10 +175,16 @@ export default function EventDetailScreen() {
   // Knockout bracket state
   type KnockoutRound = { id: number; round_number: number; label: string; is_complete: number; deadline: string | null };
   type KnockoutMatch = { id: number; round_id: number; round_number: number; match_sequence: number; next_match_id: number | null; player1_id: number | null; player1_name: string | null; player1_partner_id: number | null; player1_partner_name: string | null; player1_team_name: string | null; player2_id: number | null; player2_name: string | null; player2_partner_id: number | null; player2_partner_name: string | null; player2_team_name: string | null; winner_id: number | null; winner_name: string | null; score: string | null; status: string; player1_result: string | null; player2_result: string | null; dispute: boolean };
-  type BracketData = { rounds: KnockoutRound[]; matches: KnockoutMatch[]; champion: string | null };
+  type BracketData = {
+    rounds: KnockoutRound[]; matches: KnockoutMatch[];
+    consolation_rounds: KnockoutRound[]; consolation_matches: KnockoutMatch[];
+    consolation_enabled: boolean;
+    champion: string | null; plate_champion: string | null;
+  };
   const [bracketData, setBracketData] = useState<BracketData | null>(null);
   const [bracketLoaded, setBracketLoaded] = useState(false);
   const [bracketRound, setBracketRound] = useState(1);
+  const [bracketFlight, setBracketFlight] = useState<"main" | "consolation">("main");
   const [submittingResult, setSubmittingResult] = useState<number | null>(null);
   const [openingChat, setOpeningChat]           = useState(false);
 
@@ -283,12 +289,21 @@ export default function EventDetailScreen() {
       // Enrich each match with its round_number so we can filter by round
       const roundNumMap: Record<number, number> = {};
       for (const r of data.rounds ?? []) roundNumMap[r.id] = r.round_number;
+      const cRoundNumMap: Record<number, number> = {};
+      for (const r of data.consolation_rounds ?? []) cRoundNumMap[r.id] = r.round_number;
       const enriched: BracketData = {
         ...data,
         matches: (data.matches ?? []).map((m: any) => ({
           ...m,
           round_number: roundNumMap[m.round_id] ?? 1,
         })),
+        consolation_rounds: data.consolation_rounds ?? [],
+        consolation_matches: (data.consolation_matches ?? []).map((m: any) => ({
+          ...m,
+          round_number: cRoundNumMap[m.round_id] ?? 1,
+        })),
+        consolation_enabled: !!data.consolation_enabled,
+        plate_champion: data.plate_champion ?? null,
       };
       setBracketData(enriched);
       setBracketLoaded(true);
@@ -2027,43 +2042,78 @@ export default function EventDetailScreen() {
               </View>
             ) : (
               <>
-                {/* Champion banner */}
-                {bracketData.champion && (
-                  <View style={{ backgroundColor: "#c8a84b18", borderRadius: 14, borderWidth: 1, borderColor: "#c8a84b60", padding: 16, marginBottom: 16, alignItems: "center", gap: 4 }}>
-                    <Text style={{ fontSize: 22 }}>🏆</Text>
-                    <Text style={{ fontSize: 13, color: "#92711a", fontWeight: "700" }}>CHAMPION</Text>
-                    <Text style={{ fontSize: 17, color: "#c8a84b", fontWeight: "800" }}>{bracketData.champion}</Text>
-                  </View>
+                {/* Flight switcher — Championship vs Plate */}
+                {bracketData.consolation_enabled && bracketData.consolation_rounds.length > 0 && (
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 12 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+                    {([["main", "🏆 Championship"] as const, ["consolation", "🥇 Plate Flight"] as const]).map(([flight, label]) => (
+                      <TouchableOpacity
+                        key={flight}
+                        onPress={() => { setBracketFlight(flight); setBracketRound(1); }}
+                        style={{ paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20, borderWidth: 2,
+                          borderColor: bracketFlight === flight ? (flight === "consolation" ? "#7c3aed" : colors.primary) : colors.border,
+                          backgroundColor: bracketFlight === flight ? (flight === "consolation" ? "#7c3aed12" : colors.primary + "12") : colors.card }}
+                      >
+                        <Text style={{ fontSize: 13, fontWeight: "700",
+                          color: bracketFlight === flight ? (flight === "consolation" ? "#7c3aed" : colors.primary) : colors.mutedForeground }}>
+                          {label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
                 )}
 
+                {/* Champion banner */}
+                {(() => {
+                  const displayChampion = bracketFlight === "consolation" ? bracketData.plate_champion : bracketData.champion;
+                  if (!displayChampion) return null;
+                  const isPlateFlight = bracketFlight === "consolation";
+                  return (
+                    <View style={{ backgroundColor: isPlateFlight ? "#7c3aed18" : "#c8a84b18", borderRadius: 14, borderWidth: 1, borderColor: isPlateFlight ? "#7c3aed60" : "#c8a84b60", padding: 16, marginBottom: 16, alignItems: "center", gap: 4 }}>
+                      <Text style={{ fontSize: 22 }}>{isPlateFlight ? "🥇" : "🏆"}</Text>
+                      <Text style={{ fontSize: 13, color: isPlateFlight ? "#7c3aed" : "#92711a", fontWeight: "700" }}>{isPlateFlight ? "PLATE CHAMPION" : "CHAMPION"}</Text>
+                      <Text style={{ fontSize: 17, color: isPlateFlight ? "#7c3aed" : "#c8a84b", fontWeight: "800" }}>{displayChampion}</Text>
+                    </View>
+                  );
+                })()}
+
                 {/* Round selector */}
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
-                  {bracketData.rounds.map(r => (
-                    <TouchableOpacity
-                      key={r.id}
-                      onPress={() => setBracketRound(r.round_number)}
-                      style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5,
-                        borderColor: bracketRound === r.round_number ? colors.primary : colors.border,
-                        backgroundColor: bracketRound === r.round_number ? colors.primary + "18" : colors.card }}
-                    >
-                      <Text style={{ fontSize: 13, fontWeight: "700",
-                        color: bracketRound === r.round_number ? colors.primary : colors.mutedForeground }}>
-                        {r.label}
-                      </Text>
-                      {r.deadline && (
-                        <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
-                          By {new Date(r.deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
-                        </Text>
-                      )}
-                    </TouchableOpacity>
-                  ))}
-                </ScrollView>
+                {(() => {
+                  const displayRounds = bracketFlight === "consolation" && bracketData.consolation_rounds.length > 0
+                    ? bracketData.consolation_rounds
+                    : bracketData.rounds;
+                  return (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }} contentContainerStyle={{ gap: 8, paddingHorizontal: 2 }}>
+                      {displayRounds.map(r => (
+                        <TouchableOpacity
+                          key={r.id}
+                          onPress={() => setBracketRound(r.round_number)}
+                          style={{ paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20, borderWidth: 1.5,
+                            borderColor: bracketRound === r.round_number ? colors.primary : colors.border,
+                            backgroundColor: bracketRound === r.round_number ? colors.primary + "18" : colors.card }}
+                        >
+                          <Text style={{ fontSize: 13, fontWeight: "700",
+                            color: bracketRound === r.round_number ? colors.primary : colors.mutedForeground }}>
+                            {r.label}
+                          </Text>
+                          {r.deadline && (
+                            <Text style={{ fontSize: 10, color: colors.mutedForeground, textAlign: "center" }}>
+                              By {new Date(r.deadline).toLocaleDateString("en-ZA", { day: "numeric", month: "short" })}
+                            </Text>
+                          )}
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  );
+                })()}
 
                 {/* Match cards for selected round */}
                 {(() => {
+                  const displayMatches = bracketFlight === "consolation" && bracketData.consolation_matches.length > 0
+                    ? bracketData.consolation_matches
+                    : bracketData.matches;
                   // Build reverse feeder map: next_match_id → [feeder matches]
                   const feedersOf: Record<number, KnockoutMatch[]> = {};
-                  bracketData.matches.forEach(fm => {
+                  displayMatches.forEach(fm => {
                     if (fm.next_match_id != null) {
                       if (!feedersOf[fm.next_match_id]) feedersOf[fm.next_match_id] = [];
                       feedersOf[fm.next_match_id].push(fm);
@@ -2219,7 +2269,7 @@ export default function EventDetailScreen() {
                     );
                   };
 
-                  const roundMatches = bracketData.matches.filter(m => m.round_number === bracketRound);
+                  const roundMatches = displayMatches.filter(m => m.round_number === bracketRound);
 
                   // Round 1 — no feeders, show 2-per-row pairs
                   if (bracketRound === 1) {

@@ -76217,6 +76217,21 @@ router22.post("/portal/knockout/:id/generate", requireClubAuth, async (req, res)
     res.status(404).json({ message: "Tournament not found" });
     return;
   }
+  if (ev.consolation_enabled) {
+    const liveConsolation = await query(
+      `SELECT id FROM knockout_matches
+       WHERE event_id = ? AND bracket = 'consolation'
+         AND status IN ('in_progress', 'complete')
+       LIMIT 1`,
+      [evId]
+    );
+    if (liveConsolation.length > 0) {
+      res.status(409).json({
+        message: "Plate Flight matches are already in progress \u2014 clear consolation results before regenerating"
+      });
+      return;
+    }
+  }
   const { draw_method = ev.knockout_draw_method ?? "random", round_deadlines = [] } = req.body ?? {};
   let members;
   if (ev.knockout_type === "team") {

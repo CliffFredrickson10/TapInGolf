@@ -1768,6 +1768,26 @@ async function seedAdOfferings(): Promise<void> {
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
+
+  // ── Fix knockout_rounds unique constraint to include bracket ──────────────
+  // The original constraint was UNIQUE (event_id, round_number), which
+  // prevents a consolation round from sharing round_number=1 with the main
+  // bracket. With Plate Flight enabled both brackets use round_number starting
+  // at 1, so the constraint must scope to (event_id, round_number, bracket).
+  await ddl(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'knockout_rounds_event_id_round_number_key'
+          AND conrelid = 'knockout_rounds'::regclass
+      ) THEN
+        ALTER TABLE knockout_rounds DROP CONSTRAINT knockout_rounds_event_id_round_number_key;
+        CREATE UNIQUE INDEX IF NOT EXISTS knockout_rounds_event_bracket_round_key
+          ON knockout_rounds (event_id, bracket, round_number);
+      END IF;
+    END$$
+  `);
 }
 
 export async function migrate(): Promise<void> {

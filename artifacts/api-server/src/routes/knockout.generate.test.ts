@@ -1,0 +1,347 @@
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import express, { type Express } from "express";
+import request from "supertest";
+
+// ── Mocks ─────────────────────────────────────────────────────────────────────
+vi.mock("../lib/pg", () => ({
+  query: vi.fn(),
+  row:   vi.fn(),
+  exec:  vi.fn(),
+  run:   vi.fn(),
+}));
+
+vi.mock("../lib/portalAuth", () => ({
+  requireClubAuth: (_req: any, _res: any, next: any) => { _req.club = { id: 42, name: "Test Club" }; next(); },
+  getClub: (req: any) => req.club,
+}));
+
+vi.mock("../lib/notifications",     () => ({ sendPushNotifications: vi.fn() }));
+vi.mock("../lib/userNotifications", () => ({ saveUserNotification:  vi.fn() }));
+vi.mock("../lib/logger",            () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
+
+import knockoutRouter from "./knockout";
+import { query, row, exec, run } from "../lib/pg";
+
+const mQuery = vi.mocked(query);
+const mRow   = vi.mocked(row);
+const mExec  = vi.mocked(exec);
+const mRun   = vi.mocked(run);
+
+function makeApp(): Express {
+  const app = express();
+  app.use(express.json());
+  app.use("/", knockoutRouter);
+  return app;
+}
+
+// ── Fixtures ──────────────────────────────────────────────────────────────────
+const BASE_EVENT = {
+  id: 1,
+  club_id: 42,
+  format: "knockout_individual",
+  knockout_type: "individual",
+  knockout_draw_method: "random",
+  consolation_enabled: 0,
+  singles_entry_deadline: null,
+  scoring_enabled: 0,
+};
+
+// 4 members → bracket size 4, byes 0, 2 main rounds.
+// 2 real R1 matches → consolation: 1 round, 1 match (cN=2, cSize=2, cByes=0).
+const FOUR_MEMBERS = [
+  { user_id: 1, name: "Alice",   handicap: 5 },
+  { user_id: 2, name: "Bob",     handicap: 8 },
+  { user_id: 3, name: "Charlie", handicap: 12 },
+  { user_id: 4, name: "Dave",    handicap: 15 },
+];
+
+// ── exec-ID helpers ───────────────────────────────────────────────────────────
+// For a 4-player bracket WITHOUT consolation:
+// exec calls: round1, round2, R1match0, R1match1, R2match → 5 IDs
+function stubExecNonConsolation(base = 1) {
+  mExec
+    .mockResolvedValueOnce(base)       // knockout_rounds round 1
+    .mockResolvedValueOnce(base + 1)   // knockout_rounds round 2
+    .mockResolvedValueOnce(base + 10)  // knockout_matches R1 match 0
+    .mockResolvedValueOnce(base + 11)  // knockout_matches R1 match 1
+    .mockResolvedValueOnce(base + 20); // knockout_matches R2 match
+}
+
+// For a 4-player bracket WITH consolation:
+// extra: consolRound, consolMatch0
+function stubExecWithConsolation(base = 1) {
+  mExec
+    .mockResolvedValueOnce(base)       // knockout_rounds round 1
+    .mockResolvedValueOnce(base + 1)   // knockout_rounds round 2
+    .mockResolvedValueOnce(base + 10)  // knockout_matches R1 match 0
+    .mockResolvedValueOnce(base + 11)  // knockout_matches R1 match 1
+    .mockResolvedValueOnce(base + 20)  // knockout_matches R2 match
+    .mockResolvedValueOnce(base + 30)  // knockout_rounds consolation round 1
+    .mockResolvedValueOnce(base + 40); // knockout_matches consolation R1 match 0
+}
+
+// ── query() mock helpers ──────────────────────────────────────────────────────
+// When consolation_enabled=1, the endpoint first checks for live consolation
+// matches (a guard query). We must return [] for it before the members query.
+function stubQueriesNoConsolation() {
+  // No consolation_enabled — only members query
+  mQuery.mockResolvedValueOnce(FOUR_MEMBERS);
+}
+
+function stubQueriesWithConsolation(r1RealMatchIds: number[] = [11, 12]) {
+  // 1. live-consolation guard → [] (no in-progress consolation matches)
+  mQuery.mockResolvedValueOnce([]);
+  // 2. members
+  mQuery.mockResolvedValueOnce(FOUR_MEMBERS);
+  // 3. r1RealMatches (for consolation bracket construction)
+  mQuery.mockResolvedValueOnce(r1RealMatchIds.map(id => ({ id })));
+}
+
+// vi.resetAllMocks() clears the mockResolvedValueOnce queues between tests,
+// preventing bleed-through. Always re-establish run() default after reset.
+beforeEach(() => {
+  vi.resetAllMocks();
+  mRun.mockResolvedValue(undefined as any);
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — cascade delete on regeneration", () => {
+  it("calls DELETE FROM knockout_rounds on every generate, wiping both main and consolation rows", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT });
+    stubQueriesNoConsolation();
+    stubExecNonConsolation();
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    const deleteCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE FROM knockout_rounds")
+    );
+    expect(deleteCalls.length).toBe(1);
+    expect(deleteCalls[0]![1]).toContain(1); // event id
+  });
+
+  it("issues the cascade DELETE before any INSERT so stale consolation data is always cleared first", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT });
+    stubQueriesNoConsolation();
+    stubExecNonConsolation();
+
+    await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    const runCalls  = mRun.mock.calls.map(([sql]) => String(sql));
+    const deleteIdx = runCalls.findIndex(s => s.includes("DELETE FROM knockout_rounds"));
+    // DELETE must be the very first run() call in the handler
+    expect(deleteIdx).toBe(0);
+  });
+
+  it("returns 404 when the event does not belong to the club", async () => {
+    mRow.mockResolvedValue(null);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/99/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 400 when fewer than 2 members are available, without touching the DB", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT });
+    mQuery.mockResolvedValueOnce([{ user_id: 1, name: "Solo", handicap: 10 }]);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toMatch(/at least 2/i);
+
+    const deleteCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE FROM knockout_rounds")
+    );
+    expect(deleteCalls.length).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — consolation bracket creation", () => {
+  it("creates consolation rounds and matches when consolation_enabled=1 and ≥2 real R1 matches exist", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesWithConsolation([11, 12]);
+    stubExecWithConsolation();
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+    expect(res.body.consolation_enabled).toBe(true);
+    expect(res.body.bracket_size).toBe(4);
+
+    // A consolation round was INSERTed
+    const consolRoundInserts = mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_rounds") && String(sql).includes("consolation")
+    );
+    expect(consolRoundInserts.length).toBeGreaterThanOrEqual(1);
+
+    // A consolation match was INSERTed
+    const consolMatchInserts = mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_matches") && String(sql).includes("consolation")
+    );
+    expect(consolMatchInserts.length).toBeGreaterThanOrEqual(1);
+
+    // Two loser_next_match_id links: one per real R1 match (mm1 top, mm2 bottom)
+    const loserLinks = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("loser_next_match_id")
+    );
+    expect(loserLinks.length).toBe(2);
+  });
+
+  it("does NOT create consolation rounds when consolation_enabled=0", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 0 });
+    stubQueriesNoConsolation();
+    stubExecNonConsolation();
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(res.status).toBe(200);
+    expect(res.body.consolation_enabled).toBe(false);
+
+    const consolRoundInserts = mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_rounds") && String(sql).includes("consolation")
+    );
+    expect(consolRoundInserts.length).toBe(0);
+  });
+
+  it("returns 409 (conflict) when live consolation matches already exist — blocking data loss", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    // Guard query returns a live consolation match
+    mQuery.mockResolvedValueOnce([{ id: 55 }]);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/plate flight/i);
+
+    // DELETE must NOT have been called — data is preserved
+    const deleteCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE FROM knockout_rounds")
+    );
+    expect(deleteCalls.length).toBe(0);
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — full lifecycle: generate → consolation score → re-generate", () => {
+  it("deletes everything and re-creates consolation when re-generating after a consolation-enabled bracket with no live results", async () => {
+    const app = makeApp();
+
+    // ── Phase 1: initial generate ───────────────────────────────────────────
+    // Simulates a staff member generating the bracket for the first time.
+    // Both main and consolation rounds are created.
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesWithConsolation([11, 12]);
+    stubExecWithConsolation(100); // IDs starting at 100
+
+    const firstRes = await request(app)
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(firstRes.status).toBe(200);
+    expect(firstRes.body.consolation_enabled).toBe(true);
+
+    // First generate must call DELETE once
+    const firstDeleteCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE FROM knockout_rounds")
+    );
+    expect(firstDeleteCalls.length).toBe(1);
+
+    // Consolation round + match were created
+    const firstConsolRounds = mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_rounds") && String(sql).includes("consolation")
+    );
+    expect(firstConsolRounds.length).toBeGreaterThanOrEqual(1);
+
+    // ── Phase 2: consolation match in a pending state (not yet complete) ───
+    // In reality a player would be seeded into consolation after losing R1.
+    // The guard query checks for 'in_progress' or 'complete' status — pending
+    // is NOT blocked. So this simulate the scenario where a consolation bracket
+    // exists but no results have been entered yet (admin wants to redo the draw).
+    vi.resetAllMocks();
+    mRun.mockResolvedValue(undefined as any);
+
+    // ── Phase 3: re-generate — consolation pending (guard passes) ──────────
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesWithConsolation([21, 22]); // new R1 match IDs after fresh R1
+    stubExecWithConsolation(200); // new IDs starting at 200
+
+    const secondRes = await request(app)
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(secondRes.status).toBe(200);
+    expect(secondRes.body.consolation_enabled).toBe(true);
+
+    // DELETE fired again — in the real DB this single statement cascades
+    // and removes ALL knockout_rounds rows (bracket='main' and bracket='consolation')
+    // along with their knockout_matches children via FK ON DELETE CASCADE.
+    const secondDeleteCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE FROM knockout_rounds")
+    );
+    expect(secondDeleteCalls.length).toBe(1);
+    // The event id is always the parameter
+    expect(secondDeleteCalls[0]![1]).toContain(1);
+
+    // Fresh consolation rounds were inserted after the wipe
+    const secondConsolRounds = mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_rounds") && String(sql).includes("consolation")
+    );
+    expect(secondConsolRounds.length).toBeGreaterThanOrEqual(1);
+
+    // Loser links were re-established to the newly created main R1 matches
+    const secondLoserLinks = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("loser_next_match_id")
+    );
+    expect(secondLoserLinks.length).toBe(2); // mm1 (top) + mm2 (bottom)
+  });
+
+  it("blocks re-generate (409) when a consolation match result has been recorded, preserving player data", async () => {
+    // Simulates: bracket generated → R1 result entered → R1 loser seeded into
+    // consolation → consolation match marked in_progress → admin tries to re-generate.
+    // The guard must stop this and return 409 to prevent data loss.
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    // Guard query finds a consolation match that is in_progress (score entered)
+    mQuery.mockResolvedValueOnce([{ id: 77 }]);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({});
+
+    expect(res.status).toBe(409);
+    expect(res.body.message).toMatch(/plate flight/i);
+
+    // Absolutely no DB writes — existing bracket and consolation scores are safe
+    const writeCalls = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("DELETE") || String(sql).includes("INSERT") || String(sql).includes("UPDATE")
+    );
+    expect(writeCalls.length).toBe(0);
+  });
+});

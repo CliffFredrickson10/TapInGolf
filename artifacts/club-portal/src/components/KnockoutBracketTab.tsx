@@ -372,7 +372,7 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
   );
 }
 
-function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; knockoutType: string; onClose: () => void; onGenerated: () => void }) {
+function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, consolationEnabled, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; knockoutType: string; consolationEnabled?: boolean; onClose: () => void; onGenerated: () => void }) {
   const { toast } = useToast();
   const [drawMethod, setDrawMethod] = useState("random");
   const [generating, setGenerating] = useState(false);
@@ -405,8 +405,15 @@ function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, onC
             <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px" }}>
               <p style={{ fontSize: 12, fontWeight: 700, color: RED, marginBottom: 4 }}>Draw already published</p>
               <p style={{ fontSize: 12, color: "#7f1d1d", lineHeight: 1.5 }}>
-                This draw has already been sent to players. Re-generating will <strong>erase all current matchups and scores</strong>. Players will <strong>not</strong> be automatically re-notified — you will need to publish again manually.
+                This draw has already been sent to players. Re-generating will <strong>erase all current matchups and scores</strong>
+                {consolationEnabled && <> — including <strong>both the Championship and Plate Flight brackets</strong></>}.
+                {" "}Players will <strong>not</strong> be automatically re-notified — you will need to publish again manually.
               </p>
+              {consolationEnabled && (
+                <p style={{ fontSize: 11, color: "#991b1b", marginTop: 6, lineHeight: 1.5 }}>
+                  ⚠️ The Plate Flight bracket will also be wiped. Any consolation matches that have already been played will be lost.
+                </p>
+              )}
               <label style={{ display: "flex", alignItems: "flex-start", gap: 8, marginTop: 10, cursor: "pointer" }}>
                 <input
                   type="checkbox"
@@ -415,7 +422,7 @@ function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, onC
                   style={{ marginTop: 2, accentColor: RED, width: 14, height: 14, flexShrink: 0 }}
                 />
                 <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>
-                  I understand — erase the current draw and start fresh
+                  I understand — erase {consolationEnabled ? "both brackets" : "the current draw"} and start fresh
                 </span>
               </label>
             </div>
@@ -705,6 +712,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
             approvedCount={approvedCount}
             isPublished={false}
             knockoutType={knockoutType ?? "individual"}
+            consolationEnabled={false}
             onClose={() => setShowGenerate(false)}
             onGenerated={() => { setShowGenerate(false); load(); }}
           />
@@ -749,7 +757,7 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         <ScoreDialog match={editScore} eventId={eventId} onClose={() => setEditScore(null)} onSaved={() => { setEditScore(null); load(); }} />
       )}
       {showGenerate && (
-        <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} knockoutType={knockoutType ?? "individual"} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
+        <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} knockoutType={knockoutType ?? "individual"} consolationEnabled={!!data!.event.consolation_enabled} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
       )}
 
       {/* Published banner */}

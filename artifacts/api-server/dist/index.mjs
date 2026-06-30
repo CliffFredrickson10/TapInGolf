@@ -80728,6 +80728,20 @@ async function seedAdOfferings() {
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
+  await ddl(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'knockout_rounds_event_id_round_number_key'
+          AND conrelid = 'knockout_rounds'::regclass
+      ) THEN
+        ALTER TABLE knockout_rounds DROP CONSTRAINT knockout_rounds_event_id_round_number_key;
+        CREATE UNIQUE INDEX IF NOT EXISTS knockout_rounds_event_bracket_round_key
+          ON knockout_rounds (event_id, bracket, round_number);
+      END IF;
+    END$$
+  `);
 }
 async function migrate() {
   await applyLateAlters();

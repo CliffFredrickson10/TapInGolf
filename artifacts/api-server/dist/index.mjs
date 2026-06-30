@@ -76753,7 +76753,7 @@ router22.post("/portal/knockout/:id/publish", requireClubAuth, async (req, res) 
     res.status(404).json({ message: "Tournament not found" });
     return;
   }
-  const round1 = await row("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1", [evId]);
+  const round1 = await row("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1 AND bracket = 'main'", [evId]);
   if (!round1) {
     res.status(400).json({ message: "Bracket not generated yet" });
     return;

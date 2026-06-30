@@ -1397,6 +1397,35 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
   res.json({ ok: true, notified, inbox_count: entrants.length });
 });
 
+// ── Staff: clear all consolation (Plate Flight) results ──────────────────────
+router.post("/portal/knockout/:id/clear-consolation", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const evId = Number(req.params.id);
+
+  const ev = await row<any>(
+    "SELECT id, consolation_enabled FROM golf_events WHERE id = ? AND club_id = ? AND (format = 'knockout_individual' OR format = 'knockout_team')",
+    [evId, club.id]
+  );
+  if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
+  if (!ev.consolation_enabled) { res.status(400).json({ message: "Plate Flight is not enabled for this tournament" }); return; }
+
+  // Reset every consolation match to pending, clearing all result fields
+  const result = await run(
+    `UPDATE knockout_matches
+     SET status               = 'pending',
+         winner_id            = NULL,
+         score                = NULL,
+         player1_result       = NULL,
+         player2_result       = NULL,
+         dispute              = 0,
+         notification_sent_at = NULL
+     WHERE event_id = ? AND bracket = 'consolation'`,
+    [evId]
+  );
+
+  res.json({ ok: true, cleared: (result as any).affectedRows ?? 0 });
+});
+
 // ── Player submits their match result ────────────────────────────────────────
 router.post("/events/:id/knockout/matches/:matchId/result", async (req: Request, res: Response): Promise<void> => {
   const user = await getUser(req);

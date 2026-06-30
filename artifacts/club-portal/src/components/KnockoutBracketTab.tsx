@@ -372,6 +372,67 @@ function ScoreDialog({ match, eventId, onClose, onSaved }: { match: KnockoutMatc
   );
 }
 
+function ClearConsolationDialog({ eventId, onClose, onCleared }: { eventId: number; onClose: () => void; onCleared: () => void }) {
+  const { toast } = useToast();
+  const [confirmed, setConfirmed] = useState(false);
+  const [clearing, setClearing] = useState(false);
+
+  const clear = async () => {
+    setClearing(true);
+    try {
+      const r = await api(`/api/portal/knockout/${eventId}/clear-consolation`, { method: "POST" });
+      toast({ title: "Plate Flight results cleared", description: `${r.cleared} match${r.cleared !== 1 ? "es" : ""} reset to pending. You can now regenerate the draw.` });
+      onCleared();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setClearing(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={() => onClose()}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle>🗑 Clear Plate Flight Results</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-2">
+          <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, padding: "10px 12px" }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: RED, marginBottom: 4 }}>This will reset all consolation match scores</p>
+            <p style={{ fontSize: 12, color: "#7f1d1d", lineHeight: 1.5 }}>
+              Every Plate Flight match will be set back to <strong>pending</strong> — all scores, winners, and notification history will be erased.
+              The Championship bracket is <strong>not</strong> affected.
+            </p>
+            <p style={{ fontSize: 11, color: "#991b1b", marginTop: 6, lineHeight: 1.5 }}>
+              After clearing, staff can regenerate the full draw without the consolation-in-progress block.
+            </p>
+          </div>
+          <label style={{ display: "flex", alignItems: "flex-start", gap: 8, cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={confirmed}
+              onChange={e => setConfirmed(e.target.checked)}
+              style={{ marginTop: 2, accentColor: RED, width: 14, height: 14, flexShrink: 0 }}
+            />
+            <span style={{ fontSize: 12, color: "#991b1b", fontWeight: 600 }}>
+              I understand — erase all Plate Flight scores and reset to pending
+            </span>
+          </label>
+        </div>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={onClose}>Cancel</Button>
+          <Button
+            size="sm"
+            disabled={!confirmed || clearing}
+            style={{ background: RED, color: "#fff" }}
+            onClick={clear}
+          >
+            {clearing ? "Clearing…" : "Clear Plate Flight Results"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function GenerateDialog({ eventId, approvedCount, isPublished, knockoutType, consolationEnabled, onClose, onGenerated }: { eventId: number; approvedCount: number; isPublished: boolean; knockoutType: string; consolationEnabled?: boolean; onClose: () => void; onGenerated: () => void }) {
   const { toast } = useToast();
   const [drawMethod, setDrawMethod] = useState("random");
@@ -471,8 +532,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
   const [loading, setLoading]     = useState(true);
   const [editDeadline, setEditDeadline] = useState<KnockoutRound | null>(null);
   const [editScore, setEditScore]       = useState<KnockoutMatch | null>(null);
-  const [showGenerate, setShowGenerate] = useState(false);
-  const [publishing, setPublishing]     = useState(false);
+  const [showGenerate, setShowGenerate]               = useState(false);
+  const [showClearConsolation, setShowClearConsolation] = useState(false);
+  const [publishing, setPublishing]                   = useState(false);
   const [showPrintMenu, setShowPrintMenu]     = useState(false);
   const [fitToPage, setFitToPage]             = useState(true);
   const [bracketFlight, setBracketFlight]     = useState<"main" | "consolation">("main");
@@ -759,6 +821,9 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
       {showGenerate && (
         <GenerateDialog eventId={eventId} approvedCount={approvedCount} isPublished={isPublished} knockoutType={knockoutType ?? "individual"} consolationEnabled={!!data!.event.consolation_enabled} onClose={() => setShowGenerate(false)} onGenerated={() => { setShowGenerate(false); load(); }} />
       )}
+      {showClearConsolation && (
+        <ClearConsolationDialog eventId={eventId} onClose={() => setShowClearConsolation(false)} onCleared={() => { setShowClearConsolation(false); load(); }} />
+      )}
 
       {/* Published banner */}
       {isPublished && (
@@ -878,6 +943,18 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         </div>
         {!readOnly && (
           <>
+            {hasConsolation && (
+              <button
+                title="Reset all Plate Flight match scores back to pending so you can regenerate the draw"
+                style={{
+                  padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, cursor: "pointer",
+                  border: "1px solid #fca5a5", background: "#fef2f2", color: RED,
+                }}
+                onClick={() => setShowClearConsolation(true)}
+              >
+                🗑 Clear Plate Flight
+              </button>
+            )}
             <button
               title={isPublished
                 ? hasConsolation

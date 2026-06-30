@@ -428,3 +428,122 @@ describe("POST /portal/knockout/:id/generate — seeded draw ordering", () => {
     expect(match1Params[4]).toBe(13); // Grace
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Bye-heavy consolation bracket (cByes > 0)
+//
+// With cN=3 real R1 matches:
+//   ck=2, cSize=4, cByes=1, cTotalRounds=2, cr1Count=2
+//   consolation R1 match 0  → isConsoBye=true  → exactly 1 loser link
+//   consolation R1 match 1  → isConsoBye=false → exactly 2 loser links
+//   total loser links = 3 = cN  (no player left without a route)
+//
+// exec call order (base=1):
+//   main  : R1-round(1), R2-round(2), R1m0(11), R1m1(12), R2m0(20)
+//   consol: cR1-round(30), cR2-round(31), cR1m0(40 bye), cR1m1(41 real), cR2m0(50)
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — bye-heavy consolation bracket (cByes > 0)", () => {
+  function stubExecConsolation3Real(base = 1) {
+    mExec
+      .mockResolvedValueOnce(base)       // main knockout_rounds round 1
+      .mockResolvedValueOnce(base + 1)   // main knockout_rounds round 2
+      .mockResolvedValueOnce(base + 10)  // main R1 match 0
+      .mockResolvedValueOnce(base + 11)  // main R1 match 1
+      .mockResolvedValueOnce(base + 20)  // main R2 match
+      .mockResolvedValueOnce(base + 30)  // consolation round 1
+      .mockResolvedValueOnce(base + 31)  // consolation round 2
+      .mockResolvedValueOnce(base + 40)  // consolation R1 match 0 — bye slot
+      .mockResolvedValueOnce(base + 41)  // consolation R1 match 1 — real slot
+      .mockResolvedValueOnce(base + 50); // consolation R2 match (final)
+  }
+
+  function stubQueriesConsolation3Real() {
+    mQuery.mockResolvedValueOnce([]);           // live-consolation guard → clear
+    mQuery.mockResolvedValueOnce(FOUR_MEMBERS); // members (4-player main bracket)
+    // r1RealMatches: cN=3 forces cByes=1 in the consolation bracket
+    mQuery.mockResolvedValueOnce([{ id: 11 }, { id: 12 }, { id: 13 }]);
+  }
+
+  it("bye slot (m=0) gets exactly one loser_next_match_id link when cByes=1", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation3Real();
+    stubExecConsolation3Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    // Bye-slot consolation match has ID = base + 40 = 41.
+    // loser_next_match_id UPDATE: params are [consolMatchId, r1MatchId]
+    const byeSlotId = 1 + 40; // 41
+    const linksToByeSlot = mRun.mock.calls.filter(([sql, params]) =>
+      String(sql).includes("loser_next_match_id") &&
+      Array.isArray(params) && params[0] === byeSlotId
+    );
+
+    expect(linksToByeSlot.length).toBe(1);
+  });
+
+  it("real consolation slot (m≥cByes) gets exactly two loser_next_match_id links", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation3Real();
+    stubExecConsolation3Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    // Real-slot consolation match has ID = base + 41 = 42.
+    const realSlotId = 1 + 41; // 42
+    const linksToRealSlot = mRun.mock.calls.filter(([sql, params]) =>
+      String(sql).includes("loser_next_match_id") &&
+      Array.isArray(params) && params[0] === realSlotId
+    );
+
+    expect(linksToRealSlot.length).toBe(2);
+    // The two losers must land in different slot positions (top vs bottom)
+    const positions = linksToRealSlot.map(([sql]) => {
+      if (String(sql).includes("'top'"))    return "top";
+      if (String(sql).includes("'bottom'")) return "bottom";
+      return "unknown";
+    });
+    expect(positions).toContain("top");
+    expect(positions).toContain("bottom");
+  });
+
+  it("total loser links equals cN (no player left without a consolation route)", async () => {
+    mRow.mockResolvedValue({ ...BASE_EVENT, consolation_enabled: 1 });
+    stubQueriesConsolation3Real();
+    stubExecConsolation3Real(1);
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "random" });
+
+    expect(res.status).toBe(200);
+
+    const allLoserLinks = mRun.mock.calls.filter(([sql]) =>
+      String(sql).includes("loser_next_match_id")
+    );
+
+    // cN=3 → every R1 loser must have exactly one route into consolation
+    expect(allLoserLinks.length).toBe(3);
+
+    // Each of the 3 real R1 matches (IDs 11, 12, 13) must appear as a target
+    // exactly once — no match is linked twice, no match is skipped
+    const targetMatchIds = allLoserLinks.map(([_sql, params]) =>
+      Array.isArray(params) ? params[1] : null
+    );
+    expect(targetMatchIds).toContain(11);
+    expect(targetMatchIds).toContain(12);
+    expect(targetMatchIds).toContain(13);
+    expect(new Set(targetMatchIds).size).toBe(3); // no duplicate links
+  });
+});

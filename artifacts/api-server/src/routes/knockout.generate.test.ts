@@ -345,3 +345,86 @@ describe("POST /portal/knockout/:id/generate — full lifecycle: generate → co
     expect(writeCalls.length).toBe(0);
   });
 });
+
+// ─────────────────────────────────────────────────────────────────────────────
+describe("POST /portal/knockout/:id/generate — seeded draw ordering", () => {
+  // Helper: filter exec() calls that insert into knockout_matches with
+  // explicit player columns (i.e. Round 1 player matches, not later rounds).
+  function r1MatchInserts() {
+    return mExec.mock.calls.filter(([sql]) =>
+      String(sql).includes("knockout_matches") &&
+      String(sql).includes("player1_id, player2_id")
+    );
+  }
+
+  it("orders players by handicap ascending and places them in serpentine order across bracket slots", async () => {
+    // FOUR_MEMBERS: Alice(5), Bob(8), Charlie(12), Dave(15)
+    // Sorted ascending: Alice, Bob, Charlie, Dave
+    // Serpentine interleave: Alice(lo=0), Dave(hi=3), Bob(lo=1), Charlie(hi=2)
+    // → match 0: Alice(1) vs Dave(4), match 1: Bob(2) vs Charlie(3)
+    mRow.mockResolvedValue({ ...BASE_EVENT });
+    stubQueriesNoConsolation();
+    stubExecNonConsolation();
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "seeded" });
+
+    expect(res.status).toBe(200);
+
+    const inserts = r1MatchInserts();
+    // 4-player bracket → 2 R1 matches
+    expect(inserts.length).toBe(2);
+
+    // params: [evId, r1RoundId, matchSequence, player1_id, player2_id, status, slot_position]
+    const match0Params = inserts[0]![1] as any[];
+    const match1Params = inserts[1]![1] as any[];
+
+    // Match 0: seed #1 (Alice, user_id=1) vs seed #4 (Dave, user_id=4)
+    expect(match0Params[3]).toBe(1); // Alice
+    expect(match0Params[4]).toBe(4); // Dave
+
+    // Match 1: seed #2 (Bob, user_id=2) vs seed #3 (Charlie, user_id=3)
+    expect(match1Params[3]).toBe(2); // Bob
+    expect(match1Params[4]).toBe(3); // Charlie
+  });
+
+  it("treats null handicap as 99 (highest) so those players sort to the bottom of the seed list", async () => {
+    // Members: Zara(null→99), Eve(3), Frank(10), Grace(20)
+    // Sorted ascending by (handicap ?? 99): Eve(3), Frank(10), Grace(20), Zara(99)
+    // Serpentine: Eve(lo=0), Zara(hi=3), Frank(lo=1), Grace(hi=2)
+    // → match 0: Eve vs Zara, match 1: Frank vs Grace
+    const membersWithNull = [
+      { user_id: 10, name: "Zara",  handicap: null },
+      { user_id: 11, name: "Eve",   handicap: 3    },
+      { user_id: 12, name: "Frank", handicap: 10   },
+      { user_id: 13, name: "Grace", handicap: 20   },
+    ];
+
+    mRow.mockResolvedValue({ ...BASE_EVENT });
+    mQuery.mockResolvedValueOnce(membersWithNull);
+    stubExecNonConsolation();
+
+    const res = await request(makeApp())
+      .post("/portal/knockout/1/generate")
+      .set("Authorization", "Bearer fake-club-token")
+      .send({ draw_method: "seeded" });
+
+    expect(res.status).toBe(200);
+
+    const inserts = r1MatchInserts();
+    expect(inserts.length).toBe(2);
+
+    const match0Params = inserts[0]![1] as any[];
+    const match1Params = inserts[1]![1] as any[];
+
+    // Match 0: best seed (Eve, 11) vs worst seed (Zara, 10 — null treated as 99)
+    expect(match0Params[3]).toBe(11); // Eve — best handicap
+    expect(match0Params[4]).toBe(10); // Zara — null → 99
+
+    // Match 1: middle seeds (Frank, 12) vs (Grace, 13)
+    expect(match1Params[3]).toBe(12); // Frank
+    expect(match1Params[4]).toBe(13); // Grace
+  });
+});

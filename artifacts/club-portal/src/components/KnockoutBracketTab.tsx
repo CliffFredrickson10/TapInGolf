@@ -871,7 +871,11 @@ export function KnockoutBracketTab({ eventId, eventName, approvedCount, readOnly
         {!readOnly && (
           <>
             <button
-              title={isPublished ? "Draw already published — re-generating will erase matchups" : "Re-generate bracket"}
+              title={isPublished
+                ? hasConsolation
+                  ? "Draw already published — re-generating will erase all Championship AND Plate Flight matchups"
+                  : "Draw already published — re-generating will erase matchups"
+                : "Re-generate bracket"}
               style={{
                 padding: "5px 10px", fontSize: 11, fontWeight: 600, borderRadius: 8, cursor: "pointer",
                 border: isPublished ? `1px solid #fca5a5` : "1px solid #e5e7eb",

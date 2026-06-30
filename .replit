@@ -44,3 +44,7 @@ STITCH_WEBHOOK_SECRET = "z10qkGUXNQ7bGxy0vIY9dhOwMxSSJczSa1mqp4HLPYjturmBLRErPe+
 deploymentTarget = "autoscale"
 run = ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
 build = ["bash", "-c", "pnpm --filter @workspace/api-server run build && pnpm --filter @workspace/club-portal run build"]
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 120000

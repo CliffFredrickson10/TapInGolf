@@ -1295,7 +1295,10 @@ router.post("/portal/knockout/:id/publish", requireClubAuth, async (req: Request
   );
   if (!ev) { res.status(404).json({ message: "Tournament not found" }); return; }
 
-  const round1 = await row<any>("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1", [evId]);
+  // Championship round 1 only — with Plate Flight enabled the consolation bracket
+  // also has a round_number=1, so scope to bracket='main' (NOT NULL DEFAULT 'main',
+  // so legacy rows already match) to avoid stamping/notifying off the Plate round.
+  const round1 = await row<any>("SELECT * FROM knockout_rounds WHERE event_id = ? AND round_number = 1 AND bracket = 'main'", [evId]);
   if (!round1) { res.status(400).json({ message: "Bracket not generated yet" }); return; }
 
   // Ensure the event is active so it appears in the member-facing tournament feed

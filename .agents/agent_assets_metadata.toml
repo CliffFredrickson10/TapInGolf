@@ -107,3 +107,9 @@ id = "Ry7LZT5yzwR5Y9kXDKjMY"
 uri = "file://attached_assets/email-sig-diederich-kruyt.svg"
 type = "image"
 title = "Email Signature SVG — Diederich Kruyt"
+
+[[outputs]]
+id = "xgJdxdnySEGlvzsHcRwBz"
+uri = "file://artifacts/tapin-golf/screenshots.zip"
+type = "unspecified"
+title = "App Store & Google Play Screenshots"

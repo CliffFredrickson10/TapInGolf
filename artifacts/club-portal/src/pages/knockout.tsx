@@ -353,8 +353,8 @@ function CreateDialog({ onClose, onCreated }: { onClose: () => void; onCreated: 
             </div>
           )}
 
-          {/* Consolation (Plate Flight) toggle — singles only */}
-          {form.knockout_type === "individual" && (
+          {/* Consolation (Plate Flight) toggle — singles and betterball */}
+          {(form.knockout_type === "individual" || form.knockout_type === "team") && (
             <div className="flex items-start gap-3 rounded-lg border border-[#7c3aed]/30 bg-[#7c3aed]/5 px-3 py-3">
               <input
                 type="checkbox"

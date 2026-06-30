@@ -20,7 +20,7 @@
 
 import { chromium, type Browser, type BrowserContext, type Page } from "playwright";
 import { spawn, spawnSync, execSync, type ChildProcess } from "child_process";
-import { mkdirSync } from "fs";
+import { mkdirSync, existsSync } from "fs";
 import { join, dirname } from "path";
 import { fileURLToPath } from "url";
 import { DEVICES, MOCK_USER, SCREENS, type DeviceConfig, type ScreenConfig } from "./screenshot-config";
@@ -345,26 +345,51 @@ async function captureScreen(
 
 /**
  * Returns the path to a usable Chromium executable.
- * Prefers the system Chromium installed via Nix (avoids missing-library issues
- * in the Replit sandbox). Falls back to the Playwright-managed binary.
+ * Searches (in order):
+ *  1. PLAYWRIGHT_CHROMIUM_PATH env var (explicit override)
+ *  2. Known nix profile symlink locations (Replit NixOS)
+ *  3. `which chromium` / `which chromium-browser` on PATH
+ * Never falls back to the Playwright-managed binary — it is missing system
+ * libraries in the Replit sandbox and will always fail.
  */
 function resolveChromiumPath(): string | undefined {
+  // 1. Explicit override
+  if (process.env.PLAYWRIGHT_CHROMIUM_PATH) {
+    log(`Using PLAYWRIGHT_CHROMIUM_PATH: ${process.env.PLAYWRIGHT_CHROMIUM_PATH}`);
+    return process.env.PLAYWRIGHT_CHROMIUM_PATH;
+  }
+
+  // 2. Known nix profile / system paths (Replit NixOS)
+  const nixCandidates = [
+    "/root/.nix-profile/bin/chromium",
+    "/home/runner/.nix-profile/bin/chromium",
+    "/nix/var/nix/profiles/default/bin/chromium",
+    "/run/current-system/sw/bin/chromium",
+    "/usr/bin/chromium",
+    "/usr/bin/chromium-browser",
+  ];
+  for (const p of nixCandidates) {
+    if (existsSync(p)) {
+      log(`Using system Chromium (nix profile): ${p}`);
+      return p;
+    }
+  }
+
+  // 3. `which` lookup (inherits current PATH)
   try {
-    const path = execSync("which chromium 2>/dev/null || which chromium-browser 2>/dev/null", { encoding: "utf8" }).trim();
-    if (path) {
-      verbose(`Using system Chromium: ${path}`);
-      return path;
+    const p = execSync("which chromium 2>/dev/null || which chromium-browser 2>/dev/null", {
+      encoding: "utf8",
+      env: process.env,
+      shell: "/bin/bash",
+    }).trim();
+    if (p) {
+      log(`Using system Chromium (PATH): ${p}`);
+      return p;
     }
   } catch {
-    // not found on PATH
+    // not on PATH
   }
-  try {
-    const path = chromium.executablePath();
-    verbose(`Using Playwright Chromium: ${path}`);
-    return path;
-  } catch {
-    // not installed
-  }
+
   return undefined;
 }
 

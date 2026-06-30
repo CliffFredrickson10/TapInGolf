@@ -1,0 +1,50 @@
+~/workspace$ pnpm run screenshots
+
+> workspace@0.0.0 screenshots /home/runner/workspace
+> pnpm --filter @workspace/tapin-golf run screenshots
+
+
+> @workspace/tapin-golf@0.0.0 screenshots /home/runner/workspace/artifacts/tapin-golf
+> tsx scripts/take-screenshots.ts
+
+[screenshots] Capturing 10 screen(s) × 7 device(s) = 70 screenshot(s).
+[screenshots] Checking Replit dev domain: https://5b48a272-2c21-419d-9e86-c9f280702dda-00-2gx85khwemwzd.kirk.replit.dev
+[screenshots] Using Replit dev domain (Expo web + /api on same origin): https://5b48a272-2c21-419d-9e86-c9f280702dda-00-2gx85khwemwzd.kirk.replit.dev
+[screenshots] Fatal error: browserType.launch: Target page, context or browser has been closed
+Browser logs:
+
+<launching> /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-qxN6TJ --remote-debugging-pipe --no-startup-window
+<launched> pid=15743
+[pid=15743][err] /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file: No such file or directory
+Call log:
+  - <launching> /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-qxN6TJ --remote-debugging-pipe --no-startup-window
+  - <launched> pid=15743
+  - [pid=15743][err] /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file: No such file or directory
+  - [pid=15743] <gracefully close start>
+  - [pid=15743] <kill>
+  - [pid=15743] <will force kill>
+  - [pid=15743] exception while trying to kill process: Error: kill ESRCH
+  - [pid=15743] <process did exit: exitCode=127, signal=null>
+  - [pid=15743] starting temporary directories cleanup
+  - [pid=15743] finished temporary directories cleanup
+  - [pid=15743] <gracefully close end>
+
+    at main (/home/runner/workspace/artifacts/tapin-golf/scripts/take-screenshots.ts:385:43) {
+  log: [
+    '  - <launching> /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome --disable-field-trial-config --disable-background-networking --disable-background-timer-throttling --disable-backgrounding-occluded-windows --disable-back-forward-cache --disable-breakpad --disable-client-side-phishing-detection --disable-component-extensions-with-background-pages --disable-component-update --no-default-browser-check --disable-default-apps --disable-dev-shm-usage --disable-edgeupdater --disable-extensions --disable-features=AvoidUnnecessaryBeforeUnloadCheckSync,BoundaryEventDispatchTracksNodeRemoval,DestroyProfileOnBrowserClose,DialMediaRouteProvider,GlobalMediaControls,HttpsUpgrades,LensOverlay,MediaRouter,PaintHolding,ThirdPartyStoragePartitioning,Translate,AutoDeElevate,RenderDocument,OptimizationHints,msForceBrowserSignIn,msEdgeUpdateLaunchServicesPreferredVersion --enable-features=CDPScreenshotNewSurface --allow-pre-commit-input --disable-hang-monitor --disable-ipc-flooding-protection --disable-popup-blocking --disable-prompt-on-repost --disable-renderer-backgrounding --force-color-profile=srgb --metrics-recording-only --no-first-run --password-store=basic --use-mock-keychain --no-service-autorun --export-tagged-pdf --disable-search-engine-choice-screen --unsafely-disable-devtools-self-xss-warnings --edge-skip-compat-layer-relaunch --disable-infobars --disable-search-engine-choice-screen --disable-sync --enable-unsafe-swiftshader --headless --hide-scrollbars --mute-audio --blink-settings=primaryHoverType=2,availableHoverTypes=2,primaryPointerType=4,availablePointerTypes=4 --no-sandbox --user-data-dir=/tmp/playwright_chromiumdev_profile-qxN6TJ --remote-debugging-pipe --no-startup-window',
+    '  - <launched> pid=15743',
+    '  - [pid=15743][err] /home/runner/workspace/.cache/ms-playwright/chromium-1228/chrome-linux64/chrome: error while loading shared libraries: libglib-2.0.so.0: cannot open shared object file: No such file or directory',
+    '  - [pid=15743] <gracefully close start>',
+    '  - [pid=15743] <kill>',
+    '  - [pid=15743] <will force kill>',
+    '  - [pid=15743] exception while trying to kill process: Error: kill ESRCH',
+    '  - [pid=15743] <process did exit: exitCode=127, signal=null>',
+    '  - [pid=15743] starting temporary directories cleanup',
+    '  - [pid=15743] finished temporary directories cleanup',
+    '  - [pid=15743] <gracefully close end>'
+  ]
+}
+/home/runner/workspace/artifacts/tapin-golf:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @workspace/tapin-golf@0.0.0 screenshots: `tsx scripts/take-screenshots.ts`
+Exit status 1
+ ELIFECYCLE  Command failed with exit code 1.

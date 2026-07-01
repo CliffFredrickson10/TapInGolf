@@ -143,3 +143,15 @@ id = "6scxqDPcJPkR_cRpYUrLS"
 uri = "file://artifacts/tapin-golf/assets/images/logo_inverted_nobg.png"
 type = "image"
 title = "Logo inverted, no background"
+
+[[outputs]]
+id = "k1Z6gQnRPrZHA5NlMVHRw"
+uri = "file://.local/terms-of-use.md"
+type = "text"
+title = "Terms of Use & Community Guidelines"
+
+[[outputs]]
+id = "8HwF2DoQ71ndjQxdPFrBJ"
+uri = "file://.local/privacy-policy.md"
+type = "text"
+title = "Privacy Policy"

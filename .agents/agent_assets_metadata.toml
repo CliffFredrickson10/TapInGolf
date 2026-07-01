@@ -113,3 +113,33 @@ id = "xgJdxdnySEGlvzsHcRwBz"
 uri = "file://artifacts/tapin-golf/screenshots.zip"
 type = "unspecified"
 title = "App Store & Google Play Screenshots"
+
+[[outputs]]
+id = "zVcITiEAyHWopk7gRDMxD"
+uri = "file://artifacts/tapin-golf/assets/images/logo_main.png"
+type = "image"
+title = "Logo (main)"
+
+[[outputs]]
+id = "uwmIPndYH-M3B4gkZ_XaL"
+uri = "file://artifacts/tapin-golf/assets/images/logo_wordmark.png"
+type = "image"
+title = "Logo wordmark"
+
+[[outputs]]
+id = "mQqCrYEkeOIaGrQ-_ojAe"
+uri = "file://artifacts/tapin-golf/assets/images/logo_icon.png"
+type = "image"
+title = "Logo icon"
+
+[[outputs]]
+id = "HjKqcvpVN4t49OWAlgLTl"
+uri = "file://artifacts/tapin-golf/assets/images/logo_inverted.png"
+type = "image"
+title = "Logo inverted (dark bg)"
+
+[[outputs]]
+id = "6scxqDPcJPkR_cRpYUrLS"
+uri = "file://artifacts/tapin-golf/assets/images/logo_inverted_nobg.png"
+type = "image"
+title = "Logo inverted, no background"

@@ -39,7 +39,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "your-production-domain.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "tap-in-golf.replit.app"
       }
     }
   },

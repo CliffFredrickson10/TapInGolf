@@ -1,0 +1,28 @@
+# pnpm content-addressable store — 900MB+, not needed on build server
+.local/
+
+# node_modules are reinstalled fresh on the EAS build server
+node_modules/
+artifacts/tapin-golf/node_modules/
+artifacts/api-server/node_modules/
+artifacts/club-portal/node_modules/
+artifacts/mockup-sandbox/node_modules/
+lib/api-client-react/node_modules/
+
+# Other monorepo apps — not needed to build the mobile app
+artifacts/api-server/
+artifacts/club-portal/
+artifacts/mockup-sandbox/
+
+# Agent/editor internals
+.agents/
+.local/state/
+.cache/
+.upm/
+
+# Large binaries
+artifacts/tapin-golf/screenshots/
+artifacts/tapin-golf/screenshots.zip
+
+# Version control
+.git/

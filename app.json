@@ -1,0 +1,12 @@
+{
+  "expo": {
+    "extra": {
+      "eas": {
+        "projectId": "8066c5a2-0959-407b-b614-7febd3eda375"
+      }
+    },
+    "android": {
+      "package": "com.tapingolfza.workspace"
+    }
+  }
+}

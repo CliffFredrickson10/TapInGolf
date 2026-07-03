@@ -144,10 +144,11 @@ export default function BookingDetailScreen() {
     apiFetch(`/bookings/${booking.id}/club-addons`, user.token)
       .then((d: ClubAddons) => {
         setClubAddons(d);
-        setIncludeDrivingRange(d.current_driving_range_fee > 0);
-        setSelectedRangeBallsPrice(d.current_driving_range_fee > 0 ? d.current_driving_range_fee : null);
-        setIncludeClubHire(d.current_club_hire_fee > 0);
-        setIncludePlayerCart(d.current_player_cart_fee > 0);
+        // If add-ons from a previous session are saved, reset them so the player
+        // always starts with a clean slate (nothing auto-selected).
+        if (d.current_driving_range_fee > 0 || d.current_club_hire_fee > 0 || d.current_player_cart_fee > 0) {
+          handleUpdateAddons(0, 0, 0);
+        }
       })
       .catch(() => {});
   }, [booking?.id, booking?.role, booking?.my_paid, user]);

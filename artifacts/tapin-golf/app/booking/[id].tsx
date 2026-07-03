@@ -85,6 +85,24 @@ export default function BookingDetailScreen() {
   const [payError, setPayError]           = useState<string | null>(null);
   const [vatPct, setVatPct]               = useState(15);
 
+  interface ClubAddons {
+    range_balls_enabled: boolean;
+    range_balls_price: number;
+    range_balls_options: Array<{ label: string; price: number }>;
+    club_hire_enabled: boolean;
+    club_hire_price: number;
+    current_driving_range_fee: number;
+    current_club_hire_fee: number;
+    base_amount: number;
+  }
+  const [clubAddons, setClubAddons]               = useState<ClubAddons | null>(null);
+  const [includeDrivingRange, setIncludeDrivingRange] = useState(false);
+  const [selectedRangeBallsPrice, setSelectedRangeBallsPrice] = useState<number | null>(null);
+  const [includeClubHire, setIncludeClubHire]     = useState(false);
+  const [addonsUpdating, setAddonsUpdating]       = useState(false);
+  const [confirmLeave, setConfirmLeave]           = useState(false);
+  const [leaving, setLeaving]                     = useState(false);
+
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
   useEffect(() => {
@@ -111,6 +129,45 @@ export default function BookingDetailScreen() {
       })
       .catch(() => {});
   }, [booking?.club_id, booking?.role, booking?.my_paid, user]);
+
+  // Fetch available club add-ons for the invited player when they haven't paid yet
+  useEffect(() => {
+    if (!user || !booking?.id || booking.role !== "invited" || booking.my_paid) return;
+    apiFetch(`/bookings/${booking.id}/club-addons`, user.token)
+      .then((d: ClubAddons) => {
+        setClubAddons(d);
+        setIncludeDrivingRange(d.current_driving_range_fee > 0);
+        setSelectedRangeBallsPrice(d.current_driving_range_fee > 0 ? d.current_driving_range_fee : null);
+        setIncludeClubHire(d.current_club_hire_fee > 0);
+      })
+      .catch(() => {});
+  }, [booking?.id, booking?.role, booking?.my_paid, user]);
+
+  const handleUpdateAddons = async (drf: number, chf: number) => {
+    if (!user || !booking) return;
+    setAddonsUpdating(true);
+    try {
+      const data = await apiFetch(`/bookings/${booking.id}/player-addons`, user.token, {
+        method: "POST",
+        body: JSON.stringify({ driving_range_fee: drf, club_hire_fee: chf }),
+      });
+      setBooking((prev) => prev ? { ...prev, my_amount: data.amount } : prev);
+    } catch { /* silently ignore — user can retry */ }
+    finally { setAddonsUpdating(false); }
+  };
+
+  const handleLeave = async () => {
+    if (!user || !booking) return;
+    setLeaving(true);
+    try {
+      await apiFetch(`/bookings/${booking.id}/leave`, user.token, { method: "POST" });
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)/bookings");
+    } catch (e: any) {
+      setConfirmLeave(false);
+      setLeaving(false);
+    }
+  };
 
   const handleCancel = async () => {
     if (!user || !booking) return;
@@ -444,6 +501,99 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
 
+            {/* Optional add-ons */}
+            {clubAddons && (clubAddons.range_balls_enabled || clubAddons.club_hire_enabled) && (
+              <View style={{ gap: 6 }}>
+                <Text style={[styles.payOptionLabel, { color: colors.foreground, marginBottom: 2 }]}>
+                  Add-ons {addonsUpdating ? "(saving…)" : ""}
+                </Text>
+
+                {clubAddons.range_balls_enabled && (
+                  <>
+                    {clubAddons.range_balls_options.length > 0 ? (
+                      <>
+                        {clubAddons.range_balls_options.map((opt) => {
+                          const active = includeDrivingRange && selectedRangeBallsPrice === opt.price;
+                          return (
+                            <TouchableOpacity
+                              key={opt.label}
+                              style={[styles.payOption, {
+                                backgroundColor: active ? colors.primaryLight : colors.background,
+                                borderColor: active ? colors.primary : colors.border,
+                              }]}
+                              onPress={() => {
+                                Haptics.selectionAsync();
+                                const turning = !active;
+                                setIncludeDrivingRange(turning);
+                                setSelectedRangeBallsPrice(turning ? opt.price : null);
+                                const chf = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
+                                handleUpdateAddons(turning ? opt.price : 0, chf);
+                              }}
+                            >
+                              <Ionicons name="golf-outline" size={20} color={active ? colors.primary : colors.mutedForeground} />
+                              <View style={{ flex: 1 }}>
+                                <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Range: {opt.label}</Text>
+                                <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>+R{opt.price.toFixed(2)}</Text>
+                              </View>
+                              {active && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </>
+                    ) : (
+                      <TouchableOpacity
+                        style={[styles.payOption, {
+                          backgroundColor: includeDrivingRange ? colors.primaryLight : colors.background,
+                          borderColor: includeDrivingRange ? colors.primary : colors.border,
+                        }]}
+                        onPress={() => {
+                          Haptics.selectionAsync();
+                          const next = !includeDrivingRange;
+                          setIncludeDrivingRange(next);
+                          const drf = next ? (clubAddons.range_balls_price ?? 0) : 0;
+                          const chf = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
+                          handleUpdateAddons(drf, chf);
+                        }}
+                      >
+                        <Ionicons name="golf-outline" size={20} color={includeDrivingRange ? colors.primary : colors.mutedForeground} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Driving Range</Text>
+                          <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>+R{(clubAddons.range_balls_price ?? 0).toFixed(2)}</Text>
+                        </View>
+                        {includeDrivingRange && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                      </TouchableOpacity>
+                    )}
+                  </>
+                )}
+
+                {clubAddons.club_hire_enabled && (
+                  <TouchableOpacity
+                    style={[styles.payOption, {
+                      backgroundColor: includeClubHire ? colors.primaryLight : colors.background,
+                      borderColor: includeClubHire ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const next = !includeClubHire;
+                      setIncludeClubHire(next);
+                      const drf = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
+                      const chf = next ? (clubAddons.club_hire_price ?? 0) : 0;
+                      handleUpdateAddons(drf, chf);
+                    }}
+                  >
+                    <Ionicons name="bag-outline" size={20} color={includeClubHire ? colors.primary : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Club Hire</Text>
+                      <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>+R{(clubAddons.club_hire_price ?? 0).toFixed(2)}</Text>
+                    </View>
+                    {includeClubHire && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                )}
+
+                <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
+              </View>
+            )}
+
             {/* Stitch option */}
             <TouchableOpacity
               style={[styles.payOption, {
@@ -542,6 +692,35 @@ export default function BookingDetailScreen() {
             <Ionicons name="checkmark-circle" size={20} color={colors.success} />
             <Text style={[styles.paidBannerText, { color: colors.success }]}>Your share is paid</Text>
           </View>
+        )}
+
+        {/* Leave booking — invited player who hasn't paid yet */}
+        {isInvited && !booking.my_paid && booking.status === "confirmed" && (
+          confirmLeave ? (
+            <View style={[styles.confirmRow, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
+              <Text style={[styles.confirmText, { color: colors.foreground }]}>Remove yourself from this booking?</Text>
+              <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>
+                This will free your spot for other players. The organizer will be notified.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.muted }]} onPress={() => setConfirmLeave(false)}>
+                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>Keep it</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.destructive }]} onPress={handleLeave} disabled={leaving}>
+                  <Text style={[styles.confirmBtnText, { color: "#fff" }]}>{leaving ? "…" : "Leave"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.cancelBtn, { borderColor: colors.destructive }]}
+              onPress={() => setConfirmLeave(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="exit-outline" size={20} color={colors.destructive} />
+              <Text style={[styles.cancelText, { color: colors.destructive }]}>Leave Booking</Text>
+            </TouchableOpacity>
+          )
         )}
 
         {/* Details */}

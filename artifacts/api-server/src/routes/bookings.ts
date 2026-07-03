@@ -1239,6 +1239,160 @@ router.put("/bookings/:id/player-paid", async (req, res): Promise<void> => {
   res.json({ success: true });
 });
 
+// ── Invited player: fetch available club add-ons ─────────────────────────────
+router.get("/bookings/:id/club-addons", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ message: "Invalid booking id" }); return; }
+
+  const bp = await row<any>(
+    `SELECT bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee
+     FROM booking_players bp WHERE bp.booking_id = ? AND bp.user_id = ?`,
+    [id, user.id]
+  );
+  if (!bp) { res.status(404).json({ message: "You are not a player on this booking" }); return; }
+
+  const club = await row<any>(
+    `SELECT c.range_balls_enabled, c.range_balls_price, c.range_balls_options,
+            c.club_hire_enabled, c.club_hire_price
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     JOIN clubs c ON c.id = pts.club_id
+     WHERE b.id = ?`,
+    [id]
+  );
+  if (!club) { res.status(404).json({ message: "Booking not found" }); return; }
+
+  let rangeBallsOptions: Array<{ label: string; price: number }> = [];
+  try {
+    rangeBallsOptions = club.range_balls_options
+      ? (typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options)
+      : [];
+  } catch { /* ignore */ }
+
+  res.json({
+    range_balls_enabled: !!club.range_balls_enabled,
+    range_balls_price: club.range_balls_price ? parseFloat(club.range_balls_price) : 0,
+    range_balls_options: rangeBallsOptions,
+    club_hire_enabled: !!club.club_hire_enabled,
+    club_hire_price: club.club_hire_price ? parseFloat(club.club_hire_price) : 0,
+    current_driving_range_fee: parseFloat(bp.player_driving_range_fee ?? 0),
+    current_club_hire_fee: parseFloat(bp.player_club_hire_fee ?? 0),
+    base_amount: parseFloat(bp.amount) - parseFloat(bp.player_driving_range_fee ?? 0) - parseFloat(bp.player_club_hire_fee ?? 0),
+  });
+});
+
+// ── Invited player: update their add-on selections ───────────────────────────
+router.post("/bookings/:id/player-addons", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ message: "Invalid booking id" }); return; }
+
+  const bp = await row<any>(
+    `SELECT bp.paid, bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee
+     FROM booking_players bp WHERE bp.booking_id = ? AND bp.user_id = ?`,
+    [id, user.id]
+  );
+  if (!bp) { res.status(404).json({ message: "You are not a player on this booking" }); return; }
+  if (bp.paid) { res.status(409).json({ message: "You have already paid — add-ons cannot be changed" }); return; }
+
+  const { driving_range_fee = 0, club_hire_fee = 0 } = req.body as {
+    driving_range_fee?: number;
+    club_hire_fee?: number;
+  };
+
+  const drf = Math.max(0, parseFloat(String(driving_range_fee)) || 0);
+  const chf = Math.max(0, parseFloat(String(club_hire_fee)) || 0);
+
+  const baseAmount = parseFloat(bp.amount)
+    - parseFloat(bp.player_driving_range_fee ?? 0)
+    - parseFloat(bp.player_club_hire_fee ?? 0);
+
+  const newAmount = Math.round((baseAmount + drf + chf) * 100) / 100;
+
+  await exec(
+    `UPDATE booking_players
+     SET player_driving_range_fee = ?, player_club_hire_fee = ?, amount = ?
+     WHERE booking_id = ? AND user_id = ?`,
+    [drf, chf, newAmount, id, user.id]
+  );
+
+  res.json({ success: true, amount: newAmount, driving_range_fee: drf, club_hire_fee: chf });
+});
+
+// ── Invited player: leave/cancel themselves from the booking ─────────────────
+router.post("/bookings/:id/leave", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ message: "Invalid booking id" }); return; }
+
+  const booking = await row<any>(
+    `SELECT b.id, b.user_id, b.status, b.portal_slot_id,
+            u.push_token AS organizer_push_token
+     FROM bookings b
+     JOIN users u ON u.id = b.user_id
+     WHERE b.id = ?`,
+    [id]
+  );
+  if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
+  if (booking.user_id === user.id) {
+    res.status(403).json({ message: "Use the Cancel Booking option to cancel as the organizer" }); return;
+  }
+  if (booking.status !== "confirmed") {
+    res.status(409).json({ message: "This booking cannot be modified" }); return;
+  }
+
+  const bp = await row<any>(
+    "SELECT paid FROM booking_players WHERE booking_id = ? AND user_id = ?",
+    [id, user.id]
+  );
+  if (!bp) { res.status(403).json({ message: "You are not a player on this booking" }); return; }
+  if (bp.paid) { res.status(409).json({ message: "You have already paid — please contact the club to cancel" }); return; }
+
+  const deleted = await run(
+    "DELETE FROM booking_players WHERE booking_id = ? AND user_id = ? AND paid = 0",
+    [id, user.id]
+  );
+  if (!deleted) { res.status(404).json({ message: "Player record not found or already paid" }); return; }
+
+  await exec(
+    "UPDATE bookings SET players = GREATEST(1, players - 1) WHERE id = ?",
+    [id]
+  );
+  if (booking.portal_slot_id) {
+    await exec(
+      "UPDATE portal_tee_slots SET player_count = GREATEST(0, player_count - 1) WHERE id = ?",
+      [booking.portal_slot_id]
+    );
+  }
+
+  const organizerId = booking.user_id;
+  saveUserNotification(
+    organizerId,
+    "booking_player_left",
+    "Player cancelled",
+    `${user.name} has removed themselves from booking ${id}.`,
+    { booking_id: id }
+  );
+  if (booking.organizer_push_token?.startsWith("ExponentPushToken[")) {
+    sendPushNotifications([{
+      to: booking.organizer_push_token,
+      sound: "default",
+      title: "Player cancelled",
+      body: `${user.name} has removed themselves from your booking.`,
+      data: { booking_id: id },
+    }]);
+  }
+
+  res.json({ success: true });
+});
+
 router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }

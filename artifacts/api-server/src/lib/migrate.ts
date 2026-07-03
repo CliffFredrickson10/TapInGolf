@@ -1762,6 +1762,10 @@ async function seedAdOfferings(): Promise<void> {
   `);
   await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
 
+  // ── Per-player add-ons on booking_players ─────────────────────────────────
+  await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
+
   // ── Consolation bracket (Plate Flight) ───────────────────────────────────
   await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
   await ddl(`ALTER TABLE knockout_rounds ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);

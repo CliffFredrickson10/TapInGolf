@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router, useLocalSearchParams } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   Linking,
   Modal,
@@ -110,6 +110,7 @@ export default function BookingDetailScreen() {
   const [addonsUpdating, setAddonsUpdating]       = useState(false);
   const [confirmLeave, setConfirmLeave]           = useState(false);
   const [leaving, setLeaving]                     = useState(false);
+  const [leaveError, setLeaveError]               = useState<string | null>(null);
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;
 
@@ -117,16 +118,21 @@ export default function BookingDetailScreen() {
     apiFetch("/settings").then((d) => { if (d?.vat_pct != null) setVatPct(parseFloat(d.vat_pct)); }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (!user) return;
-    apiFetch(`/bookings/${id}`, user.token)
-      .then((d) => setBooking(d.booking))
-      .catch(() => {})
-      .finally(() => setLoading(false));
-    apiFetch("/payments/methods", user.token)
-      .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
-      .catch(() => {});
-  }, [id, user]);
+  // Re-fetch booking every time this screen comes into focus so that changes
+  // made by other players (leaving, paying) are always visible without a
+  // manual refresh.
+  useFocusEffect(
+    useCallback(() => {
+      if (!user) return;
+      apiFetch(`/bookings/${id}`, user.token)
+        .then((d) => setBooking(d.booking))
+        .catch(() => {})
+        .finally(() => setLoading(false));
+      apiFetch("/payments/methods", user.token)
+        .then((d) => setWalletBalance(parseFloat(d?.wallet?.balance ?? "0")))
+        .catch(() => {});
+    }, [id, user])
+  );
 
   // Fetch prepaid balance once we know the club (only relevant for invited players)
   useEffect(() => {
@@ -176,6 +182,7 @@ export default function BookingDetailScreen() {
     } catch (e: any) {
       setConfirmLeave(false);
       setLeaving(false);
+      setLeaveError(e?.message ?? "Could not cancel booking. Please try again.");
     }
   };
 
@@ -493,13 +500,21 @@ export default function BookingDetailScreen() {
           ) : (
             <TouchableOpacity
               style={[styles.cancelBtn, { borderColor: colors.destructive }]}
-              onPress={() => setConfirmLeave(true)}
+              onPress={() => { setLeaveError(null); setConfirmLeave(true); }}
               activeOpacity={0.8}
             >
               <Ionicons name="close-circle-outline" size={20} color={colors.destructive} />
               <Text style={[styles.cancelText, { color: colors.destructive }]}>Cancel Booking</Text>
             </TouchableOpacity>
           )
+        )}
+
+        {/* Leave-error banner */}
+        {leaveError && (
+          <View style={[styles.errorRow, { backgroundColor: colors.destructive + "18", borderColor: colors.destructive }]}>
+            <Ionicons name="alert-circle-outline" size={16} color={colors.destructive} />
+            <Text style={[styles.errorRowText, { color: colors.destructive }]}>{leaveError}</Text>
+          </View>
         )}
 
         {/* View Booking Policies link */}
@@ -1265,6 +1280,8 @@ const styles = StyleSheet.create({
   confirmBtnText: { fontSize: 13, fontFamily: "Inter_600SemiBold" },
   cancelBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8, borderWidth: 1.5, borderRadius: 14, height: 50 },
   cancelText: { fontSize: 15, fontFamily: "Inter_600SemiBold" },
+  errorRow: { flexDirection: "row", alignItems: "center", gap: 8, borderWidth: 1, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  errorRowText: { flex: 1, fontSize: 13, fontFamily: "Inter_400Regular", lineHeight: 18 },
   errorText: { fontSize: 18, fontFamily: "Inter_600SemiBold" },
   doneBtn: { height: 52, borderRadius: 14, alignItems: "center", justifyContent: "center" },
   doneBtnText: { color: "#fff", fontFamily: "Inter_700Bold", fontSize: 16 },

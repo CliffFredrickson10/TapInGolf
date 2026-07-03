@@ -65305,7 +65305,7 @@ router4.get("/bookings/:id/club-addons", async (req, res) => {
     return;
   }
   const bp = await row(
-    `SELECT bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee
+    `SELECT bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee, bp.player_cart_fee
      FROM booking_players bp WHERE bp.booking_id = ? AND bp.user_id = ?`,
     [id, user.id]
   );
@@ -65313,33 +65313,48 @@ router4.get("/bookings/:id/club-addons", async (req, res) => {
     res.status(404).json({ message: "You are not a player on this booking" });
     return;
   }
-  const club = await row(
-    `SELECT c.range_balls_enabled, c.range_balls_price, c.range_balls_options,
-            c.club_hire_enabled, c.club_hire_price
+  const bookingRow = await row(
+    `SELECT b.cart_fee, b.players,
+            c.range_balls_enabled, c.range_balls_price, c.range_balls_options,
+            c.club_hire_enabled, c.club_hire_price,
+            c.cart_available, c.cart_compulsory, c.cart_price
      FROM bookings b
      JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
      JOIN clubs c ON c.id = pts.club_id
      WHERE b.id = ?`,
     [id]
   );
-  if (!club) {
+  if (!bookingRow) {
     res.status(404).json({ message: "Booking not found" });
     return;
   }
   let rangeBallsOptions = [];
   try {
-    rangeBallsOptions = club.range_balls_options ? typeof club.range_balls_options === "string" ? JSON.parse(club.range_balls_options) : club.range_balls_options : [];
+    rangeBallsOptions = bookingRow.range_balls_options ? typeof bookingRow.range_balls_options === "string" ? JSON.parse(bookingRow.range_balls_options) : bookingRow.range_balls_options : [];
   } catch {
   }
+  const bookingCartFee = parseFloat(bookingRow.cart_fee ?? 0);
+  const numPlayers = parseInt(bookingRow.players ?? 1);
+  const cartShare = numPlayers > 0 ? Math.round(bookingCartFee / numPlayers * 100) / 100 : 0;
+  const pDrf = parseFloat(bp.player_driving_range_fee ?? 0);
+  const pChf = parseFloat(bp.player_club_hire_fee ?? 0);
+  const pCrt = parseFloat(bp.player_cart_fee ?? 0);
+  const baseAmount = parseFloat(bp.amount) - pDrf - pChf - pCrt;
   res.json({
-    range_balls_enabled: !!club.range_balls_enabled,
-    range_balls_price: club.range_balls_price ? parseFloat(club.range_balls_price) : 0,
+    cart_available: !!bookingRow.cart_available,
+    cart_compulsory: !!bookingRow.cart_compulsory,
+    cart_price: bookingRow.cart_price ? parseFloat(bookingRow.cart_price) : 0,
+    booking_cart_fee: bookingCartFee,
+    cart_share: cartShare,
+    current_player_cart_fee: pCrt,
+    range_balls_enabled: !!bookingRow.range_balls_enabled,
+    range_balls_price: bookingRow.range_balls_price ? parseFloat(bookingRow.range_balls_price) : 0,
     range_balls_options: rangeBallsOptions,
-    club_hire_enabled: !!club.club_hire_enabled,
-    club_hire_price: club.club_hire_price ? parseFloat(club.club_hire_price) : 0,
-    current_driving_range_fee: parseFloat(bp.player_driving_range_fee ?? 0),
-    current_club_hire_fee: parseFloat(bp.player_club_hire_fee ?? 0),
-    base_amount: parseFloat(bp.amount) - parseFloat(bp.player_driving_range_fee ?? 0) - parseFloat(bp.player_club_hire_fee ?? 0)
+    club_hire_enabled: !!bookingRow.club_hire_enabled,
+    club_hire_price: bookingRow.club_hire_price ? parseFloat(bookingRow.club_hire_price) : 0,
+    current_driving_range_fee: pDrf,
+    current_club_hire_fee: pChf,
+    base_amount: baseAmount
   });
 });
 router4.post("/bookings/:id/player-addons", async (req, res) => {
@@ -65354,7 +65369,7 @@ router4.post("/bookings/:id/player-addons", async (req, res) => {
     return;
   }
   const bp = await row(
-    `SELECT bp.paid, bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee
+    `SELECT bp.paid, bp.amount, bp.player_driving_range_fee, bp.player_club_hire_fee, bp.player_cart_fee
      FROM booking_players bp WHERE bp.booking_id = ? AND bp.user_id = ?`,
     [id, user.id]
   );
@@ -65366,18 +65381,37 @@ router4.post("/bookings/:id/player-addons", async (req, res) => {
     res.status(409).json({ message: "You have already paid \u2014 add-ons cannot be changed" });
     return;
   }
-  const { driving_range_fee = 0, club_hire_fee = 0 } = req.body;
+  const { driving_range_fee = 0, club_hire_fee = 0, cart_fee = 0 } = req.body;
+  const pcrt = Math.max(0, parseFloat(String(cart_fee)) || 0);
+  if (pcrt > 0) {
+    const bookingCartCheck = await row(
+      `SELECT b.cart_fee, c.cart_available, c.cart_compulsory
+       FROM bookings b
+       JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       JOIN clubs c ON c.id = pts.club_id
+       WHERE b.id = ?`,
+      [id]
+    );
+    if (!bookingCartCheck?.cart_available) {
+      res.status(400).json({ message: "Cart is not available at this club" });
+      return;
+    }
+    if (parseFloat(bookingCartCheck?.cart_fee ?? 0) > 0) {
+      res.status(409).json({ message: "A cart is already included in this booking" });
+      return;
+    }
+  }
   const drf = Math.max(0, parseFloat(String(driving_range_fee)) || 0);
   const chf = Math.max(0, parseFloat(String(club_hire_fee)) || 0);
-  const baseAmount = parseFloat(bp.amount) - parseFloat(bp.player_driving_range_fee ?? 0) - parseFloat(bp.player_club_hire_fee ?? 0);
-  const newAmount = Math.round((baseAmount + drf + chf) * 100) / 100;
+  const baseAmount = parseFloat(bp.amount) - parseFloat(bp.player_driving_range_fee ?? 0) - parseFloat(bp.player_club_hire_fee ?? 0) - parseFloat(bp.player_cart_fee ?? 0);
+  const newAmount = Math.round((baseAmount + drf + chf + pcrt) * 100) / 100;
   await exec(
     `UPDATE booking_players
-     SET player_driving_range_fee = ?, player_club_hire_fee = ?, amount = ?
+     SET player_driving_range_fee = ?, player_club_hire_fee = ?, player_cart_fee = ?, amount = ?
      WHERE booking_id = ? AND user_id = ?`,
-    [drf, chf, newAmount, id, user.id]
+    [drf, chf, pcrt, newAmount, id, user.id]
   );
-  res.json({ success: true, amount: newAmount, driving_range_fee: drf, club_hire_fee: chf });
+  res.json({ success: true, amount: newAmount, driving_range_fee: drf, club_hire_fee: chf, cart_fee: pcrt });
 });
 router4.post("/bookings/:id/leave", async (req, res) => {
   const user = await getUser(req);
@@ -80961,6 +80995,7 @@ async function seedAdOfferings() {
   await ddl(`CREATE INDEX IF NOT EXISTS idx_eclectic_ringer_event ON eclectic_ringer_board (event_id)`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_cart_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
   await ddl(`ALTER TABLE knockout_rounds ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);

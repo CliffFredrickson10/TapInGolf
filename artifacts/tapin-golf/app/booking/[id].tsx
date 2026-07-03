@@ -86,6 +86,12 @@ export default function BookingDetailScreen() {
   const [vatPct, setVatPct]               = useState(15);
 
   interface ClubAddons {
+    cart_available: boolean;
+    cart_compulsory: boolean;
+    cart_price: number;
+    booking_cart_fee: number;
+    cart_share: number;
+    current_player_cart_fee: number;
     range_balls_enabled: boolean;
     range_balls_price: number;
     range_balls_options: Array<{ label: string; price: number }>;
@@ -99,6 +105,7 @@ export default function BookingDetailScreen() {
   const [includeDrivingRange, setIncludeDrivingRange] = useState(false);
   const [selectedRangeBallsPrice, setSelectedRangeBallsPrice] = useState<number | null>(null);
   const [includeClubHire, setIncludeClubHire]     = useState(false);
+  const [includePlayerCart, setIncludePlayerCart] = useState(false);
   const [addonsUpdating, setAddonsUpdating]       = useState(false);
   const [confirmLeave, setConfirmLeave]           = useState(false);
   const [leaving, setLeaving]                     = useState(false);
@@ -139,17 +146,18 @@ export default function BookingDetailScreen() {
         setIncludeDrivingRange(d.current_driving_range_fee > 0);
         setSelectedRangeBallsPrice(d.current_driving_range_fee > 0 ? d.current_driving_range_fee : null);
         setIncludeClubHire(d.current_club_hire_fee > 0);
+        setIncludePlayerCart(d.current_player_cart_fee > 0);
       })
       .catch(() => {});
   }, [booking?.id, booking?.role, booking?.my_paid, user]);
 
-  const handleUpdateAddons = async (drf: number, chf: number) => {
+  const handleUpdateAddons = async (drf: number, chf: number, crt: number) => {
     if (!user || !booking) return;
     setAddonsUpdating(true);
     try {
       const data = await apiFetch(`/bookings/${booking.id}/player-addons`, user.token, {
         method: "POST",
-        body: JSON.stringify({ driving_range_fee: drf, club_hire_fee: chf }),
+        body: JSON.stringify({ driving_range_fee: drf, club_hire_fee: chf, cart_fee: crt }),
       });
       setBooking((prev) => prev ? { ...prev, my_amount: data.amount } : prev);
     } catch { /* silently ignore — user can retry */ }
@@ -501,12 +509,93 @@ export default function BookingDetailScreen() {
               </Text>
             </View>
 
+            {/* Price breakdown */}
+            {clubAddons && (() => {
+              const cartShare   = clubAddons.cart_share ?? 0;
+              const greens      = clubAddons.base_amount - cartShare;
+              const drf         = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
+              const chf         = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
+              const pcrt        = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
+              const hasBreakdown = cartShare > 0 || drf > 0 || chf > 0 || pcrt > 0;
+              if (!hasBreakdown && greens === (booking.my_amount ?? 0)) return null;
+              return (
+                <View style={{ gap: 4, marginBottom: 2 }}>
+                  {greens > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Greens Fee</Text>
+                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{greens.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {cartShare > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (shared)</Text>
+                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{cartShare.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {pcrt > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (1 × R{(clubAddons.cart_price ?? 0).toFixed(2)})</Text>
+                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{pcrt.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {drf > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Driving Range Balls</Text>
+                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{drf.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  {chf > 0 && (
+                    <View style={styles.breakdownRow}>
+                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Club Hire</Text>
+                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{chf.toFixed(2)}</Text>
+                    </View>
+                  )}
+                  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Total</Text>
+                    <Text style={[styles.breakdownVal, { color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 16 }]}>R{(booking.my_amount ?? 0).toFixed(2)}</Text>
+                  </View>
+                  <View style={styles.breakdownRow}>
+                    <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
+                    <Text style={[styles.breakdownVal, { color: colors.mutedForeground }]}>R{((booking.my_amount ?? 0) * vatPct / (100 + vatPct)).toFixed(2)}</Text>
+                  </View>
+                  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
+                </View>
+              );
+            })()}
+
             {/* Optional add-ons */}
-            {clubAddons && (clubAddons.range_balls_enabled || clubAddons.club_hire_enabled) && (
+            {clubAddons && (clubAddons.cart_available || clubAddons.range_balls_enabled || clubAddons.club_hire_enabled) && (
               <View style={{ gap: 6 }}>
                 <Text style={[styles.payOptionLabel, { color: colors.foreground, marginBottom: 2 }]}>
                   Add-ons {addonsUpdating ? "(saving…)" : ""}
                 </Text>
+
+                {/* Cart toggle — only when booking has no cart and club has carts available */}
+                {clubAddons.cart_available && !clubAddons.cart_compulsory && clubAddons.booking_cart_fee === 0 && (
+                  <TouchableOpacity
+                    style={[styles.payOption, {
+                      backgroundColor: includePlayerCart ? colors.primaryLight : colors.background,
+                      borderColor: includePlayerCart ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => {
+                      Haptics.selectionAsync();
+                      const next = !includePlayerCart;
+                      setIncludePlayerCart(next);
+                      const drf = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
+                      const chf = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
+                      const crt = next ? (clubAddons.cart_price ?? 0) : 0;
+                      handleUpdateAddons(drf, chf, crt);
+                    }}
+                  >
+                    <Ionicons name="car-outline" size={20} color={includePlayerCart ? colors.primary : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Add Golf Cart</Text>
+                      <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>+R{(clubAddons.cart_price ?? 0).toFixed(2)}</Text>
+                    </View>
+                    {includePlayerCart && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                )}
 
                 {clubAddons.range_balls_enabled && (
                   <>
@@ -527,7 +616,8 @@ export default function BookingDetailScreen() {
                                 setIncludeDrivingRange(turning);
                                 setSelectedRangeBallsPrice(turning ? opt.price : null);
                                 const chf = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
-                                handleUpdateAddons(turning ? opt.price : 0, chf);
+                                const crt = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
+                                handleUpdateAddons(turning ? opt.price : 0, chf, crt);
                               }}
                             >
                               <Ionicons name="golf-outline" size={20} color={active ? colors.primary : colors.mutedForeground} />
@@ -552,7 +642,8 @@ export default function BookingDetailScreen() {
                           setIncludeDrivingRange(next);
                           const drf = next ? (clubAddons.range_balls_price ?? 0) : 0;
                           const chf = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
-                          handleUpdateAddons(drf, chf);
+                          const crt = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
+                          handleUpdateAddons(drf, chf, crt);
                         }}
                       >
                         <Ionicons name="golf-outline" size={20} color={includeDrivingRange ? colors.primary : colors.mutedForeground} />
@@ -578,7 +669,8 @@ export default function BookingDetailScreen() {
                       setIncludeClubHire(next);
                       const drf = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
                       const chf = next ? (clubAddons.club_hire_price ?? 0) : 0;
-                      handleUpdateAddons(drf, chf);
+                      const crt = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
+                      handleUpdateAddons(drf, chf, crt);
                     }}
                   >
                     <Ionicons name="bag-outline" size={20} color={includeClubHire ? colors.primary : colors.mutedForeground} />
@@ -1032,6 +1124,9 @@ const styles = StyleSheet.create({
   payCardHeader: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 2 },
   payCardTitle: { fontSize: 16, fontFamily: "Inter_700Bold", flex: 1 },
   payCardAmount: { fontSize: 18, fontFamily: "Inter_700Bold" },
+  breakdownRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  breakdownLabel: { fontSize: 13, fontFamily: "Inter_400Regular", flex: 1 },
+  breakdownVal: { fontSize: 13, fontFamily: "Inter_500Medium" },
   payOption: { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 12, borderWidth: 1.5, padding: 12 },
   payOptionLabel: { fontSize: 14, fontFamily: "Inter_600SemiBold" },
   payOptionSub: { fontSize: 11, fontFamily: "Inter_400Regular", marginTop: 1 },

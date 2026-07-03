@@ -1165,7 +1165,10 @@ export default function StartRoundScreen() {
         transparent
         onRequestClose={() => setPickerTarget(null)}
       >
-        <View style={styles.pickerOverlay}>
+        <KeyboardAvoidingView
+          style={styles.pickerOverlay}
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+        >
           <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={() => setPickerTarget(null)} />
           <View style={[styles.pickerSheet, { backgroundColor: colors.card }]}>
             <View style={[styles.pickerHandle, { backgroundColor: colors.border }]} />
@@ -1287,7 +1290,7 @@ export default function StartRoundScreen() {
               </View>
             )}
           </View>
-        </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );

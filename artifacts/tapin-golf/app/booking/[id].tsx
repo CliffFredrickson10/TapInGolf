@@ -455,6 +455,35 @@ export default function BookingDetailScreen() {
           )}
         </View>
 
+        {/* Cancel booking — invited player who hasn't paid yet */}
+        {isInvited && !booking.my_paid && booking.status === "confirmed" && (
+          confirmLeave ? (
+            <View style={[styles.confirmRow, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
+              <Text style={[styles.confirmText, { color: colors.foreground }]}>Cancel this booking?</Text>
+              <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>
+                Your spot will be freed for other players and the organizer will be notified.
+              </Text>
+              <View style={{ flexDirection: "row", gap: 8 }}>
+                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.muted }]} onPress={() => setConfirmLeave(false)}>
+                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>Keep it</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.destructive }]} onPress={handleLeave} disabled={leaving}>
+                  <Text style={[styles.confirmBtnText, { color: "#fff" }]}>{leaving ? "…" : "Cancel"}</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          ) : (
+            <TouchableOpacity
+              style={[styles.cancelBtn, { borderColor: colors.destructive }]}
+              onPress={() => setConfirmLeave(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="close-circle-outline" size={20} color={colors.destructive} />
+              <Text style={[styles.cancelText, { color: colors.destructive }]}>Cancel Booking</Text>
+            </TouchableOpacity>
+          )
+        )}
+
         {/* View Booking Policies link */}
         {hasPolicies && (
           <TouchableOpacity
@@ -786,34 +815,6 @@ export default function BookingDetailScreen() {
           </View>
         )}
 
-        {/* Leave booking — invited player who hasn't paid yet */}
-        {isInvited && !booking.my_paid && booking.status === "confirmed" && (
-          confirmLeave ? (
-            <View style={[styles.confirmRow, { backgroundColor: colors.card, borderColor: colors.destructive }]}>
-              <Text style={[styles.confirmText, { color: colors.foreground }]}>Remove yourself from this booking?</Text>
-              <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>
-                This will free your spot for other players. The organizer will be notified.
-              </Text>
-              <View style={{ flexDirection: "row", gap: 8 }}>
-                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.muted }]} onPress={() => setConfirmLeave(false)}>
-                  <Text style={[styles.confirmBtnText, { color: colors.foreground }]}>Keep it</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.confirmBtn, { backgroundColor: colors.destructive }]} onPress={handleLeave} disabled={leaving}>
-                  <Text style={[styles.confirmBtnText, { color: "#fff" }]}>{leaving ? "…" : "Leave"}</Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ) : (
-            <TouchableOpacity
-              style={[styles.cancelBtn, { borderColor: colors.destructive }]}
-              onPress={() => setConfirmLeave(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="exit-outline" size={20} color={colors.destructive} />
-              <Text style={[styles.cancelText, { color: colors.destructive }]}>Leave Booking</Text>
-            </TouchableOpacity>
-          )
-        )}
 
         {/* Details */}
         <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.border }]}>

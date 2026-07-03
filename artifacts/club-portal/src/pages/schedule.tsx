@@ -1624,23 +1624,43 @@ export default function Schedule() {
 
   // ── Data ──────────────────────────────────────────────────────────────────
 
+  const fetchData = async () => {
+    const [tt, bk, de] = await Promise.all([
+      api<TeeTime[]>(`/api/portal/tee-times?from=${rangeStart}&to=${rangeEnd}`),
+      api<Booking[]>(`/api/portal/bookings?limit=500&from=${rangeStart}&to=${rangeEnd}`),
+      api<DrawEntry[]>(`/api/portal/schedule-draw-entries?from=${rangeStart}&to=${rangeEnd}`),
+    ]);
+    setTeeTimes(tt.map(t => ({ ...t, date: t.date.slice(0, 10) })));
+    setBookings(bk.map(b => ({ ...b, date: b.date.slice(0, 10) })));
+    setDrawEntries(de.map(d => ({ ...d, tee_date: d.tee_date.slice(0, 10), tee_time: String(d.tee_time).slice(0, 5) })));
+  };
+
   const load = async () => {
     setLoading(true);
     try {
-      const [tt, bk, de] = await Promise.all([
-        api<TeeTime[]>(`/api/portal/tee-times?from=${rangeStart}&to=${rangeEnd}`),
-        api<Booking[]>(`/api/portal/bookings?limit=500&from=${rangeStart}&to=${rangeEnd}`),
-        api<DrawEntry[]>(`/api/portal/schedule-draw-entries?from=${rangeStart}&to=${rangeEnd}`),
-      ]);
-      setTeeTimes(tt.map(t => ({ ...t, date: t.date.slice(0, 10) })));
-      setBookings(bk.map(b => ({ ...b, date: b.date.slice(0, 10) })));
-      setDrawEntries(de.map(d => ({ ...d, tee_date: d.tee_date.slice(0, 10), tee_time: String(d.tee_time).slice(0, 5) })));
+      await fetchData();
     } catch (e: any) {
       toast({ title: "Error loading schedule", description: e.message, variant: "destructive" });
     } finally { setLoading(false); }
   };
 
   useEffect(() => { load(); }, [rangeStart]);
+
+  // Keep the schedule fresh: silently refetch every 30s and whenever the tab
+  // regains focus, so bookings/cancellations made from the mobile app appear
+  // without a manual page reload.
+  useEffect(() => {
+    const silentRefresh = () => { fetchData().catch(() => {}); };
+    const iv = setInterval(silentRefresh, 30_000);
+    const onVisible = () => { if (document.visibilityState === "visible") silentRefresh(); };
+    document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("focus", onVisible);
+    return () => {
+      clearInterval(iv);
+      document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("focus", onVisible);
+    };
+  }, [rangeStart]);
   useEffect(() => {
     if (selectedDate < rangeStart) setSelectedDate(rangeStart);
     if (selectedDate > rangeEnd) setSelectedDate(rangeEnd);

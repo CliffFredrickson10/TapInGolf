@@ -64275,11 +64275,19 @@ function generateRef() {
 async function releaseStalePendingBookings() {
   await exec(`
     WITH stale AS (
-      UPDATE bookings SET status = 'cancelled'
-      WHERE status = 'pending'
-        AND payment_method IN ('stitch','pay_at_club')
-        AND created_at < NOW() - INTERVAL '15 minutes'
-      RETURNING portal_slot_id, players
+      UPDATE bookings b SET status = 'cancelled'
+      WHERE b.status = 'pending'
+        AND (
+          b.payment_method IN ('stitch','pay_at_club')
+          -- prepaid greens with unpaid add-ons: still waiting on a Stitch payment
+          OR (b.payment_method = 'prepaid' AND EXISTS (
+            SELECT 1 FROM booking_players bp
+            WHERE bp.booking_id = b.id AND bp.user_id = b.user_id
+              AND bp.pending_prepaid_greens = 1
+          ))
+        )
+        AND b.created_at < NOW() - INTERVAL '15 minutes'
+      RETURNING b.portal_slot_id, b.players
     ), agg AS (
       SELECT portal_slot_id, SUM(players)::int AS total
       FROM stale
@@ -64916,6 +64924,8 @@ router4.post("/bookings", async (req, res) => {
   const totalAmount = greensAfterDiscount + cartFee + rangeBallsFee + clubHireFee;
   const splitAmount = split_bill && numPlayers > 1 ? organizerGreens + cartShare + rangeBallsFee + clubHireFee : totalAmount;
   const effectivePaymentMethod = splitAmount <= 0 ? "voucher" : payment_method;
+  const prepaidAddonsDue = payment_method === "prepaid" && splitAmount > 5e-3;
+  const needsStitchLink = effectivePaymentMethod === "stitch" || effectivePaymentMethod === "pay_at_club" || prepaidAddonsDue;
   const friendAmounts = invitedGreens.map((g) => split_bill ? g + cartShare : 0);
   const ref = generateRef();
   const feeSetting = await row("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
@@ -65001,7 +65011,7 @@ router4.post("/bookings", async (req, res) => {
         );
       }
     }
-    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+    if (!needsStitchLink) {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -65026,7 +65036,7 @@ router4.post("/bookings", async (req, res) => {
         );
       }
     }
-    if (payment_method === "prepaid") {
+    if (payment_method === "prepaid" && !prepaidAddonsDue) {
       await clientQuery(
         client,
         `UPDATE club_members
@@ -65043,11 +65053,18 @@ router4.post("/bookings", async (req, res) => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+    if (!needsStitchLink) {
       await clientQuery(
         client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
         [effectivePaymentMethod, bookingId, user.id]
+      );
+    }
+    if (prepaidAddonsDue) {
+      await clientQuery(
+        client,
+        "UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?",
+        [bookingId, user.id]
       );
     }
     await clientQuery(
@@ -65056,14 +65073,14 @@ router4.post("/bookings", async (req, res) => {
       [numPlayers, parseInt(tee_time_id)]
     );
   });
-  if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+  if (!needsStitchLink) {
     fireInvoiceEmail(bookingId).catch(() => {
     });
     syncEventRegistration(bookingId).catch(() => {
     });
   }
   let paymentUrl = null;
-  if (effectivePaymentMethod === "stitch" || effectivePaymentMethod === "pay_at_club") {
+  if (needsStitchLink) {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({
@@ -65300,7 +65317,7 @@ router4.post("/bookings/:id/resume-payment", async (req, res) => {
     res.status(409).json({ message: `This booking is already ${booking.status}.` });
     return;
   }
-  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club") {
+  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club" && booking.payment_method !== "prepaid") {
     res.status(400).json({ message: "This booking cannot be paid online." });
     return;
   }
@@ -65652,17 +65669,53 @@ router4.post("/bookings/:id/confirm-payment", async (req, res) => {
     res.status(402).json({ confirmed: false, status: booking.status, message: "Payment not completed yet" });
     return;
   }
-  await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
-  await run(
-    "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-    [bookingId, bookingId]
+  const claimed = await run(
+    "UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
+    [bookingId]
   );
-  fireInvoiceEmail(bookingId).catch(() => {
-  });
-  syncEventRegistration(bookingId).catch(() => {
-  });
+  if (claimed === 1) {
+    await settleOrganizerPaid(bookingId);
+    fireInvoiceEmail(bookingId).catch(() => {
+    });
+    syncEventRegistration(bookingId).catch(() => {
+    });
+  }
   res.json({ confirmed: true, status: "confirmed" });
 });
+async function settleOrganizerPaid(bookingId) {
+  const org = await row(
+    `SELECT bp.user_id, bp.pending_prepaid_greens
+     FROM booking_players bp
+     JOIN bookings b ON b.id = bp.booking_id AND b.user_id = bp.user_id
+     WHERE bp.booking_id = ?`,
+    [bookingId]
+  );
+  if (org?.pending_prepaid_greens) {
+    const mem = await row(
+      `SELECT cm.id FROM club_members cm
+       JOIN portal_tee_slots pts ON pts.club_id = cm.club_id
+       JOIN bookings b ON b.portal_slot_id = pts.id
+       WHERE b.id = ? AND cm.user_id = ? AND cm.status = 'active'`,
+      [bookingId, org.user_id]
+    );
+    if (mem) {
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [mem.id]
+      );
+    }
+    await run(
+      "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
+      [bookingId, org.user_id]
+    );
+  } else {
+    await run(
+      "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+      [bookingId, bookingId]
+    );
+  }
+}
 router4.post("/stitch/webhook", async (req, res) => {
   const raw = Buffer.isBuffer(req.body) ? req.body.toString("utf8") : JSON.stringify(req.body ?? {});
   const secret = process.env["STITCH_WEBHOOK_SECRET"];
@@ -66041,10 +66094,7 @@ router4.post("/stitch/webhook", async (req, res) => {
         [bookingId]
       );
       if (claimed === 1) {
-        await run(
-          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-          [bookingId, bookingId]
-        );
+        await settleOrganizerPaid(bookingId);
         fireInvoiceEmail(bookingId).catch(() => {
         });
         syncEventRegistration(bookingId).catch(() => {

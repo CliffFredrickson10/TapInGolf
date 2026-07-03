@@ -564,7 +564,7 @@ export default function NewBookingScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if ((paymentMethod === "stitch" || paymentMethod === "pay_at_club") && data.payment_url) {
+      if (data.payment_url) {
         router.replace({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: data.booking_id } });
       } else {
         router.replace({ pathname: "/booking/[id]", params: { id: data.booking_id } });

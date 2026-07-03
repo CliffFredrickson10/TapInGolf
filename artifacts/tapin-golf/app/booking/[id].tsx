@@ -290,7 +290,9 @@ export default function BookingDetailScreen() {
   const organizerNeedsPayment =
     !isInvited &&
     booking.status === "pending" &&
-    (booking.payment_method === "stitch" || booking.payment_method === "pay_at_club");
+    (booking.payment_method === "stitch" ||
+      booking.payment_method === "pay_at_club" ||
+      booking.payment_method === "prepaid");
 
   const formatDate = (raw: string) => {
     try {

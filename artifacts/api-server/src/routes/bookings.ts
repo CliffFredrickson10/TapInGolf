@@ -130,11 +130,19 @@ function generateRef(): string {
 async function releaseStalePendingBookings(): Promise<void> {
   await exec(`
     WITH stale AS (
-      UPDATE bookings SET status = 'cancelled'
-      WHERE status = 'pending'
-        AND payment_method IN ('stitch','pay_at_club')
-        AND created_at < NOW() - INTERVAL '15 minutes'
-      RETURNING portal_slot_id, players
+      UPDATE bookings b SET status = 'cancelled'
+      WHERE b.status = 'pending'
+        AND (
+          b.payment_method IN ('stitch','pay_at_club')
+          -- prepaid greens with unpaid add-ons: still waiting on a Stitch payment
+          OR (b.payment_method = 'prepaid' AND EXISTS (
+            SELECT 1 FROM booking_players bp
+            WHERE bp.booking_id = b.id AND bp.user_id = b.user_id
+              AND bp.pending_prepaid_greens = 1
+          ))
+        )
+        AND b.created_at < NOW() - INTERVAL '15 minutes'
+      RETURNING b.portal_slot_id, b.players
     ), agg AS (
       SELECT portal_slot_id, SUM(players)::int AS total
       FROM stale
@@ -852,6 +860,17 @@ router.post("/bookings", async (req, res): Promise<void> => {
   // so the booking is auto-confirmed without trying to send R0 to Stitch.
   const effectivePaymentMethod = splitAmount <= 0 ? "voucher" : payment_method;
 
+  // Prepaid rounds cover the greens fee only. If the organizer added add-ons
+  // (cart share, range balls, club hire) those must still be paid online: the
+  // booking stays pending, a Stitch link is issued for the add-ons amount, and
+  // the prepaid round is only deducted once the payment is confirmed.
+  const prepaidAddonsDue = payment_method === "prepaid" && splitAmount > 0.005;
+  // Payment methods that settle later via Stitch redirect/webhook
+  const needsStitchLink =
+    effectivePaymentMethod === "stitch" ||
+    effectivePaymentMethod === "pay_at_club" ||
+    prepaidAddonsDue;
+
   // Each invited player's payment: their individual tier price + cart share (split) or R0 (organizer pays all)
   const friendAmounts = invitedGreens.map(g => split_bill ? g + cartShare : 0);
 
@@ -932,9 +951,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
       }
     }
 
-    // Confirm immediately only for payments settled at creation (prepaid, wallet, voucher).
-    // Stitch bookings and pay_at_club stay 'pending' until the payment webhook confirms them.
-    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+    // Confirm immediately only for payments settled at creation (prepaid without
+    // add-ons, wallet, voucher). Stitch bookings, pay_at_club and prepaid-with-
+    // add-ons stay 'pending' until the payment webhook confirms them.
+    if (!needsStitchLink) {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -959,8 +979,9 @@ router.post("/bookings", async (req, res): Promise<void> => {
         );
       }
     }
-    // For prepaid: deduct one round from the member's balance
-    if (payment_method === "prepaid") {
+    // For prepaid with no add-ons due: deduct one round from the member's balance now.
+    // With add-ons due, the deduction happens on payment confirmation (webhook/verify).
+    if (payment_method === "prepaid" && !prepaidAddonsDue) {
       await clientQuery(client,
         `UPDATE club_members
            SET prepaid_rounds_used = prepaid_rounds_used + 1
@@ -976,11 +997,20 @@ router.post("/bookings", async (req, res): Promise<void> => {
         [splitAmount, user.id, splitAmount]
       );
     }
-    // For non-Stitch/non-pay_at_club payments (prepaid, wallet, voucher) the organizer is paid immediately
-    if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+    // For payments settled at creation (prepaid without add-ons, wallet, voucher)
+    // the organizer is paid immediately
+    if (!needsStitchLink) {
       await clientQuery(client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
         [effectivePaymentMethod, bookingId, user.id]
+      );
+    }
+    // Prepaid with add-ons: flag the organizer row so the webhook/verify path
+    // deducts the prepaid round and marks them 'prepaid_stitch' on confirmation.
+    if (prepaidAddonsDue) {
+      await clientQuery(client,
+        "UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?",
+        [bookingId, user.id]
       );
     }
     // Track booked players in the portal slot
@@ -991,13 +1021,13 @@ router.post("/bookings", async (req, res): Promise<void> => {
   });
 
   // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
-  if (effectivePaymentMethod !== "stitch" && effectivePaymentMethod !== "pay_at_club") {
+  if (!needsStitchLink) {
     fireInvoiceEmail(bookingId).catch(() => {});
     syncEventRegistration(bookingId).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
-  if (effectivePaymentMethod === "stitch" || effectivePaymentMethod === "pay_at_club") {
+  if (needsStitchLink) {
     const host = req.get("host") ?? "";
     try {
       const pr = await createStitchPayment({
@@ -1262,7 +1292,9 @@ router.post("/bookings/:id/resume-payment", async (req, res): Promise<void> => {
   if (booking.status !== "pending") {
     res.status(409).json({ message: `This booking is already ${booking.status}.` }); return;
   }
-  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club") {
+  // "prepaid" here means the greens are covered by a prepaid round but the
+  // add-ons (my_amount) still need to be settled online.
+  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club" && booking.payment_method !== "prepaid") {
     res.status(400).json({ message: "This booking cannot be paid online." }); return;
   }
 
@@ -1619,16 +1651,60 @@ router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => 
 
   // Payment verified — run the same logic the webhook would run. The status
   // guard keeps this idempotent and prevents resurrecting a cancelled booking.
-  await run("UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'", [bookingId]);
-  await run(
-    "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-    [bookingId, bookingId]
+  // Settlement only runs when THIS request claims the pending→confirmed
+  // transition; if the webhook won the race it has already settled the
+  // organizer row (and we must not overwrite e.g. 'prepaid_stitch' → 'stitch').
+  const claimed = await run(
+    "UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
+    [bookingId]
   );
-  fireInvoiceEmail(bookingId).catch(() => {});
-  syncEventRegistration(bookingId).catch(() => {});
+  if (claimed === 1) {
+    await settleOrganizerPaid(bookingId);
+    fireInvoiceEmail(bookingId).catch(() => {});
+    syncEventRegistration(bookingId).catch(() => {});
+  }
 
   res.json({ confirmed: true, status: "confirmed" });
 });
+
+// Mark the organizer's booking_players row paid after a verified Stitch payment.
+// If the organizer paid greens with a prepaid round and only the add-ons went
+// through Stitch (pending_prepaid_greens = 1), deduct the reserved prepaid round
+// now and record the combined method as 'prepaid_stitch'.
+async function settleOrganizerPaid(bookingId: number): Promise<void> {
+  const org = await row<any>(
+    `SELECT bp.user_id, bp.pending_prepaid_greens
+     FROM booking_players bp
+     JOIN bookings b ON b.id = bp.booking_id AND b.user_id = bp.user_id
+     WHERE bp.booking_id = ?`,
+    [bookingId]
+  );
+  if (org?.pending_prepaid_greens) {
+    const mem = await row<any>(
+      `SELECT cm.id FROM club_members cm
+       JOIN portal_tee_slots pts ON pts.club_id = cm.club_id
+       JOIN bookings b ON b.portal_slot_id = pts.id
+       WHERE b.id = ? AND cm.user_id = ? AND cm.status = 'active'`,
+      [bookingId, org.user_id]
+    );
+    if (mem) {
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [mem.id]
+      );
+    }
+    await run(
+      "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
+      [bookingId, org.user_id]
+    );
+  } else {
+    await run(
+      "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+      [bookingId, bookingId]
+    );
+  }
+}
 
 // Stitch Express webhook — server-to-server payment notification (via Svix).
 // Payload: { amount, id (payment id), status:"PAID", type, linkId, ... }. The
@@ -2011,10 +2087,7 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         [bookingId]
       );
       if (claimed === 1) {
-        await run(
-          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-          [bookingId, bookingId]
-        );
+        await settleOrganizerPaid(bookingId);
         // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
         fireInvoiceEmail(bookingId).catch(() => {});
         syncEventRegistration(bookingId).catch(() => {});

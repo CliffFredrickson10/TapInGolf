@@ -65178,7 +65178,7 @@ router4.post("/bookings/:id/pay", async (req, res) => {
     return;
   }
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
-  const { payment_method = "stitch" } = req.body;
+  const { payment_method = "stitch", secondary_payment_method } = req.body;
   if (payment_method === "prepaid") {
     const membership = await row(
       `SELECT id, prepaid_rounds, prepaid_rounds_used
@@ -65196,13 +65196,58 @@ router4.post("/bookings/:id/pay", async (req, res) => {
       res.status(402).json({ message: "You have no prepaid rounds remaining at this club." });
       return;
     }
-    await exec(
-      `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
-       WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
-      [membership.id]
+    const bpFull = await row(
+      `SELECT COALESCE(bp.player_driving_range_fee, 0) AS drf,
+              COALESCE(bp.player_club_hire_fee, 0)      AS chf,
+              COALESCE(bp.player_cart_fee, 0)           AS pcrt,
+              COALESCE(b.cart_fee, 0) / NULLIF(b.players, 0) AS cart_share
+       FROM booking_players bp
+       JOIN bookings b ON b.id = bp.booking_id
+       WHERE bp.booking_id = ? AND bp.user_id = ?`,
+      [id, user.id]
     );
-    await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
-    res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
+    const addonsAmount = bpFull ? parseFloat(bpFull.drf) + parseFloat(bpFull.chf) + parseFloat(bpFull.pcrt) + parseFloat(bpFull.cart_share || 0) : 0;
+    if (addonsAmount <= 5e-3) {
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [membership.id]
+      );
+      await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+      res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
+      return;
+    }
+    if (!secondary_payment_method) {
+      res.json({ needs_secondary: true, addons_amount: addonsAmount, rounds_remaining: remaining });
+      return;
+    }
+    if (secondary_payment_method === "wallet") {
+      const wallet = await row("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+      const balance = wallet ? parseFloat(wallet.balance) : 0;
+      if (balance < addonsAmount) {
+        res.status(402).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${addonsAmount.toFixed(2)} required for add-ons)` });
+        return;
+      }
+      await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [addonsAmount, user.id]);
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [membership.id]
+      );
+      await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid_wallet' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+      res.json({ success: true, method: "prepaid_wallet", amount, booking_id: id, rounds_remaining: remaining - 1 });
+      return;
+    }
+    await exec("UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    const host2 = req.get("host") ?? "";
+    const pr2 = await createStitchPayment({
+      amount: addonsAmount,
+      payerName: user.name,
+      payerEmail: user.email,
+      merchantReference: `${id}-player-${user.id}`,
+      redirectUrl: `https://${host2}/booking/success`
+    });
+    res.json({ payment_url: pr2.url, amount: addonsAmount, booking_id: id });
     return;
   }
   if (payment_method === "wallet") {
@@ -65960,10 +66005,35 @@ router4.post("/stitch/webhook", async (req, res) => {
     if (externalRef.includes("-player-")) {
       const userId = parseInt(externalRef.split("-player-")[1] ?? "0", 10);
       if (userId) {
-        await run(
-          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
+        const bpFlags = await row(
+          "SELECT pending_prepaid_greens FROM booking_players WHERE booking_id = ? AND user_id = ?",
           [bookingId, userId]
         );
+        if (bpFlags?.pending_prepaid_greens) {
+          const mem = await row(
+            `SELECT cm.id FROM club_members cm
+             JOIN portal_tee_slots pts ON pts.club_id = cm.club_id
+             JOIN bookings b ON b.portal_slot_id = pts.id
+             WHERE b.id = ? AND cm.user_id = ? AND cm.status = 'active'`,
+            [bookingId, userId]
+          );
+          if (mem) {
+            await exec(
+              `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+               WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+              [mem.id]
+            );
+          }
+          await run(
+            "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
+            [bookingId, userId]
+          );
+        } else {
+          await run(
+            "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
+            [bookingId, userId]
+          );
+        }
       }
     } else {
       const claimed = await run(
@@ -80996,6 +81066,7 @@ async function seedAdOfferings() {
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_cart_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS pending_prepaid_greens SMALLINT NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);
   await ddl(`ALTER TABLE knockout_rounds ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS bracket VARCHAR(20) NOT NULL DEFAULT 'main'`);

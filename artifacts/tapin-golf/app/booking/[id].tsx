@@ -83,6 +83,7 @@ export default function BookingDetailScreen() {
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [prepaidBalance, setPrepaidBalance] = useState<{ remaining: number } | null>(null);
   const [payError, setPayError]           = useState<string | null>(null);
+  const [secondaryPayMethod, setSecondaryPayMethod] = useState<"stitch" | "wallet">("stitch");
   const [vatPct, setVatPct]               = useState(15);
 
   interface ClubAddons {
@@ -201,12 +202,25 @@ export default function BookingDetailScreen() {
     setPayLoading(true);
     setPayError(null);
     try {
+      // For prepaid with add-ons, pass the secondary payment method
+      const body: Record<string, string> = { payment_method: payMethod };
+      if (payMethod === "prepaid") {
+        const greens = clubAddons ? clubAddons.base_amount - (clubAddons.cart_share ?? 0) : (booking.my_amount ?? 0);
+        const addons = (booking.my_amount ?? 0) - greens;
+        if (addons > 0.005) body.secondary_payment_method = secondaryPayMethod;
+      }
+
       const data = await apiFetch(`/bookings/${booking.id}/pay`, user.token, {
         method: "POST",
-        body: JSON.stringify({ payment_method: payMethod }),
+        body: JSON.stringify(body),
       });
-      if (payMethod === "wallet" || payMethod === "prepaid") {
-        // Settled immediately — refresh booking and update local balance
+
+      const settledImmediately =
+        payMethod === "wallet" ||
+        (payMethod === "prepaid" && !data.payment_url);
+
+      if (settledImmediately) {
+        // Settled immediately — refresh booking and update local balances
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         const fresh = await apiFetch(`/bookings/${booking.id}`, user.token);
         setBooking(fresh.booking);
@@ -215,6 +229,9 @@ export default function BookingDetailScreen() {
         }
         if (payMethod === "prepaid") {
           setPrepaidBalance(prev => prev && prev.remaining > 1 ? { remaining: prev.remaining - 1 } : null);
+          if (secondaryPayMethod === "wallet" && data.method === "prepaid_wallet") {
+            setWalletBalance(prev => prev !== null ? prev - (data.amount ?? 0) : null);
+          }
         }
       } else if (data.payment_url) {
         // Stitch — open payment WebView
@@ -530,66 +547,88 @@ export default function BookingDetailScreen() {
         {/* Pay your share */}
         {needsPayment && (
           <View style={[styles.payCard, { backgroundColor: colors.card, borderColor: colors.accent + "55" }]}>
-            <View style={styles.payCardHeader}>
-              <Ionicons name="card-outline" size={20} color={colors.accent} />
-              <Text style={[styles.payCardTitle, { color: colors.foreground }]}>Pay your share</Text>
-              <Text style={[styles.payCardAmount, { color: colors.accent }]}>
-                R{(booking.my_amount ?? 0).toFixed(2)}
-              </Text>
-            </View>
-
-            {/* Price breakdown */}
-            {clubAddons && (() => {
-              const cartShare   = clubAddons.cart_share ?? 0;
-              const greens      = clubAddons.base_amount - cartShare;
-              const drf         = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
-              const chf         = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
-              const pcrt        = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
-              const hasBreakdown = cartShare > 0 || drf > 0 || chf > 0 || pcrt > 0;
-              if (!hasBreakdown && greens === (booking.my_amount ?? 0)) return null;
+            {/* Header + breakdown together so they share the prepaid-split computed values */}
+            {(() => {
+              const cartShare  = clubAddons ? (clubAddons.cart_share ?? 0) : 0;
+              const greensAmt  = clubAddons ? clubAddons.base_amount - cartShare : (booking.my_amount ?? 0);
+              const addonsAmt  = (booking.my_amount ?? 0) - greensAmt;
+              const isPrepaid  = payMethod === "prepaid";
+              const hasSplit   = isPrepaid && addonsAmt > 0.005;
+              const displayAmt = hasSplit ? addonsAmt : (booking.my_amount ?? 0);
               return (
-                <View style={{ gap: 4, marginBottom: 2 }}>
-                  {greens > 0 && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Greens Fee</Text>
-                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{greens.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {cartShare > 0 && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (shared)</Text>
-                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{cartShare.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {pcrt > 0 && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (1 × R{(clubAddons.cart_price ?? 0).toFixed(2)})</Text>
-                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{pcrt.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {drf > 0 && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Driving Range Balls</Text>
-                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{drf.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  {chf > 0 && (
-                    <View style={styles.breakdownRow}>
-                      <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Club Hire</Text>
-                      <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{chf.toFixed(2)}</Text>
-                    </View>
-                  )}
-                  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
-                  <View style={styles.breakdownRow}>
-                    <Text style={[styles.breakdownLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>Total</Text>
-                    <Text style={[styles.breakdownVal, { color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 16 }]}>R{(booking.my_amount ?? 0).toFixed(2)}</Text>
+                <>
+                  <View style={styles.payCardHeader}>
+                    <Ionicons name="card-outline" size={20} color={colors.accent} />
+                    <Text style={[styles.payCardTitle, { color: colors.foreground }]}>Pay your share</Text>
+                    <Text style={[styles.payCardAmount, { color: colors.accent }]}>
+                      R{displayAmt.toFixed(2)}
+                    </Text>
                   </View>
-                  <View style={styles.breakdownRow}>
-                    <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
-                    <Text style={[styles.breakdownVal, { color: colors.mutedForeground }]}>R{((booking.my_amount ?? 0) * vatPct / (100 + vatPct)).toFixed(2)}</Text>
-                  </View>
-                  <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
-                </View>
+
+                  {/* Price breakdown */}
+                  {clubAddons && (() => {
+                    const drf  = includeDrivingRange ? (selectedRangeBallsPrice ?? clubAddons.range_balls_price ?? 0) : 0;
+                    const chf  = includeClubHire ? (clubAddons.club_hire_price ?? 0) : 0;
+                    const pcrt = includePlayerCart ? (clubAddons.cart_price ?? 0) : 0;
+                    const hasBreakdown = cartShare > 0 || drf > 0 || chf > 0 || pcrt > 0 || isPrepaid;
+                    if (!hasBreakdown && greensAmt === (booking.my_amount ?? 0)) return null;
+                    return (
+                      <View style={{ gap: 4, marginBottom: 2 }}>
+                        {isPrepaid ? (
+                          <View style={styles.breakdownRow}>
+                            <Text style={[styles.breakdownLabel, { color: colors.primary }]}>Greens Fee (Prepaid Round ✓)</Text>
+                            <Text style={[styles.breakdownVal, { color: colors.primary }]}>R0.00</Text>
+                          </View>
+                        ) : (
+                          greensAmt > 0 && (
+                            <View style={styles.breakdownRow}>
+                              <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Greens Fee</Text>
+                              <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{greensAmt.toFixed(2)}</Text>
+                            </View>
+                          )
+                        )}
+                        {cartShare > 0 && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (shared)</Text>
+                            <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{cartShare.toFixed(2)}</Text>
+                          </View>
+                        )}
+                        {pcrt > 0 && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Golf Cart (1 × R{(clubAddons.cart_price ?? 0).toFixed(2)})</Text>
+                            <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{pcrt.toFixed(2)}</Text>
+                          </View>
+                        )}
+                        {drf > 0 && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Driving Range Balls</Text>
+                            <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{drf.toFixed(2)}</Text>
+                          </View>
+                        )}
+                        {chf > 0 && (
+                          <View style={styles.breakdownRow}>
+                            <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Club Hire</Text>
+                            <Text style={[styles.breakdownVal, { color: colors.foreground }]}>+R{chf.toFixed(2)}</Text>
+                          </View>
+                        )}
+                        <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
+                        <View style={styles.breakdownRow}>
+                          <Text style={[styles.breakdownLabel, { color: colors.foreground, fontFamily: "Inter_700Bold" }]}>
+                            {hasSplit ? "Remaining to Pay" : "Total"}
+                          </Text>
+                          <Text style={[styles.breakdownVal, { color: colors.primary, fontFamily: "Inter_700Bold", fontSize: 16 }]}>
+                            R{displayAmt.toFixed(2)}
+                          </Text>
+                        </View>
+                        <View style={styles.breakdownRow}>
+                          <Text style={[styles.breakdownLabel, { color: colors.mutedForeground }]}>Incl. VAT ({vatPct}%)</Text>
+                          <Text style={[styles.breakdownVal, { color: colors.mutedForeground }]}>R{(displayAmt * vatPct / (100 + vatPct)).toFixed(2)}</Text>
+                        </View>
+                        <View style={[styles.divider, { backgroundColor: colors.border, marginVertical: 2 }]} />
+                      </View>
+                    );
+                  })()}
+                </>
               );
             })()}
 
@@ -774,6 +813,56 @@ export default function BookingDetailScreen() {
               </TouchableOpacity>
             )}
 
+            {/* Secondary payment method — shown when prepaid is selected and there are add-ons to pay */}
+            {payMethod === "prepaid" && clubAddons && (() => {
+              const cartShare = clubAddons.cart_share ?? 0;
+              const greensAmt = clubAddons.base_amount - cartShare;
+              const addonsAmt = (booking.my_amount ?? 0) - greensAmt;
+              if (addonsAmt <= 0.005) return null;
+              return (
+                <View style={{ gap: 6, marginTop: 4 }}>
+                  <Text style={[styles.payOptionLabel, { color: colors.foreground, marginBottom: 0 }]}>
+                    Pay R{addonsAmt.toFixed(2)} add-ons via:
+                  </Text>
+                  <TouchableOpacity
+                    style={[styles.payOption, {
+                      backgroundColor: secondaryPayMethod === "stitch" ? colors.primaryLight : colors.background,
+                      borderColor:     secondaryPayMethod === "stitch" ? colors.primary : colors.border,
+                    }]}
+                    onPress={() => { Haptics.selectionAsync(); setSecondaryPayMethod("stitch"); }}
+                  >
+                    <Ionicons name="card-outline" size={20} color={secondaryPayMethod === "stitch" ? colors.primary : colors.mutedForeground} />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Stitch</Text>
+                      <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
+                    </View>
+                    {secondaryPayMethod === "stitch" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                  </TouchableOpacity>
+                  {walletBalance !== null && (
+                    <TouchableOpacity
+                      style={[styles.payOption, {
+                        backgroundColor: secondaryPayMethod === "wallet" ? colors.primaryLight : colors.background,
+                        borderColor:     secondaryPayMethod === "wallet" ? colors.primary : colors.border,
+                      }]}
+                      onPress={() => { Haptics.selectionAsync(); setSecondaryPayMethod("wallet"); }}
+                    >
+                      <Ionicons name="wallet-outline" size={20} color={secondaryPayMethod === "wallet" ? colors.primary : colors.mutedForeground} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Wallet</Text>
+                        <Text style={[styles.payOptionSub, {
+                          color: walletBalance >= addonsAmt ? colors.primary : "#e53935",
+                        }]}>
+                          R{walletBalance.toFixed(2)} available
+                          {walletBalance < addonsAmt ? " — insufficient" : ""}
+                        </Text>
+                      </View>
+                      {secondaryPayMethod === "wallet" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })()}
+
             {/* Insufficient wallet notice */}
             {payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0) && (
               <View style={[styles.payOption, { backgroundColor: "#fff3e0", borderColor: colors.warning }]}>
@@ -789,22 +878,39 @@ export default function BookingDetailScreen() {
               <Text style={{ color: "#e53935", fontSize: 13, marginTop: 4 }}>{payError}</Text>
             )}
 
-            <TouchableOpacity
-              style={[styles.payConfirmBtn, {
-                backgroundColor: (payLoading || (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0)))
-                  ? colors.muted : colors.accent,
-              }]}
-              onPress={handlePayShare}
-              disabled={payLoading || (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0))}
-            >
-              <Text style={styles.payConfirmText}>
-                {payLoading
-                  ? "Processing…"
-                  : payMethod === "prepaid"
-                    ? "Use Prepaid Round"
-                    : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`}
-              </Text>
-            </TouchableOpacity>
+            {/* Pay / confirm button */}
+            {(() => {
+              const cartShare = clubAddons ? (clubAddons.cart_share ?? 0) : 0;
+              const greensAmt = clubAddons ? clubAddons.base_amount - cartShare : (booking.my_amount ?? 0);
+              const addonsAmt = (booking.my_amount ?? 0) - greensAmt;
+              const hasSplit  = payMethod === "prepaid" && addonsAmt > 0.005;
+              const walletInsufficient =
+                (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0)) ||
+                (hasSplit && secondaryPayMethod === "wallet" && walletBalance !== null && walletBalance < addonsAmt);
+              let btnLabel = `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`;
+              if (payMethod === "prepaid") {
+                if (hasSplit) {
+                  btnLabel = secondaryPayMethod === "wallet"
+                    ? `Pay R${addonsAmt.toFixed(2)} via Wallet + Prepaid Round`
+                    : `Pay R${addonsAmt.toFixed(2)} via Stitch + Prepaid Round`;
+                } else {
+                  btnLabel = "Use Prepaid Round";
+                }
+              }
+              return (
+                <TouchableOpacity
+                  style={[styles.payConfirmBtn, {
+                    backgroundColor: (payLoading || walletInsufficient) ? colors.muted : colors.accent,
+                  }]}
+                  onPress={handlePayShare}
+                  disabled={payLoading || walletInsufficient}
+                >
+                  <Text style={styles.payConfirmText}>
+                    {payLoading ? "Processing…" : btnLabel}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })()}
           </View>
         )}
 

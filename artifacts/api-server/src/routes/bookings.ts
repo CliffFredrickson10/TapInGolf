@@ -1126,7 +1126,7 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
   if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
 
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
-  const { payment_method = "stitch" } = req.body as { payment_method?: string };
+  const { payment_method = "stitch", secondary_payment_method } = req.body as { payment_method?: string; secondary_payment_method?: string };
 
   // ── Prepaid rounds payment ─────────────────────────────────────────────────
   if (payment_method === "prepaid") {
@@ -1144,13 +1144,72 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
     if (remaining <= 0) {
       res.status(402).json({ message: "You have no prepaid rounds remaining at this club." }); return;
     }
-    await exec(
-      `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
-       WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
-      [membership.id]
+
+    // Calculate add-ons amount server-side — prepaid covers the greens fee only.
+    // add-ons = cart share from original booking + any player-added cart/range/hire fees.
+    const bpFull = await row<any>(
+      `SELECT COALESCE(bp.player_driving_range_fee, 0) AS drf,
+              COALESCE(bp.player_club_hire_fee, 0)      AS chf,
+              COALESCE(bp.player_cart_fee, 0)           AS pcrt,
+              COALESCE(b.cart_fee, 0) / NULLIF(b.players, 0) AS cart_share
+       FROM booking_players bp
+       JOIN bookings b ON b.id = bp.booking_id
+       WHERE bp.booking_id = ? AND bp.user_id = ?`,
+      [id, user.id]
     );
-    await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
-    res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
+    const addonsAmount = bpFull
+      ? parseFloat(bpFull.drf) + parseFloat(bpFull.chf) + parseFloat(bpFull.pcrt) + parseFloat(bpFull.cart_share || 0)
+      : 0;
+
+    // No add-ons — prepaid covers the full amount immediately
+    if (addonsAmount <= 0.005) {
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [membership.id]
+      );
+      await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+      res.json({ success: true, method: "prepaid", amount, booking_id: id, rounds_remaining: remaining - 1 });
+      return;
+    }
+
+    // Add-ons present — secondary payment required for the remainder
+    if (!secondary_payment_method) {
+      // Client didn't specify secondary yet — return the amounts so the UI can prompt
+      res.json({ needs_secondary: true, addons_amount: addonsAmount, rounds_remaining: remaining });
+      return;
+    }
+
+    if (secondary_payment_method === "wallet") {
+      const wallet = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+      const balance = wallet ? parseFloat(wallet.balance) : 0;
+      if (balance < addonsAmount) {
+        res.status(402).json({ message: `Insufficient wallet balance (R${balance.toFixed(2)} available, R${addonsAmount.toFixed(2)} required for add-ons)` });
+        return;
+      }
+      await exec("UPDATE wallets SET balance = balance - ? WHERE user_id = ?", [addonsAmount, user.id]);
+      await exec(
+        `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+         WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+        [membership.id]
+      );
+      await exec("UPDATE booking_players SET paid = 1, payment_method = 'prepaid_wallet' WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+      res.json({ success: true, method: "prepaid_wallet", amount, booking_id: id, rounds_remaining: remaining - 1 });
+      return;
+    }
+
+    // secondary = "stitch" — create Stitch payment for add-ons only;
+    // pending_prepaid_greens = 1 signals the webhook to deduct the prepaid round on confirmation.
+    await exec("UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
+    const host2 = req.get("host") ?? "";
+    const pr2 = await createStitchPayment({
+      amount:            addonsAmount,
+      payerName:         user.name,
+      payerEmail:        user.email,
+      merchantReference: `${id}-player-${user.id}`,
+      redirectUrl:       `https://${host2}/booking/success`,
+    });
+    res.json({ payment_url: pr2.url, amount: addonsAmount, booking_id: id });
     return;
   }
 
@@ -1910,10 +1969,37 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
     if (externalRef.includes("-player-")) {
       const userId = parseInt(externalRef.split("-player-")[1] ?? "0", 10);
       if (userId) {
-        await run(
-          "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
+        // Check whether this player used prepaid for greens + Stitch for add-ons
+        const bpFlags = await row<any>(
+          "SELECT pending_prepaid_greens FROM booking_players WHERE booking_id = ? AND user_id = ?",
           [bookingId, userId]
         );
+        if (bpFlags?.pending_prepaid_greens) {
+          // Deduct the reserved prepaid round and mark fully paid
+          const mem = await row<any>(
+            `SELECT cm.id FROM club_members cm
+             JOIN portal_tee_slots pts ON pts.club_id = cm.club_id
+             JOIN bookings b ON b.portal_slot_id = pts.id
+             WHERE b.id = ? AND cm.user_id = ? AND cm.status = 'active'`,
+            [bookingId, userId]
+          );
+          if (mem) {
+            await exec(
+              `UPDATE club_members SET prepaid_rounds_used = prepaid_rounds_used + 1
+               WHERE id = ? AND prepaid_rounds > prepaid_rounds_used`,
+              [mem.id]
+            );
+          }
+          await run(
+            "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
+            [bookingId, userId]
+          );
+        } else {
+          await run(
+            "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
+            [bookingId, userId]
+          );
+        }
       }
     } else {
       // Idempotent + state-safe: only the delivery that flips pending→confirmed

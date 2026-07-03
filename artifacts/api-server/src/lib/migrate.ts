@@ -1766,6 +1766,7 @@ async function seedAdOfferings(): Promise<void> {
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_driving_range_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_club_hire_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
   await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS player_cart_fee DECIMAL(10,2) NOT NULL DEFAULT 0`);
+  await ddl(`ALTER TABLE booking_players ADD COLUMN IF NOT EXISTS pending_prepaid_greens SMALLINT NOT NULL DEFAULT 0`);
 
   // ── Consolation bracket (Plate Flight) ───────────────────────────────────
   await ddl(`ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS consolation_enabled BOOLEAN NOT NULL DEFAULT FALSE`);

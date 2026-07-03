@@ -78249,14 +78249,14 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
     const roundId = parseInt(req.params.id);
     const holeNum = parseInt(req.params.holeNum);
     const rounds = await query(
-      "SELECT playing_handicap, format FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
+      "SELECT playing_handicap, format, opponent_playing_hcp, partner_playing_hcp, opponent2_playing_hcp FROM scoring_rounds WHERE id = ? AND user_id = ? AND status = 'active'",
       [roundId, user.id]
     );
     if (rounds.length === 0) {
       res.status(404).json({ message: "Active round not found" });
       return;
     }
-    const { playing_handicap, format: roundFormat } = rounds[0];
+    const { playing_handicap, format: roundFormat, opponent_playing_hcp, partner_playing_hcp, opponent2_playing_hcp } = rounds[0];
     const { par, strokeIndex, grossScore, isNr = false, players } = req.body;
     if (!par || !strokeIndex) {
       res.status(400).json({ message: "par and strokeIndex required" });
@@ -78286,14 +78286,24 @@ router23.put("/scoring/rounds/:id/holes/:holeNum", async (req, res) => {
       `, [roundId, holeNum, par, strokeIndex, effectiveGross, netScore, pts]);
     }
     if (Array.isArray(players)) {
+      const BB_FMTS = ["betterball_match_play", "betterball_gross_match_play", "fourball_stableford_match_play"];
+      const isBBFmt = BB_FMTS.includes(roundFormat ?? "");
       for (let i = 0; i < players.length; i++) {
         const p = players[i];
+        const pRawGross = p.grossScore ?? null;
+        let pEffGross = pRawGross;
+        if (pRawGross != null && !p.isNr) {
+          const pHcp = isBBFmt ? i === 0 ? Number(partner_playing_hcp ?? 0) : i === 1 ? Number(opponent_playing_hcp ?? 0) : Number(opponent2_playing_hcp ?? 0) : i === 0 ? Number(opponent_playing_hcp ?? 0) : Number(opponent2_playing_hcp ?? 0);
+          const pHa = getHA(strokeIndex, pHcp);
+          const pMax = getStablefordMax(roundFormat ?? "individual_stableford", par, pHa);
+          pEffGross = pMax != null ? Math.min(pRawGross, pMax) : pRawGross;
+        }
         await exec(`
           INSERT INTO scoring_player_holes (round_id, player_index, player_name, hole_number, gross_score, is_nr)
           VALUES (?, ?, ?, ?, ?, ?)
           ON CONFLICT (round_id, player_index, hole_number) DO UPDATE
             SET gross_score = EXCLUDED.gross_score, is_nr = EXCLUDED.is_nr, player_name = EXCLUDED.player_name
-        `, [roundId, i, p.name ?? null, holeNum, p.grossScore ?? null, p.isNr ? 1 : 0]);
+        `, [roundId, i, p.name ?? null, holeNum, pEffGross, p.isNr ? 1 : 0]);
       }
     }
     await run(`
@@ -78370,6 +78380,7 @@ router23.patch("/scoring/rounds/:id/handicaps", async (req, res) => {
       "UPDATE scoring_rounds SET playing_handicap = ?, course_handicap = ?, opponent_playing_hcp = ?, partner_playing_hcp = ?, opponent2_playing_hcp = ? WHERE id = ?",
       [newPlayingHcp, newPlayingHcp, newOppHcp, newPartnerHcp, newOpp2Hcp, roundId]
     );
+    const fmt = round.format ?? "individual_stableford";
     if (newPlayingHcp !== Number(round.playing_handicap)) {
       const holeRows = await query(
         "SELECT hole_number, par, stroke_index, gross_score FROM scoring_holes WHERE round_id = ? AND is_nr = 0 AND gross_score IS NOT NULL",
@@ -78377,7 +78388,6 @@ router23.patch("/scoring/rounds/:id/handicaps", async (req, res) => {
       );
       for (const h of holeRows) {
         const ha = getHA(h.stroke_index, newPlayingHcp);
-        const fmt = round.format ?? "individual_stableford";
         const stablefordMax = getStablefordMax(fmt, h.par, ha);
         const effectiveGross = stablefordMax != null ? Math.min(h.gross_score, stablefordMax) : h.gross_score;
         const netScore = effectiveGross - ha;
@@ -78386,6 +78396,29 @@ router23.patch("/scoring/rounds/:id/handicaps", async (req, res) => {
           "UPDATE scoring_holes SET gross_score = ?, net_score = ?, stableford_points = ? WHERE round_id = ? AND hole_number = ?",
           [effectiveGross, netScore, pts, roundId, h.hole_number]
         );
+      }
+    }
+    const anyOppHcpChanged = newOppHcp !== Number(round.opponent_playing_hcp) || newPartnerHcp !== Number(round.partner_playing_hcp) || newOpp2Hcp !== Number(round.opponent2_playing_hcp);
+    if (anyOppHcpChanged) {
+      const BB_FMTS = ["betterball_match_play", "betterball_gross_match_play", "fourball_stableford_match_play"];
+      const isBBFmt = BB_FMTS.includes(fmt);
+      const phRows = await query(`
+        SELECT sph.player_index, sph.hole_number, sph.gross_score, sh.par, sh.stroke_index
+        FROM scoring_player_holes sph
+        JOIN scoring_holes sh ON sh.round_id = sph.round_id AND sh.hole_number = sph.hole_number
+        WHERE sph.round_id = ? AND sph.is_nr = 0 AND sph.gross_score IS NOT NULL
+      `, [roundId]);
+      for (const ph of phRows) {
+        const pHcp = isBBFmt ? ph.player_index === 0 ? Number(newPartnerHcp ?? 0) : ph.player_index === 1 ? Number(newOppHcp ?? 0) : Number(newOpp2Hcp ?? 0) : ph.player_index === 0 ? Number(newOppHcp ?? 0) : Number(newOpp2Hcp ?? 0);
+        const pHa = getHA(ph.stroke_index, pHcp);
+        const pMax = getStablefordMax(fmt, ph.par, pHa);
+        const pEff = pMax != null ? Math.min(ph.gross_score, pMax) : ph.gross_score;
+        if (pEff !== ph.gross_score) {
+          await exec(
+            "UPDATE scoring_player_holes SET gross_score = ? WHERE round_id = ? AND player_index = ? AND hole_number = ?",
+            [pEff, roundId, ph.player_index, ph.hole_number]
+          );
+        }
       }
     }
     res.json({ ok: true });

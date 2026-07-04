@@ -64,6 +64,14 @@ export async function materializeStandingHolds(): Promise<number> {
            SELECT 1 FROM standing_holds sh
            WHERE sh.slot_id = pts.id AND sh.user_id = srm.user_id
          )
+         -- skip slots superseded by an active tournament slot at the same time
+         -- (the public tee sheet hides them, so a hold could never be confirmed)
+         AND NOT EXISTS (
+           SELECT 1 FROM portal_tee_slots ev
+           WHERE ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
+             AND ev.event_id IS NOT NULL AND ev.is_active = 1
+             AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+         )
        ORDER BY pts.date ASC, pts.tee_time ASC`
     );
 
@@ -137,6 +145,45 @@ export async function releaseExpiredStandingHolds(): Promise<number> {
   return expired.length;
 }
 
+// Release holds whose slot is no longer bookable: the club deactivated the
+// slot, or a tournament slot now occupies the same time (the public tee sheet
+// hides the general slot in favour of the event slot, so the member could
+// never confirm). Members get a "released" notice instead of a dead hold.
+export async function releaseOrphanedStandingHolds(): Promise<number> {
+  const orphaned = await query<any>(
+    `UPDATE standing_holds sh
+     SET status = 'released'
+     FROM portal_tee_slots pts, clubs c, users u
+     WHERE sh.status = 'held'
+       AND pts.id = sh.slot_id AND c.id = pts.club_id AND u.id = sh.user_id
+       AND (
+         pts.is_active = 0
+         OR EXISTS (
+           SELECT 1 FROM portal_tee_slots ev
+           WHERE ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
+             AND ev.event_id IS NOT NULL AND ev.is_active = 1
+             AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+         )
+       )
+     RETURNING sh.id, sh.user_id, sh.slot_id, pts.date, pts.tee_time, c.name AS club_name, c.id AS club_id, u.push_token`
+  );
+  if (!orphaned.length) return 0;
+
+  for (const e of orphaned) {
+    const dateStr = fmtDate(e.date);
+    const timeStr = String(e.tee_time).slice(0, 5);
+    await notify(
+      e.user_id,
+      e.push_token,
+      "standing_tee_time_released",
+      "Standing tee time released",
+      `Your reserved tee time at ${e.club_name} — ${dateStr} at ${timeStr} — is no longer available (the club closed this slot or scheduled a tournament) and has been released.`,
+      { type: "standing_tee_time_released", slot_id: e.slot_id, club_id: e.club_id, date: dateStr, tee_time: timeStr }
+    );
+  }
+  return orphaned.length;
+}
+
 // Holds confirmed against a booking that was later cancelled revert to 'held'
 // (if the deadline hasn't passed) so the seat is protected again, or 'released'.
 export async function revertHoldsForCancelledBookings(): Promise<void> {
@@ -152,9 +199,10 @@ export async function revertHoldsForCancelledBookings(): Promise<void> {
 
 export async function runStandingReservationsOnce(): Promise<{ created: number; released: number }> {
   await revertHoldsForCancelledBookings();
+  const orphaned = await releaseOrphanedStandingHolds();
   const created = await materializeStandingHolds();
   const released = await releaseExpiredStandingHolds();
-  return { created, released };
+  return { created, released: released + orphaned };
 }
 
 export function startStandingReservationsWorker(): void {

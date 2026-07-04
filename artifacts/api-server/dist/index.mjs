@@ -70278,6 +70278,14 @@ async function materializeStandingHolds() {
            SELECT 1 FROM standing_holds sh
            WHERE sh.slot_id = pts.id AND sh.user_id = srm.user_id
          )
+         -- skip slots superseded by an active tournament slot at the same time
+         -- (the public tee sheet hides them, so a hold could never be confirmed)
+         AND NOT EXISTS (
+           SELECT 1 FROM portal_tee_slots ev
+           WHERE ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
+             AND ev.event_id IS NOT NULL AND ev.is_active = 1
+             AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+         )
        ORDER BY pts.date ASC, pts.tee_time ASC`
     );
     let n = 0;
@@ -70339,6 +70347,39 @@ async function releaseExpiredStandingHolds() {
   }
   return expired.length;
 }
+async function releaseOrphanedStandingHolds() {
+  const orphaned = await query(
+    `UPDATE standing_holds sh
+     SET status = 'released'
+     FROM portal_tee_slots pts, clubs c, users u
+     WHERE sh.status = 'held'
+       AND pts.id = sh.slot_id AND c.id = pts.club_id AND u.id = sh.user_id
+       AND (
+         pts.is_active = 0
+         OR EXISTS (
+           SELECT 1 FROM portal_tee_slots ev
+           WHERE ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
+             AND ev.event_id IS NOT NULL AND ev.is_active = 1
+             AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+         )
+       )
+     RETURNING sh.id, sh.user_id, sh.slot_id, pts.date, pts.tee_time, c.name AS club_name, c.id AS club_id, u.push_token`
+  );
+  if (!orphaned.length) return 0;
+  for (const e of orphaned) {
+    const dateStr = fmtDate3(e.date);
+    const timeStr = String(e.tee_time).slice(0, 5);
+    await notify(
+      e.user_id,
+      e.push_token,
+      "standing_tee_time_released",
+      "Standing tee time released",
+      `Your reserved tee time at ${e.club_name} \u2014 ${dateStr} at ${timeStr} \u2014 is no longer available (the club closed this slot or scheduled a tournament) and has been released.`,
+      { type: "standing_tee_time_released", slot_id: e.slot_id, club_id: e.club_id, date: dateStr, tee_time: timeStr }
+    );
+  }
+  return orphaned.length;
+}
 async function revertHoldsForCancelledBookings() {
   await run(`
     UPDATE standing_holds sh
@@ -70351,9 +70392,10 @@ async function revertHoldsForCancelledBookings() {
 }
 async function runStandingReservationsOnce() {
   await revertHoldsForCancelledBookings();
+  const orphaned = await releaseOrphanedStandingHolds();
   const created = await materializeStandingHolds();
   const released = await releaseExpiredStandingHolds();
-  return { created, released };
+  return { created, released: released + orphaned };
 }
 function startStandingReservationsWorker() {
   const tick = async () => {
@@ -81590,17 +81632,34 @@ async function applyLateAlters() {
     CREATE TABLE IF NOT EXISTS standing_holds (
       id             SERIAL PRIMARY KEY,
       reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
-      slot_id        INT NOT NULL,
+      slot_id        INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
       user_id        INT NOT NULL,
       status         VARCHAR(12) NOT NULL DEFAULT 'held',
       confirm_by     TIMESTAMP NOT NULL,
-      booking_id     INT,
+      booking_id     INT REFERENCES bookings(id) ON DELETE SET NULL,
       created_at     TIMESTAMP DEFAULT NOW(),
       UNIQUE (slot_id, user_id)
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_slot_status ON standing_holds (slot_id, status)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_user ON standing_holds (user_id, status)");
+  await ddl(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'standing_holds_slot_id_fkey') THEN
+        DELETE FROM standing_holds sh WHERE NOT EXISTS (SELECT 1 FROM portal_tee_slots p WHERE p.id = sh.slot_id);
+        ALTER TABLE standing_holds
+          ADD CONSTRAINT standing_holds_slot_id_fkey
+          FOREIGN KEY (slot_id) REFERENCES portal_tee_slots(id) ON DELETE CASCADE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'standing_holds_booking_id_fkey') THEN
+        UPDATE standing_holds sh SET booking_id = NULL
+          WHERE booking_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.id = sh.booking_id);
+        ALTER TABLE standing_holds
+          ADD CONSTRAINT standing_holds_booking_id_fkey
+          FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL;
+      END IF;
+    END $$
+  `);
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (
       id                SERIAL PRIMARY KEY,

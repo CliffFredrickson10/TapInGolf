@@ -1732,17 +1732,37 @@ async function applyLateAlters() {
     CREATE TABLE IF NOT EXISTS standing_holds (
       id             SERIAL PRIMARY KEY,
       reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
-      slot_id        INT NOT NULL,
+      slot_id        INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
       user_id        INT NOT NULL,
       status         VARCHAR(12) NOT NULL DEFAULT 'held',
       confirm_by     TIMESTAMP NOT NULL,
-      booking_id     INT,
+      booking_id     INT REFERENCES bookings(id) ON DELETE SET NULL,
       created_at     TIMESTAMP DEFAULT NOW(),
       UNIQUE (slot_id, user_id)
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_slot_status ON standing_holds (slot_id, status)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_user ON standing_holds (user_id, status)");
+  // Backfill FKs for databases created before they were added: purge dangling
+  // rows first, then attach the constraints (slot deletion cascades holds away;
+  // booking deletion just detaches the hold).
+  await ddl(`
+    DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'standing_holds_slot_id_fkey') THEN
+        DELETE FROM standing_holds sh WHERE NOT EXISTS (SELECT 1 FROM portal_tee_slots p WHERE p.id = sh.slot_id);
+        ALTER TABLE standing_holds
+          ADD CONSTRAINT standing_holds_slot_id_fkey
+          FOREIGN KEY (slot_id) REFERENCES portal_tee_slots(id) ON DELETE CASCADE;
+      END IF;
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'standing_holds_booking_id_fkey') THEN
+        UPDATE standing_holds sh SET booking_id = NULL
+          WHERE booking_id IS NOT NULL AND NOT EXISTS (SELECT 1 FROM bookings b WHERE b.id = sh.booking_id);
+        ALTER TABLE standing_holds
+          ADD CONSTRAINT standing_holds_booking_id_fkey
+          FOREIGN KEY (booking_id) REFERENCES bookings(id) ON DELETE SET NULL;
+      END IF;
+    END $$
+  `);
 
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (

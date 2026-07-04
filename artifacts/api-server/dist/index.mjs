@@ -75046,6 +75046,60 @@ router14.put("/portal/scorecard", requireClubAuth2, async (req, res) => {
   );
   res.json({ success: true });
 });
+var LOW_DATA_THRESHOLD = 10;
+router14.get("/portal/scorecard/hole-difficulty", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const scorecard = await row("SELECT holes FROM club_scorecards WHERE club_id = $1", [club.id]);
+  const configHoles = Array.isArray(scorecard?.holes) ? scorecard.holes : DEFAULT_HOLES;
+  const configByNumber = /* @__PURE__ */ new Map();
+  for (const h of configHoles) configByNumber.set(Number(h.number), h);
+  const agg = await query(
+    `SELECT sh.hole_number,
+            COUNT(*)::int                       AS score_count,
+            AVG(sh.gross_score)::float          AS avg_gross,
+            AVG(sh.gross_score - sh.par)::float AS avg_over_par
+       FROM scoring_holes sh
+       JOIN scoring_rounds sr ON sr.id = sh.round_id
+      WHERE sr.club_id = $1
+        AND sr.status = 'complete'
+        AND COALESCE(sh.is_nr, 0) = 0
+        AND sh.gross_score IS NOT NULL AND sh.gross_score > 0
+        AND sh.par IS NOT NULL AND sh.par > 0
+      GROUP BY sh.hole_number`,
+    [club.id]
+  );
+  const aggByNumber = /* @__PURE__ */ new Map();
+  for (const r of agg) aggByNumber.set(Number(r.hole_number), r);
+  const totalRounds = await row(
+    `SELECT COUNT(*)::int AS cnt FROM scoring_rounds WHERE club_id = $1 AND status = 'complete'`,
+    [club.id]
+  );
+  const holeNumbers = configHoles.map((h) => Number(h.number)).sort((a, b) => a - b);
+  const rows = holeNumbers.map((num) => {
+    const cfg = configByNumber.get(num);
+    const a = aggByNumber.get(num);
+    const scoreCount = a ? Number(a.score_count) : 0;
+    return {
+      number: num,
+      par: cfg?.par ?? null,
+      official_stroke_index: cfg?.stroke_index ?? null,
+      score_count: scoreCount,
+      avg_gross: a ? Number(a.avg_gross) : null,
+      avg_over_par: a ? Number(a.avg_over_par) : null,
+      low_data: scoreCount > 0 && scoreCount < LOW_DATA_THRESHOLD,
+      difficulty_rank: null
+    };
+  });
+  const ranked = rows.filter((r) => r.avg_over_par != null).sort((a, b) => b.avg_over_par - a.avg_over_par || b.avg_gross - a.avg_gross);
+  ranked.forEach((r, i) => {
+    r.difficulty_rank = i + 1;
+  });
+  res.json({
+    holes: rows,
+    total_rounds: Number(totalRounds?.cnt ?? 0),
+    low_data_threshold: LOW_DATA_THRESHOLD
+  });
+});
 router14.get("/portal/local-rules", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const existing = await row("SELECT rules, course_ratings, footer_notes FROM club_local_rules WHERE club_id = $1", [club.id]);

@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useReadOnly } from "@/context/ReadOnlyContext";
 import {
   Save, Plus, Trash2, GripVertical, ClipboardList, BookOpen,
-  ChevronDown, ChevronUp, Settings2, Users,
+  ChevronDown, ChevronUp, Settings2, Users, BarChart3, AlertTriangle,
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 
@@ -44,6 +44,17 @@ interface CourseRating {
   color: string;
   course_rating: string;
   slope_rating: string;
+}
+
+interface HoleDifficulty {
+  number: number;
+  par: number | null;
+  official_stroke_index: number | null;
+  score_count: number;
+  avg_gross: number | null;
+  avg_over_par: number | null;
+  low_data: boolean;
+  difficulty_rank: number | null;
 }
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -237,8 +248,14 @@ export default function Scorecard() {
   const [lrSaving, setLrSaving]       = useState(false);
 
   // UI state
-  const [activeTab, setActiveTab]     = useState<"scorecard" | "local_rules">("scorecard");
+  const [activeTab, setActiveTab]     = useState<"scorecard" | "local_rules" | "difficulty">("scorecard");
   const [showTeeConfig, setShowTeeConfig] = useState(false);
+
+  // Hole difficulty (data-driven)
+  const [difficulty, setDifficulty]   = useState<HoleDifficulty[]>([]);
+  const [totalRounds, setTotalRounds] = useState(0);
+  const [lowDataThreshold, setLowDataThreshold] = useState(10);
+  const [diffLoading, setDiffLoading] = useState(true);
 
   // ── Loaders ────────────────────────────────────────────────────────────────
 
@@ -259,6 +276,15 @@ export default function Scorecard() {
       })
       .catch(() => {})
       .finally(() => setLrLoading(false));
+
+    api<{ holes: HoleDifficulty[]; total_rounds: number; low_data_threshold: number }>("/api/portal/scorecard/hole-difficulty")
+      .then(d => {
+        setDifficulty(d.holes ?? []);
+        setTotalRounds(d.total_rounds ?? 0);
+        setLowDataThreshold(d.low_data_threshold ?? 10);
+      })
+      .catch(() => {})
+      .finally(() => setDiffLoading(false));
   }, []);
 
   // ── Savers ─────────────────────────────────────────────────────────────────
@@ -685,7 +711,7 @@ export default function Scorecard() {
           <p className="text-sm text-muted-foreground mt-1">Configure your course scorecard and local rules.</p>
         </div>
         <div className="flex gap-2">
-          {activeTab === "scorecard" ? (
+          {activeTab === "scorecard" && (
             <Button
               onClick={saveScorecard}
               disabled={scSaving || readOnly}
@@ -694,7 +720,8 @@ export default function Scorecard() {
               <Save className="h-4 w-4" />
               {scSaving ? "Saving…" : "Save Scorecard"}
             </Button>
-          ) : (
+          )}
+          {activeTab === "local_rules" && (
             <Button
               onClick={saveLocalRules}
               disabled={lrSaving || readOnly}
@@ -710,8 +737,9 @@ export default function Scorecard() {
       {/* Tab selector */}
       <div className="flex border-b border-border">
         {([
-          { key: "scorecard",   label: "Scorecard",   icon: ClipboardList },
-          { key: "local_rules", label: "Local Rules",  icon: BookOpen },
+          { key: "scorecard",   label: "Scorecard",       icon: ClipboardList },
+          { key: "local_rules", label: "Local Rules",     icon: BookOpen },
+          { key: "difficulty",  label: "Hole Difficulty", icon: BarChart3 },
         ] as const).map(({ key, label, icon: Icon }) => (
           <button
             key={key}
@@ -1280,6 +1308,127 @@ export default function Scorecard() {
                 rows={4}
                 className="resize-y text-sm font-mono"
               />
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {/* ── HOLE DIFFICULTY TAB ────────────────────────────────────────────── */}
+      {activeTab === "difficulty" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <BarChart3 className="h-4 w-4 text-[#1a5c38]" />
+                Data-Driven Hole Difficulty
+              </CardTitle>
+              <p className="text-xs text-muted-foreground">
+                Difficulty is calculated from every completed round played at this course — the hole
+                players score highest over par ranks hardest (1). It updates automatically as more
+                scores come in. Based on <strong>{totalRounds.toLocaleString()}</strong> completed
+                {totalRounds === 1 ? " round" : " rounds"}.
+              </p>
+            </CardHeader>
+            <CardContent>
+              {diffLoading ? (
+                <div className="text-center py-10 text-muted-foreground text-sm">Loading…</div>
+              ) : totalRounds === 0 ? (
+                <div className="text-center py-10 text-muted-foreground text-sm">
+                  No completed rounds have been recorded at this course yet. Difficulty ratings will
+                  appear here once players start submitting scores.
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-x-auto">
+                    <table className="w-full border-collapse text-sm">
+                      <thead>
+                        <tr className="bg-muted/50">
+                          <th className="border border-border px-3 py-2 text-left font-semibold">Hole</th>
+                          <th className="border border-border px-3 py-2 text-center font-semibold">Par</th>
+                          <th className="border border-border px-3 py-2 text-center font-semibold">
+                            Difficulty Rank
+                          </th>
+                          <th className="border border-border px-3 py-2 text-center font-semibold">
+                            Official Stroke Index
+                          </th>
+                          <th className="border border-border px-3 py-2 text-center font-semibold">
+                            Avg. vs Par
+                          </th>
+                          <th className="border border-border px-3 py-2 text-center font-semibold">
+                            Scores
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {difficulty.map(h => {
+                          const diff = h.official_stroke_index != null && h.difficulty_rank != null
+                            ? h.difficulty_rank - h.official_stroke_index
+                            : null;
+                          return (
+                            <tr key={h.number} className="hover:bg-muted/20">
+                              <td className="border border-border px-3 py-2 font-medium">{h.number}</td>
+                              <td className="border border-border px-3 py-2 text-center text-muted-foreground">
+                                {h.par ?? "—"}
+                              </td>
+                              <td className="border border-border px-3 py-2 text-center">
+                                {h.difficulty_rank != null ? (
+                                  <span className="inline-flex items-center gap-1.5">
+                                    <span className="font-bold text-[#1a5c38]">{h.difficulty_rank}</span>
+                                    {h.low_data && (
+                                      <span
+                                        title={`Low confidence — only ${h.score_count} score${h.score_count === 1 ? "" : "s"} recorded (fewer than ${lowDataThreshold})`}
+                                      >
+                                        <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                                      </span>
+                                    )}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground text-xs">No data</span>
+                                )}
+                              </td>
+                              <td className="border border-border px-3 py-2 text-center text-muted-foreground">
+                                {h.official_stroke_index ?? "—"}
+                                {diff != null && diff !== 0 && (
+                                  <span
+                                    className={`ml-1.5 text-xs font-medium ${Math.abs(diff) >= 4 ? "text-red-500" : "text-amber-500"}`}
+                                    title="Difference between real-play rank and the official stroke index"
+                                  >
+                                    ({diff > 0 ? "+" : ""}{diff})
+                                  </span>
+                                )}
+                              </td>
+                              <td className="border border-border px-3 py-2 text-center">
+                                {h.avg_over_par != null ? (
+                                  <span className={h.avg_over_par > 0 ? "text-red-600" : h.avg_over_par < 0 ? "text-green-600" : ""}>
+                                    {h.avg_over_par > 0 ? "+" : ""}{h.avg_over_par.toFixed(2)}
+                                  </span>
+                                ) : (
+                                  <span className="text-muted-foreground">—</span>
+                                )}
+                              </td>
+                              <td className="border border-border px-3 py-2 text-center text-muted-foreground">
+                                {h.score_count.toLocaleString()}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                  <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1.5 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1.5">
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                      Fewer than {lowDataThreshold} scores — treat rating as provisional
+                    </span>
+                    <span>
+                      <strong>Avg. vs Par</strong>: average strokes over (+) or under (−) par per hole
+                    </span>
+                    <span>
+                      <strong>( )</strong> next to the stroke index shows how far the real-play rank differs from it
+                    </span>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>

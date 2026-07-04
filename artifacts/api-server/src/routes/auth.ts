@@ -5,6 +5,7 @@ import { generateToken, getUser } from "../lib/auth";
 import { getHnaStatus } from "../lib/hna";
 import { generateOTP, hashOTP, generateResetToken, normalizePhone, sendOTPEmail, sendOTPPhone } from "../lib/otp";
 import { logger } from "../lib/logger";
+import { nextMemberNumber } from "../lib/memberNumber";
 
 const router: IRouter = Router();
 
@@ -144,19 +145,32 @@ router.post("/auth/register", async (req, res): Promise<void> => {
   const promotedPendingIds: number[] = [];
   for (const pm of pendingMemberships) {
     try {
+      // Carry the club member number over from the pending row; if it clashed
+      // with a number assigned to someone else in the meantime, take the next one.
+      let memberNo: number | null = Number(pm.member_number) || null;
+      if (memberNo) {
+        const clash = await row<any>(
+          "SELECT 1 AS x FROM club_members WHERE club_id = ? AND member_number = ? AND user_id != ?",
+          [pm.club_id, memberNo, id]
+        );
+        if (clash) memberNo = await nextMemberNumber(pm.club_id);
+      } else {
+        memberNo = await nextMemberNumber(pm.club_id);
+      }
       await exec(
         `INSERT INTO club_members
-           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds, member_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (club_id, user_id) DO UPDATE SET
            membership_type = EXCLUDED.membership_type,
            status          = EXCLUDED.status,
            start_date      = EXCLUDED.start_date,
            renewal_date    = EXCLUDED.renewal_date,
            benefits        = EXCLUDED.benefits,
-           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds,
+           member_number   = COALESCE(club_members.member_number, EXCLUDED.member_number)`,
         [pm.club_id, id, pm.membership_type || "standard", pm.status || "active", pm.club_id,
-         fmtDate(pm.start_date), fmtDate(pm.renewal_date), pm.benefits ?? null, Number(pm.prepaid_rounds) || 0]
+         fmtDate(pm.start_date), fmtDate(pm.renewal_date), pm.benefits ?? null, Number(pm.prepaid_rounds) || 0, memberNo]
       );
       // Set home club if the user doesn't have one yet
       await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [pm.club_id, id]);

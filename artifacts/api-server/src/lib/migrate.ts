@@ -1661,6 +1661,47 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS marker_disputed SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
 
+  // ── Sequential club member numbers ─────────────────────────────────────────
+  // Each club numbers its members 1, 2, 3, … . The sequence spans both real
+  // members and pending (staged) memberships so a number assigned while pending
+  // is kept when the golfer registers and the row is promoted.
+  await ddl("ALTER TABLE club_members ADD COLUMN IF NOT EXISTS member_number INT");
+  await ddl("ALTER TABLE pending_memberships ADD COLUMN IF NOT EXISTS member_number INT");
+  // Backfill existing members per club in join order (idempotent — only NULL rows)
+  await ddl(`
+    WITH nums AS (
+      SELECT id, club_id,
+             ROW_NUMBER() OVER (PARTITION BY club_id ORDER BY created_at NULLS LAST, id) AS rn
+      FROM club_members WHERE member_number IS NULL
+    ), base AS (
+      SELECT c.club_id, GREATEST(
+        COALESCE((SELECT MAX(m.member_number) FROM club_members m WHERE m.club_id = c.club_id), 0),
+        COALESCE((SELECT MAX(p.member_number) FROM pending_memberships p WHERE p.club_id = c.club_id), 0)
+      ) AS mx
+      FROM (SELECT DISTINCT club_id FROM club_members WHERE member_number IS NULL) c
+    )
+    UPDATE club_members cm SET member_number = nums.rn + base.mx
+    FROM nums JOIN base ON base.club_id = nums.club_id
+    WHERE cm.id = nums.id
+  `);
+  await ddl(`
+    WITH nums AS (
+      SELECT id, club_id,
+             ROW_NUMBER() OVER (PARTITION BY club_id ORDER BY created_at NULLS LAST, id) AS rn
+      FROM pending_memberships WHERE member_number IS NULL
+    ), base AS (
+      SELECT c.club_id, GREATEST(
+        COALESCE((SELECT MAX(m.member_number) FROM club_members m WHERE m.club_id = c.club_id), 0),
+        COALESCE((SELECT MAX(p.member_number) FROM pending_memberships p WHERE p.club_id = c.club_id), 0)
+      ) AS mx
+      FROM (SELECT DISTINCT club_id FROM pending_memberships WHERE member_number IS NULL) c
+    )
+    UPDATE pending_memberships pm SET member_number = nums.rn + base.mx
+    FROM nums JOIN base ON base.club_id = nums.club_id
+    WHERE pm.id = nums.id
+  `);
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_club_members_member_number ON club_members (club_id, member_number) WHERE member_number IS NOT NULL");
+
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (
       id                SERIAL PRIMARY KEY,

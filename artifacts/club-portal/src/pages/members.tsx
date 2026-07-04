@@ -20,6 +20,7 @@ import { format, parseISO } from "date-fns";
 
 interface Member {
   id: number;
+  member_number: number | null;
   membership_type: string;
   status: string;
   created_at: string;
@@ -47,6 +48,7 @@ interface ImportRow {
   prepaid_rounds: number;
   hna_number: string;
   student_number: string;
+  member_number: string;
   _row: number;
   _error?: string;
 }
@@ -60,6 +62,7 @@ interface ImportResult {
 
 interface PendingMember {
   id: number;
+  member_number: number | null;
   email: string;
   hna_number: string | null;
   membership_type: string;
@@ -110,11 +113,11 @@ function fmtDate(d: string | null) {
 
 function downloadTemplate() {
   const ws = XLSX.utils.aoa_to_sheet([
-    ["email", "membership_type", "start_date", "renewal_date", "benefits", "prepaid_rounds", "hna_number", "student_number"],
-    ["john.smith@example.com", "standard", "2026-01-01", "2027-01-01", "Free range balls; Guest day", "12", "1234567890", ""],
-    ["jane.doe@example.com", "premium", "2026-03-15", "2027-03-15", "Unlimited buggy use; Locker", "24", "9876543210", "STU2024001"],
+    ["email", "membership_type", "start_date", "renewal_date", "benefits", "prepaid_rounds", "hna_number", "student_number", "member_number"],
+    ["john.smith@example.com", "standard", "2026-01-01", "2027-01-01", "Free range balls; Guest day", "12", "1234567890", "", "101"],
+    ["jane.doe@example.com", "premium", "2026-03-15", "2027-03-15", "Unlimited buggy use; Locker", "24", "9876543210", "STU2024001", ""],
   ]);
-  ws["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 36 }, { wch: 16 }, { wch: 16 }, { wch: 18 }];
+  ws["!cols"] = [{ wch: 32 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 36 }, { wch: 16 }, { wch: 16 }, { wch: 18 }, { wch: 16 }];
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, "Members");
   XLSX.writeFile(wb, "TapIn_Members_Import_Template.xlsx");
@@ -138,6 +141,7 @@ function parseSheet(file: File): Promise<ImportRow[]> {
           const prepaid_rounds = Number(r["prepaid_rounds"]) || 0;
           const hna_number = String(r["hna_number"] ?? "").trim().replace(/\D/g, "");
           const student_number = String(r["student_number"] ?? "").trim();
+          const member_number = String(r["member_number"] ?? "").trim().replace(/\D/g, "");
           const row: ImportRow = {
             email,
             membership_type: MEMBERSHIP_TYPES.includes(membership_type) ? membership_type : "standard",
@@ -147,6 +151,7 @@ function parseSheet(file: File): Promise<ImportRow[]> {
             prepaid_rounds,
             hna_number,
             student_number,
+            member_number,
             _row: i + 2,
           };
           if (!email || !email.includes("@")) row._error = "Invalid email";
@@ -211,6 +216,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
             benefits: r.benefits || null,
             prepaid_rounds: r.prepaid_rounds,
             student_number: r.student_number || null,
+            member_number: r.member_number || null,
           })),
         }),
       });
@@ -246,9 +252,11 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                 Download the required Excel template, fill in your members' details, then upload the completed file below.
                 Each row needs an <strong>email</strong> and an <strong>HNA number</strong>. If the golfer already has a
                 TapIn Golf account it links immediately; if not, the row is held and links automatically when they sign up.
+                The <strong>member_number</strong> column is optional — leave it blank and each member gets the next
+                sequential number for your club automatically.
               </p>
               <div className="rounded border border-amber-200 bg-white text-xs px-3 py-2 font-mono text-amber-900">
-                email · membership_type · start_date · renewal_date · benefits · prepaid_rounds · hna_number · student_number
+                email · membership_type · start_date · renewal_date · benefits · prepaid_rounds · hna_number · student_number · member_number
               </div>
               <Button variant="outline" className="gap-2 border-amber-400 text-amber-800 hover:bg-amber-100" onClick={downloadTemplate}>
                 <Download className="h-4 w-4" />Download Template (.xlsx)
@@ -301,6 +309,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                 <thead>
                   <tr className="bg-muted/60 text-left">
                     <th className="px-2 py-2 font-semibold">Row</th>
+                    <th className="px-2 py-2 font-semibold">Mem #</th>
                     <th className="px-2 py-2 font-semibold">Email</th>
                     <th className="px-2 py-2 font-semibold">HNA</th>
                     <th className="px-2 py-2 font-semibold">Type</th>
@@ -314,6 +323,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                   {rows.map(r => (
                     <tr key={r._row} className={r._error ? "bg-red-50" : ""}>
                       <td className="px-2 py-1.5 text-muted-foreground">{r._row}</td>
+                      <td className="px-2 py-1.5 font-mono">{r.member_number || <span className="text-muted-foreground">auto</span>}</td>
                       <td className="px-2 py-1.5 font-mono">{r.email}</td>
                       <td className="px-2 py-1.5 font-mono">{r.hna_number || "—"}</td>
                       <td className="px-2 py-1.5">{membershipLabel(r.membership_type)}</td>
@@ -799,6 +809,9 @@ export default function Members() {
                       </div>
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
+                          {m.member_number != null && (
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-[#1a5c38] text-white">#{m.member_number}</span>
+                          )}
                           <span className="font-medium text-sm">{m.name}</span>
                           {isVerified(m.status, m.renewal_date) ? (
                             <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700 flex items-center gap-1">
@@ -870,6 +883,9 @@ export default function Members() {
                     </div>
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
+                        {p.member_number != null && (
+                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-600 text-white">#{p.member_number}</span>
+                        )}
                         <span className="font-medium text-sm">{p.email}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Awaiting signup</span>
                         <span className="text-xs bg-muted px-2 py-0.5 rounded-full">{membershipLabel(p.membership_type)}</span>

@@ -61912,6 +61912,34 @@ async function isHnaVerified(userId) {
 // src/routes/auth.ts
 init_otp();
 init_logger();
+
+// src/lib/memberNumber.ts
+init_pg();
+async function nextMemberNumber(clubId) {
+  const r = await row(
+    `SELECT GREATEST(
+       COALESCE((SELECT MAX(member_number) FROM club_members WHERE club_id = ?), 0),
+       COALESCE((SELECT MAX(member_number) FROM pending_memberships WHERE club_id = ?), 0)
+     ) AS mx`,
+    [clubId, clubId]
+  );
+  return Number(r?.mx || 0) + 1;
+}
+async function memberNumberTaken(clubId, memberNumber, excludeEmail) {
+  const r = await row(
+    `SELECT 1 AS x FROM (
+       SELECT u.email FROM club_members cm JOIN users u ON u.id = cm.user_id
+        WHERE cm.club_id = ? AND cm.member_number = ?
+       UNION ALL
+       SELECT pm.email FROM pending_memberships pm
+        WHERE pm.club_id = ? AND pm.member_number = ?
+     ) t WHERE LOWER(t.email) != LOWER(?) LIMIT 1`,
+    [clubId, memberNumber, clubId, memberNumber, excludeEmail]
+  );
+  return !!r;
+}
+
+// src/routes/auth.ts
 var router2 = (0, import_express2.Router)();
 var PRIVACY_POLICY_VERSION = "2026-05-31";
 var fmtDate2 = (d) => {
@@ -62025,17 +62053,28 @@ router2.post("/auth/register", async (req, res) => {
   const promotedPendingIds = [];
   for (const pm of pendingMemberships) {
     try {
+      let memberNo = Number(pm.member_number) || null;
+      if (memberNo) {
+        const clash = await row(
+          "SELECT 1 AS x FROM club_members WHERE club_id = ? AND member_number = ? AND user_id != ?",
+          [pm.club_id, memberNo, id]
+        );
+        if (clash) memberNo = await nextMemberNumber(pm.club_id);
+      } else {
+        memberNo = await nextMemberNumber(pm.club_id);
+      }
       await exec(
         `INSERT INTO club_members
-           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds, member_number)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (club_id, user_id) DO UPDATE SET
            membership_type = EXCLUDED.membership_type,
            status          = EXCLUDED.status,
            start_date      = EXCLUDED.start_date,
            renewal_date    = EXCLUDED.renewal_date,
            benefits        = EXCLUDED.benefits,
-           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
+           prepaid_rounds  = EXCLUDED.prepaid_rounds,
+           member_number   = COALESCE(club_members.member_number, EXCLUDED.member_number)`,
         [
           pm.club_id,
           id,
@@ -62045,7 +62084,8 @@ router2.post("/auth/register", async (req, res) => {
           fmtDate2(pm.start_date),
           fmtDate2(pm.renewal_date),
           pm.benefits ?? null,
-          Number(pm.prepaid_rounds) || 0
+          Number(pm.prepaid_rounds) || 0,
+          memberNo
         ]
       );
       await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [pm.club_id, id]);
@@ -72761,7 +72801,7 @@ router14.get("/portal/members", requireClubAuth2, async (req, res) => {
   const rows = await query(
     `SELECT cm.id, cm.membership_type, cm.status, cm.created_at,
             cm.start_date, cm.renewal_date, cm.benefits,
-            cm.prepaid_rounds, cm.prepaid_rounds_used,
+            cm.prepaid_rounds, cm.prepaid_rounds_used, cm.member_number,
             u.id AS user_id, u.name, u.email, u.phone, u.handicap, u.date_of_birth, u.hna_number, u.student_number
      FROM club_members cm JOIN users u ON cm.user_id = u.id
      WHERE cm.club_id = ? ORDER BY cm.created_at DESC`,
@@ -72797,10 +72837,11 @@ router14.post("/portal/members", requireClubAuth2, async (req, res) => {
   const stuClean = student_number ? String(student_number).trim() || null : null;
   const user = await row("SELECT id FROM users WHERE email = ?", [emailClean]);
   if (!user) {
+    const memberNo2 = await nextMemberNumber(club.id);
     await exec(
       `INSERT INTO pending_memberships
-         (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
-       VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+         (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number, member_number)
+       VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
        ON CONFLICT (club_id, email) DO UPDATE SET
          hna_number      = EXCLUDED.hna_number,
          membership_type = EXCLUDED.membership_type,
@@ -72809,7 +72850,8 @@ router14.post("/portal/members", requireClubAuth2, async (req, res) => {
          renewal_date    = EXCLUDED.renewal_date,
          benefits        = EXCLUDED.benefits,
          prepaid_rounds  = EXCLUDED.prepaid_rounds,
-         student_number  = EXCLUDED.student_number`,
+         student_number  = EXCLUDED.student_number,
+         member_number   = COALESCE(pending_memberships.member_number, EXCLUDED.member_number)`,
       [
         club.id,
         emailClean,
@@ -72819,23 +72861,26 @@ router14.post("/portal/members", requireClubAuth2, async (req, res) => {
         renewal_date ?? null,
         benefits ?? null,
         Number(prepaid_rounds) || 0,
-        stuClean
+        stuClean,
+        memberNo2
       ]
     );
     res.json({ message: "Member staged \u2014 will activate when the golfer signs up", pending: true });
     return;
   }
+  const memberNo = await nextMemberNumber(club.id);
   await exec(
-    `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+    `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds, member_number)
+     VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
      ON CONFLICT (club_id, user_id) DO UPDATE SET
        membership_type = EXCLUDED.membership_type,
        status          = 'active',
        start_date      = EXCLUDED.start_date,
        renewal_date    = EXCLUDED.renewal_date,
        benefits        = EXCLUDED.benefits,
-       prepaid_rounds  = EXCLUDED.prepaid_rounds`,
-    [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0]
+       prepaid_rounds  = EXCLUDED.prepaid_rounds,
+       member_number   = COALESCE(club_members.member_number, EXCLUDED.member_number)`,
+    [club.id, user.id, membership_type, club.id, start_date ?? null, renewal_date ?? null, benefits ?? null, Number(prepaid_rounds) || 0, memberNo]
   );
   await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
   await exec(
@@ -72870,6 +72915,8 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
     const prepaid_rounds = Number(r.prepaid_rounds) || 0;
     const hnaClean = r.hna_number ? String(r.hna_number).trim().replace(/\D/g, "") : "";
     const stuClean = r.student_number ? String(r.student_number).trim() || null : null;
+    const requestedNoRaw = Number.parseInt(String(r.member_number ?? "").trim(), 10);
+    let requestedNo = Number.isFinite(requestedNoRaw) && requestedNoRaw > 0 ? requestedNoRaw : null;
     if (!email) continue;
     if (!hnaClean) {
       errors.push(`${email}: HNA number is required`);
@@ -72889,11 +72936,16 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
     }
     try {
       const user = await row("SELECT id, name FROM users WHERE email = ?", [email]);
+      if (requestedNo && await memberNumberTaken(club.id, requestedNo, email)) {
+        errors.push(`${email}: member number ${requestedNo} is already in use \u2014 a new number was auto-assigned`);
+        requestedNo = null;
+      }
       if (!user) {
+        const memberNo2 = requestedNo ?? await nextMemberNumber(club.id);
         await exec(
           `INSERT INTO pending_memberships
-             (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number)
-           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?)
+             (club_id, email, hna_number, membership_type, status, start_date, renewal_date, benefits, prepaid_rounds, student_number, member_number)
+           VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
            ON CONFLICT (club_id, email) DO UPDATE SET
              hna_number      = EXCLUDED.hna_number,
              membership_type = EXCLUDED.membership_type,
@@ -72902,8 +72954,9 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
              renewal_date    = EXCLUDED.renewal_date,
              benefits        = EXCLUDED.benefits,
              prepaid_rounds  = EXCLUDED.prepaid_rounds,
-             student_number  = EXCLUDED.student_number`,
-          [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean]
+             student_number  = EXCLUDED.student_number,
+             member_number   = ${requestedNo ? "EXCLUDED.member_number" : "COALESCE(pending_memberships.member_number, EXCLUDED.member_number)"}`,
+          [club.id, email, hnaClean, membership_type, start_date, renewal_date, benefits, prepaid_rounds, stuClean, memberNo2]
         );
         pending++;
         if (prepaid_rounds > 0) {
@@ -72920,17 +72973,19 @@ router14.post("/portal/members/import", requireClubAuth2, async (req, res) => {
         continue;
       }
       const existing = await row("SELECT id FROM club_members WHERE club_id = ? AND user_id = ?", [club.id, user.id]);
+      const memberNo = requestedNo ?? await nextMemberNumber(club.id);
       await exec(
-        `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds)
-         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?)
+        `INSERT INTO club_members (club_id, user_id, membership_type, status, added_by, start_date, renewal_date, benefits, prepaid_rounds, member_number)
+         VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?)
          ON CONFLICT (club_id, user_id) DO UPDATE SET
            membership_type = EXCLUDED.membership_type,
            status          = 'active',
            start_date      = EXCLUDED.start_date,
            renewal_date    = EXCLUDED.renewal_date,
            benefits        = EXCLUDED.benefits,
-           prepaid_rounds  = EXCLUDED.prepaid_rounds`,
-        [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds]
+           prepaid_rounds  = EXCLUDED.prepaid_rounds,
+           member_number   = ${requestedNo ? "EXCLUDED.member_number" : "COALESCE(club_members.member_number, EXCLUDED.member_number)"}`,
+        [club.id, user.id, membership_type, club.id, start_date, renewal_date, benefits, prepaid_rounds, memberNo]
       );
       await exec("UPDATE users SET club_id = ? WHERE id = ? AND club_id IS NULL", [club.id, user.id]);
       await exec(
@@ -73299,7 +73354,7 @@ router14.get("/portal/pending-members", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
     `SELECT id, email, hna_number, membership_type, status, start_date, renewal_date,
-            benefits, prepaid_rounds, student_number, created_at
+            benefits, prepaid_rounds, student_number, created_at, member_number
      FROM pending_memberships WHERE club_id = ? ORDER BY created_at DESC`,
     [club.id]
   );
@@ -81066,6 +81121,41 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_submitted_at TIMESTAMP");
   await ddl("ALTER TABLE event_scores ADD COLUMN IF NOT EXISTS marker_disputed SMALLINT NOT NULL DEFAULT 0");
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
+  await ddl("ALTER TABLE club_members ADD COLUMN IF NOT EXISTS member_number INT");
+  await ddl("ALTER TABLE pending_memberships ADD COLUMN IF NOT EXISTS member_number INT");
+  await ddl(`
+    WITH nums AS (
+      SELECT id, club_id,
+             ROW_NUMBER() OVER (PARTITION BY club_id ORDER BY created_at NULLS LAST, id) AS rn
+      FROM club_members WHERE member_number IS NULL
+    ), base AS (
+      SELECT c.club_id, GREATEST(
+        COALESCE((SELECT MAX(m.member_number) FROM club_members m WHERE m.club_id = c.club_id), 0),
+        COALESCE((SELECT MAX(p.member_number) FROM pending_memberships p WHERE p.club_id = c.club_id), 0)
+      ) AS mx
+      FROM (SELECT DISTINCT club_id FROM club_members WHERE member_number IS NULL) c
+    )
+    UPDATE club_members cm SET member_number = nums.rn + base.mx
+    FROM nums JOIN base ON base.club_id = nums.club_id
+    WHERE cm.id = nums.id
+  `);
+  await ddl(`
+    WITH nums AS (
+      SELECT id, club_id,
+             ROW_NUMBER() OVER (PARTITION BY club_id ORDER BY created_at NULLS LAST, id) AS rn
+      FROM pending_memberships WHERE member_number IS NULL
+    ), base AS (
+      SELECT c.club_id, GREATEST(
+        COALESCE((SELECT MAX(m.member_number) FROM club_members m WHERE m.club_id = c.club_id), 0),
+        COALESCE((SELECT MAX(p.member_number) FROM pending_memberships p WHERE p.club_id = c.club_id), 0)
+      ) AS mx
+      FROM (SELECT DISTINCT club_id FROM pending_memberships WHERE member_number IS NULL) c
+    )
+    UPDATE pending_memberships pm SET member_number = nums.rn + base.mx
+    FROM nums JOIN base ON base.club_id = nums.club_id
+    WHERE pm.id = nums.id
+  `);
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_club_members_member_number ON club_members (club_id, member_number) WHERE member_number IS NOT NULL");
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (
       id                SERIAL PRIMARY KEY,

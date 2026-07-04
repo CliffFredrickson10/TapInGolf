@@ -77894,14 +77894,18 @@ router23.get("/scoring/rounds", async (req, res) => {
              c.name  AS club_name,
              c.location AS club_location,
              c.logo_url AS club_logo_url,
-             e.name  AS tournament_name
+             e.name  AS tournament_name,
+             (r.user_id = ?) AS is_own,
+             u.name  AS scorer_name
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
+      JOIN users u ON u.id = r.user_id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       WHERE r.user_id = ?
+         OR (r.status = 'complete' AND ? IN (r.partner_user_id, r.opponent_user_id, r.opponent2_user_id, r.marker_user_id))
       ORDER BY r.started_at DESC
       LIMIT 30
-    `, [user.id]);
+    `, [user.id, user.id, user.id]);
     res.json({ rounds });
   } catch (err) {
     if (err?.message?.includes("Unauthorized")) {
@@ -78163,6 +78167,13 @@ router23.post("/scoring/rounds", async (req, res) => {
     if (req.body.opponentPlayingHcp != null) opponentPlayingHcp = Number(req.body.opponentPlayingHcp);
     if (req.body.opponent2Name != null) opponent2Name = String(req.body.opponent2Name);
     if (req.body.opponent2PlayingHcp != null) opponent2PlayingHcp = Number(req.body.opponent2PlayingHcp);
+    const linkId = (v) => {
+      const n = parseInt(String(v), 10);
+      return Number.isFinite(n) && n > 0 && n !== user.id ? n : null;
+    };
+    const partnerUserId = linkId(req.body.partnerUserId);
+    const opponentUserId = linkId(req.body.opponentUserId);
+    const opponent2UserId = linkId(req.body.opponent2UserId);
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
       [user.id]
@@ -78175,8 +78186,9 @@ router23.post("/scoring/rounds", async (req, res) => {
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
          tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
          partner_name, partner_playing_hcp, partner_tee_color,
-         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id,
+         partner_user_id, opponent_user_id, opponent2_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [
       user.id,
@@ -78197,7 +78209,10 @@ router23.post("/scoring/rounds", async (req, res) => {
       opponent2Name,
       opponent2PlayingHcp,
       opponent2TeeColor,
-      markerUserId
+      markerUserId,
+      partnerUserId,
+      opponentUserId,
+      opponent2UserId
     ]);
     res.json({ id });
   } catch (err) {
@@ -78234,7 +78249,7 @@ router23.get("/scoring/rounds/:id", async (req, res) => {
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       LEFT JOIN knockout_matches km ON km.id = r.match_id
       LEFT JOIN event_scores es ON es.event_id = r.tournament_id AND es.user_id = r.user_id
-      WHERE r.id = ? AND (r.user_id = ? OR r.marker_user_id = ?)
+      WHERE r.id = ? AND (r.user_id = ? OR ? IN (r.marker_user_id, r.partner_user_id, r.opponent_user_id, r.opponent2_user_id))
     `, [roundId, user.id, user.id]);
     if (rounds.length === 0) {
       res.status(404).json({ message: "Round not found" });
@@ -81043,6 +81058,9 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_user_id INT REFERENCES users(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_hole_scores JSONB");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_gross INT");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_submitted_at TIMESTAMP");

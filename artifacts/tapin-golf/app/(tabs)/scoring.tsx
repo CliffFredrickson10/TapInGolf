@@ -38,6 +38,8 @@ type Round = {
   started_at: string;
   completed_at: string | null;
   tournament_name: string | null;
+  is_own?: boolean;
+  scorer_name?: string | null;
 };
 
 const FORMAT_LABELS: Record<string, string> = {
@@ -227,6 +229,11 @@ export default function ScoringScreen() {
                       <Text style={[styles.roundDate, { color: colors.mutedForeground }]}>
                         {formatDate(round.started_at)} · {round.holes_played} holes
                       </Text>
+                      {round.is_own === false && round.scorer_name ? (
+                        <Text style={[styles.roundDate, { color: colors.primary }]} numberOfLines={1}>
+                          Scored by {round.scorer_name}
+                        </Text>
+                      ) : null}
                     </View>
                     <View style={{ alignItems: "flex-end", gap: 4 }}>
                       {round.total_points != null && (

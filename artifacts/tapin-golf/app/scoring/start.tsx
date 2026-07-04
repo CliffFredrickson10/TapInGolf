@@ -445,9 +445,9 @@ export default function StartRoundScreen() {
           opponentTeeColor:  oppTeeColor,
           partnerTeeColor:   partnerTeeColor,
           opponent2TeeColor: opp2TeeColor,
-          ...(!linkedTournamentId && casualPartner  ? { partnerName:   casualPartner.name,  partnerPlayingHcp:   parseInt(casualPartner.hcp)  || 0 } : {}),
-          ...(!linkedTournamentId && casualOpp1     ? { opponentName:  casualOpp1.name,     opponentPlayingHcp:  parseInt(casualOpp1.hcp)     || 0 } : {}),
-          ...(!linkedTournamentId && casualOpp2     ? { opponent2Name: casualOpp2.name,     opponent2PlayingHcp: parseInt(casualOpp2.hcp)     || 0 } : {}),
+          ...(!linkedTournamentId && casualPartner  ? { partnerName:   casualPartner.name,  partnerPlayingHcp:   parseInt(casualPartner.hcp)  || 0, ...(casualPartner.userId ? { partnerUserId:   casualPartner.userId } : {}) } : {}),
+          ...(!linkedTournamentId && casualOpp1     ? { opponentName:  casualOpp1.name,     opponentPlayingHcp:  parseInt(casualOpp1.hcp)     || 0, ...(casualOpp1.userId     ? { opponentUserId:  casualOpp1.userId }     : {}) } : {}),
+          ...(!linkedTournamentId && casualOpp2     ? { opponent2Name: casualOpp2.name,     opponent2PlayingHcp: parseInt(casualOpp2.hcp)     || 0, ...(casualOpp2.userId     ? { opponent2UserId: casualOpp2.userId }     : {}) } : {}),
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);

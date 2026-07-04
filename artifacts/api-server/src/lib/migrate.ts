@@ -1650,6 +1650,11 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_tee_color VARCHAR(20) DEFAULT 'white'");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  // Link partner/opponents to real user accounts (casual play with friends) so
+  // they can view the scorecard from their own profile even if they didn't score
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS partner_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent_user_id INT REFERENCES users(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS opponent2_user_id INT REFERENCES users(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_hole_scores JSONB");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_gross INT");
   await ddl("ALTER TABLE scoring_rounds ADD COLUMN IF NOT EXISTS marker_submitted_at TIMESTAMP");

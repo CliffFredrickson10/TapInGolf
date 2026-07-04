@@ -407,6 +407,9 @@ router.get("/scoring/rounds", async (req, res) => {
   try {
     const user = await getUser(req);
     if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+    // Own rounds (any status) plus completed rounds where this user was linked
+    // as partner/opponent/marker by another scorer — those are view-only, so
+    // active rounds of other scorers are excluded (they'd hijack "resume round").
     const rounds = await query<any>(`
       SELECT r.id, r.club_id, r.tee_color, r.format, r.course_handicap,
              r.playing_handicap, r.allowance_pct, r.status, r.holes_played,
@@ -415,14 +418,18 @@ router.get("/scoring/rounds", async (req, res) => {
              c.name  AS club_name,
              c.location AS club_location,
              c.logo_url AS club_logo_url,
-             e.name  AS tournament_name
+             e.name  AS tournament_name,
+             (r.user_id = ?) AS is_own,
+             u.name  AS scorer_name
       FROM scoring_rounds r
       JOIN clubs c ON r.club_id = c.id
+      JOIN users u ON u.id = r.user_id
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       WHERE r.user_id = ?
+         OR (r.status = 'complete' AND ? IN (r.partner_user_id, r.opponent_user_id, r.opponent2_user_id, r.marker_user_id))
       ORDER BY r.started_at DESC
       LIMIT 30
-    `, [user.id]);
+    `, [user.id, user.id, user.id]);
 
     res.json({ rounds });
   } catch (err: any) {
@@ -692,6 +699,16 @@ router.post("/scoring/rounds", async (req, res) => {
     if (req.body.opponent2Name       != null) opponent2Name       = String(req.body.opponent2Name);
     if (req.body.opponent2PlayingHcp != null) opponent2PlayingHcp = Number(req.body.opponent2PlayingHcp);
 
+    // Link partner/opponents to real user accounts (friends picked in the app)
+    // so they can view this scorecard from their own profile. Guests have no id.
+    const linkId = (v: any): number | null => {
+      const n = parseInt(String(v), 10);
+      return Number.isFinite(n) && n > 0 && n !== user.id ? n : null;
+    };
+    const partnerUserId   = linkId(req.body.partnerUserId);
+    const opponentUserId  = linkId(req.body.opponentUserId);
+    const opponent2UserId = linkId(req.body.opponent2UserId);
+
     // Abandon any existing active round
     await run(
       "UPDATE scoring_rounds SET status = 'abandoned' WHERE user_id = ? AND status = 'active'",
@@ -707,13 +724,15 @@ router.post("/scoring/rounds", async (req, res) => {
         (user_id, club_id, tee_color, format, course_handicap, playing_handicap, allowance_pct,
          tournament_id, match_id, opponent_name, opponent_playing_hcp, opponent_tee_color,
          partner_name, partner_playing_hcp, partner_tee_color,
-         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         opponent2_name, opponent2_playing_hcp, opponent2_tee_color, marker_user_id,
+         partner_user_id, opponent_user_id, opponent2_user_id)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       RETURNING id
     `, [user.id, clubId, teeColor, format, courseHandicap, playingHandicap, allowancePct,
         tournamentId, matchId, opponentName, opponentPlayingHcp, opponentTeeColor,
         partnerName, partnerPlayingHcp, partnerTeeColor,
-        opponent2Name, opponent2PlayingHcp, opponent2TeeColor, markerUserId]);
+        opponent2Name, opponent2PlayingHcp, opponent2TeeColor, markerUserId,
+        partnerUserId, opponentUserId, opponent2UserId]);
 
     res.json({ id });
   } catch (err: any) {
@@ -748,7 +767,7 @@ router.get("/scoring/rounds/:id", async (req, res) => {
       LEFT JOIN golf_events e ON r.tournament_id = e.id
       LEFT JOIN knockout_matches km ON km.id = r.match_id
       LEFT JOIN event_scores es ON es.event_id = r.tournament_id AND es.user_id = r.user_id
-      WHERE r.id = ? AND (r.user_id = ? OR r.marker_user_id = ?)
+      WHERE r.id = ? AND (r.user_id = ? OR ? IN (r.marker_user_id, r.partner_user_id, r.opponent_user_id, r.opponent2_user_id))
     `, [roundId, user.id, user.id]);
 
     if (rounds.length === 0) { res.status(404).json({ message: "Round not found" }); return; }

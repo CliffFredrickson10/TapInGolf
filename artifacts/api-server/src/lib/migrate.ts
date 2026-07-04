@@ -1667,6 +1667,11 @@ async function applyLateAlters() {
   // is kept when the golfer registers and the row is promoted.
   await ddl("ALTER TABLE club_members ADD COLUMN IF NOT EXISTS member_number INT");
   await ddl("ALTER TABLE pending_memberships ADD COLUMN IF NOT EXISTS member_number INT");
+  // Club-configurable numbering format: optional letters before/after the number
+  // and a "continue from" floor so clubs can keep their existing convention.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_prefix VARCHAR(10) NOT NULL DEFAULT ''");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_suffix VARCHAR(10) NOT NULL DEFAULT ''");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_next INT");
   // Backfill existing members per club in join order (idempotent — only NULL rows)
   await ddl(`
     WITH nums AS (

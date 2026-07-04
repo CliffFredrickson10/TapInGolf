@@ -3,15 +3,18 @@ import { row } from "./pg";
 // Next sequential member number for a club. The sequence spans both real
 // members (club_members) and staged members (pending_memberships) so numbers
 // stay unique within the club and survive pending → member promotion.
+// Respects the club's configured "continue from" floor (clubs.member_no_next)
+// so a club can pick up where its previous numbering convention left off.
 export async function nextMemberNumber(clubId: number): Promise<number> {
   const r = await row<any>(
     `SELECT GREATEST(
-       COALESCE((SELECT MAX(member_number) FROM club_members WHERE club_id = ?), 0),
-       COALESCE((SELECT MAX(member_number) FROM pending_memberships WHERE club_id = ?), 0)
-     ) AS mx`,
-    [clubId, clubId]
+       COALESCE((SELECT MAX(member_number) FROM club_members WHERE club_id = ?), 0) + 1,
+       COALESCE((SELECT MAX(member_number) FROM pending_memberships WHERE club_id = ?), 0) + 1,
+       COALESCE((SELECT member_no_next FROM clubs WHERE id = ?), 1)
+     ) AS nxt`,
+    [clubId, clubId, clubId]
   );
-  return Number(r?.mx || 0) + 1;
+  return Number(r?.nxt || 1);
 }
 
 // True if a member number is already used within the club by someone other

@@ -14,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   Plus, Trash2, UserCircle2, Upload, Download, FileSpreadsheet,
-  CheckCircle2, XCircle, AlertCircle, ArrowLeft, Pencil, CalendarDays, RefreshCw,
+  CheckCircle2, XCircle, AlertCircle, ArrowLeft, Pencil, CalendarDays, RefreshCw, Settings2,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -171,7 +171,119 @@ function parseSheet(file: File): Promise<ImportRow[]> {
   });
 }
 
-function ImportDialog({ onImported }: { onImported: () => void }) {
+interface Numbering {
+  prefix: string;
+  suffix: string;
+  continue_from: number | null;
+  next_number: number;
+}
+
+function formatMemberNo(numbering: Numbering | null, n: number | string | null | undefined): string | null {
+  if (n == null || n === "") return null;
+  const pre = numbering?.prefix ?? "";
+  const suf = numbering?.suffix ?? "";
+  if (!pre && !suf) return `#${n}`;
+  return `${pre}${n}${suf}`;
+}
+
+function NumberingDialog({ numbering, onSaved }: { numbering: Numbering | null; onSaved: (n: Numbering) => void }) {
+  const { toast } = useToast();
+  const readOnly = useReadOnly();
+  const [open, setOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [prefix, setPrefix] = useState("");
+  const [suffix, setSuffix] = useState("");
+  const [continueFrom, setContinueFrom] = useState("");
+
+  useEffect(() => {
+    if (open && numbering) {
+      setPrefix(numbering.prefix);
+      setSuffix(numbering.suffix);
+      setContinueFrom(numbering.continue_from != null ? String(numbering.continue_from) : "");
+    }
+  }, [open, numbering]);
+
+  const previewNo = (() => {
+    const cont = Number.parseInt(continueFrom, 10);
+    const base = numbering?.next_number ?? 1;
+    return Number.isFinite(cont) && cont > base ? cont : base;
+  })();
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const res = await api<Numbering>("/api/portal/member-numbering", {
+        method: "PUT",
+        body: JSON.stringify({
+          prefix: prefix.trim(),
+          suffix: suffix.trim(),
+          continue_from: continueFrom.trim() || null,
+        }),
+      });
+      onSaved(res);
+      toast({ title: "Numbering format saved" });
+      setOpen(false);
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={setOpen}>
+      <DialogTrigger asChild>
+        <Button variant="outline" className="gap-2">
+          <Settings2 className="h-4 w-4" />Numbering
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="max-w-md">
+        <DialogHeader><DialogTitle>Member Number Format</DialogTitle></DialogHeader>
+        <div className="space-y-4 py-2">
+          <p className="text-sm text-muted-foreground">
+            Choose how your club's member numbers look. New members always get the next number in
+            sequence — the letters below are added around it automatically.
+          </p>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Letters before (prefix)</Label>
+              <Input value={prefix} onChange={e => setPrefix(e.target.value)} placeholder="e.g. M-" maxLength={10} />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Letters after (suffix)</Label>
+              <Input value={suffix} onChange={e => setSuffix(e.target.value)} placeholder="e.g. /SR" maxLength={10} />
+            </div>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Continue numbering from</Label>
+            <Input
+              type="number"
+              min={1}
+              value={continueFrom}
+              onChange={e => setContinueFrom(e.target.value)}
+              placeholder={`Leave blank to continue from ${numbering?.next_number ?? 1}`}
+            />
+            <p className="text-xs text-muted-foreground">
+              Already have a numbering convention? Enter the next number your club would issue (e.g. 501)
+              and TapIn continues from there. Numbers already assigned are never changed.
+            </p>
+          </div>
+          <div className="rounded-lg border bg-muted/40 px-4 py-3 text-sm">
+            Next member will be{" "}
+            <span className="font-mono font-semibold text-[#1a5c38]">
+              {(prefix.trim() || suffix.trim()) ? `${prefix.trim()}${previewNo}${suffix.trim()}` : `#${previewNo}`}
+            </span>
+          </div>
+          <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={handleSave} disabled={saving || readOnly}>
+            {saving ? "Saving…" : "Save Format"}
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ImportDialog({ onImported, numbering }: { onImported: () => void; numbering: Numbering | null }) {
   const { toast } = useToast();
   const readOnly = useReadOnly();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -253,7 +365,8 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                 Each row needs an <strong>email</strong> and an <strong>HNA number</strong>. If the golfer already has a
                 TapIn Golf account it links immediately; if not, the row is held and links automatically when they sign up.
                 The <strong>member_number</strong> column is optional — leave it blank and each member gets the next
-                sequential number for your club automatically.
+                sequential number for your club automatically. Enter digits only; your club's letters
+                (set under <strong>Numbering</strong>) are added around the number automatically.
               </p>
               <div className="rounded border border-amber-200 bg-white text-xs px-3 py-2 font-mono text-amber-900">
                 email · membership_type · start_date · renewal_date · benefits · prepaid_rounds · hna_number · student_number · member_number
@@ -323,7 +436,7 @@ function ImportDialog({ onImported }: { onImported: () => void }) {
                   {rows.map(r => (
                     <tr key={r._row} className={r._error ? "bg-red-50" : ""}>
                       <td className="px-2 py-1.5 text-muted-foreground">{r._row}</td>
-                      <td className="px-2 py-1.5 font-mono">{r.member_number || <span className="text-muted-foreground">auto</span>}</td>
+                      <td className="px-2 py-1.5 font-mono">{r.member_number ? formatMemberNo(numbering, r.member_number) : <span className="text-muted-foreground">auto</span>}</td>
                       <td className="px-2 py-1.5 font-mono">{r.email}</td>
                       <td className="px-2 py-1.5 font-mono">{r.hna_number || "—"}</td>
                       <td className="px-2 py-1.5">{membershipLabel(r.membership_type)}</td>
@@ -566,6 +679,7 @@ export default function Members() {
   const [renewOpen, setRenewOpen] = useState(false);
   const [renewDate, setRenewDate] = useState("");
   const [renewing, setRenewing] = useState(false);
+  const [numbering, setNumbering] = useState<Numbering | null>(null);
 
   const load = () => {
     setLoading(true);
@@ -579,14 +693,19 @@ export default function Members() {
       .then(setPending)
       .catch(() => { /* pending list is best-effort */ });
   };
-  useEffect(() => { load(); loadPending(); }, []);
+  const loadNumbering = () => {
+    api<Numbering>("/api/portal/member-numbering")
+      .then(setNumbering)
+      .catch(() => { /* formatting is best-effort — falls back to plain #N */ });
+  };
+  useEffect(() => { load(); loadPending(); loadNumbering(); }, []);
 
   useEffect(() => {
     const params = new URLSearchParams(urlSearch);
     if (params.get("action") === "new") setOpen(true);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const reloadAll = () => { load(); loadPending(); };
+  const reloadAll = () => { load(); loadPending(); loadNumbering(); };
 
   const toggleSelect = (id: number) => setSelected(s => s.includes(id) ? s.filter(x => x !== id) : [...s, id]);
 
@@ -703,7 +822,8 @@ export default function Members() {
               </div>
             </DialogContent>
           </Dialog>
-          <ImportDialog onImported={reloadAll} />
+          <NumberingDialog numbering={numbering} onSaved={setNumbering} />
+          <ImportDialog onImported={reloadAll} numbering={numbering} />
           <Dialog open={open} onOpenChange={v => { setOpen(v); if (!v) resetAddForm(); }}>
             <DialogTrigger asChild>
               <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" disabled={readOnly}><Plus className="h-4 w-4" />Add Member</Button>
@@ -810,7 +930,7 @@ export default function Members() {
                       <div className="flex-1 min-w-0 space-y-1.5">
                         <div className="flex items-center gap-2 flex-wrap">
                           {m.member_number != null && (
-                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-[#1a5c38] text-white">#{m.member_number}</span>
+                            <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-[#1a5c38] text-white">{formatMemberNo(numbering, m.member_number)}</span>
                           )}
                           <span className="font-medium text-sm">{m.name}</span>
                           {isVerified(m.status, m.renewal_date) ? (
@@ -884,7 +1004,7 @@ export default function Members() {
                     <div className="flex-1 min-w-0 space-y-1.5">
                       <div className="flex items-center gap-2 flex-wrap">
                         {p.member_number != null && (
-                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-600 text-white">#{p.member_number}</span>
+                          <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-amber-600 text-white">{formatMemberNo(numbering, p.member_number)}</span>
                         )}
                         <span className="font-medium text-sm">{p.email}</span>
                         <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-amber-100 text-amber-700">Awaiting signup</span>

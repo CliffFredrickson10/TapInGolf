@@ -61918,12 +61918,13 @@ init_pg();
 async function nextMemberNumber(clubId) {
   const r = await row(
     `SELECT GREATEST(
-       COALESCE((SELECT MAX(member_number) FROM club_members WHERE club_id = ?), 0),
-       COALESCE((SELECT MAX(member_number) FROM pending_memberships WHERE club_id = ?), 0)
-     ) AS mx`,
-    [clubId, clubId]
+       COALESCE((SELECT MAX(member_number) FROM club_members WHERE club_id = ?), 0) + 1,
+       COALESCE((SELECT MAX(member_number) FROM pending_memberships WHERE club_id = ?), 0) + 1,
+       COALESCE((SELECT member_no_next FROM clubs WHERE id = ?), 1)
+     ) AS nxt`,
+    [clubId, clubId, clubId]
   );
-  return Number(r?.mx || 0) + 1;
+  return Number(r?.nxt || 1);
 }
 async function memberNumberTaken(clubId, memberNumber, excludeEmail) {
   const r = await row(
@@ -72796,6 +72797,46 @@ router14.post("/portal/events/:id/scores/:userId/dq", requireClubAuth2, async (r
   }
   res.json({ success: true });
 });
+router14.get("/portal/member-numbering", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const c = await row("SELECT member_no_prefix, member_no_suffix, member_no_next FROM clubs WHERE id = ?", [club.id]);
+  res.json({
+    prefix: c?.member_no_prefix ?? "",
+    suffix: c?.member_no_suffix ?? "",
+    continue_from: c?.member_no_next != null ? Number(c.member_no_next) : null,
+    next_number: await nextMemberNumber(club.id)
+  });
+});
+router14.put("/portal/member-numbering", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const { prefix, suffix, continue_from } = req.body ?? {};
+  const fmtRe = /^[A-Za-z0-9\-\/. ]{0,10}$/;
+  const prefixClean = String(prefix ?? "").trim();
+  const suffixClean = String(suffix ?? "").trim();
+  if (!fmtRe.test(prefixClean) || !fmtRe.test(suffixClean)) {
+    res.status(400).json({ error: "Prefix/suffix may only contain letters, numbers, - / . and be at most 10 characters" });
+    return;
+  }
+  let contFrom = null;
+  if (continue_from != null && String(continue_from).trim() !== "") {
+    const raw = String(continue_from).trim();
+    contFrom = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(contFrom) || contFrom < 1 || contFrom > 1e9) {
+      res.status(400).json({ error: "Continue-from must be a positive whole number" });
+      return;
+    }
+  }
+  await exec(
+    "UPDATE clubs SET member_no_prefix = ?, member_no_suffix = ?, member_no_next = ? WHERE id = ?",
+    [prefixClean, suffixClean, contFrom, club.id]
+  );
+  res.json({
+    prefix: prefixClean,
+    suffix: suffixClean,
+    continue_from: contFrom,
+    next_number: await nextMemberNumber(club.id)
+  });
+});
 router14.get("/portal/members", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const rows = await query(
@@ -81123,6 +81164,9 @@ async function applyLateAlters() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_scoring_rounds_user ON scoring_rounds (user_id, started_at DESC)");
   await ddl("ALTER TABLE club_members ADD COLUMN IF NOT EXISTS member_number INT");
   await ddl("ALTER TABLE pending_memberships ADD COLUMN IF NOT EXISTS member_number INT");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_prefix VARCHAR(10) NOT NULL DEFAULT ''");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_suffix VARCHAR(10) NOT NULL DEFAULT ''");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS member_no_next INT");
   await ddl(`
     WITH nums AS (
       SELECT id, club_id,

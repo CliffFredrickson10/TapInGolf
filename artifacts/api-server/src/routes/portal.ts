@@ -2409,6 +2409,51 @@ router.post("/portal/events/:id/scores/:userId/dq", requireClubAuth, async (req:
 
 // ─── MEMBERS ─────────────────────────────────────────────────────────────────
 
+// ── Member numbering settings ────────────────────────────────────────────────
+// Clubs control how member numbers look (letters before/after the number) and
+// where the sequence continues from (to keep an existing numbering convention).
+router.get("/portal/member-numbering", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const c = await row<any>("SELECT member_no_prefix, member_no_suffix, member_no_next FROM clubs WHERE id = ?", [club.id]);
+  res.json({
+    prefix: c?.member_no_prefix ?? "",
+    suffix: c?.member_no_suffix ?? "",
+    continue_from: c?.member_no_next != null ? Number(c.member_no_next) : null,
+    next_number: await nextMemberNumber(club.id),
+  });
+});
+
+router.put("/portal/member-numbering", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { prefix, suffix, continue_from } = req.body ?? {};
+  const fmtRe = /^[A-Za-z0-9\-\/. ]{0,10}$/;
+  const prefixClean = String(prefix ?? "").trim();
+  const suffixClean = String(suffix ?? "").trim();
+  if (!fmtRe.test(prefixClean) || !fmtRe.test(suffixClean)) {
+    res.status(400).json({ error: "Prefix/suffix may only contain letters, numbers, - / . and be at most 10 characters" });
+    return;
+  }
+  let contFrom: number | null = null;
+  if (continue_from != null && String(continue_from).trim() !== "") {
+    const raw = String(continue_from).trim();
+    contFrom = /^\d+$/.test(raw) ? Number.parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(contFrom) || contFrom < 1 || contFrom > 1000000000) {
+      res.status(400).json({ error: "Continue-from must be a positive whole number" });
+      return;
+    }
+  }
+  await exec(
+    "UPDATE clubs SET member_no_prefix = ?, member_no_suffix = ?, member_no_next = ? WHERE id = ?",
+    [prefixClean, suffixClean, contFrom, club.id]
+  );
+  res.json({
+    prefix: prefixClean,
+    suffix: suffixClean,
+    continue_from: contFrom,
+    next_number: await nextMemberNumber(club.id),
+  });
+});
+
 router.get("/portal/members", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const rows = await query<any>(

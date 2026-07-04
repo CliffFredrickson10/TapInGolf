@@ -1085,6 +1085,18 @@ router.get("/portal/events", requireClubAuth, async (req: Request, res: Response
   })));
 });
 
+// Parse the tournament's standing-tee-time confirmation deadline. Accepts a
+// full ISO timestamp, or a local datetime ("YYYY-MM-DDTHH:mm") interpreted as
+// SAST (UTC+2) to match how tee times are handled everywhere else.
+function parseStandingConfirmBy(v: any): Date | null {
+  if (!v) return null;
+  const s = String(v).trim();
+  const d = /Z$|[+-]\d{2}:?\d{2}$/.test(s)
+    ? new Date(s)
+    : new Date(`${s.length === 16 ? `${s}:00` : s}+02:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
+
 router.post("/portal/events", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const {
@@ -1094,6 +1106,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
     ballot, scoring_enabled, payment_required, entries_required,
     use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
     shotgun_start, block_full_day,
+    prepopulate_standing, standing_confirm_by,
     rounds = 1,
   } = req.body ?? {};
   const status = "pending_publish";
@@ -1107,8 +1120,8 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, entries_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       shotgun_start, block_full_day, rounds, image_url, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       shotgun_start, block_full_day, prepopulate_standing, standing_confirm_by, rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [club.id, name, description ?? null, event_date, end_date ?? null, start_time ?? null, end_time ?? null,
      event_type, format, (req.body?.format_custom) ?? null,
      (req.body?.format2) || null, (req.body?.format2_custom) || null,
@@ -1121,6 +1134,7 @@ router.post("/portal/events", requireClubAuth, async (req: Request, res: Respons
      entries_required === false || entries_required === 0 ? 0 : 1,
      use_tiered_pricing ? 1 : 0, 1 /* allow_wallet always on */, allow_prepaid ? 1 : 0, allow_voucher ? 1 : 0,
      shotgun_start ? 1 : 0, block_full_day ? 1 : 0,
+     prepopulate_standing ? 1 : 0, parseStandingConfirmBy(standing_confirm_by),
      Number(rounds), (req.body?.image_url) || null, status, club.id]
   );
 
@@ -1170,6 +1184,8 @@ router.put("/portal/events/:id", requireClubAuth, async (req: Request, res: Resp
   if (req.body?.shotgun_double_tee !== undefined)  { updates.push("shotgun_double_tee = ?");  vals.push(req.body.shotgun_double_tee ? 1 : 0); }
   if (req.body?.shotgun_par3_holes !== undefined)  { updates.push("shotgun_par3_holes = ?");  vals.push(req.body.shotgun_par3_holes != null ? JSON.stringify(req.body.shotgun_par3_holes) : null); }
   if (req.body?.block_full_day !== undefined)      { updates.push("block_full_day = ?");      vals.push(req.body.block_full_day ? 1 : 0); }
+  if (req.body?.prepopulate_standing !== undefined) { updates.push("prepopulate_standing = ?"); vals.push(req.body.prepopulate_standing ? 1 : 0); }
+  if (req.body?.standing_confirm_by !== undefined)  { updates.push("standing_confirm_by = ?");  vals.push(parseStandingConfirmBy(req.body.standing_confirm_by)); }
   if (rounds !== undefined)              { updates.push("rounds = ?");            vals.push(Number(rounds)); }
   if (holes !== undefined)               { updates.push("holes = ?");             vals.push(Number(holes)); }
   // Editing a published tournament requires republishing — reset to pending_publish
@@ -1271,6 +1287,10 @@ router.post("/portal/events/:id/publish", requireClubAuth, async (req: Request, 
   const isRepublish = parseInt(regRow?.cnt ?? "0") > 0;
 
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+
+  // If this tournament pre-populates standing tee times, place/migrate the
+  // standing holds onto its slots right away rather than waiting for the worker.
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing prepopulate after publish failed"));
 
   const fmtDateStr = (d: any) => {
     try {
@@ -1553,6 +1573,10 @@ router.post("/portal/events/:id/resolve-and-publish", requireClubAuth, async (re
 
   // ── 3. Publish the new event (mirrors /publish logic exactly) ────────────────
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+
+  // If this tournament pre-populates standing tee times, place/migrate the
+  // standing holds onto its slots right away rather than waiting for the worker.
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing prepopulate after publish failed"));
 
   const fmtDate = (d: any) => {
     try {

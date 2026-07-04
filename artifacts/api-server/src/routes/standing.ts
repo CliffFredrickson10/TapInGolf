@@ -15,10 +15,12 @@ router.get("/standing/mine", async (req, res): Promise<void> => {
 
   const rows = await query<any>(
     `SELECT sh.id, sh.status, sh.confirm_by, sh.slot_id, sh.booking_id,
-            pts.date, pts.tee_time,
+            pts.date, pts.tee_time, pts.event_id,
+            ge.name AS event_name,
             c.id AS club_id, c.name AS club_name, c.location AS club_location
      FROM standing_holds sh
      JOIN portal_tee_slots pts ON pts.id = sh.slot_id
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
      JOIN clubs c ON c.id = pts.club_id
      WHERE sh.user_id = ? AND sh.status IN ('held', 'confirmed')
        AND pts.date >= CURRENT_DATE
@@ -37,6 +39,8 @@ router.get("/standing/mine", async (req, res): Promise<void> => {
     club_id:       r.club_id,
     club_name:     r.club_name,
     club_location: r.club_location,
+    event_id:      r.event_id ?? null,
+    event_name:    r.event_name ?? null,
   })));
 });
 

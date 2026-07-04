@@ -614,7 +614,16 @@ router.post("/bookings", async (req, res): Promise<void> => {
         "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
         [ev.id, user.id]
       );
-      if (!reg || reg.status !== "approved") {
+      // A standing hold on this slot means the club pre-populated this member's
+      // seat into the tournament — treat it as an implicit approved entry
+      // (registration is synced automatically after the booking is created).
+      const standingHold = (!reg || reg.status !== "approved")
+        ? await row<any>(
+            "SELECT id FROM standing_holds WHERE slot_id = ? AND user_id = ? AND status = 'held'",
+            [slot.id, user.id]
+          )
+        : null;
+      if ((!reg || reg.status !== "approved") && !standingHold) {
         res.status(403).json({
           message: `You must be registered and approved for "${ev.name}" before booking a tee time.`,
           error_code: "event_entry_required", event_id: ev.id, registration_status: reg?.status ?? null,

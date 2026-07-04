@@ -64778,7 +64778,11 @@ router4.post("/bookings", async (req, res) => {
         "SELECT status FROM event_registrations WHERE event_id = ? AND user_id = ?",
         [ev.id, user.id]
       );
-      if (!reg || reg.status !== "approved") {
+      const standingHold = !reg || reg.status !== "approved" ? await row(
+        "SELECT id FROM standing_holds WHERE slot_id = ? AND user_id = ? AND status = 'held'",
+        [slot.id, user.id]
+      ) : null;
+      if ((!reg || reg.status !== "approved") && !standingHold) {
         res.status(403).json({
           message: `You must be registered and approved for "${ev.name}" before booking a tee time.`,
           error_code: "event_entry_required",
@@ -70247,6 +70251,81 @@ async function notify(userId, pushToken, type, title, body, data) {
     }
   }
 }
+async function migrateHoldsToPrepopulatingEvents() {
+  const toNotify = [];
+  const moved = await withTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('standing_holds_materialize'))");
+    const { rows } = await clientQuery(
+      client,
+      `SELECT sh.id AS hold_id, sh.user_id, sh.confirm_by AS old_confirm_by,
+              ev.id AS event_slot_id, ev.date, ev.tee_time,
+              ge.id AS event_id, ge.name AS event_name, ge.standing_confirm_by,
+              c.id AS club_id, c.name AS club_name, u.push_token
+       FROM standing_holds sh
+       JOIN portal_tee_slots pts ON pts.id = sh.slot_id AND pts.event_id IS NULL
+       JOIN portal_tee_slots ev
+         ON ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
+        AND ev.event_id IS NOT NULL AND ev.is_active = 1
+        AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+        AND ev.id = (
+          SELECT MIN(e2.id) FROM portal_tee_slots e2
+          WHERE e2.club_id = pts.club_id AND e2.date = pts.date AND e2.tee_time = pts.tee_time
+            AND e2.event_id = ev.event_id AND e2.is_active = 1
+            AND COALESCE(e2.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
+        )
+       JOIN golf_events ge
+         ON ge.id = ev.event_id
+        AND ge.prepopulate_standing = 1
+        AND ge.status = 'active'
+       JOIN clubs c ON c.id = pts.club_id
+       JOIN users u ON u.id = sh.user_id
+       WHERE sh.status = 'held'`
+    );
+    let n = 0;
+    for (const r of rows) {
+      const confirmBy = r.standing_confirm_by ? new Date(r.standing_confirm_by) : new Date(r.old_confirm_by);
+      if (confirmBy.getTime() <= Date.now()) continue;
+      const upd = await clientQuery(
+        client,
+        `UPDATE standing_holds sh
+         SET slot_id = ?, confirm_by = ?
+         WHERE sh.id = ? AND sh.status = 'held'
+           AND NOT EXISTS (
+             SELECT 1 FROM standing_holds x WHERE x.slot_id = ? AND x.user_id = sh.user_id
+           )
+           AND (SELECT p.max_players - p.player_count FROM portal_tee_slots p WHERE p.id = ?)
+             > (SELECT COUNT(*)::int FROM standing_holds h2 WHERE h2.slot_id = ? AND h2.status = 'held')`,
+        [r.event_slot_id, confirmBy, r.hold_id, r.event_slot_id, r.event_slot_id, r.event_slot_id]
+      );
+      if (!upd.rowCount) continue;
+      n++;
+      toNotify.push({
+        user_id: r.user_id,
+        push_token: r.push_token,
+        club_id: r.club_id,
+        club_name: r.club_name,
+        event_id: r.event_id,
+        event_name: r.event_name,
+        slot_id: r.event_slot_id,
+        dateStr: fmtDate3(r.date),
+        timeStr: String(r.tee_time).slice(0, 5),
+        confirmBy
+      });
+    }
+    return n;
+  });
+  for (const t of toNotify) {
+    await notify(
+      t.user_id,
+      t.push_token,
+      "standing_tee_time_event",
+      "\u{1F3C6} Your standing tee time is now a tournament",
+      `${t.club_name} has scheduled ${t.event_name} over your regular tee time (${t.dateStr} at ${t.timeStr}). Your seat is still held for you \u2014 confirm by ${fmtSast(t.confirmBy)} or it will be released.`,
+      { type: "standing_tee_time_event", slot_id: t.slot_id, club_id: t.club_id, event_id: t.event_id, date: t.dateStr, tee_time: t.timeStr }
+    );
+  }
+  return moved;
+}
 async function materializeStandingHolds() {
   const toNotify = [];
   const created = await withTransaction(async (client) => {
@@ -70288,13 +70367,43 @@ async function materializeStandingHolds() {
          )
        ORDER BY pts.date ASC, pts.tee_time ASC`
     );
+    const { rows: eventRows } = await clientQuery(
+      client,
+      `SELECT sr.id AS reservation_id, sr.club_id, sr.confirm_hours_before,
+              srm.user_id, pts.id AS slot_id, pts.date, pts.tee_time,
+              ge.id AS event_id, ge.name AS event_name, ge.standing_confirm_by,
+              c.name AS club_name, u.push_token
+       FROM standing_reservations sr
+       JOIN standing_reservation_members srm ON srm.reservation_id = sr.id
+       JOIN portal_tee_slots pts
+         ON pts.club_id  = sr.club_id
+        AND pts.tee_time = sr.tee_time
+        AND pts.is_active = 1
+        AND pts.event_id IS NOT NULL
+        AND pts.date >= CURRENT_DATE
+        AND EXTRACT(DOW FROM pts.date) = sr.day_of_week
+        AND pts.id = (
+          SELECT MIN(p2.id) FROM portal_tee_slots p2
+          WHERE p2.club_id = pts.club_id AND p2.date = pts.date AND p2.tee_time = pts.tee_time
+            AND p2.is_active = 1 AND p2.event_id = pts.event_id
+        )
+       JOIN golf_events ge ON ge.id = pts.event_id AND ge.prepopulate_standing = 1 AND ge.status = 'active'
+       JOIN clubs c ON c.id = sr.club_id
+       JOIN users u ON u.id = srm.user_id
+       WHERE sr.active = 1
+         AND NOT EXISTS (
+           SELECT 1 FROM standing_holds sh
+           WHERE sh.slot_id = pts.id AND sh.user_id = srm.user_id
+         )
+       ORDER BY pts.date ASC, pts.tee_time ASC`
+    );
     let n = 0;
-    for (const r of rows) {
+    for (const r of [...rows, ...eventRows]) {
       const dateStr = fmtDate3(r.date);
       const timeStr = String(r.tee_time).slice(0, 5);
       const teeDt = /* @__PURE__ */ new Date(`${dateStr}T${timeStr}:00+02:00`);
       if (isNaN(teeDt.getTime())) continue;
-      const confirmBy = new Date(teeDt.getTime() - Number(r.confirm_hours_before) * 36e5);
+      const confirmBy = r.standing_confirm_by ? new Date(r.standing_confirm_by) : new Date(teeDt.getTime() - Number(r.confirm_hours_before) * 36e5);
       if (confirmBy.getTime() <= Date.now()) continue;
       const ins = await clientQuery(
         client,
@@ -70307,7 +70416,7 @@ async function materializeStandingHolds() {
       );
       if (!ins.rowCount) continue;
       n++;
-      toNotify.push({ user_id: r.user_id, push_token: r.push_token, club_id: r.club_id, club_name: r.club_name, slot_id: r.slot_id, dateStr, timeStr, confirmBy });
+      toNotify.push({ user_id: r.user_id, push_token: r.push_token, club_id: r.club_id, club_name: r.club_name, slot_id: r.slot_id, dateStr, timeStr, confirmBy, event_name: r.event_name ?? null });
     }
     return n;
   });
@@ -70316,8 +70425,8 @@ async function materializeStandingHolds() {
       t.user_id,
       t.push_token,
       "standing_tee_time",
-      "\u26F3 Standing tee time reserved",
-      `Your regular tee time at ${t.club_name} \u2014 ${t.dateStr} at ${t.timeStr} \u2014 is being held for you. Confirm by ${fmtSast(t.confirmBy)} or it will be released.`,
+      t.event_name ? "\u{1F3C6} Standing tee time reserved for tournament" : "\u26F3 Standing tee time reserved",
+      t.event_name ? `Your regular tee time at ${t.club_name} \u2014 ${t.dateStr} at ${t.timeStr} \u2014 falls in ${t.event_name} and is being held for you. Confirm by ${fmtSast(t.confirmBy)} or it will be released.` : `Your regular tee time at ${t.club_name} \u2014 ${t.dateStr} at ${t.timeStr} \u2014 is being held for you. Confirm by ${fmtSast(t.confirmBy)} or it will be released.`,
       { type: "standing_tee_time", slot_id: t.slot_id, club_id: t.club_id, date: t.dateStr, tee_time: t.timeStr }
     );
   }
@@ -70356,12 +70465,25 @@ async function releaseOrphanedStandingHolds() {
        AND pts.id = sh.slot_id AND c.id = pts.club_id AND u.id = sh.user_id
        AND (
          pts.is_active = 0
-         OR EXISTS (
+         -- public slot superseded by a tournament slot (holds that could move
+         -- onto a prepopulating tournament were already migrated before this).
+         -- Holds superseded by a prepopulating DRAFT (pending_publish) event are
+         -- kept in place \u2014 they migrate onto the event slot when it is published.
+         OR (pts.event_id IS NULL AND EXISTS (
            SELECT 1 FROM portal_tee_slots ev
+           JOIN golf_events ge2 ON ge2.id = ev.event_id
            WHERE ev.club_id = pts.club_id AND ev.date = pts.date AND ev.tee_time = pts.tee_time
-             AND ev.event_id IS NOT NULL AND ev.is_active = 1
+             AND ev.is_active = 1
              AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
-         )
+             AND NOT (ge2.prepopulate_standing = 1 AND ge2.status = 'pending_publish')
+         ))
+         -- hold sits on a tournament slot whose event was cancelled or no
+         -- longer pre-populates standing tee times
+         OR (pts.event_id IS NOT NULL AND EXISTS (
+           SELECT 1 FROM golf_events ge
+           WHERE ge.id = pts.event_id
+             AND (ge.status = 'cancelled' OR ge.prepopulate_standing = 0)
+         ))
        )
      RETURNING sh.id, sh.user_id, sh.slot_id, pts.date, pts.tee_time, c.name AS club_name, c.id AS club_id, u.push_token`
   );
@@ -70392,6 +70514,7 @@ async function revertHoldsForCancelledBookings() {
 }
 async function runStandingReservationsOnce() {
   await revertHoldsForCancelledBookings();
+  await migrateHoldsToPrepopulatingEvents();
   const orphaned = await releaseOrphanedStandingHolds();
   const created = await materializeStandingHolds();
   const released = await releaseExpiredStandingHolds();
@@ -71629,6 +71752,12 @@ router14.get("/portal/events", requireClubAuth2, async (req, res) => {
     pending_count: parseInt(e.pending_count ?? "0")
   })));
 });
+function parseStandingConfirmBy(v) {
+  if (!v) return null;
+  const s = String(v).trim();
+  const d = /Z$|[+-]\d{2}:?\d{2}$/.test(s) ? new Date(s) : /* @__PURE__ */ new Date(`${s.length === 16 ? `${s}:00` : s}+02:00`);
+  return isNaN(d.getTime()) ? null : d;
+}
 router14.post("/portal/events", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
   const {
@@ -71656,6 +71785,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     allow_voucher,
     shotgun_start,
     block_full_day,
+    prepopulate_standing,
+    standing_confirm_by,
     rounds = 1
   } = req.body ?? {};
   const status = "pending_publish";
@@ -71672,8 +71803,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
     `INSERT INTO golf_events (club_id, name, description, event_date, end_date, start_time, end_time,
        event_type, format, format_custom, format2, format2_custom, restriction, entry_fee, max_participants, divisions, entries_open, entries_close,
        ballot, scoring_enabled, payment_required, entries_required, use_tiered_pricing, allow_wallet, allow_prepaid, allow_voucher,
-       shotgun_start, block_full_day, rounds, image_url, status, created_by)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       shotgun_start, block_full_day, prepopulate_standing, standing_confirm_by, rounds, image_url, status, created_by)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       club.id,
       name,
@@ -71703,6 +71834,8 @@ router14.post("/portal/events", requireClubAuth2, async (req, res) => {
       allow_voucher ? 1 : 0,
       shotgun_start ? 1 : 0,
       block_full_day ? 1 : 0,
+      prepopulate_standing ? 1 : 0,
+      parseStandingConfirmBy(standing_confirm_by),
       Number(rounds),
       req.body?.image_url || null,
       status,
@@ -71869,6 +72002,14 @@ router14.put("/portal/events/:id", requireClubAuth2, async (req, res) => {
     updates.push("block_full_day = ?");
     vals.push(req.body.block_full_day ? 1 : 0);
   }
+  if (req.body?.prepopulate_standing !== void 0) {
+    updates.push("prepopulate_standing = ?");
+    vals.push(req.body.prepopulate_standing ? 1 : 0);
+  }
+  if (req.body?.standing_confirm_by !== void 0) {
+    updates.push("standing_confirm_by = ?");
+    vals.push(parseStandingConfirmBy(req.body.standing_confirm_by));
+  }
   if (rounds !== void 0) {
     updates.push("rounds = ?");
     vals.push(Number(rounds));
@@ -71963,6 +72104,7 @@ router14.post("/portal/events/:id/publish", requireClubAuth2, async (req, res) =
   const regRow = await row("SELECT COUNT(*) AS cnt FROM event_registrations WHERE event_id = ?", [evId]);
   const isRepublish = parseInt(regRow?.cnt ?? "0") > 0;
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing prepopulate after publish failed"));
   const fmtDateStr = (d) => {
     try {
       const iso = d instanceof Date ? d.toISOString() : String(d);
@@ -72210,6 +72352,7 @@ router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async 
     }
   }
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing prepopulate after publish failed"));
   const fmtDate5 = (d) => {
     try {
       const iso = d instanceof Date ? d.toISOString() : String(d);
@@ -79979,10 +80122,12 @@ router25.get("/standing/mine", async (req, res) => {
   }
   const rows = await query(
     `SELECT sh.id, sh.status, sh.confirm_by, sh.slot_id, sh.booking_id,
-            pts.date, pts.tee_time,
+            pts.date, pts.tee_time, pts.event_id,
+            ge.name AS event_name,
             c.id AS club_id, c.name AS club_name, c.location AS club_location
      FROM standing_holds sh
      JOIN portal_tee_slots pts ON pts.id = sh.slot_id
+     LEFT JOIN golf_events ge ON ge.id = pts.event_id
      JOIN clubs c ON c.id = pts.club_id
      WHERE sh.user_id = ? AND sh.status IN ('held', 'confirmed')
        AND pts.date >= CURRENT_DATE
@@ -79999,7 +80144,9 @@ router25.get("/standing/mine", async (req, res) => {
     tee_time: String(r.tee_time).slice(0, 5),
     club_id: r.club_id,
     club_name: r.club_name,
-    club_location: r.club_location
+    club_location: r.club_location,
+    event_id: r.event_id ?? null,
+    event_name: r.event_name ?? null
   })));
 });
 router25.post("/standing/holds/:id/decline", async (req, res) => {
@@ -81445,6 +81592,8 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS block_full_day SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS prepopulate_standing SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS standing_confirm_by TIMESTAMP");
   await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
     id            SERIAL PRIMARY KEY,
     ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,

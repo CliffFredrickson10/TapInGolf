@@ -84,6 +84,8 @@ interface GolfEvent {
   use_tiered_pricing: number; allow_wallet: number; allow_prepaid: number; allow_voucher: number;
   shotgun_start: number; shotgun_double_tee?: number; shotgun_par3_holes?: number[] | null;
   block_full_day: number;
+  prepopulate_standing?: number;
+  standing_confirm_by?: string | null;
   rounds: number; holes: number;
   additional_fees: { name: string; amount: number }[];
   total_registrations: number; approved_count: number; pending_count: number;
@@ -301,9 +303,20 @@ const EMPTY_FORM = {
   use_tiered_pricing: false, allow_wallet: true, allow_prepaid: false, allow_voucher: false,
   shotgun_start: null as boolean | null,
   block_full_day: false,
+  prepopulate_standing: false,
+  standing_confirm_by: "",
   use_divisions: false,
   divisions: DEFAULT_DIVISIONS,
 };
+
+// Convert a UTC ISO timestamp from the server to a SAST datetime-local value
+// ("YYYY-MM-DDTHH:mm") for the deadline input, and leave empty values alone.
+function toSastDatetimeLocal(v: any): string {
+  if (!v) return "";
+  const d = new Date(v);
+  if (isNaN(d.getTime())) return "";
+  return new Date(d.getTime() + 2 * 3600_000).toISOString().slice(0, 16);
+}
 
 // ─── Main component ────────────────────────────────────────────────────────
 
@@ -1023,6 +1036,8 @@ export default function Events() {
       allow_wallet: true, allow_prepaid: !!ev.allow_prepaid, allow_voucher: !!ev.allow_voucher,
       shotgun_start: !!ev.shotgun_start,
       block_full_day: !!ev.block_full_day,
+      prepopulate_standing: !!ev.prepopulate_standing,
+      standing_confirm_by: toSastDatetimeLocal(ev.standing_confirm_by),
       use_divisions: Array.isArray(ev.divisions) ? ev.divisions.length > 0 : true,
       divisions: (Array.isArray(ev.divisions) && ev.divisions.length > 0) ? ev.divisions : DEFAULT_DIVISIONS,
     });
@@ -3578,6 +3593,35 @@ ${bodyHtml}
                         )}
                       </div>
                       <Switch checked={!!form.block_full_day} onCheckedChange={v => setForm(f => ({ ...f, block_full_day: v }))} />
+                    </div>
+
+                    {/* ── Standing tee times ─────────────────────────────────────── */}
+                    <div className={`rounded-xl border-2 p-4 transition-colors ${form.prepopulate_standing ? "border-[#1a5c38] bg-green-50" : "border-border bg-muted/30"}`}>
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <p className="text-sm font-semibold flex items-center gap-1.5">
+                            🔁 Pre-populate standing tee times
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            Members with a standing (recurring) tee time that falls on a tournament tee time keep their seat — it's held on the tournament slot for them to confirm. If off, their standing tee times on tournament days are released.
+                          </p>
+                        </div>
+                        <Switch checked={!!form.prepopulate_standing} onCheckedChange={v => setForm(f => ({ ...f, prepopulate_standing: v }))} />
+                      </div>
+                      {form.prepopulate_standing && (
+                        <div className="mt-3 pt-3 border-t">
+                          <Label className="text-xs font-semibold">Confirmation deadline for standing tee times</Label>
+                          <p className="text-xs text-muted-foreground mt-0.5 mb-1.5">
+                            Held seats not confirmed (booked) by this date and time are released. Leave empty to use each standing reservation's own deadline.
+                          </p>
+                          <Input
+                            type="datetime-local"
+                            className="max-w-xs"
+                            value={form.standing_confirm_by}
+                            onChange={e => setForm(f => ({ ...f, standing_confirm_by: e.target.value }))}
+                          />
+                        </div>
+                      )}
                     </div>
 
                     {/* ── Start type ─────────────────────────────────────────────── */}

@@ -1521,6 +1521,12 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS payment_link VARCHAR(500)");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS billing_frequency VARCHAR(20) NOT NULL DEFAULT 'once'");
   await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS block_full_day SMALLINT NOT NULL DEFAULT 0");
+  // Standing tee-time integration: when prepopulate_standing = 1, standing
+  // reservation holds carry over onto the tournament's tee slots instead of
+  // being released; standing_confirm_by is the tournament-specific deadline
+  // (UTC) by which members must confirm those seats.
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS prepopulate_standing SMALLINT NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE golf_events ADD COLUMN IF NOT EXISTS standing_confirm_by TIMESTAMP");
   await ddl(`CREATE TABLE IF NOT EXISTS ad_billing_cycles (
     id            SERIAL PRIMARY KEY,
     ad_request_id INT NOT NULL REFERENCES ad_requests(id) ON DELETE CASCADE,

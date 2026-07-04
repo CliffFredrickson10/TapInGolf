@@ -18,6 +18,8 @@ interface StandingHold {
   club_id: number;
   club_name: string;
   club_location: string | null;
+  event_id: number | null;
+  event_name: string | null;
 }
 
 function formatDateLabel(dateStr: string): string {
@@ -92,9 +94,9 @@ export default function StandingHoldsCard() {
           prepaid_enabled:     club.prepaid_enabled === false ? "0" : "1",
           voucher_enabled:     club.voucher_enabled  === false ? "0" : "1",
           pay_at_club_enabled: club.pay_at_club_enabled ? "1" : "0",
-          event_id: "",
-          event_name: "",
-          event_holes: "",
+          event_id: slot.event_id ? String(slot.event_id) : "",
+          event_name: slot.event_name ?? hold.event_name ?? "",
+          event_holes: slot.event_holes != null ? String(slot.event_holes) : "",
         },
       });
     } catch {
@@ -142,11 +144,18 @@ export default function StandingHoldsCard() {
               <Ionicons name="repeat" size={20} color={colors.accent} />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={[styles.label, { color: colors.accent }]}>Standing Tee Time</Text>
+              <Text style={[styles.label, { color: colors.accent }]}>
+                {hold.event_name ? "Standing Tee Time • Tournament" : "Standing Tee Time"}
+              </Text>
               <Text style={[styles.club, { color: colors.foreground }]} numberOfLines={1}>{hold.club_name}</Text>
               <Text style={[styles.meta, { color: colors.mutedForeground }]}>
                 {formatDateLabel(hold.date)} • {hold.tee_time}
               </Text>
+              {!!hold.event_name && (
+                <Text style={[styles.meta, { color: colors.accent }]} numberOfLines={1}>
+                  🏆 {hold.event_name}
+                </Text>
+              )}
             </View>
           </View>
           <Text style={[styles.deadline, { color: colors.mutedForeground }]}>

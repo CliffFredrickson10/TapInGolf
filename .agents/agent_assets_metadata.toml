@@ -155,3 +155,9 @@ id = "8HwF2DoQ71ndjQxdPFrBJ"
 uri = "file://.local/privacy-policy.md"
 type = "text"
 title = "Privacy Policy"
+
+[[outputs]]
+id = "5KdQyCS3PnlsygQs82mq0"
+uri = "file://artifacts/tapin-golf/store-listing.md"
+type = "text"
+title = "ASO-optimised store listing (Play + App Store)"

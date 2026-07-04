@@ -431,7 +431,10 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
   // ── All tee slots come from portal_tee_slots ─────────────────────────────
   const portalSlots = await query<any>(
     `SELECT pts.*,
-       GREATEST(0, pts.max_players - pts.player_count) AS available_slots,
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh
+            WHERE sh.slot_id = pts.id AND sh.status = 'held' AND sh.user_id != ?)
+       ) AS available_slots,
        (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players,
@@ -440,7 +443,7 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
      ORDER BY pts.tee_time ASC`,
-    [clubId, date]
+    [authUser?.id ?? 0, clubId, date]
   );
 
   const isJuniorResponse = !!(authUser?.id && (tierType === "junior_member" || tierType === "junior_visitor"));

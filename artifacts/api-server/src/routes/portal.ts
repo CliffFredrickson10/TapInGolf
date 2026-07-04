@@ -13,6 +13,7 @@ import { logger } from "../lib/logger";
 import { saveUserNotification } from "../lib/userNotifications";
 import { sendPushNotifications } from "../lib/notifications";
 import { nextMemberNumber, memberNumberTaken } from "../lib/memberNumber";
+import { runStandingReservationsOnce } from "../worker/standingReservations";
 
 // DB stores snake_case values: 'first_tee' | 'tenth_tee' | 'two_tee'
 function normTeeStart(raw: string | undefined | null): string {
@@ -2452,6 +2453,127 @@ router.put("/portal/member-numbering", requireClubAuth, async (req: Request, res
     continue_from: contFrom,
     next_number: await nextMemberNumber(club.id),
   });
+});
+
+// ─── STANDING (RECURRING) TEE TIME RESERVATIONS ─────────────────────────────
+
+const TEE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+async function validateStandingBody(clubId: number, body: any): Promise<{ error?: string; day_of_week?: number; tee_time?: string; confirm_hours_before?: number; member_user_ids?: number[] }> {
+  const day = Number(body?.day_of_week);
+  if (!Number.isInteger(day) || day < 0 || day > 6) return { error: "day_of_week must be 0 (Sunday) to 6 (Saturday)" };
+  const teeTime = String(body?.tee_time ?? "").trim();
+  if (!TEE_TIME_RE.test(teeTime)) return { error: "tee_time must be in HH:MM format" };
+  const hours = Number(body?.confirm_hours_before);
+  if (!Number.isInteger(hours) || hours < 1 || hours > 336) return { error: "confirm_hours_before must be between 1 and 336 hours" };
+  const ids: number[] = Array.isArray(body?.member_user_ids) ? [...new Set<number>(body.member_user_ids.map((n: any) => Number(n)))] : [];
+  if (!ids.length || ids.length > 4 || ids.some((n) => !Number.isInteger(n) || n < 1)) {
+    return { error: "Select between 1 and 4 members" };
+  }
+  const cnt = await row<any>(
+    "SELECT COUNT(*)::int AS n FROM club_members WHERE club_id = ? AND user_id = ANY(?)",
+    [clubId, ids]
+  );
+  if (Number(cnt?.n ?? 0) !== ids.length) return { error: "All selected players must be members of your club" };
+  return { day_of_week: day, tee_time: teeTime, confirm_hours_before: hours, member_user_ids: ids as number[] };
+}
+
+router.get("/portal/standing-reservations", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const reservations = await query<any>(
+    `SELECT sr.id, sr.day_of_week, sr.tee_time, sr.confirm_hours_before, sr.active, sr.created_at,
+       (SELECT JSON_AGG(JSON_BUILD_OBJECT('user_id', u.id, 'name', u.name, 'email', u.email) ORDER BY u.name)
+        FROM standing_reservation_members srm JOIN users u ON u.id = srm.user_id
+        WHERE srm.reservation_id = sr.id) AS members
+     FROM standing_reservations sr
+     WHERE sr.club_id = ?
+     ORDER BY sr.day_of_week ASC, sr.tee_time ASC`,
+    [club.id]
+  );
+  const ids = reservations.map((r: any) => r.id);
+  let holds: any[] = [];
+  if (ids.length) {
+    holds = await query<any>(
+      `SELECT sh.reservation_id, sh.status, sh.confirm_by, pts.date, pts.tee_time, u.name AS member_name, u.id AS user_id
+       FROM standing_holds sh
+       JOIN portal_tee_slots pts ON pts.id = sh.slot_id
+       JOIN users u ON u.id = sh.user_id
+       WHERE sh.reservation_id = ANY(?) AND pts.date >= CURRENT_DATE
+       ORDER BY pts.date ASC, u.name ASC`,
+      [ids]
+    );
+  }
+  const holdsByRes: Record<number, any[]> = {};
+  for (const h of holds) {
+    (holdsByRes[h.reservation_id] ??= []).push({
+      user_id: h.user_id,
+      member_name: h.member_name,
+      status: h.status,
+      confirm_by: h.confirm_by instanceof Date ? h.confirm_by.toISOString() : h.confirm_by,
+      date: (h.date instanceof Date ? h.date.toISOString() : String(h.date)).slice(0, 10),
+      tee_time: String(h.tee_time).slice(0, 5),
+    });
+  }
+  res.json(reservations.map((r: any) => ({
+    id: r.id,
+    day_of_week: Number(r.day_of_week),
+    tee_time: String(r.tee_time).slice(0, 5),
+    confirm_hours_before: Number(r.confirm_hours_before),
+    active: !!Number(r.active),
+    members: typeof r.members === "string" ? JSON.parse(r.members) : (r.members ?? []),
+    upcoming: holdsByRes[r.id] ?? [],
+  })));
+});
+
+router.post("/portal/standing-reservations", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const v = await validateStandingBody(club.id, req.body);
+  if (v.error) { res.status(400).json({ error: v.error }); return; }
+
+  const resId = await exec(
+    "INSERT INTO standing_reservations (club_id, day_of_week, tee_time, confirm_hours_before) VALUES (?, ?, ?, ?)",
+    [club.id, v.day_of_week, v.tee_time, v.confirm_hours_before]
+  );
+  for (const uid of v.member_user_ids!) {
+    await exec("INSERT INTO standing_reservation_members (reservation_id, user_id) VALUES (?, ?)", [resId, uid]);
+  }
+  // Place holds on already-generated matching slots right away
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing materialize after create failed"));
+  res.json({ id: resId, success: true });
+});
+
+router.put("/portal/standing-reservations/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params.id), 10);
+  const existing = await row<any>("SELECT * FROM standing_reservations WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!existing) { res.status(404).json({ error: "Reservation not found" }); return; }
+
+  const v = await validateStandingBody(club.id, req.body);
+  if (v.error) { res.status(400).json({ error: v.error }); return; }
+  const active = req.body?.active === undefined ? Number(existing.active) : (req.body.active ? 1 : 0);
+
+  await run(
+    "UPDATE standing_reservations SET day_of_week = ?, tee_time = ?, confirm_hours_before = ?, active = ? WHERE id = ?",
+    [v.day_of_week, v.tee_time, v.confirm_hours_before, active, id]
+  );
+  await run("DELETE FROM standing_reservation_members WHERE reservation_id = ?", [id]);
+  for (const uid of v.member_user_ids!) {
+    await exec("INSERT INTO standing_reservation_members (reservation_id, user_id) VALUES (?, ?)", [id, uid]);
+  }
+  // Drop unconfirmed holds (confirmed ones are real bookings and stay) and re-materialize
+  await run("DELETE FROM standing_holds WHERE reservation_id = ? AND status = 'held'", [id]);
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing materialize after update failed"));
+  res.json({ success: true });
+});
+
+router.delete("/portal/standing-reservations/:id", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params.id), 10);
+  const existing = await row<any>("SELECT id FROM standing_reservations WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!existing) { res.status(404).json({ error: "Reservation not found" }); return; }
+  // Cascade removes members + holds; confirmed bookings themselves are unaffected
+  await run("DELETE FROM standing_reservations WHERE id = ?", [id]);
+  res.json({ success: true });
 });
 
 router.get("/portal/members", requireClubAuth, async (req: Request, res: Response): Promise<void> => {

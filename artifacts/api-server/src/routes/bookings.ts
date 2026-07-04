@@ -187,7 +187,9 @@ router.get("/bookings/open", async (req, res): Promise<void> => {
        pts.id          AS tee_time_id,
        pts.date, pts.tee_time AS time, 0 AS price, NULL AS promotional_price,
        pts.max_players AS total_slots,
-       GREATEST(0, pts.max_players - pts.player_count) AS available,
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh WHERE sh.slot_id = pts.id AND sh.status = 'held')
+       ) AS available,
        pts.player_count AS booked_count,
        c.id            AS club_id,
        c.name          AS club_name,
@@ -452,11 +454,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
     `SELECT pts.*, c.name AS club_name,
        c.cart_available, c.cart_compulsory, c.cart_price,
        c.range_balls_enabled, c.range_balls_price, c.range_balls_options, c.club_hire_enabled, c.club_hire_price,
-       GREATEST(0, pts.max_players - pts.player_count) AS available
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh
+            WHERE sh.slot_id = pts.id AND sh.status = 'held' AND sh.user_id != ?)
+       ) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
      WHERE pts.id = ? AND pts.is_active = 1`,
-    [parseInt(tee_time_id)]
+    [user.id, parseInt(tee_time_id)]
   );
 
   if (!rawSlot) { res.status(404).json({ message: "Tee time not found" }); return; }
@@ -916,6 +921,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
 
   let bookingId!: number;
+  try {
   await withTransaction(async (client) => {
     const insertResult = await clientQuery(client,
       `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
@@ -1013,12 +1019,36 @@ router.post("/bookings", async (req, res): Promise<void> => {
         [bookingId, user.id]
       );
     }
-    // Track booked players in the portal slot
+    // Track booked players in the portal slot. The capacity re-check here is a
+    // defensive guard against concurrent bookings/holds racing past the earlier
+    // availability check — active held seats (other than the booker's own hold)
+    // still count against capacity.
+    const slotUpd = await clientQuery(client,
+      `UPDATE portal_tee_slots SET player_count = player_count + ?
+       WHERE id = ?
+         AND player_count + ? <= max_players - (
+           SELECT COUNT(*)::int FROM standing_holds sh
+           WHERE sh.slot_id = portal_tee_slots.id AND sh.status = 'held' AND sh.user_id <> ?
+         )`,
+      [numPlayers, parseInt(tee_time_id), numPlayers, user.id]
+    );
+    if (!slotUpd.rowCount) {
+      throw Object.assign(new Error("Slot is fully booked"), { statusCode: 409 });
+    }
+    // If the booker had a standing-reservation hold on this slot, consume it:
+    // the booking now occupies the seat, so the hold stops hiding it.
     await clientQuery(client,
-      "UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?",
-      [numPlayers, parseInt(tee_time_id)]
+      "UPDATE standing_holds SET status = 'confirmed', booking_id = ? WHERE slot_id = ? AND user_id = ? AND status = 'held'",
+      [bookingId, parseInt(tee_time_id), user.id]
     );
   });
+  } catch (txnErr: any) {
+    if (txnErr?.statusCode === 409) {
+      res.status(409).json({ message: "This tee time just filled up. Please pick another slot." });
+      return;
+    }
+    throw txnErr;
+  }
 
   // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
   if (!needsStitchLink) {
@@ -1554,6 +1584,14 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
         [parseInt(booking.players, 10) || 1, booking.portal_slot_id]
       );
     }
+    // A standing-reservation hold consumed by this booking reverts to 'held'
+    // (still protected) if the confirm deadline hasn't passed, else releases.
+    await clientQuery(client,
+      `UPDATE standing_holds
+       SET status = CASE WHEN confirm_by > NOW() THEN 'held' ELSE 'released' END, booking_id = NULL
+       WHERE booking_id = ? AND status = 'confirmed'`,
+      [id]
+    );
   });
 
   // Fetch club details for the response + portal inbox notification

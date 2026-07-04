@@ -88,6 +88,7 @@ Run this via cPanel phpMyAdmin or SSH. Using `'%'` avoids needing to update the 
 - `bookings` — booking records with split-bill support
 - `booking_players` — per-player join table for split billing
 - `friendships` — friend requests/accepted pairs
+- `standing_reservations` / `standing_reservation_members` / `standing_holds` — recurring weekly tee-time reservations: portal creates per day-of-week reservations for ≤4 members; a 5-min worker materializes per-seat holds that hide seats from public booking; members confirm in-app via normal booking/payment before the club-set deadline (`confirm_hours_before`) or the seat auto-releases
 - `reviews` — club ratings
 - `ads` — sponsored club ads by placement
 

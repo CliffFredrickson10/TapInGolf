@@ -23,6 +23,7 @@ import bansRouter from "./bans";
 import knockoutRouter from "./knockout";
 import scoringRouter from "./scoring";
 import supportRouter from "./support";
+import standingRouter from "./standing";
 
 const router: IRouter = Router();
 
@@ -31,6 +32,7 @@ router.use(authRouter);
 router.use(geofencingRouter); // must come before clubsRouter — /clubs/geofences vs /clubs/:id
 router.use(clubsRouter);
 router.use(bookingsRouter);
+router.use(standingRouter);
 router.use(friendsRouter);
 router.use(adsRouter);
 router.use(messagesRouter);

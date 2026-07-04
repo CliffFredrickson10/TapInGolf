@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router26;
+    module.exports = Router27;
     module.exports.Route = Route;
-    function Router26(options) {
-      if (!(this instanceof Router26)) {
-        return new Router26(options);
+    function Router27(options) {
+      if (!(this instanceof Router27)) {
+        return new Router27(options);
       }
       const opts = options || {};
-      function router26(req, res, next) {
-        router26.handle(req, res, next);
+      function router27(req, res, next) {
+        router27.handle(req, res, next);
       }
-      Object.setPrototypeOf(router26, this);
-      router26.caseSensitive = opts.caseSensitive;
-      router26.mergeParams = opts.mergeParams;
-      router26.params = {};
-      router26.strict = opts.strict;
-      router26.stack = [];
-      return router26;
+      Object.setPrototypeOf(router27, this);
+      router27.caseSensitive = opts.caseSensitive;
+      router27.mergeParams = opts.mergeParams;
+      router27.params = {};
+      router27.strict = opts.strict;
+      router27.stack = [];
+      return router27;
     }
-    Router26.prototype = function() {
+    Router27.prototype = function() {
     };
-    Router26.prototype.param = function param(name, fn) {
+    Router27.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router26.prototype.handle = function handle(req, res, callback) {
+    Router27.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router26.prototype.use = function use(handler) {
+    Router27.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router26.prototype.route = function route(path4) {
+    Router27.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router26.prototype[method] = function(path4) {
+      Router27.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router26 = require_router();
+    var Router27 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router26 = null;
+      var router27 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router26 === null) {
-            router26 = new Router26({
+          if (router27 === null) {
+            router27 = new Router27({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router26;
+          return router27;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router26 = this.router;
+      var router27 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router26.use(path4, fn2);
+          return router27.use(path4, fn2);
         }
         debug7(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router26.use(path4, function mounted_app(req, res, next) {
+        router27.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router26 = require_router();
+    var Router27 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router26.Route;
-    exports.Router = Router26;
+    exports.Route = Router27.Route;
+    exports.Router = Router27;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -56446,15 +56446,15 @@ function startAutoTeeGenWorker() {
   }, 8e3);
   setInterval(() => {
     runAllActiveRules().catch((err) => logger.warn({ err }, "Auto tee-gen: interval run error"));
-  }, POLL_INTERVAL_MS);
+  }, POLL_INTERVAL_MS2);
 }
-var POLL_INTERVAL_MS, TEE_START_MAP;
+var POLL_INTERVAL_MS2, TEE_START_MAP;
 var init_autoTeeGen = __esm({
   "src/worker/autoTeeGen.ts"() {
     "use strict";
     init_pg();
     init_logger();
-    POLL_INTERVAL_MS = 24 * 60 * 60 * 1e3;
+    POLL_INTERVAL_MS2 = 24 * 60 * 60 * 1e3;
     TEE_START_MAP = {
       first_tee: "1st Tee",
       tenth_tee: "10th Tee",
@@ -56467,7 +56467,7 @@ var init_autoTeeGen = __esm({
 });
 
 // src/app.ts
-var import_express26 = __toESM(require_express2(), 1);
+var import_express27 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
@@ -57392,11 +57392,11 @@ function parsePathRewriteRules(rewriteConfig) {
 var debug4 = Debug.extend("router");
 async function getTarget(req, res, config) {
   let newTarget;
-  const router26 = config.router;
-  if (isPlainObject(router26)) {
-    newTarget = getTargetFromProxyTable(req, router26);
-  } else if (typeof router26 === "function") {
-    newTarget = await router26(req, res, config);
+  const router27 = config.router;
+  if (isPlainObject(router27)) {
+    newTarget = getTargetFromProxyTable(req, router27);
+  } else if (typeof router27 === "function") {
+    newTarget = await router27(req, res, config);
   }
   return newTarget;
 }
@@ -57643,7 +57643,7 @@ function createProxyMiddleware(options) {
 var debug6 = Debug.extend("response-interceptor");
 
 // src/routes/index.ts
-var import_express25 = __toESM(require_express2(), 1);
+var import_express26 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -62940,7 +62940,10 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
   };
   const portalSlots = await query(
     `SELECT pts.*,
-       GREATEST(0, pts.max_players - pts.player_count) AS available_slots,
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh
+            WHERE sh.slot_id = pts.id AND sh.status = 'held' AND sh.user_id != ?)
+       ) AS available_slots,
        (SELECT JSON_AGG(JSON_BUILD_OBJECT('name', psb.player_name, 'players', 1))
         FROM portal_slot_bookings psb WHERE psb.slot_id = pts.id
        ) AS existing_players,
@@ -62949,7 +62952,7 @@ router3.get("/clubs/:id/tee-times", async (req, res) => {
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
      ORDER BY pts.tee_time ASC`,
-    [clubId, date]
+    [authUser?.id ?? 0, clubId, date]
   );
   const isJuniorResponse = !!(authUser?.id && (tierType === "junior_member" || tierType === "junior_visitor"));
   const nowMs = Date.now();
@@ -64367,7 +64370,9 @@ router4.get("/bookings/open", async (req, res) => {
        pts.id          AS tee_time_id,
        pts.date, pts.tee_time AS time, 0 AS price, NULL AS promotional_price,
        pts.max_players AS total_slots,
-       GREATEST(0, pts.max_players - pts.player_count) AS available,
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh WHERE sh.slot_id = pts.id AND sh.status = 'held')
+       ) AS available,
        pts.player_count AS booked_count,
        c.id            AS club_id,
        c.name          AS club_name,
@@ -64611,11 +64616,14 @@ router4.post("/bookings", async (req, res) => {
     `SELECT pts.*, c.name AS club_name,
        c.cart_available, c.cart_compulsory, c.cart_price,
        c.range_balls_enabled, c.range_balls_price, c.range_balls_options, c.club_hire_enabled, c.club_hire_price,
-       GREATEST(0, pts.max_players - pts.player_count) AS available
+       GREATEST(0, pts.max_players - pts.player_count
+         - (SELECT COUNT(*)::int FROM standing_holds sh
+            WHERE sh.slot_id = pts.id AND sh.status = 'held' AND sh.user_id != ?)
+       ) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
      WHERE pts.id = ? AND pts.is_active = 1`,
-    [parseInt(tee_time_id)]
+    [user.id, parseInt(tee_time_id)]
   );
   if (!rawSlot) {
     res.status(404).json({ message: "Tee time not found" });
@@ -64999,121 +65007,142 @@ router4.post("/bookings", async (req, res) => {
     }
   }
   let bookingId;
-  await withTransaction(async (client) => {
-    const insertResult = await clientQuery(
-      client,
-      `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
+  try {
+    await withTransaction(async (client) => {
+      const insertResult = await clientQuery(
+        client,
+        `INSERT INTO bookings (user_id, tee_time_id, portal_slot_id, players, split_bill, total_amount, my_amount,
         booking_ref, payment_method, status, voucher_code, discount_amount, cart_fee, platform_fee, club_amount, holes,
         driving_range_fee, club_hire_fee, price_tier, event_entry_fee, event_additional_fees, knockout_match_id)
        VALUES (?, NULL, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`,
-      [
-        user.id,
-        parseInt(tee_time_id),
-        numPlayers,
-        split_bill ? 1 : 0,
-        totalAmount,
-        chargeAmount,
-        ref,
-        effectivePaymentMethod,
-        appliedVoucher,
-        discountAmount,
-        cartFee,
-        platformFee,
-        clubAmount,
-        numHoles,
-        rangeBallsFee,
-        clubHireFee,
-        bookingTierType,
-        bookingEventEntryFee,
-        bookingEventAdditionalFees,
-        knockout_match_id ? parseInt(knockout_match_id) : null
-      ]
-    );
-    bookingId = insertResult.rows[0].id;
-    await clientQuery(
-      client,
-      "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
-      [bookingId, user.id, chargeAmount]
-    );
-    for (let i = 0; i < normalised.length; i++) {
-      const p = normalised[i];
-      const pAmount = friendAmounts[i] ?? 0;
-      if (p.user_id) {
-        await clientQuery(
-          client,
-          "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
-          [bookingId, p.user_id, pAmount]
-        );
-      } else if (p.guest_name) {
-        await clientQuery(
-          client,
-          "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, NULL, ?, 0, ?)",
-          [bookingId, p.guest_name, pAmount]
-        );
+        [
+          user.id,
+          parseInt(tee_time_id),
+          numPlayers,
+          split_bill ? 1 : 0,
+          totalAmount,
+          chargeAmount,
+          ref,
+          effectivePaymentMethod,
+          appliedVoucher,
+          discountAmount,
+          cartFee,
+          platformFee,
+          clubAmount,
+          numHoles,
+          rangeBallsFee,
+          clubHireFee,
+          bookingTierType,
+          bookingEventEntryFee,
+          bookingEventAdditionalFees,
+          knockout_match_id ? parseInt(knockout_match_id) : null
+        ]
+      );
+      bookingId = insertResult.rows[0].id;
+      await clientQuery(
+        client,
+        "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
+        [bookingId, user.id, chargeAmount]
+      );
+      for (let i = 0; i < normalised.length; i++) {
+        const p = normalised[i];
+        const pAmount = friendAmounts[i] ?? 0;
+        if (p.user_id) {
+          await clientQuery(
+            client,
+            "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, ?, NULL, 0, ?)",
+            [bookingId, p.user_id, pAmount]
+          );
+        } else if (p.guest_name) {
+          await clientQuery(
+            client,
+            "INSERT INTO booking_players (booking_id, user_id, guest_name, paid, amount) VALUES (?, NULL, ?, 0, ?)",
+            [bookingId, p.guest_name, pAmount]
+          );
+        }
       }
-    }
-    if (!needsStitchLink) {
-      await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
-    }
-    if (appliedVoucher) {
-      if (isCancellationVoucher) {
-        await clientQuery(
-          client,
-          `UPDATE cancellation_vouchers
+      if (!needsStitchLink) {
+        await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
+      }
+      if (appliedVoucher) {
+        if (isCancellationVoucher) {
+          await clientQuery(
+            client,
+            `UPDATE cancellation_vouchers
              SET value_remaining = GREATEST(0, COALESCE(value_remaining, value_rands) - ?),
                  redeemed_at     = CASE WHEN GREATEST(0, COALESCE(value_remaining, value_rands) - ?) = 0 THEN NOW() ELSE redeemed_at END
            WHERE code = ?`,
-          [discountAmount, discountAmount, appliedVoucher]
-        );
-      } else {
-        await clientQuery(
-          client,
-          `UPDATE vouchers
+            [discountAmount, discountAmount, appliedVoucher]
+          );
+        } else {
+          await clientQuery(
+            client,
+            `UPDATE vouchers
              SET value_remaining = GREATEST(0, COALESCE(value_remaining, discount_value) - ?),
                  uses_count      = uses_count + 1,
                  active          = CASE WHEN GREATEST(0, COALESCE(value_remaining, discount_value) - ?) = 0 THEN 0 ELSE active END
            WHERE code = ?`,
-          [discountAmount, discountAmount, appliedVoucher]
-        );
+            [discountAmount, discountAmount, appliedVoucher]
+          );
+        }
       }
-    }
-    if (payment_method === "prepaid" && !prepaidAddonsDue) {
-      await clientQuery(
-        client,
-        `UPDATE club_members
+      if (payment_method === "prepaid" && !prepaidAddonsDue) {
+        await clientQuery(
+          client,
+          `UPDATE club_members
            SET prepaid_rounds_used = prepaid_rounds_used + 1
          WHERE club_id = ? AND user_id = ? AND status = 'active'
            AND prepaid_rounds > prepaid_rounds_used`,
-        [slot.club_id, user.id]
+          [slot.club_id, user.id]
+        );
+      }
+      if (payment_method === "wallet") {
+        await clientQuery(
+          client,
+          "UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
+          [splitAmount, user.id, splitAmount]
+        );
+      }
+      if (!needsStitchLink) {
+        await clientQuery(
+          client,
+          "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
+          [effectivePaymentMethod, bookingId, user.id]
+        );
+      }
+      if (prepaidAddonsDue) {
+        await clientQuery(
+          client,
+          "UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?",
+          [bookingId, user.id]
+        );
+      }
+      const slotUpd = await clientQuery(
+        client,
+        `UPDATE portal_tee_slots SET player_count = player_count + ?
+       WHERE id = ?
+         AND player_count + ? <= max_players - (
+           SELECT COUNT(*)::int FROM standing_holds sh
+           WHERE sh.slot_id = portal_tee_slots.id AND sh.status = 'held' AND sh.user_id <> ?
+         )`,
+        [numPlayers, parseInt(tee_time_id), numPlayers, user.id]
       );
-    }
-    if (payment_method === "wallet") {
+      if (!slotUpd.rowCount) {
+        throw Object.assign(new Error("Slot is fully booked"), { statusCode: 409 });
+      }
       await clientQuery(
         client,
-        "UPDATE wallets SET balance = balance - ? WHERE user_id = ? AND balance >= ?",
-        [splitAmount, user.id, splitAmount]
+        "UPDATE standing_holds SET status = 'confirmed', booking_id = ? WHERE slot_id = ? AND user_id = ? AND status = 'held'",
+        [bookingId, parseInt(tee_time_id), user.id]
       );
+    });
+  } catch (txnErr) {
+    if (txnErr?.statusCode === 409) {
+      res.status(409).json({ message: "This tee time just filled up. Please pick another slot." });
+      return;
     }
-    if (!needsStitchLink) {
-      await clientQuery(
-        client,
-        "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
-        [effectivePaymentMethod, bookingId, user.id]
-      );
-    }
-    if (prepaidAddonsDue) {
-      await clientQuery(
-        client,
-        "UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?",
-        [bookingId, user.id]
-      );
-    }
-    await clientQuery(
-      client,
-      "UPDATE portal_tee_slots SET player_count = player_count + ? WHERE id = ?",
-      [numPlayers, parseInt(tee_time_id)]
-    );
-  });
+    throw txnErr;
+  }
   if (!needsStitchLink) {
     fireInvoiceEmail(bookingId).catch(() => {
     });
@@ -65626,6 +65655,13 @@ router4.put("/bookings/:id/cancel", async (req, res) => {
         [parseInt(booking.players, 10) || 1, booking.portal_slot_id]
       );
     }
+    await clientQuery(
+      client,
+      `UPDATE standing_holds
+       SET status = CASE WHEN confirm_by > NOW() THEN 'held' ELSE 'released' END, booking_id = NULL
+       WHERE booking_id = ? AND status = 'confirmed'`,
+      [id]
+    );
   });
   const club = booking.portal_slot_id ? await row(
     `SELECT c.id AS club_id, c.name AS club_name,
@@ -69627,7 +69663,7 @@ router13.post("/admin/events", async (req, res) => {
     )
   ]);
   if (audience.length > 0 && clubRow) {
-    const fmtDate3 = (d) => {
+    const fmtDate5 = (d) => {
       try {
         return (/* @__PURE__ */ new Date(String(d).slice(0, 10) + "T00:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
       } catch {
@@ -69638,7 +69674,7 @@ router13.post("/admin/events", async (req, res) => {
       to: u.push_token,
       sound: "default",
       title: `\u26F3 New Event \u2014 ${clubRow.name}`,
-      body: `${String(name)} \xB7 ${fmtDate3(event_date)}. Tap to view & enter.`,
+      body: `${String(name)} \xB7 ${fmtDate5(event_date)}. Tap to view & enter.`,
       data: { type: "event_created", event_id: eventId, club_id: clubId }
     })));
   }
@@ -70186,6 +70222,155 @@ import path2 from "path";
 init_otp();
 init_logger();
 init_notifications();
+
+// src/worker/standingReservations.ts
+init_pg();
+init_logger();
+init_notifications();
+var POLL_INTERVAL_MS = 5 * 60 * 1e3;
+var INITIAL_DELAY_MS = 20 * 1e3;
+var DOW_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+function fmtDate3(d) {
+  return (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+}
+function fmtSast(dt) {
+  const sast = new Date(dt.getTime() + 2 * 36e5);
+  const iso = sast.toISOString();
+  return `${DOW_NAMES[sast.getUTCDay()].slice(0, 3)} ${iso.slice(0, 10)} ${iso.slice(11, 16)}`;
+}
+async function notify(userId, pushToken, type, title, body, data) {
+  saveUserNotification(userId, type, title, body, data);
+  if (pushToken?.startsWith("ExponentPushToken[")) {
+    try {
+      await sendPushNotifications([{ to: pushToken, sound: "default", title, body, data }]);
+    } catch {
+    }
+  }
+}
+async function materializeStandingHolds() {
+  const toNotify = [];
+  const created = await withTransaction(async (client) => {
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('standing_holds_materialize'))");
+    const { rows } = await clientQuery(
+      client,
+      `SELECT sr.id AS reservation_id, sr.club_id, sr.confirm_hours_before,
+              srm.user_id, pts.id AS slot_id, pts.date, pts.tee_time,
+              c.name AS club_name, u.push_token
+       FROM standing_reservations sr
+       JOIN standing_reservation_members srm ON srm.reservation_id = sr.id
+       JOIN portal_tee_slots pts
+         ON pts.club_id  = sr.club_id
+        AND pts.tee_time = sr.tee_time
+        AND pts.is_active = 1
+        AND pts.event_id IS NULL
+        AND pts.date >= CURRENT_DATE
+        AND EXTRACT(DOW FROM pts.date) = sr.day_of_week
+        -- duplicate slot rows can exist for the same date/time \u2014 hold only the first
+        AND pts.id = (
+          SELECT MIN(p2.id) FROM portal_tee_slots p2
+          WHERE p2.club_id = pts.club_id AND p2.date = pts.date AND p2.tee_time = pts.tee_time
+            AND p2.is_active = 1 AND p2.event_id IS NULL
+        )
+       JOIN clubs c ON c.id = sr.club_id
+       JOIN users u ON u.id = srm.user_id
+       WHERE sr.active = 1
+         AND NOT EXISTS (
+           SELECT 1 FROM standing_holds sh
+           WHERE sh.slot_id = pts.id AND sh.user_id = srm.user_id
+         )
+       ORDER BY pts.date ASC, pts.tee_time ASC`
+    );
+    let n = 0;
+    for (const r of rows) {
+      const dateStr = fmtDate3(r.date);
+      const timeStr = String(r.tee_time).slice(0, 5);
+      const teeDt = /* @__PURE__ */ new Date(`${dateStr}T${timeStr}:00+02:00`);
+      if (isNaN(teeDt.getTime())) continue;
+      const confirmBy = new Date(teeDt.getTime() - Number(r.confirm_hours_before) * 36e5);
+      if (confirmBy.getTime() <= Date.now()) continue;
+      const ins = await clientQuery(
+        client,
+        `INSERT INTO standing_holds (reservation_id, slot_id, user_id, status, confirm_by)
+         SELECT ?, ?, ?, 'held', ?
+         WHERE (SELECT pts.max_players - pts.player_count FROM portal_tee_slots pts WHERE pts.id = ?)
+             > (SELECT COUNT(*)::int FROM standing_holds sh WHERE sh.slot_id = ? AND sh.status = 'held')
+         ON CONFLICT (slot_id, user_id) DO NOTHING`,
+        [r.reservation_id, r.slot_id, r.user_id, confirmBy, r.slot_id, r.slot_id]
+      );
+      if (!ins.rowCount) continue;
+      n++;
+      toNotify.push({ user_id: r.user_id, push_token: r.push_token, club_id: r.club_id, club_name: r.club_name, slot_id: r.slot_id, dateStr, timeStr, confirmBy });
+    }
+    return n;
+  });
+  for (const t of toNotify) {
+    await notify(
+      t.user_id,
+      t.push_token,
+      "standing_tee_time",
+      "\u26F3 Standing tee time reserved",
+      `Your regular tee time at ${t.club_name} \u2014 ${t.dateStr} at ${t.timeStr} \u2014 is being held for you. Confirm by ${fmtSast(t.confirmBy)} or it will be released.`,
+      { type: "standing_tee_time", slot_id: t.slot_id, club_id: t.club_id, date: t.dateStr, tee_time: t.timeStr }
+    );
+  }
+  return created;
+}
+async function releaseExpiredStandingHolds() {
+  const expired = await query(
+    `UPDATE standing_holds sh
+     SET status = 'released'
+     FROM portal_tee_slots pts, clubs c, users u
+     WHERE sh.status = 'held' AND sh.confirm_by < NOW()
+       AND pts.id = sh.slot_id AND c.id = pts.club_id AND u.id = sh.user_id
+     RETURNING sh.id, sh.user_id, sh.slot_id, pts.date, pts.tee_time, c.name AS club_name, c.id AS club_id, u.push_token`
+  );
+  if (!expired.length) return 0;
+  for (const e of expired) {
+    const dateStr = fmtDate3(e.date);
+    const timeStr = String(e.tee_time).slice(0, 5);
+    await notify(
+      e.user_id,
+      e.push_token,
+      "standing_tee_time_released",
+      "Standing tee time released",
+      `Your reserved tee time at ${e.club_name} \u2014 ${dateStr} at ${timeStr} \u2014 was not confirmed in time and has been released.`,
+      { type: "standing_tee_time_released", slot_id: e.slot_id, club_id: e.club_id, date: dateStr, tee_time: timeStr }
+    );
+  }
+  return expired.length;
+}
+async function revertHoldsForCancelledBookings() {
+  await run(`
+    UPDATE standing_holds sh
+    SET status = CASE WHEN sh.confirm_by > NOW() THEN 'held' ELSE 'released' END,
+        booking_id = NULL
+    WHERE sh.status = 'confirmed'
+      AND sh.booking_id IS NOT NULL
+      AND EXISTS (SELECT 1 FROM bookings b WHERE b.id = sh.booking_id AND b.status = 'cancelled')
+  `);
+}
+async function runStandingReservationsOnce() {
+  await revertHoldsForCancelledBookings();
+  const created = await materializeStandingHolds();
+  const released = await releaseExpiredStandingHolds();
+  return { created, released };
+}
+function startStandingReservationsWorker() {
+  const tick = async () => {
+    try {
+      const { created, released } = await runStandingReservationsOnce();
+      if (created || released) {
+        logger.info({ created, released }, "standing reservations worker tick");
+      }
+    } catch (err) {
+      logger.warn({ err }, "standing reservations worker failed");
+    }
+  };
+  setTimeout(tick, INITIAL_DELAY_MS);
+  setInterval(tick, POLL_INTERVAL_MS);
+}
+
+// src/routes/portal.ts
 function normTeeStart2(raw) {
   if (!raw) return "first_tee";
   const map = {
@@ -71983,7 +72168,7 @@ router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async 
     }
   }
   await exec("UPDATE golf_events SET status = 'active' WHERE id = ? AND club_id = ?", [evId, club.id]);
-  const fmtDate3 = (d) => {
+  const fmtDate5 = (d) => {
     try {
       const iso = d instanceof Date ? d.toISOString() : String(d);
       return (/* @__PURE__ */ new Date(iso.slice(0, 10) + "T12:00:00")).toLocaleDateString("en-ZA", { day: "numeric", month: "short", year: "numeric" });
@@ -71998,7 +72183,7 @@ router14.post("/portal/events/:id/resolve-and-publish", requireClubAuth2, async 
   );
   if (audience.length > 0) {
     const pTitle = isInviteOnly ? `\u{1F4E9} You've been invited \u2014 ${club.name}` : `\u26F3 Tournament Now Open \u2014 ${club.name}`;
-    const pBody = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDate3(ev.event_date)}. Tap to view & enter.`;
+    const pBody = isInviteOnly ? `${String(ev.name)} \xB7 ${fmtDate5(ev.event_date)}. You have been invited \u2014 tap to register.` : `${String(ev.name)} \xB7 ${fmtDate5(ev.event_date)}. Tap to view & enter.`;
     const pPush = audience.filter((u) => u.push_token);
     if (pPush.length > 0) {
       sendPushNotifications(pPush.map((u) => ({
@@ -72836,6 +73021,125 @@ router14.put("/portal/member-numbering", requireClubAuth2, async (req, res) => {
     continue_from: contFrom,
     next_number: await nextMemberNumber(club.id)
   });
+});
+var TEE_TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+async function validateStandingBody(clubId, body) {
+  const day = Number(body?.day_of_week);
+  if (!Number.isInteger(day) || day < 0 || day > 6) return { error: "day_of_week must be 0 (Sunday) to 6 (Saturday)" };
+  const teeTime = String(body?.tee_time ?? "").trim();
+  if (!TEE_TIME_RE.test(teeTime)) return { error: "tee_time must be in HH:MM format" };
+  const hours = Number(body?.confirm_hours_before);
+  if (!Number.isInteger(hours) || hours < 1 || hours > 336) return { error: "confirm_hours_before must be between 1 and 336 hours" };
+  const ids = Array.isArray(body?.member_user_ids) ? [...new Set(body.member_user_ids.map((n) => Number(n)))] : [];
+  if (!ids.length || ids.length > 4 || ids.some((n) => !Number.isInteger(n) || n < 1)) {
+    return { error: "Select between 1 and 4 members" };
+  }
+  const cnt = await row(
+    "SELECT COUNT(*)::int AS n FROM club_members WHERE club_id = ? AND user_id = ANY(?)",
+    [clubId, ids]
+  );
+  if (Number(cnt?.n ?? 0) !== ids.length) return { error: "All selected players must be members of your club" };
+  return { day_of_week: day, tee_time: teeTime, confirm_hours_before: hours, member_user_ids: ids };
+}
+router14.get("/portal/standing-reservations", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const reservations = await query(
+    `SELECT sr.id, sr.day_of_week, sr.tee_time, sr.confirm_hours_before, sr.active, sr.created_at,
+       (SELECT JSON_AGG(JSON_BUILD_OBJECT('user_id', u.id, 'name', u.name, 'email', u.email) ORDER BY u.name)
+        FROM standing_reservation_members srm JOIN users u ON u.id = srm.user_id
+        WHERE srm.reservation_id = sr.id) AS members
+     FROM standing_reservations sr
+     WHERE sr.club_id = ?
+     ORDER BY sr.day_of_week ASC, sr.tee_time ASC`,
+    [club.id]
+  );
+  const ids = reservations.map((r) => r.id);
+  let holds = [];
+  if (ids.length) {
+    holds = await query(
+      `SELECT sh.reservation_id, sh.status, sh.confirm_by, pts.date, pts.tee_time, u.name AS member_name, u.id AS user_id
+       FROM standing_holds sh
+       JOIN portal_tee_slots pts ON pts.id = sh.slot_id
+       JOIN users u ON u.id = sh.user_id
+       WHERE sh.reservation_id = ANY(?) AND pts.date >= CURRENT_DATE
+       ORDER BY pts.date ASC, u.name ASC`,
+      [ids]
+    );
+  }
+  const holdsByRes = {};
+  for (const h of holds) {
+    (holdsByRes[h.reservation_id] ??= []).push({
+      user_id: h.user_id,
+      member_name: h.member_name,
+      status: h.status,
+      confirm_by: h.confirm_by instanceof Date ? h.confirm_by.toISOString() : h.confirm_by,
+      date: (h.date instanceof Date ? h.date.toISOString() : String(h.date)).slice(0, 10),
+      tee_time: String(h.tee_time).slice(0, 5)
+    });
+  }
+  res.json(reservations.map((r) => ({
+    id: r.id,
+    day_of_week: Number(r.day_of_week),
+    tee_time: String(r.tee_time).slice(0, 5),
+    confirm_hours_before: Number(r.confirm_hours_before),
+    active: !!Number(r.active),
+    members: typeof r.members === "string" ? JSON.parse(r.members) : r.members ?? [],
+    upcoming: holdsByRes[r.id] ?? []
+  })));
+});
+router14.post("/portal/standing-reservations", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const v = await validateStandingBody(club.id, req.body);
+  if (v.error) {
+    res.status(400).json({ error: v.error });
+    return;
+  }
+  const resId = await exec(
+    "INSERT INTO standing_reservations (club_id, day_of_week, tee_time, confirm_hours_before) VALUES (?, ?, ?, ?)",
+    [club.id, v.day_of_week, v.tee_time, v.confirm_hours_before]
+  );
+  for (const uid of v.member_user_ids) {
+    await exec("INSERT INTO standing_reservation_members (reservation_id, user_id) VALUES (?, ?)", [resId, uid]);
+  }
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing materialize after create failed"));
+  res.json({ id: resId, success: true });
+});
+router14.put("/portal/standing-reservations/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const id = parseInt(String(req.params.id), 10);
+  const existing = await row("SELECT * FROM standing_reservations WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!existing) {
+    res.status(404).json({ error: "Reservation not found" });
+    return;
+  }
+  const v = await validateStandingBody(club.id, req.body);
+  if (v.error) {
+    res.status(400).json({ error: v.error });
+    return;
+  }
+  const active = req.body?.active === void 0 ? Number(existing.active) : req.body.active ? 1 : 0;
+  await run(
+    "UPDATE standing_reservations SET day_of_week = ?, tee_time = ?, confirm_hours_before = ?, active = ? WHERE id = ?",
+    [v.day_of_week, v.tee_time, v.confirm_hours_before, active, id]
+  );
+  await run("DELETE FROM standing_reservation_members WHERE reservation_id = ?", [id]);
+  for (const uid of v.member_user_ids) {
+    await exec("INSERT INTO standing_reservation_members (reservation_id, user_id) VALUES (?, ?)", [id, uid]);
+  }
+  await run("DELETE FROM standing_holds WHERE reservation_id = ? AND status = 'held'", [id]);
+  runStandingReservationsOnce().catch((err) => logger.warn({ err }, "standing materialize after update failed"));
+  res.json({ success: true });
+});
+router14.delete("/portal/standing-reservations/:id", requireClubAuth2, async (req, res) => {
+  const club = getClub2(req);
+  const id = parseInt(String(req.params.id), 10);
+  const existing = await row("SELECT id FROM standing_reservations WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!existing) {
+    res.status(404).json({ error: "Reservation not found" });
+    return;
+  }
+  await run("DELETE FROM standing_reservations WHERE id = ?", [id]);
+  res.json({ success: true });
 });
 router14.get("/portal/members", requireClubAuth2, async (req, res) => {
   const club = getClub2(req);
@@ -79618,38 +79922,100 @@ router24.get("/support/messages", async (req, res) => {
 });
 var support_default = router24;
 
-// src/routes/index.ts
+// src/routes/standing.ts
+var import_express25 = __toESM(require_express2(), 1);
+init_pg();
 var router25 = (0, import_express25.Router)();
-router25.use(health_default);
-router25.use(auth_default);
-router25.use(geofencing_default);
-router25.use(clubs_default);
-router25.use(bookings_default);
-router25.use(friends_default);
-router25.use(ads_default);
-router25.use(messages_default);
-router25.use(vouchers_default);
-router25.use(cancellationVouchers_default);
-router25.use(admin_default);
-router25.use(notifications_default);
-router25.use(events_default);
-router25.use(portal_default);
-router25.use(storage_default);
-router25.use(payments_default);
-router25.use(settings_default);
-router25.use(map_default);
-router25.use(hnaVerification_default);
-router25.use(moderation_default);
-router25.use(bans_default);
-router25.use(knockout_default);
-router25.use(scoring_default);
-router25.use(support_default);
-var routes_default = router25;
+function fmtDate4(d) {
+  return (d instanceof Date ? d.toISOString() : String(d)).slice(0, 10);
+}
+router25.get("/standing/mine", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const rows = await query(
+    `SELECT sh.id, sh.status, sh.confirm_by, sh.slot_id, sh.booking_id,
+            pts.date, pts.tee_time,
+            c.id AS club_id, c.name AS club_name, c.location AS club_location
+     FROM standing_holds sh
+     JOIN portal_tee_slots pts ON pts.id = sh.slot_id
+     JOIN clubs c ON c.id = pts.club_id
+     WHERE sh.user_id = ? AND sh.status IN ('held', 'confirmed')
+       AND pts.date >= CURRENT_DATE
+     ORDER BY pts.date ASC, pts.tee_time ASC`,
+    [user.id]
+  );
+  res.json(rows.map((r) => ({
+    id: r.id,
+    status: r.status,
+    confirm_by: r.confirm_by instanceof Date ? r.confirm_by.toISOString() : r.confirm_by,
+    slot_id: r.slot_id,
+    booking_id: r.booking_id,
+    date: fmtDate4(r.date),
+    tee_time: String(r.tee_time).slice(0, 5),
+    club_id: r.club_id,
+    club_name: r.club_name,
+    club_location: r.club_location
+  })));
+});
+router25.post("/standing/holds/:id/decline", async (req, res) => {
+  const user = await getUser(req);
+  if (!user) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) {
+    res.status(400).json({ message: "Invalid hold id" });
+    return;
+  }
+  const updated = await run(
+    "UPDATE standing_holds SET status = 'declined' WHERE id = ? AND user_id = ? AND status = 'held'",
+    [id, user.id]
+  );
+  if (!updated) {
+    res.status(404).json({ message: "Hold not found or already confirmed" });
+    return;
+  }
+  res.json({ success: true });
+});
+var standing_default = router25;
+
+// src/routes/index.ts
+var router26 = (0, import_express26.Router)();
+router26.use(health_default);
+router26.use(auth_default);
+router26.use(geofencing_default);
+router26.use(clubs_default);
+router26.use(bookings_default);
+router26.use(standing_default);
+router26.use(friends_default);
+router26.use(ads_default);
+router26.use(messages_default);
+router26.use(vouchers_default);
+router26.use(cancellationVouchers_default);
+router26.use(admin_default);
+router26.use(notifications_default);
+router26.use(events_default);
+router26.use(portal_default);
+router26.use(storage_default);
+router26.use(payments_default);
+router26.use(settings_default);
+router26.use(map_default);
+router26.use(hnaVerification_default);
+router26.use(moderation_default);
+router26.use(bans_default);
+router26.use(knockout_default);
+router26.use(scoring_default);
+router26.use(support_default);
+var routes_default = router26;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path3.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express26.default)();
+var app = (0, import_express27.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -79670,11 +80036,11 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express26.default.raw({ type: "*/*" }));
-app.use(import_express26.default.json());
-app.use(import_express26.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express27.default.raw({ type: "*/*" }));
+app.use(import_express27.default.json());
+app.use(import_express27.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express26.default.static(logosDir));
+app.use("/api/logos", import_express27.default.static(logosDir));
 app.get("/", (_req, res) => {
   res.json({ ok: true, service: "TapIn Golf API", ts: Date.now() });
 });
@@ -79702,7 +80068,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express26.default.static(clientDir));
+  app.use(import_express27.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path3.join(clientDir, "index.html"));
   });
@@ -81201,6 +81567,41 @@ async function applyLateAlters() {
   `);
   await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_club_members_member_number ON club_members (club_id, member_number) WHERE member_number IS NOT NULL");
   await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_reservations (
+      id                   SERIAL PRIMARY KEY,
+      club_id              INT NOT NULL,
+      day_of_week          SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      tee_time             VARCHAR(5) NOT NULL,
+      confirm_hours_before INT NOT NULL DEFAULT 48,
+      active               SMALLINT NOT NULL DEFAULT 1,
+      created_at           TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_reservation_members (
+      id             SERIAL PRIMARY KEY,
+      reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
+      user_id        INT NOT NULL,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE (reservation_id, user_id)
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_holds (
+      id             SERIAL PRIMARY KEY,
+      reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
+      slot_id        INT NOT NULL,
+      user_id        INT NOT NULL,
+      status         VARCHAR(12) NOT NULL DEFAULT 'held',
+      confirm_by     TIMESTAMP NOT NULL,
+      booking_id     INT,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE (slot_id, user_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_slot_status ON standing_holds (slot_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_user ON standing_holds (user_id, status)");
+  await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (
       id                SERIAL PRIMARY KEY,
       round_id          INT NOT NULL REFERENCES scoring_rounds(id) ON DELETE CASCADE,
@@ -81410,7 +81811,7 @@ init_pg();
 init_pg();
 init_notifications();
 init_logger();
-var POLL_INTERVAL_MS2 = 6e4;
+var POLL_INTERVAL_MS3 = 6e4;
 var WINDOW_MINUTES = 3;
 async function getLeadMinutes() {
   try {
@@ -81490,7 +81891,7 @@ function startReminderWorker() {
   runReminderCycle().catch((err) => logger.warn({ err }, "Reminder cycle error"));
   setInterval(() => {
     runReminderCycle().catch((err) => logger.warn({ err }, "Reminder cycle error"));
-  }, POLL_INTERVAL_MS2);
+  }, POLL_INTERVAL_MS3);
 }
 
 // src/index.ts
@@ -81500,7 +81901,7 @@ init_autoTeeGen();
 init_pg();
 init_notifications();
 init_logger();
-var POLL_INTERVAL_MS3 = 60 * 60 * 1e3;
+var POLL_INTERVAL_MS4 = 60 * 60 * 1e3;
 async function runEntryPaymentReminderCycle() {
   const due = await query(
     `SELECT
@@ -81571,7 +81972,7 @@ function startEntryPaymentReminderWorker() {
     runEntryPaymentReminderCycle().catch(
       (err) => logger.warn({ err }, "Entry payment reminder cycle error")
     );
-  }, POLL_INTERVAL_MS3);
+  }, POLL_INTERVAL_MS4);
 }
 
 // src/worker/monthlyCounterInvoice.ts
@@ -81579,7 +81980,7 @@ init_pg();
 init_stitch();
 init_logger();
 import { randomUUID as randomUUID4 } from "crypto";
-var POLL_INTERVAL_MS4 = 60 * 60 * 1e3;
+var POLL_INTERVAL_MS5 = 60 * 60 * 1e3;
 var lastInvoicedMonth = "";
 function nowSAST() {
   return new Date(Date.now() + 2 * 60 * 60 * 1e3);
@@ -81722,14 +82123,14 @@ function startMonthlyCounterInvoiceWorker() {
     runMonthlyInvoiceCycle().catch(
       (err) => logger.error({ err }, "Monthly counter invoice worker: cycle failed")
     );
-  }, POLL_INTERVAL_MS4);
+  }, POLL_INTERVAL_MS5);
 }
 
 // src/worker/monthlyAdBilling.ts
 init_pg();
 init_stitch();
 init_logger();
-var POLL_INTERVAL_MS5 = 60 * 60 * 1e3;
+var POLL_INTERVAL_MS6 = 60 * 60 * 1e3;
 var lastBilledMonth = "";
 function nowSAST2() {
   return new Date(Date.now() + 2 * 60 * 60 * 1e3);
@@ -81971,14 +82372,14 @@ function startMonthlyAdBillingWorker() {
     runMonthlyAdBillingCycle().catch(
       (err) => logger.error({ err }, "Monthly ad billing worker: cycle failed")
     );
-  }, POLL_INTERVAL_MS5);
+  }, POLL_INTERVAL_MS6);
 }
 
 // src/worker/knockoutResultReminder.ts
 init_pg();
 init_notifications();
 init_logger();
-var POLL_INTERVAL_MS6 = 60 * 60 * 1e3;
+var POLL_INTERVAL_MS7 = 60 * 60 * 1e3;
 async function runReminderCycle2() {
   const due = await query(
     `SELECT
@@ -82146,14 +82547,14 @@ function startKnockoutResultReminderWorker() {
   runCycle().catch((err) => logger.error({ err }, "Knockout result reminder: startup cycle failed"));
   setInterval(
     () => runCycle().catch((err) => logger.error({ err }, "Knockout result reminder: cycle failed")),
-    POLL_INTERVAL_MS6
+    POLL_INTERVAL_MS7
   );
 }
 
 // src/worker/knockoutPairingDeadline.ts
 init_pg();
 init_logger();
-var POLL_INTERVAL_MS7 = 60 * 60 * 1e3;
+var POLL_INTERVAL_MS8 = 60 * 60 * 1e3;
 async function runCycle2() {
   const dueBetterball = await query(
     `SELECT ge.id, ge.name
@@ -82197,7 +82598,7 @@ function startKnockoutPairingDeadlineWorker() {
   runCycle2().catch((err) => logger.error({ err }, "Knockout pairing deadline: startup cycle failed"));
   setInterval(
     () => runCycle2().catch((err) => logger.error({ err }, "Knockout pairing deadline: cycle failed")),
-    POLL_INTERVAL_MS7
+    POLL_INTERVAL_MS8
   );
 }
 
@@ -82228,6 +82629,7 @@ migrate().then(() => {
   startMonthlyAdBillingWorker();
   startKnockoutResultReminderWorker();
   startKnockoutPairingDeadlineWorker();
+  startStandingReservationsWorker();
 }).catch((err) => {
   logger.warn({ err }, "Migration failed \u2014 check DB credentials/firewall. App will serve requests but DB queries may fail.");
   startReminderWorker();
@@ -82237,6 +82639,7 @@ migrate().then(() => {
   startMonthlyAdBillingWorker();
   startKnockoutResultReminderWorker();
   startKnockoutPairingDeadlineWorker();
+  startStandingReservationsWorker();
 });
 /*! Bundled license information:
 

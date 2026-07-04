@@ -13,6 +13,7 @@ import ForgotPassword from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
 import Schedule from "@/pages/schedule";
+import StandingTeeTimes from "@/pages/standing-tee-times";
 import Reviews from "@/pages/reviews";
 import Ads from "@/pages/ads";
 import Events from "@/pages/events";
@@ -118,6 +119,9 @@ function Router() {
         </Route>
         <Route path="/tee-times">
           <SectionGuard section="schedule"><Schedule /></SectionGuard>
+        </Route>
+        <Route path="/standing-tee-times">
+          <SectionGuard section="schedule"><StandingTeeTimes /></SectionGuard>
         </Route>
         <Route path="/bookings">
           <SectionGuard section="schedule"><Bookings /></SectionGuard>

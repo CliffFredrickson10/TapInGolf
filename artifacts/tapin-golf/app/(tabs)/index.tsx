@@ -19,6 +19,7 @@ import ClubCard, { Club } from "@/components/ClubCard";
 import FeaturedCarousel, { FeaturedClub } from "@/components/FeaturedCarousel";
 import { AppHeader } from "@/components/AppHeader";
 import { ClubCardSkeleton } from "@/components/SkeletonLoader";
+import StandingHoldsCard from "@/components/StandingHoldsCard";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 import { apiFetch } from "@/lib/api";
@@ -185,6 +186,9 @@ export default function HomeScreen() {
           <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.7)" />
         </TouchableOpacity>
       )}
+
+      {/* Standing tee time holds awaiting confirmation */}
+      <StandingHoldsCard />
 
       {/* Book Now Hero */}
       <TouchableOpacity

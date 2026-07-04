@@ -1707,6 +1707,43 @@ async function applyLateAlters() {
   `);
   await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_club_members_member_number ON club_members (club_id, member_number) WHERE member_number IS NOT NULL");
 
+  // ── Standing (recurring) tee time reservations ────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_reservations (
+      id                   SERIAL PRIMARY KEY,
+      club_id              INT NOT NULL,
+      day_of_week          SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+      tee_time             VARCHAR(5) NOT NULL,
+      confirm_hours_before INT NOT NULL DEFAULT 48,
+      active               SMALLINT NOT NULL DEFAULT 1,
+      created_at           TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_reservation_members (
+      id             SERIAL PRIMARY KEY,
+      reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
+      user_id        INT NOT NULL,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE (reservation_id, user_id)
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS standing_holds (
+      id             SERIAL PRIMARY KEY,
+      reservation_id INT NOT NULL REFERENCES standing_reservations(id) ON DELETE CASCADE,
+      slot_id        INT NOT NULL,
+      user_id        INT NOT NULL,
+      status         VARCHAR(12) NOT NULL DEFAULT 'held',
+      confirm_by     TIMESTAMP NOT NULL,
+      booking_id     INT,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      UNIQUE (slot_id, user_id)
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_slot_status ON standing_holds (slot_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_standing_holds_user ON standing_holds (user_id, status)");
+
   await ddl(`
     CREATE TABLE IF NOT EXISTS scoring_holes (
       id                SERIAL PRIMARY KEY,

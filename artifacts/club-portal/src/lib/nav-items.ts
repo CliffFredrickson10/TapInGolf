@@ -18,6 +18,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/",                   label: "Dashboard",          icon: LayoutDashboard, section: "dashboard" },
   { href: "/profile",            label: "Club Profile",       icon: Building2,       section: "profile" },
   { href: "/tee-times",          label: "Tee Schedule",       icon: CalendarDays,    section: "schedule" },
+  { href: "/standing-tee-times", label: "Standing Tee Times", icon: RefreshCw,       section: "schedule" },
   { href: "/bookings",           label: "Bookings",           icon: BookOpen,        section: "schedule" },
   { href: "/payments",           label: "Payments",           icon: CreditCard,      section: "payments" },
   { href: "/events",             label: "Tournaments",        icon: Calendar,        section: "events" },

@@ -58,13 +58,13 @@ const OUTLET_TYPES = ["pro_shop", "bar", "restaurant"];
 router.get("/portal/pos/outlets", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const outlets = await query<any>(
-    `SELECT o.id, o.name, o.type, o.active, o.created_at,
+    `SELECT o.id, o.name, o.type, o.active, o.service_fee_percent, o.created_at,
        (SELECT COUNT(*)::int FROM pos_staff s WHERE s.outlet_id = o.id AND s.active = 1) AS staff_count,
        (SELECT COUNT(*)::int FROM pos_products p WHERE p.outlet_id = o.id AND p.active = 1) AS product_count
      FROM pos_outlets o WHERE o.club_id = ? ORDER BY o.id`,
     [club.id]
   );
-  res.json({ outlets });
+  res.json({ outlets: outlets.map(o => ({ ...o, service_fee_percent: Number(o.service_fee_percent ?? 0) })) });
 });
 
 router.post("/portal/pos/outlets", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
@@ -82,10 +82,18 @@ router.put("/portal/pos/outlets/:id", requireClubAdmin, async (req: Request, res
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   const outlet = await row<any>("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
   if (!outlet) { res.status(404).json({ message: "Outlet not found" }); return; }
-  const { name, active } = req.body ?? {};
+  const { name, active, service_fee_percent } = req.body ?? {};
+  let feePercent: number | null = null;
+  if (service_fee_percent != null) {
+    feePercent = Number(service_fee_percent);
+    if (!Number.isFinite(feePercent) || feePercent < 0 || feePercent > 100) {
+      res.status(400).json({ message: "Service fee must be between 0 and 100 percent" }); return;
+    }
+    feePercent = Math.round(feePercent * 100) / 100;
+  }
   await run(
-    "UPDATE pos_outlets SET name = COALESCE(?, name), active = COALESCE(?, active) WHERE id = ?",
-    [name != null ? String(name).trim() : null, active != null ? (active ? 1 : 0) : null, id]
+    "UPDATE pos_outlets SET name = COALESCE(?, name), active = COALESCE(?, active), service_fee_percent = COALESCE(?, service_fee_percent) WHERE id = ?",
+    [name != null ? String(name).trim() : null, active != null ? (active ? 1 : 0) : null, feePercent, id]
   );
   res.json({ success: true });
 });
@@ -1023,19 +1031,32 @@ async function orderWithTotals(orderId: number, outletId: number): Promise<any |
       discountTotal += discount;
       return { ...i, unit_price: unitPrice, discount, promotion_id: promotionId, line_total: Math.round((line - discount) * 100) / 100 };
     });
+    const feePercent = await outletServiceFeePercent(outletId);
+    const serviceFee = Math.round((subtotal - discountTotal) * feePercent) / 100;
     return {
       ...order,
       subtotal: Math.round(subtotal * 100) / 100,
       discount_total: Math.round(discountTotal * 100) / 100,
-      total: Math.round((subtotal - discountTotal) * 100) / 100,
+      service_fee_percent: feePercent,
+      service_fee: serviceFee,
+      tip_amount: 0,
+      total: Math.round((subtotal - discountTotal) * 100) / 100 + serviceFee,
       items: withDiscounts,
     };
   }
   return {
     ...order,
     subtotal: Number(order.subtotal), discount_total: Number(order.discount_total), total: Number(order.total),
+    service_fee: Number(order.service_fee ?? 0), tip_amount: Number(order.tip_amount ?? 0),
+    amount_paid: order.amount_paid != null ? Number(order.amount_paid) : null,
     items: items.map((i) => ({ ...i, unit_price: Number(i.unit_price), discount: Number(i.discount), line_total: Number(i.line_total) })),
   };
+}
+
+async function outletServiceFeePercent(outletId: number): Promise<number> {
+  const o = await row<any>("SELECT service_fee_percent FROM pos_outlets WHERE id = ?", [outletId]);
+  const pct = Number(o?.service_fee_percent ?? 0);
+  return Number.isFinite(pct) && pct > 0 ? pct : 0;
 }
 
 // ─── Orders (tables / takeaway / counter) ────────────────────────────────────
@@ -1160,7 +1181,9 @@ router.delete("/pos/orders/:id/items/:itemId", requirePosAuth, async (req: Reque
 });
 
 // Finalize: lock in promotion discounts, decrement stock, record movements.
-async function finalizeOrderPayment(orderId: number, outletId: number, staffId: number, paymentMethod: string): Promise<any> {
+// If amountPaid is provided, the tip is worked out as amountPaid - bill total
+// (never negative); the outlet's automatic service fee is locked in either way.
+async function finalizeOrderPayment(orderId: number, outletId: number, staffId: number, paymentMethod: string, amountPaid: number | null = null): Promise<any> {
   return withTransaction(async (client) => {
     const orderRes = await clientQuery(client,
       "SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ? FOR UPDATE", [orderId, outletId]);
@@ -1214,12 +1237,17 @@ async function finalizeOrderPayment(orderId: number, outletId: number, staffId: 
         "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, ref_id, created_by) VALUES (?, ?, ?, ?, 'sale', ?, ?)",
         [outletId, item.product_id, item.variant_id ?? null, -item.quantity, orderId, staffId]);
     }
-    const total = Math.round((subtotal - discountTotal) * 100) / 100;
+    const feePercent = await outletServiceFeePercent(outletId);
+    const serviceFee = Math.round((subtotal - discountTotal) * feePercent) / 100;
+    const total = Math.round((subtotal - discountTotal) * 100) / 100 + serviceFee;
+    const tip = amountPaid != null ? Math.max(0, Math.round((amountPaid - total) * 100) / 100) : 0;
     await clientQuery(client,
       `UPDATE pos_orders SET status = 'paid', payment_method = ?, subtotal = ?, discount_total = ?, total = ?,
+         service_fee = ?, tip_amount = ?, amount_paid = ?,
          closed_by = ?, paid_at = NOW() WHERE id = ?`,
-      [paymentMethod, Math.round(subtotal * 100) / 100, Math.round(discountTotal * 100) / 100, total, staffId, orderId]);
-    return { subtotal: Math.round(subtotal * 100) / 100, discount_total: Math.round(discountTotal * 100) / 100, total };
+      [paymentMethod, Math.round(subtotal * 100) / 100, Math.round(discountTotal * 100) / 100, total,
+       serviceFee, tip, amountPaid, staffId, orderId]);
+    return { subtotal: Math.round(subtotal * 100) / 100, discount_total: Math.round(discountTotal * 100) / 100, service_fee: serviceFee, tip_amount: tip, total };
   });
 }
 
@@ -1228,8 +1256,14 @@ router.post("/pos/orders/:id/pay", requirePosAuth, async (req: Request, res: Res
   const id = parseInt(String(req.params["id"] ?? ""), 10);
   const paymentMethod = String(req.body?.payment_method ?? "");
   if (paymentMethod !== "cash" && paymentMethod !== "card") { res.status(400).json({ message: "payment_method must be cash or card" }); return; }
+  let amountPaid: number | null = null;
+  if (req.body?.amount_paid != null && String(req.body.amount_paid).trim() !== "") {
+    amountPaid = Number(req.body.amount_paid);
+    if (!Number.isFinite(amountPaid) || amountPaid < 0) { res.status(400).json({ message: "amount_paid must be zero or a positive amount" }); return; }
+    amountPaid = Math.round(amountPaid * 100) / 100;
+  }
   try {
-    await finalizeOrderPayment(id, s.outlet_id, s.id, paymentMethod);
+    await finalizeOrderPayment(id, s.outlet_id, s.id, paymentMethod, amountPaid);
     const full = await orderWithTotals(id, s.outlet_id);
     res.json(full);
   } catch (err: any) {
@@ -1416,6 +1450,7 @@ router.get("/pos/transactions", requirePosAuth, requirePosManager, async (req: R
   if (req.query["staff_id"]) { conditions.push("o.closed_by = ?"); params.push(parseInt(String(req.query["staff_id"]), 10)); }
   const transactions = await query<any>(
     `SELECT o.id, o.order_type, o.table_name, o.subtotal, o.discount_total, o.total, o.payment_method,
+            o.service_fee, o.tip_amount, o.amount_paid,
             o.paid_at, o.created_at, closer.name AS staff_name,
             (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
      FROM pos_orders o
@@ -1427,6 +1462,8 @@ router.get("/pos/transactions", requirePosAuth, requirePosManager, async (req: R
   res.json({
     transactions: transactions.map(t => ({
       ...t, subtotal: Number(t.subtotal), discount_total: Number(t.discount_total), total: Number(t.total),
+      service_fee: Number(t.service_fee ?? 0), tip_amount: Number(t.tip_amount ?? 0),
+      amount_paid: t.amount_paid != null ? Number(t.amount_paid) : null,
     })),
   });
 });
@@ -1446,6 +1483,8 @@ router.get("/pos/reports/summary", requirePosAuth, requirePosManager, async (req
   const totals = await row<any>(
     `SELECT COUNT(*)::int AS transaction_count, COALESCE(SUM(o.total), 0) AS total_sales,
             COALESCE(SUM(o.discount_total), 0) AS total_discounts,
+            COALESCE(SUM(o.service_fee), 0) AS total_service_fees,
+            COALESCE(SUM(o.tip_amount), 0) AS total_tips,
             COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'cash'), 0) AS cash_sales,
             COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'card'), 0) AS card_sales
      FROM pos_orders o WHERE ${where}`, params);
@@ -1477,11 +1516,24 @@ router.get("/pos/reports/summary", requirePosAuth, requirePosManager, async (req
      WHERE ${where}
      GROUP BY st.id, st.name ORDER BY sales DESC`, params);
 
+  // Tips are attributed to the waiter who served the table (opened_by),
+  // falling back to whoever took the payment.
+  const tipsByStaff = await query<any>(
+    `SELECT st.id AS staff_id, st.name, COUNT(*)::int AS orders,
+            COALESCE(SUM(o.tip_amount), 0) AS tips,
+            COALESCE(SUM(o.service_fee), 0) AS service_fees,
+            COALESCE(SUM(o.tip_amount + o.service_fee), 0) AS total_tips
+     FROM pos_orders o JOIN pos_staff st ON st.id = COALESCE(o.opened_by, o.closed_by)
+     WHERE ${where} AND (o.tip_amount > 0 OR o.service_fee > 0)
+     GROUP BY st.id, st.name ORDER BY total_tips DESC`, params);
+
   res.json({
     totals: {
       transaction_count: totals?.transaction_count ?? 0,
       total_sales: Number(totals?.total_sales ?? 0),
       total_discounts: Number(totals?.total_discounts ?? 0),
+      total_service_fees: Number(totals?.total_service_fees ?? 0),
+      total_tips: Number(totals?.total_tips ?? 0),
       cash_sales: Number(totals?.cash_sales ?? 0),
       card_sales: Number(totals?.card_sales ?? 0),
     },
@@ -1489,6 +1541,9 @@ router.get("/pos/reports/summary", requirePosAuth, requirePosManager, async (req
     top_products: topProducts.map(p => ({ ...p, sales: Number(p.sales) })),
     by_category: byCategory.map(c => ({ ...c, sales: Number(c.sales) })),
     by_staff: byStaff.map(w => ({ ...w, sales: Number(w.sales) })),
+    tips_by_staff: tipsByStaff.map(w => ({
+      ...w, tips: Number(w.tips), service_fees: Number(w.service_fees), total_tips: Number(w.total_tips),
+    })),
   });
 });
 

@@ -1963,6 +1963,9 @@ async function seedAdOfferings(): Promise<void> {
   // so email is optional (managers still require it for the outlet login).
   await ddl("ALTER TABLE pos_staff ALTER COLUMN email DROP NOT NULL");
 
+  // Optional automatic service fee (e.g. 10%) added to every bill at this outlet.
+  await ddl("ALTER TABLE pos_outlets ADD COLUMN IF NOT EXISTS service_fee_percent DECIMAL(5,2) NOT NULL DEFAULT 0");
+
   // WebAuthn (fingerprint) credentials for waiter terminal unlock.
   await ddl(`
     CREATE TABLE IF NOT EXISTS pos_webauthn_credentials (
@@ -2116,6 +2119,11 @@ async function seedAdOfferings(): Promise<void> {
   `);
   await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_outlet ON pos_orders (outlet_id, status)`);
   await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_paid ON pos_orders (outlet_id, paid_at)`);
+  // Tips: service_fee is the automatic % fee locked in at payment; tip_amount is
+  // worked out from the amount the client actually paid (paid - total).
+  await ddl("ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS service_fee DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS tip_amount DECIMAL(10,2) NOT NULL DEFAULT 0");
+  await ddl("ALTER TABLE pos_orders ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(10,2)");
 
   await ddl(`
     CREATE TABLE IF NOT EXISTS pos_order_items (

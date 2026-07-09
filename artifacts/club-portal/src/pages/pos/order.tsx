@@ -25,6 +25,7 @@ export default function PosOrder() {
   const [search, setSearch] = useState("");
   const [variantPicker, setVariantPicker] = useState<any | null>(null);
   const [busy, setBusy] = useState(false);
+  const [amountPaid, setAmountPaid] = useState("");
 
   const load = useCallback(() => {
     if (!orderId) return;
@@ -67,12 +68,15 @@ export default function PosOrder() {
     if (busy) return;
     setBusy(true);
     try {
+      const paid = amountPaid.trim() !== "" ? Number(amountPaid) : null;
       const updated = await api<any>(`/api/pos/orders/${orderId}/pay`, {
         method: "POST",
-        body: JSON.stringify({ payment_method: method }),
+        body: JSON.stringify({ payment_method: method, ...(paid != null ? { amount_paid: paid } : {}) }),
       });
       setOrder(updated);
-      toast({ title: "Payment recorded", description: `${fmt(updated.total)} paid by ${method}.` });
+      setAmountPaid("");
+      const tipNote = Number(updated.tip_amount) > 0 ? ` Tip: ${fmt(updated.tip_amount)}.` : "";
+      toast({ title: "Payment recorded", description: `${fmt(updated.total)} paid by ${method}.${tipNote}` });
     } catch (err: any) {
       toast({ title: "Payment failed", description: err.message, variant: "destructive" });
     } finally {
@@ -184,19 +188,48 @@ export default function PosOrder() {
           {Number(order.discount_total) > 0 && (
             <div className="flex justify-between text-sm text-[#1a5c38]"><span>Promotions</span><span>-{fmt(order.discount_total)}</span></div>
           )}
+          {Number(order.service_fee) > 0 && (
+            <div className="flex justify-between text-sm" data-testid="text-service-fee">
+              <span>Service fee{order.service_fee_percent ? ` (${Number(order.service_fee_percent)}%)` : ""}</span>
+              <span>{fmt(order.service_fee)}</span>
+            </div>
+          )}
           <div className="flex justify-between text-lg font-bold">
             <span>Total</span>
             <span data-testid="text-order-total">{fmt(order.total)}</span>
           </div>
-          {isOpen ? (
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={order.items.length === 0 || busy} onClick={() => pay("cash")} data-testid="button-order-pay-cash">
-                <Banknote className="h-4 w-4 mr-2" /> Paid Cash
-              </Button>
-              <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={order.items.length === 0 || busy} onClick={() => pay("card")} data-testid="button-order-pay-card">
-                <CreditCard className="h-4 w-4 mr-2" /> Paid Card
-              </Button>
+          {!isOpen && Number(order.tip_amount) > 0 && (
+            <div className="flex justify-between text-sm text-[#1a5c38] font-semibold" data-testid="text-tip-amount">
+              <span>Tip</span>
+              <span>{fmt(order.tip_amount)}</span>
             </div>
+          )}
+          {isOpen ? (
+            <>
+              <div className="pt-1">
+                <Input
+                  type="number" min={0} step="0.01" inputMode="decimal"
+                  value={amountPaid}
+                  onChange={e => setAmountPaid(e.target.value)}
+                  placeholder={`Amount received (optional) — bill ${fmt(order.total)}`}
+                  className="h-10"
+                  data-testid="input-amount-received"
+                />
+                {amountPaid.trim() !== "" && Number.isFinite(Number(amountPaid)) && Number(amountPaid) > Number(order.total) && (
+                  <p className="text-xs text-[#1a5c38] font-semibold mt-1" data-testid="text-tip-preview">
+                    Tip: {fmt(Number(amountPaid) - Number(order.total))}
+                  </p>
+                )}
+              </div>
+              <div className="grid grid-cols-2 gap-2 pt-1">
+                <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={order.items.length === 0 || busy} onClick={() => pay("cash")} data-testid="button-order-pay-cash">
+                  <Banknote className="h-4 w-4 mr-2" /> Paid Cash
+                </Button>
+                <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={order.items.length === 0 || busy} onClick={() => pay("card")} data-testid="button-order-pay-card">
+                  <CreditCard className="h-4 w-4 mr-2" /> Paid Card
+                </Button>
+              </div>
+            </>
           ) : (
             <Button className="w-full" variant="outline" onClick={() => navigate("/")} data-testid="button-back-after-paid">Back to orders</Button>
           )}

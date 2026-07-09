@@ -4,9 +4,18 @@ import { posApi as api } from "@/lib/api";
 import { PosWaiterGate } from "@/components/pos-waiter-gate";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { UtensilsCrossed, UserRound, ReceiptText, CircleDollarSign } from "lucide-react";
+import { UtensilsCrossed, UserRound, ReceiptText, CircleDollarSign, HandCoins } from "lucide-react";
 
 const fmt = (n: number) => `R${Number(n).toFixed(2)}`;
+
+interface StaffTips {
+  staff_id: number;
+  name: string;
+  orders: number;
+  tips: number;
+  service_fees: number;
+  total_tips: number;
+}
 
 interface OverviewOrder {
   id: number;
@@ -23,12 +32,21 @@ export default function PosOverview() {
   const [, navigate] = useLocation();
   const [orders, setOrders] = useState<OverviewOrder[]>([]);
   const [loading, setLoading] = useState(true);
+  const [tips, setTips] = useState<StaffTips[]>([]);
+  const [tipsTotal, setTipsTotal] = useState(0);
 
   const load = useCallback(() => {
     api<{ orders: OverviewOrder[] }>("/api/pos/orders?status=open")
       .then(r => setOrders(r.orders))
       .catch(() => {})
       .finally(() => setLoading(false));
+    const today = new Date().toISOString().slice(0, 10);
+    api<any>(`/api/pos/reports/summary?from=${today}&to=${today}`)
+      .then(r => {
+        setTips(r.tips_by_staff ?? []);
+        setTipsTotal(Number(r.totals?.total_tips ?? 0) + Number(r.totals?.total_service_fees ?? 0));
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -59,7 +77,7 @@ export default function PosOverview() {
           <p className="text-sm text-muted-foreground">All open tables and orders by waiter — tap an order to view or assist.</p>
         </div>
 
-        <div className="grid grid-cols-3 gap-3 max-w-xl">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 max-w-3xl">
           <Card className="p-4">
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium"><ReceiptText className="h-3.5 w-3.5" /> Open orders</div>
             <p className="text-2xl font-bold mt-1" data-testid="stat-open-orders">{orders.length}</p>
@@ -72,7 +90,36 @@ export default function PosOverview() {
             <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium"><UserRound className="h-3.5 w-3.5" /> Waiters serving</div>
             <p className="text-2xl font-bold mt-1" data-testid="stat-waiters-serving">{byWaiter.length}</p>
           </Card>
+          <Card className="p-4">
+            <div className="flex items-center gap-2 text-muted-foreground text-xs font-medium"><HandCoins className="h-3.5 w-3.5" /> Tips today</div>
+            <p className="text-2xl font-bold mt-1 text-[#c8a84b]" data-testid="stat-tips-today">{fmt(tipsTotal)}</p>
+          </Card>
         </div>
+
+        {tips.length > 0 && (
+          <div className="space-y-2">
+            <h2 className="font-semibold text-sm flex items-center gap-1.5"><HandCoins className="h-4 w-4 text-[#c8a84b]" /> Tips today by waiter</h2>
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3">
+              {tips.map(t => (
+                <Card key={t.staff_id} className="p-4" data-testid={`tips-staff-${t.staff_id}`}>
+                  <div className="flex items-center gap-2">
+                    <div className="h-7 w-7 rounded-full bg-[#c8a84b]/15 text-[#a8893a] flex items-center justify-center font-bold text-xs">
+                      {t.name.split(/\s+/).map(p => p[0]).slice(0, 2).join("").toUpperCase()}
+                    </div>
+                    <p className="font-semibold text-sm flex-1 truncate">{t.name}</p>
+                  </div>
+                  <p className="text-xl font-bold mt-2 text-[#1a5c38]">{fmt(t.total_tips)}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {t.orders} order{t.orders === 1 ? "" : "s"}
+                    {t.service_fees > 0 && t.tips > 0
+                      ? ` · ${fmt(t.tips)} tips + ${fmt(t.service_fees)} service fees`
+                      : t.service_fees > 0 ? " · service fees" : " · tips"}
+                  </p>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
 
         {loading ? (
           <p className="text-muted-foreground text-sm">Loading…</p>

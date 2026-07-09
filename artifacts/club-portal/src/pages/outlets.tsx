@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Store, Users, KeyRound } from "lucide-react";
+import { Plus, Store, Users, KeyRound, Percent } from "lucide-react";
 
 const TYPE_LABEL: Record<string, string> = { pro_shop: "Pro Shop", bar: "Bar", restaurant: "Restaurant" };
 
@@ -27,6 +27,8 @@ export default function Outlets() {
   const [addStaffOpen, setAddStaffOpen] = useState(false);
   const [resetTarget, setResetTarget] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
+  const [feeTarget, setFeeTarget] = useState<any | null>(null);
+  const [feeValue, setFeeValue] = useState("");
 
   const load = useCallback(() => {
     api<{ outlets: any[] }>("/api/portal/pos/outlets")
@@ -68,6 +70,26 @@ export default function Outlets() {
       load();
     } catch (err: any) {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const saveServiceFee = async () => {
+    if (!feeTarget || saving) return;
+    const pct = Number(feeValue);
+    if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+      toast({ title: "Invalid percentage", description: "Enter a value between 0 and 100.", variant: "destructive" });
+      return;
+    }
+    setSaving(true);
+    try {
+      await api(`/api/portal/pos/outlets/${feeTarget.id}`, { method: "PUT", body: JSON.stringify({ service_fee_percent: pct }) });
+      toast({ title: "Service fee updated", description: pct > 0 ? `A ${pct}% service fee will be added to every bill at ${feeTarget.name}.` : `No automatic service fee at ${feeTarget.name}.` });
+      setFeeTarget(null);
+      load();
+    } catch (err: any) {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -151,6 +173,16 @@ export default function Outlets() {
                   {o.active ? "Disable" : "Enable"}
                 </Button>
               </div>
+              <button
+                className="mt-3 w-full flex items-center justify-between text-sm border rounded-lg px-3 py-2 hover:bg-muted transition-colors"
+                onClick={() => { setFeeTarget(o); setFeeValue(String(o.service_fee_percent ?? 0)); }}
+                data-testid={`button-outlet-fee-${o.id}`}
+              >
+                <span className="flex items-center gap-1.5 text-muted-foreground"><Percent className="h-3.5 w-3.5" /> Service fee</span>
+                <span className={`font-semibold ${Number(o.service_fee_percent) > 0 ? "text-[#1a5c38]" : "text-muted-foreground"}`}>
+                  {Number(o.service_fee_percent) > 0 ? `${Number(o.service_fee_percent)}% on all bills` : "None"}
+                </span>
+              </button>
             </Card>
           ))}
         </div>
@@ -265,6 +297,34 @@ export default function Outlets() {
             <Button variant="outline" onClick={() => setAddStaffOpen(false)}>Cancel</Button>
             <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={!staffForm.name.trim() || !staffForm.email.trim() || staffForm.password.length < 6 || saving} onClick={createStaff} data-testid="button-save-outlet-staff">
               {saving ? "Creating…" : "Create account"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!feeTarget} onOpenChange={(o) => { if (!o) setFeeTarget(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Service fee — {feeTarget?.name}</DialogTitle></DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Automatic service fee (%)</Label>
+              <Input
+                type="number" min={0} max={100} step="0.5"
+                value={feeValue}
+                onChange={e => setFeeValue(e.target.value)}
+                placeholder="e.g. 10"
+                data-testid="input-service-fee"
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Added to every bill at this outlet (e.g. 10% on a R100 bill = R110 total). The fee is recorded as the waiter's tip.
+              Set to 0 to turn it off — the till can still work out tips from the amount the client pays.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFeeTarget(null)}>Cancel</Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={saving} onClick={saveServiceFee} data-testid="button-save-service-fee">
+              {saving ? "Saving…" : "Save"}
             </Button>
           </DialogFooter>
         </DialogContent>

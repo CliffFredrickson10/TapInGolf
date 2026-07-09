@@ -51,7 +51,7 @@ export default function PosReports() {
       </div>
 
       {summary && (
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           <Card className="p-4">
             <p className="text-xs text-muted-foreground">Total sales</p>
             <p className="text-xl font-bold text-[#1a5c38]" data-testid="stat-total-sales">{fmt(summary.totals.total_sales)}</p>
@@ -71,6 +71,12 @@ export default function PosReports() {
           <Card className="p-4">
             <p className="text-xs text-muted-foreground">Discounts given</p>
             <p className="text-xl font-bold">{fmt(summary.totals.total_discounts)}</p>
+          </Card>
+          <Card className="p-4">
+            <p className="text-xs text-muted-foreground">Tips & service fees</p>
+            <p className="text-xl font-bold text-[#a8893a]" data-testid="stat-total-tips">
+              {fmt(Number(summary.totals.total_tips ?? 0) + Number(summary.totals.total_service_fees ?? 0))}
+            </p>
           </Card>
         </div>
       )}
@@ -119,6 +125,18 @@ export default function PosReports() {
                   </div>
                 ))}
                 {(!summary || summary.by_staff.length === 0) && <p className="text-sm text-muted-foreground">No sales in this period.</p>}
+              </div>
+            </Card>
+            <Card className="p-4">
+              <h3 className="font-semibold mb-3">Tips by waiter</h3>
+              <div className="space-y-2">
+                {summary?.tips_by_staff?.map((w: any) => (
+                  <div key={w.staff_id} className="flex justify-between text-sm" data-testid={`report-tips-${w.staff_id}`}>
+                    <span>{w.name} <span className="text-muted-foreground">({w.orders} order{w.orders === 1 ? "" : "s"})</span></span>
+                    <span className="font-medium text-[#a8893a]">{fmt(w.total_tips)}</span>
+                  </div>
+                ))}
+                {(!summary || !summary.tips_by_staff || summary.tips_by_staff.length === 0) && <p className="text-sm text-muted-foreground">No tips in this period.</p>}
               </div>
             </Card>
             <Card className="p-4">

@@ -97,6 +97,7 @@ export default function PosTransactions() {
               <TableHead>Staff</TableHead>
               <TableHead>Payment</TableHead>
               <TableHead>Discount</TableHead>
+              <TableHead>Tip</TableHead>
               <TableHead className="text-right">Total</TableHead>
             </TableRow>
           </TableHeader>
@@ -110,11 +111,14 @@ export default function PosTransactions() {
                 <TableCell className="text-sm">{t.staff_name ?? "—"}</TableCell>
                 <TableCell><Badge variant="secondary" className="capitalize">{t.payment_method}</Badge></TableCell>
                 <TableCell className="text-sm text-[#1a5c38]">{t.discount_total > 0 ? `-${fmt(t.discount_total)}` : "—"}</TableCell>
+                <TableCell className="text-sm font-medium text-[#a8893a]" data-testid={`tx-tip-${t.id}`}>
+                  {(t.tip_amount + t.service_fee) > 0 ? fmt(t.tip_amount + t.service_fee) : "—"}
+                </TableCell>
                 <TableCell className="text-right font-semibold">{fmt(t.total)}</TableCell>
               </TableRow>
             ))}
             {transactions.length === 0 && (
-              <TableRow><TableCell colSpan={8} className="text-center text-muted-foreground py-8">No transactions in this period.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={9} className="text-center text-muted-foreground py-8">No transactions in this period.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -134,7 +138,14 @@ export default function PosTransactions() {
               <div className="border-t pt-2 space-y-1 text-sm">
                 <div className="flex justify-between"><span>Subtotal</span><span>{fmt(detail.subtotal)}</span></div>
                 {detail.discount_total > 0 && <div className="flex justify-between text-[#1a5c38]"><span>Promotions</span><span>-{fmt(detail.discount_total)}</span></div>}
+                {Number(detail.service_fee) > 0 && <div className="flex justify-between"><span>Service fee</span><span>{fmt(detail.service_fee)}</span></div>}
                 <div className="flex justify-between font-bold"><span>Paid ({detail.payment_method})</span><span>{fmt(detail.total)}</span></div>
+                {Number(detail.tip_amount) > 0 && (
+                  <div className="flex justify-between text-[#a8893a] font-semibold">
+                    <span>Tip{detail.amount_paid != null ? ` (received ${fmt(detail.amount_paid)})` : ""}</span>
+                    <span>{fmt(detail.tip_amount)}</span>
+                  </div>
+                )}
               </div>
             </div>
           )}

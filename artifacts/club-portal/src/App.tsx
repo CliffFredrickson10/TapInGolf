@@ -54,6 +54,7 @@ import RulesFormats from "@/pages/rules-formats";
 import Outlets from "@/pages/outlets";
 import PosTill from "@/pages/pos/till";
 import PosTables from "@/pages/pos/tables";
+import PosOverview from "@/pages/pos/overview";
 import PosOrder from "@/pages/pos/order";
 import PosProducts from "@/pages/pos/products";
 import PosSuppliers from "@/pages/pos/suppliers";
@@ -82,6 +83,13 @@ function SectionGuard({ section, children }: { section: string; children: React.
       {children}
     </ReadOnlyProvider>
   );
+}
+
+// Bar/restaurant home: waiters get the working Tables & Orders screen; a
+// manager who unlocks the terminal gets the read-focused floor overview.
+function PosHome() {
+  const { activeWaiter } = useAuth();
+  return activeWaiter?.role === "manager" ? <PosOverview /> : <PosTables />;
 }
 
 function Router() {
@@ -134,7 +142,7 @@ function Router() {
     return (
       <PosLayout>
         <Switch>
-          <Route path="/" component={isProShop ? PosTill : PosTables} />
+          <Route path="/" component={isProShop ? PosTill : PosHome} />
           <Route path="/orders/:id" component={PosOrder} />
           {isManager && <Route path="/products" component={PosProducts} />}
           {isManager && <Route path="/suppliers" component={PosSuppliers} />}

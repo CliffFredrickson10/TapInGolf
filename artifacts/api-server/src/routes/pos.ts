@@ -1046,7 +1046,7 @@ router.get("/pos/orders", requirePosAuth, async (req: Request, res: Response): P
   if (!["open", "paid", "cancelled"].includes(status)) { res.status(400).json({ message: "Invalid status" }); return; }
   const orders = await query<any>(
     `SELECT o.id, o.order_type, o.table_name, o.status, o.created_at, o.paid_at,
-            opener.name AS opened_by_name,
+            o.opened_by, opener.name AS opened_by_name, opener.role AS opened_by_role,
             (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
      FROM pos_orders o
      LEFT JOIN pos_staff opener ON opener.id = o.opened_by

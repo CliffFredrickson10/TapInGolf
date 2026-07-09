@@ -20,7 +20,7 @@ export function PosLayout({ children }: { children: React.ReactNode }) {
     ? [
         isProShop
           ? { href: "/", label: "Till", icon: ShoppingCart }
-          : { href: "/", label: "Tables & Orders", icon: LayoutGrid },
+          : { href: "/", label: isManager ? "Floor Overview" : "Tables & Orders", icon: LayoutGrid },
         ...(isManager
           ? [
               { href: "/products", label: "Products", icon: Package },

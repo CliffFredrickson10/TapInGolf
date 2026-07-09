@@ -182,13 +182,13 @@ export function PosWaiterGate({ children }: { children: ReactNode }) {
         </div>
 
         <Dialog open={!!selected} onOpenChange={(o) => { if (!o) { setSelected(null); setPin(""); } }}>
-          <DialogContent className="max-w-xs">
+          <DialogContent className="w-[calc(100vw-2rem)] max-w-xs overflow-hidden">
             <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <Button variant="ghost" size="icon" className="h-7 w-7 -ml-1" onClick={() => { setSelected(null); setPin(""); }}>
+              <DialogTitle className="flex items-center gap-2 min-w-0">
+                <Button variant="ghost" size="icon" className="h-7 w-7 -ml-1 shrink-0" onClick={() => { setSelected(null); setPin(""); }}>
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
-                {selected?.name}
+                <span className="min-w-0 flex-1 truncate text-left" title={selected?.name}>{selected?.name}</span>
               </DialogTitle>
             </DialogHeader>
             <form onSubmit={unlockWithPin} className="space-y-3">

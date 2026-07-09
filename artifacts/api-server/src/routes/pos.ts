@@ -246,6 +246,32 @@ router.get("/pos/waiters", requirePosAuth, async (req: Request, res: Response): 
   res.json({ staff });
 });
 
+// Any unlocked staff member can see their own tips for today (SA time).
+// Tips are attributed the same way as the manager report: the waiter who
+// served the table (opened_by), falling back to whoever took the payment.
+router.get("/pos/my-tips", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const totals = await row<any>(
+    `SELECT COUNT(*)::int AS orders,
+            COALESCE(SUM(o.tip_amount), 0) AS tips,
+            COALESCE(SUM(o.service_fee), 0) AS service_fees,
+            COALESCE(SUM(o.tip_amount + o.service_fee), 0) AS total_tips
+     FROM pos_orders o
+     WHERE o.outlet_id = ? AND o.status = 'paid'
+       AND COALESCE(o.opened_by, o.closed_by) = ?
+       AND (o.tip_amount > 0 OR o.service_fee > 0)
+       AND (o.paid_at AT TIME ZONE 'UTC' + INTERVAL '2 hours')::date
+           = (NOW() AT TIME ZONE 'UTC' + INTERVAL '2 hours')::date`,
+    [s.outlet_id, s.id]
+  );
+  res.json({
+    orders: totals?.orders ?? 0,
+    tips: Number(totals?.tips ?? 0),
+    service_fees: Number(totals?.service_fees ?? 0),
+    total_tips: Number(totals?.total_tips ?? 0),
+  });
+});
+
 // Brute-force protection for PIN unlocks: after 5 consecutive failures for a
 // staff member, further attempts are rejected for 60 seconds.
 const pinAttempts = new Map<number, { count: number; lockedUntil: number }>();

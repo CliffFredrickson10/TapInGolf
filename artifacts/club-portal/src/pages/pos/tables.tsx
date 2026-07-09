@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { Plus, UtensilsCrossed, ShoppingBag } from "lucide-react";
+import { Plus, UtensilsCrossed, ShoppingBag, HandCoins } from "lucide-react";
 
 const fmt = (n: number) => `R${Number(n).toFixed(2)}`;
 
@@ -21,12 +21,14 @@ export default function PosTables() {
   const [showNewTable, setShowNewTable] = useState(false);
   const [tableName, setTableName] = useState("");
   const [creating, setCreating] = useState(false);
+  const [myTips, setMyTips] = useState<any | null>(null);
 
   const load = useCallback(() => {
     api<{ orders: any[] }>("/api/pos/orders?status=open")
       .then(r => setOrders(r.orders))
       .catch(() => {})
       .finally(() => setLoading(false));
+    api<any>("/api/pos/my-tips").then(setMyTips).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -61,7 +63,18 @@ export default function PosTables() {
           <h1 className="text-2xl font-bold">Tables & Orders</h1>
           <p className="text-sm text-muted-foreground">Open orders — tap one to add items or take payment.</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 items-center">
+          {myTips && myTips.total_tips > 0 && (
+            <div className="flex items-center gap-2 rounded-lg border bg-[#faf6ec] px-3 py-2 mr-1" data-testid="my-tips-today">
+              <HandCoins className="h-4 w-4 text-[#a8893a]" />
+              <div className="leading-tight">
+                <p className="text-[10px] text-muted-foreground uppercase tracking-wide">My tips today</p>
+                <p className="text-sm font-bold text-[#a8893a]">
+                  {fmt(myTips.total_tips)} <span className="font-normal text-muted-foreground">· {myTips.orders} order{myTips.orders === 1 ? "" : "s"}</span>
+                </p>
+              </div>
+            </div>
+          )}
           <Button variant="outline" onClick={() => createOrder("takeaway")} disabled={creating} data-testid="button-new-takeaway">
             <ShoppingBag className="h-4 w-4 mr-2" /> New Takeaway
           </Button>

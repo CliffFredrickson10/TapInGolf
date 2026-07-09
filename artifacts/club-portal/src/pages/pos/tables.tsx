@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
-import { api } from "@/lib/api";
+import { posApi as api } from "@/lib/api";
+import { PosWaiterGate } from "@/components/pos-waiter-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -53,6 +54,7 @@ export default function PosTables() {
   };
 
   return (
+    <PosWaiterGate>
     <div className="p-6 space-y-5">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
@@ -115,5 +117,6 @@ export default function PosTables() {
         </DialogContent>
       </Dialog>
     </div>
+    </PosWaiterGate>
   );
 }

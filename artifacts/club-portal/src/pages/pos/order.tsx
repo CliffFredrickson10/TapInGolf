@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRoute, useLocation } from "wouter";
-import { api } from "@/lib/api";
+import { posApi as api } from "@/lib/api";
+import { PosWaiterGate } from "@/components/pos-waiter-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -89,7 +90,7 @@ export default function PosOrder() {
     }
   };
 
-  if (!order) return <div className="p-6 text-muted-foreground">Loading…</div>;
+  if (!order) return <PosWaiterGate><div className="p-6 text-muted-foreground">Loading…</div></PosWaiterGate>;
 
   const isOpen = order.status === "open";
   const title = order.order_type === "table" ? order.table_name : order.order_type === "takeaway" ? `Takeaway #${order.id}` : `Sale #${order.id}`;
@@ -99,6 +100,7 @@ export default function PosOrder() {
   );
 
   return (
+    <PosWaiterGate>
     <div className="flex h-full">
       <div className="flex-1 flex flex-col p-4 gap-3 min-w-0">
         <div className="flex items-center gap-3">
@@ -222,5 +224,6 @@ export default function PosOrder() {
         </DialogContent>
       </Dialog>
     </div>
+    </PosWaiterGate>
   );
 }

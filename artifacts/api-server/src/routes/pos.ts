@@ -1,6 +1,10 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
+import {
+  generateRegistrationOptions, verifyRegistrationResponse,
+  generateAuthenticationOptions, verifyAuthenticationResponse,
+} from "@simplewebauthn/server";
 import { query, row, exec, run, withTransaction, clientQuery } from "../lib/pg";
 import { generatePosToken, requirePosAuth, requirePosManager, getPosStaff } from "../lib/posAuth";
 import { logger } from "../lib/logger";
@@ -107,27 +111,37 @@ router.post("/portal/pos/outlets/:id/staff", requireClubAdmin, async (req: Reque
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
   const role = String(req.body?.role ?? "manager");
-  if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
-  if (password.length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
   if (role !== "manager" && role !== "waiter") { res.status(400).json({ message: "Role must be manager or waiter" }); return; }
-  const existing = await row<any>("SELECT id FROM pos_staff WHERE email = ?", [email]);
-  if (existing) { res.status(409).json({ message: "An outlet account with this email already exists" }); return; }
+  // Managers need an email login; waiters only need a name and a terminal PIN.
+  if (role === "manager") {
+    if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
+    if (password.length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+    const existing = await row<any>("SELECT id FROM pos_staff WHERE email = ?", [email]);
+    if (existing) { res.status(409).json({ message: "An outlet account with this email already exists" }); return; }
+  } else {
+    if (!name || !password) { res.status(400).json({ message: "Name and PIN are required" }); return; }
+    if (password.length < 4) { res.status(400).json({ message: "PIN must be at least 4 characters" }); return; }
+  }
   const hash = await bcrypt.hash(password, 10);
   const staffId = await exec(
     "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)",
-    [id, club.id, name, email, hash, role]
+    [id, club.id, name, role === "manager" ? email : null, hash, role]
   );
-  res.status(201).json({ id: staffId, name, email, role, active: 1 });
+  res.status(201).json({ id: staffId, name, email: role === "manager" ? email : null, role, active: 1 });
 });
 
 router.put("/portal/pos/staff/:id", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const id = parseInt(String(req.params["id"] ?? ""), 10);
-  const staff = await row<any>("SELECT id FROM pos_staff WHERE id = ? AND club_id = ?", [id, club.id]);
+  const staff = await row<any>("SELECT id, role FROM pos_staff WHERE id = ? AND club_id = ?", [id, club.id]);
   if (!staff) { res.status(404).json({ message: "Staff member not found" }); return; }
   const { active, password, name } = req.body ?? {};
   if (password != null) {
-    if (String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+    const minLen = staff.role === "manager" ? 6 : 4;
+    if (String(password).length < minLen) {
+      res.status(400).json({ message: staff.role === "manager" ? "Password must be at least 6 characters" : "PIN must be at least 4 characters" });
+      return;
+    }
     const hash = await bcrypt.hash(String(password), 10);
     await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash, id]);
   }
@@ -144,6 +158,8 @@ router.post("/pos/auth/login", async (req: Request, res: Response): Promise<void
   const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
   if (!email || !password) { res.status(400).json({ message: "Email and password required" }); return; }
+  // Only managers open the terminal session — waiters/cashiers unlock on the
+  // terminal itself with their PIN or fingerprint (see /pos/waiters below).
   const staff = await row<any>(
     `SELECT s.id, s.outlet_id, s.club_id, s.name, s.email, s.password_hash, s.role, s.active,
             o.name AS outlet_name, o.type AS outlet_type, o.active AS outlet_active,
@@ -151,7 +167,7 @@ router.post("/pos/auth/login", async (req: Request, res: Response): Promise<void
      FROM pos_staff s
      JOIN pos_outlets o ON o.id = s.outlet_id
      JOIN clubs c ON c.id = s.club_id
-     WHERE s.email = ? LIMIT 1`,
+     WHERE s.email = ? AND s.role = 'manager' LIMIT 1`,
     [email]
   );
   if (!staff || !staff.active || !staff.outlet_active) { res.status(401).json({ message: "Invalid credentials" }); return; }
@@ -172,6 +188,215 @@ router.get("/pos/me", requirePosAuth, async (req: Request, res: Response): Promi
     staff: { id: s.id, name: s.name, email: s.email, role: s.role },
     outlet: { id: s.outlet_id, name: s.outlet_name, type: s.outlet_type, club_name: club?.name ?? "" },
   });
+});
+
+// ─── Waiter terminal unlock (PIN + fingerprint) ──────────────────────────────
+// The terminal stays signed in with the manager's outlet session. Staff are
+// listed by name; each one unlocks with their personal PIN or a registered
+// fingerprint (WebAuthn platform authenticator). Unlocking returns a
+// short-lived pos_staff token for that person, so orders/sales are recorded
+// against the waiter who actually performed them.
+
+const WAITER_TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // one shift
+
+// WebAuthn challenges are single-use and short-lived; an in-memory store is
+// fine for the single-process API server.
+const webauthnChallenges = new Map<string, { challenge: string; exp: number }>();
+function putChallenge(key: string, challenge: string): void {
+  webauthnChallenges.set(key, { challenge, exp: Date.now() + 5 * 60 * 1000 });
+}
+function takeChallenge(key: string): string | null {
+  const entry = webauthnChallenges.get(key);
+  webauthnChallenges.delete(key);
+  if (!entry || entry.exp < Date.now()) return null;
+  return entry.challenge;
+}
+
+// WebAuthn is origin-bound by the browser; derive rpID/origin from the request
+// so the flow works on both the rotating dev domain and production.
+function webauthnRp(req: Request): { rpID: string; origin: string } | null {
+  const origin = String(req.headers.origin ?? "");
+  try {
+    const url = new URL(origin);
+    if (url.protocol !== "https:" && url.hostname !== "localhost") return null;
+    return { rpID: url.hostname, origin };
+  } catch {
+    return null;
+  }
+}
+
+router.get("/pos/waiters", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const staff = await query<any>(
+    `SELECT st.id, st.name, st.role,
+            EXISTS (SELECT 1 FROM pos_webauthn_credentials w WHERE w.staff_id = st.id) AS has_fingerprint
+     FROM pos_staff st
+     WHERE st.outlet_id = ? AND st.active = 1
+     ORDER BY st.role, st.name`,
+    [s.outlet_id]
+  );
+  res.json({ staff });
+});
+
+// Brute-force protection for PIN unlocks: after 5 consecutive failures for a
+// staff member, further attempts are rejected for 60 seconds.
+const pinAttempts = new Map<number, { count: number; lockedUntil: number }>();
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_LOCKOUT_MS = 60 * 1000;
+
+router.post("/pos/waiters/:id/unlock", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const password = String(req.body?.password ?? "");
+  if (!password) { res.status(400).json({ message: "PIN required" }); return; }
+  const target = await row<any>(
+    "SELECT id, outlet_id, club_id, name, role, password_hash, active FROM pos_staff WHERE id = ? AND outlet_id = ?",
+    [id, s.outlet_id]
+  );
+  if (!target || !target.active) { res.status(404).json({ message: "Staff member not found" }); return; }
+  const attempts = pinAttempts.get(target.id);
+  if (attempts && attempts.lockedUntil > Date.now()) {
+    const waitSec = Math.ceil((attempts.lockedUntil - Date.now()) / 1000);
+    res.status(429).json({ message: `Too many attempts — try again in ${waitSec}s` });
+    return;
+  }
+  const valid = await bcrypt.compare(password, target.password_hash);
+  if (!valid) {
+    const count = (attempts && attempts.lockedUntil <= Date.now() && attempts.count >= PIN_MAX_ATTEMPTS ? 0 : attempts?.count ?? 0) + 1;
+    pinAttempts.set(target.id, { count, lockedUntil: count >= PIN_MAX_ATTEMPTS ? Date.now() + PIN_LOCKOUT_MS : 0 });
+    res.status(401).json({ message: "Incorrect PIN" });
+    return;
+  }
+  pinAttempts.delete(target.id);
+  const token = generatePosToken(target.id, target.outlet_id, target.club_id, target.role, WAITER_TOKEN_TTL_MS);
+  res.json({ token, staff: { id: target.id, name: target.name, role: target.role } });
+});
+
+// Fingerprint registration — only the unlocked person may register their own
+// fingerprint (the caller's token must belong to the staff member).
+router.post("/pos/waiters/webauthn/register/options", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const rp = webauthnRp(req);
+  if (!rp) { res.status(400).json({ message: "Fingerprint sign-in requires a secure (https) connection" }); return; }
+  const existing = await query<any>("SELECT credential_id FROM pos_webauthn_credentials WHERE staff_id = ?", [s.id]);
+  const options = await generateRegistrationOptions({
+    rpName: "TapIn Golf POS",
+    rpID: rp.rpID,
+    userName: s.name,
+    userDisplayName: s.name,
+    userID: Buffer.from(`pos-staff-${s.id}`),
+    attestationType: "none",
+    excludeCredentials: existing.map((c: any) => ({ id: c.credential_id })),
+    authenticatorSelection: { authenticatorAttachment: "platform", userVerification: "required" },
+  });
+  putChallenge(`reg:${s.id}`, options.challenge);
+  res.json(options);
+});
+
+router.post("/pos/waiters/webauthn/register/verify", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const rp = webauthnRp(req);
+  if (!rp) { res.status(400).json({ message: "Fingerprint sign-in requires a secure (https) connection" }); return; }
+  const expectedChallenge = takeChallenge(`reg:${s.id}`);
+  if (!expectedChallenge) { res.status(400).json({ message: "Registration expired — try again" }); return; }
+  try {
+    const verification = await verifyRegistrationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin: rp.origin,
+      expectedRPID: rp.rpID,
+      requireUserVerification: true,
+    });
+    if (!verification.verified || !verification.registrationInfo) {
+      res.status(400).json({ message: "Fingerprint could not be verified" });
+      return;
+    }
+    const cred = verification.registrationInfo.credential;
+    await run(
+      "INSERT INTO pos_webauthn_credentials (staff_id, credential_id, public_key, counter, transports) VALUES (?, ?, ?, ?, ?) ON CONFLICT (credential_id) DO NOTHING",
+      [s.id, cred.id, Buffer.from(cred.publicKey).toString("base64url"), cred.counter, JSON.stringify(cred.transports ?? [])]
+    );
+    res.json({ success: true });
+  } catch (err: any) {
+    logger.warn({ err, staffId: s.id }, "POS fingerprint registration failed");
+    res.status(400).json({ message: "Fingerprint registration failed" });
+  }
+});
+
+// Fingerprint unlock — any signed-in terminal may request options for a staff
+// member of the same outlet; verification returns that person's waiter token.
+router.post("/pos/waiters/:id/webauthn/options", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const rp = webauthnRp(req);
+  if (!rp) { res.status(400).json({ message: "Fingerprint sign-in requires a secure (https) connection" }); return; }
+  const target = await row<any>("SELECT id, active FROM pos_staff WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!target || !target.active) { res.status(404).json({ message: "Staff member not found" }); return; }
+  const creds = await query<any>("SELECT credential_id, transports FROM pos_webauthn_credentials WHERE staff_id = ?", [id]);
+  if (creds.length === 0) { res.status(404).json({ message: "No fingerprint registered" }); return; }
+  const options = await generateAuthenticationOptions({
+    rpID: rp.rpID,
+    userVerification: "required",
+    allowCredentials: creds.map((c: any) => ({
+      id: c.credential_id,
+      transports: c.transports ? JSON.parse(c.transports) : undefined,
+    })),
+  });
+  putChallenge(`auth:${s.outlet_id}:${id}`, options.challenge);
+  res.json(options);
+});
+
+router.post("/pos/waiters/:id/webauthn/verify", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const rp = webauthnRp(req);
+  if (!rp) { res.status(400).json({ message: "Fingerprint sign-in requires a secure (https) connection" }); return; }
+  const target = await row<any>(
+    "SELECT id, outlet_id, club_id, name, role, active FROM pos_staff WHERE id = ? AND outlet_id = ?",
+    [id, s.outlet_id]
+  );
+  if (!target || !target.active) { res.status(404).json({ message: "Staff member not found" }); return; }
+  const expectedChallenge = takeChallenge(`auth:${s.outlet_id}:${id}`);
+  if (!expectedChallenge) { res.status(400).json({ message: "Fingerprint sign-in expired — try again" }); return; }
+  const credentialId = String(req.body?.id ?? "");
+  const cred = await row<any>(
+    "SELECT id, credential_id, public_key, counter, transports FROM pos_webauthn_credentials WHERE credential_id = ? AND staff_id = ?",
+    [credentialId, id]
+  );
+  if (!cred) { res.status(400).json({ message: "Unknown fingerprint" }); return; }
+  try {
+    const verification = await verifyAuthenticationResponse({
+      response: req.body,
+      expectedChallenge,
+      expectedOrigin: rp.origin,
+      expectedRPID: rp.rpID,
+      requireUserVerification: true,
+      credential: {
+        id: cred.credential_id,
+        publicKey: Buffer.from(cred.public_key, "base64url"),
+        counter: Number(cred.counter),
+        transports: cred.transports ? JSON.parse(cred.transports) : undefined,
+      },
+    });
+    if (!verification.verified) { res.status(401).json({ message: "Fingerprint not recognised" }); return; }
+    await run("UPDATE pos_webauthn_credentials SET counter = ? WHERE id = ?", [verification.authenticationInfo.newCounter, cred.id]);
+    const token = generatePosToken(target.id, target.outlet_id, target.club_id, target.role, WAITER_TOKEN_TTL_MS);
+    res.json({ token, staff: { id: target.id, name: target.name, role: target.role } });
+  } catch (err: any) {
+    logger.warn({ err, staffId: id }, "POS fingerprint unlock failed");
+    res.status(401).json({ message: "Fingerprint not recognised" });
+  }
+});
+
+// Managers may remove a staff member's registered fingerprints (lost device,
+// re-registration on a new scanner, etc.).
+router.delete("/pos/staff/:id/fingerprints", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const target = await row<any>("SELECT id FROM pos_staff WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!target) { res.status(404).json({ message: "Staff member not found" }); return; }
+  await run("DELETE FROM pos_webauthn_credentials WHERE staff_id = ?", [id]);
+  res.json({ success: true });
 });
 
 // ─── Categories ──────────────────────────────────────────────────────────────
@@ -1132,7 +1357,9 @@ router.post("/pos/sales", requirePosAuth, async (req: Request, res: Response): P
 router.get("/pos/staff", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
   const s = getPosStaff(req);
   const staff = await query<any>(
-    "SELECT id, name, email, role, active, created_at FROM pos_staff WHERE outlet_id = ? ORDER BY role, name",
+    `SELECT st.id, st.name, st.email, st.role, st.active, st.created_at,
+            EXISTS (SELECT 1 FROM pos_webauthn_credentials w WHERE w.staff_id = st.id) AS has_fingerprint
+     FROM pos_staff st WHERE st.outlet_id = ? ORDER BY st.role, st.name`,
     [s.outlet_id]
   );
   res.json({ staff });
@@ -1141,19 +1368,17 @@ router.get("/pos/staff", requirePosAuth, requirePosManager, async (req: Request,
 router.post("/pos/staff", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
   const s = getPosStaff(req);
   const name = String(req.body?.name ?? "").trim();
-  const email = String(req.body?.email ?? "").trim().toLowerCase();
   const password = String(req.body?.password ?? "");
-  if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
-  if (password.length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
-  const existing = await row<any>("SELECT id FROM pos_staff WHERE email = ?", [email]);
-  if (existing) { res.status(409).json({ message: "An outlet account with this email already exists" }); return; }
+  // Waiters/cashiers don't have logins — just a name and a personal PIN they
+  // type on the terminal. Managers are created by the club admin.
+  if (!name || !password) { res.status(400).json({ message: "Name and PIN are required" }); return; }
+  if (password.length < 4) { res.status(400).json({ message: "PIN must be at least 4 characters" }); return; }
   const hash = await bcrypt.hash(password, 10);
-  // Managers may only create waiters/cashiers — manager accounts come from the club admin
   const id = await exec(
-    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, 'waiter')",
-    [s.outlet_id, s.club_id, name, email, hash]
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, NULL, ?, 'waiter')",
+    [s.outlet_id, s.club_id, name, hash]
   );
-  res.status(201).json({ id, name, email, role: "waiter", active: 1 });
+  res.status(201).json({ id, name, email: null, role: "waiter", active: 1 });
 });
 
 router.put("/pos/staff/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
@@ -1164,7 +1389,11 @@ router.put("/pos/staff/:id", requirePosAuth, requirePosManager, async (req: Requ
   if (target.role === "manager" && target.id !== s.id) { res.status(403).json({ message: "Managers cannot modify other managers — ask your club admin" }); return; }
   const { active, password, name } = req.body ?? {};
   if (password != null) {
-    if (String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+    const minLen = target.role === "manager" ? 6 : 4;
+    if (String(password).length < minLen) {
+      res.status(400).json({ message: target.role === "manager" ? "Password must be at least 6 characters" : "PIN must be at least 4 characters" });
+      return;
+    }
     const hash = await bcrypt.hash(String(password), 10);
     await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash, id]);
   }

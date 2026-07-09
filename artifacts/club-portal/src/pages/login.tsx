@@ -136,7 +136,7 @@ export default function Login() {
                 : tab === "reseller"
                 ? "Sign in with your reseller account to buy listed tee times."
                 : tab === "pos"
-                ? "Pro shop, bar & restaurant staff — sign in to your outlet POS."
+                ? "Outlet managers — sign in to open the POS terminal. Waiters and cashiers unlock on the terminal with their PIN or fingerprint."
                 : "Enter your club credentials to access the management portal."}
             </CardDescription>
           </CardHeader>

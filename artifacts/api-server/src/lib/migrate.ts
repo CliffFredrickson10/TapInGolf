@@ -1952,10 +1952,26 @@ async function seedAdOfferings(): Promise<void> {
       outlet_id     INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
       club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
       name          VARCHAR(120) NOT NULL,
-      email         VARCHAR(255) NOT NULL UNIQUE,
+      email         VARCHAR(255) UNIQUE,
       password_hash VARCHAR(255) NOT NULL,
       role          VARCHAR(20) NOT NULL CHECK (role IN ('manager','waiter')),
       active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  // Waiters no longer log in with email — they unlock the terminal with a PIN,
+  // so email is optional (managers still require it for the outlet login).
+  await ddl("ALTER TABLE pos_staff ALTER COLUMN email DROP NOT NULL");
+
+  // WebAuthn (fingerprint) credentials for waiter terminal unlock.
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_webauthn_credentials (
+      id            SERIAL PRIMARY KEY,
+      staff_id      INT NOT NULL REFERENCES pos_staff(id) ON DELETE CASCADE,
+      credential_id TEXT NOT NULL UNIQUE,
+      public_key    TEXT NOT NULL,
+      counter       BIGINT NOT NULL DEFAULT 0,
+      transports    TEXT,
       created_at    TIMESTAMP DEFAULT NOW()
     )
   `);
@@ -2317,9 +2333,10 @@ async function seedPosDemo(): Promise<void> {
     "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Bar Manager', 'bar.demo@tapingolf.co.za', ?, 'manager')",
     [barId, club.id, pwHash]
   );
+  const waiterPinHash = await bcrypt.hash("1234", 10);
   await exec(
-    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Waiter', 'waiter.demo@tapingolf.co.za', ?, 'waiter')",
-    [barId, club.id, pwHash]
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Waiter', NULL, ?, 'waiter')",
+    [barId, club.id, waiterPinHash]
   );
   const catBeer = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Beers', 1)", [barId]);
   const catWine = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Wine', 2)", [barId]);

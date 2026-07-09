@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { api } from "@/lib/api";
+import { posApi as api } from "@/lib/api";
+import { PosWaiterGate } from "@/components/pos-waiter-gate";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,6 +132,7 @@ export default function PosTill() {
   );
 
   return (
+    <PosWaiterGate>
     <div className="flex h-full">
       <div className="flex-1 flex flex-col p-4 gap-3 min-w-0">
         <form onSubmit={handleScan} className="flex gap-2">
@@ -281,5 +283,6 @@ export default function PosTill() {
         </DialogContent>
       </Dialog>
     </div>
+    </PosWaiterGate>
   );
 }

@@ -8,14 +8,14 @@ import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Plus, KeyRound } from "lucide-react";
+import { Plus, KeyRound, Fingerprint } from "lucide-react";
 
 export default function PosStaff() {
   const { toast } = useToast();
   const { posStaff, posOutlet } = useAuth();
   const [staff, setStaff] = useState<any[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [form, setForm] = useState({ name: "", password: "" });
   const [saving, setSaving] = useState(false);
   const [resetTarget, setResetTarget] = useState<any | null>(null);
   const [newPassword, setNewPassword] = useState("");
@@ -32,9 +32,9 @@ export default function PosStaff() {
     setSaving(true);
     try {
       await api("/api/pos/staff", { method: "POST", body: JSON.stringify(form) });
-      toast({ title: `${roleLabel} account created` });
+      toast({ title: `${roleLabel} added`, description: "They can now unlock the terminal with their PIN." });
       setDialogOpen(false);
-      setForm({ name: "", email: "", password: "" });
+      setForm({ name: "", password: "" });
       load();
     } catch (err: any) {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
@@ -53,12 +53,24 @@ export default function PosStaff() {
   };
 
   const resetPassword = async () => {
-    if (!resetTarget || newPassword.length < 6) return;
+    const minLen = resetTarget?.role === "manager" ? 6 : 4;
+    if (!resetTarget || newPassword.length < minLen) return;
     try {
       await api(`/api/pos/staff/${resetTarget.id}`, { method: "PUT", body: JSON.stringify({ password: newPassword }) });
-      toast({ title: "Password updated" });
+      toast({ title: resetTarget.role === "manager" ? "Password updated" : "PIN updated" });
       setResetTarget(null);
       setNewPassword("");
+    } catch (err: any) {
+      toast({ title: "Failed", description: err.message, variant: "destructive" });
+    }
+  };
+
+  const removeFingerprint = async (member: any) => {
+    if (!confirm(`Remove ${member.name}'s registered fingerprint? They can re-register after unlocking with their PIN.`)) return;
+    try {
+      await api(`/api/pos/staff/${member.id}/fingerprints`, { method: "DELETE" });
+      toast({ title: "Fingerprint removed" });
+      load();
     } catch (err: any) {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
@@ -69,7 +81,9 @@ export default function PosStaff() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold">Staff</h1>
-          <p className="text-sm text-muted-foreground">{roleLabel} accounts for this outlet. Manager accounts are created by your club admin.</p>
+          <p className="text-sm text-muted-foreground">
+            {roleLabel}s don't sign in — they appear on the terminal's list and unlock with their own PIN or fingerprint. Manager accounts are created by your club admin.
+          </p>
         </div>
         <Button className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={() => setDialogOpen(true)} data-testid="button-add-staff">
           <Plus className="h-4 w-4 mr-2" /> Add {roleLabel.toLowerCase()}
@@ -81,25 +95,38 @@ export default function PosStaff() {
           <TableHeader>
             <TableRow>
               <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
               <TableHead>Role</TableHead>
+              <TableHead>Sign-in</TableHead>
               <TableHead>Status</TableHead>
-              <TableHead className="w-40"></TableHead>
+              <TableHead className="w-56"></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {staff.map(m => (
               <TableRow key={m.id} data-testid={`staff-row-${m.id}`} className={m.active ? "" : "opacity-50"}>
                 <TableCell className="font-medium">{m.name}{m.id === posStaff?.id ? " (you)" : ""}</TableCell>
-                <TableCell className="text-sm">{m.email}</TableCell>
-                <TableCell><Badge variant={m.role === "manager" ? "default" : "secondary"} className={m.role === "manager" ? "bg-[#1a5c38]" : ""}>{m.role}</Badge></TableCell>
+                <TableCell><Badge variant={m.role === "manager" ? "default" : "secondary"} className={m.role === "manager" ? "bg-[#1a5c38]" : ""}>{m.role === "manager" ? "manager" : roleLabel.toLowerCase()}</Badge></TableCell>
+                <TableCell className="text-sm">
+                  {m.role === "manager" ? (
+                    <span>{m.email}</span>
+                  ) : (
+                    <span className="flex items-center gap-1.5 text-muted-foreground">
+                      PIN{m.has_fingerprint && <span className="inline-flex items-center gap-0.5 text-[#1a5c38]"><Fingerprint className="h-3.5 w-3.5" /> + fingerprint</span>}
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell>{m.active ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Disabled</Badge>}</TableCell>
                 <TableCell>
                   {(m.role !== "manager" || m.id === posStaff?.id) && (
                     <div className="flex gap-1 justify-end">
                       <Button size="sm" variant="ghost" className="text-xs" onClick={() => setResetTarget(m)}>
-                        <KeyRound className="h-3.5 w-3.5 mr-1" /> Password
+                        <KeyRound className="h-3.5 w-3.5 mr-1" /> {m.role === "manager" ? "Password" : "PIN"}
                       </Button>
+                      {m.has_fingerprint && m.role !== "manager" && (
+                        <Button size="sm" variant="ghost" className="text-xs" onClick={() => removeFingerprint(m)} data-testid={`button-remove-fingerprint-${m.id}`}>
+                          <Fingerprint className="h-3.5 w-3.5 mr-1" /> Remove
+                        </Button>
+                      )}
                       {m.id !== posStaff?.id && (
                         <Button size="sm" variant="ghost" className="text-xs" onClick={() => toggleActive(m)} data-testid={`button-toggle-staff-${m.id}`}>
                           {m.active ? "Disable" : "Enable"}
@@ -126,18 +153,17 @@ export default function PosStaff() {
               <Input value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} data-testid="input-staff-name" />
             </div>
             <div className="space-y-1.5">
-              <Label>Email *</Label>
-              <Input type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} data-testid="input-staff-email" />
+              <Label>PIN * (min 4 digits — they'll type this on the terminal)</Label>
+              <Input type="password" inputMode="numeric" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} data-testid="input-staff-password" />
             </div>
-            <div className="space-y-1.5">
-              <Label>Password * (min 6 characters)</Label>
-              <Input type="password" value={form.password} onChange={e => setForm(f => ({ ...f, password: e.target.value }))} data-testid="input-staff-password" />
-            </div>
+            <p className="text-xs text-muted-foreground">
+              No email or login needed. {form.name.trim() || `The ${roleLabel.toLowerCase()}`} will appear on the terminal's "Who's serving?" list and can also register a fingerprint on devices with a scanner.
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={!form.name.trim() || !form.email.trim() || form.password.length < 6 || saving} onClick={create} data-testid="button-save-staff">
-              {saving ? "Creating…" : "Create account"}
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={!form.name.trim() || form.password.length < 4 || saving} onClick={create} data-testid="button-save-staff">
+              {saving ? "Adding…" : `Add ${roleLabel.toLowerCase()}`}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -145,13 +171,15 @@ export default function PosStaff() {
 
       <Dialog open={!!resetTarget} onOpenChange={(o) => { if (!o) { setResetTarget(null); setNewPassword(""); } }}>
         <DialogContent className="max-w-sm">
-          <DialogHeader><DialogTitle>Reset password — {resetTarget?.name}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{resetTarget?.role === "manager" ? "Reset password" : "Reset PIN"} — {resetTarget?.name}</DialogTitle></DialogHeader>
           <div className="space-y-1.5">
-            <Label>New password (min 6 characters)</Label>
-            <Input type="password" value={newPassword} onChange={e => setNewPassword(e.target.value)} data-testid="input-reset-password" />
+            <Label>{resetTarget?.role === "manager" ? "New password (min 6 characters)" : "New PIN (min 4 digits)"}</Label>
+            <Input type="password" inputMode={resetTarget?.role === "manager" ? undefined : "numeric"} value={newPassword} onChange={e => setNewPassword(e.target.value)} data-testid="input-reset-password" />
           </div>
           <DialogFooter>
-            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={newPassword.length < 6} onClick={resetPassword}>Update password</Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={newPassword.length < (resetTarget?.role === "manager" ? 6 : 4)} onClick={resetPassword}>
+              Update
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

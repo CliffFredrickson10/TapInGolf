@@ -11,11 +11,11 @@ export interface PosTokenPayload {
   role: "manager" | "waiter";
 }
 
-export function generatePosToken(staffId: number, outletId: number, clubId: number, role: string): string {
+export function generatePosToken(staffId: number, outletId: number, clubId: number, role: string, ttlMs?: number): string {
   const payload = Buffer.from(
     JSON.stringify({
       sub: staffId, outlet: outletId, club: clubId, role,
-      type: "pos_staff", iat: Date.now(), exp: Date.now() + 7 * 24 * 60 * 60 * 1000,
+      type: "pos_staff", iat: Date.now(), exp: Date.now() + (ttlMs ?? 7 * 24 * 60 * 60 * 1000),
     })
   ).toString("base64url");
   const sig = crypto.createHmac("sha256", SECRET).update(payload).digest("hex");

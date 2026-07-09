@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import {
   api, getToken, setToken, clearToken,
   getMode, setMode, getSelectedClubId, setSelectedClubId as persistSelectedClubId,
+  getWaiterInfo, setWaiterSession, clearWaiterSession,
 } from "@/lib/api";
 
 export type Permission = "none" | "view" | "edit";
@@ -46,8 +47,14 @@ export interface ResellerInfo {
 export interface PosStaffInfo {
   id: number;
   name: string;
-  email: string;
+  email: string | null;
   role: "manager" | "waiter";
+}
+
+export interface ActiveWaiter {
+  id: number;
+  name: string;
+  role: string;
 }
 
 export interface PosOutletInfo {
@@ -76,6 +83,9 @@ interface AuthContextValue {
   staffLogin: (email: string, password: string) => Promise<void>;
   resellerLogin: (username: string, password: string) => Promise<void>;
   posLogin: (email: string, password: string) => Promise<void>;
+  activeWaiter: ActiveWaiter | null;
+  unlockWaiter: (token: string, staff: ActiveWaiter) => void;
+  lockWaiter: () => void;
   logout: () => void;
 }
 
@@ -98,6 +108,9 @@ const AuthContext = createContext<AuthContextValue>({
   staffLogin: async () => {},
   resellerLogin: async () => {},
   posLogin: async () => {},
+  activeWaiter: null,
+  unlockWaiter: () => {},
+  lockWaiter: () => {},
   logout: () => {},
 });
 
@@ -110,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [posOutlet, setPosOutlet] = useState<PosOutletInfo | null>(null);
   const [clubs, setClubs] = useState<StaffClub[]>([]);
   const [selectedClubId, setSelectedClubIdState] = useState<number | null>(getSelectedClubId());
+  const [activeWaiter, setActiveWaiter] = useState<ActiveWaiter | null>(getWaiterInfo());
   const [loading, setLoading] = useState(true);
 
   const setSelectedClubId = useCallback((id: number | null) => {
@@ -232,8 +246,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setReseller(null);
   }, []);
 
+  const unlockWaiter = useCallback((token: string, staff: ActiveWaiter) => {
+    setWaiterSession(token, staff);
+    setActiveWaiter(staff);
+  }, []);
+
+  const lockWaiter = useCallback(() => {
+    clearWaiterSession();
+    setActiveWaiter(null);
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
+    setActiveWaiter(null);
     setClub(null);
     setClubUser(null);
     setStaff(null);
@@ -262,7 +287,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     <AuthContext.Provider value={{
       club, clubUser, staff, reseller, posStaff, posOutlet, clubs, selectedClubId, setSelectedClubId,
       loading, isClubAdmin, canView, canEdit,
-      login, clubUserLogin, staffLogin, resellerLogin, posLogin, logout,
+      login, clubUserLogin, staffLogin, resellerLogin, posLogin,
+      activeWaiter, unlockWaiter, lockWaiter, logout,
     }}>
       {children}
     </AuthContext.Provider>

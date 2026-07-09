@@ -79,6 +79,31 @@ export function PosWaiterGate({ children }: { children: ReactNode }) {
     }
   };
 
+  // WebAuthn prompts are blocked inside cross-origin iframes (e.g. embedded
+  // previews) unless the parent page grants the publickey-credentials
+  // permissions. Detect that so we can explain instead of failing silently.
+  const inCrossOriginFrame = (() => {
+    try { return window.self !== window.top; } catch { return true; }
+  })();
+
+  const explainWebAuthnError = (err: any, action: "register" | "unlock") => {
+    const blocked = err?.name === "NotAllowedError" || err?.name === "SecurityError";
+    if (blocked && inCrossOriginFrame) {
+      toast({
+        title: "Fingerprint blocked in embedded preview",
+        description: "Open the portal in its own browser tab to use Touch ID — fingerprint prompts don't work inside this preview frame.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (err?.name === "NotAllowedError") return; // user cancelled the prompt
+    toast({
+      title: action === "register" ? "Could not register fingerprint" : "Fingerprint failed",
+      description: err?.message ?? (action === "register" ? "This device may not have a fingerprint scanner." : "Try your PIN instead."),
+      variant: "destructive",
+    });
+  };
+
   const unlockWithFingerprint = async (target: WaiterListItem) => {
     if (busy) return;
     setBusy(true);
@@ -93,9 +118,7 @@ export function PosWaiterGate({ children }: { children: ReactNode }) {
       setSelected(null);
       setPin("");
     } catch (err: any) {
-      if (err?.name !== "NotAllowedError") {
-        toast({ title: "Fingerprint failed", description: err.message ?? "Try your PIN instead.", variant: "destructive" });
-      }
+      explainWebAuthnError(err, "unlock");
     } finally {
       setBusy(false);
     }
@@ -111,9 +134,7 @@ export function PosWaiterGate({ children }: { children: ReactNode }) {
       toast({ title: "Fingerprint registered", description: `${activeWaiter.name} can now unlock with a fingerprint on this device.` });
       loadWaiters();
     } catch (err: any) {
-      if (err?.name !== "NotAllowedError") {
-        toast({ title: "Could not register fingerprint", description: err.message ?? "This device may not have a fingerprint scanner.", variant: "destructive" });
-      }
+      explainWebAuthnError(err, "register");
     } finally {
       setRegistering(false);
     }

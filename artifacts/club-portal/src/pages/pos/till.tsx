@@ -50,9 +50,12 @@ export default function PosTill() {
   const [golfName, setGolfName] = useState("");
   const [golfPhone, setGolfPhone] = useState("");
   const [golfFee, setGolfFee] = useState("");
-  const [golfSaving, setGolfSaving] = useState(false);
   const [golfReceipt, setGolfReceipt] = useState<any | null>(null);
-  const [golfIncludeCart, setGolfIncludeCart] = useState(true);
+  interface GolfPending {
+    tee_time_id: number; players: number; guest_name: string; guest_phone: string;
+    fee_per_player: number; fees_total: number; date: string; time: string;
+  }
+  const [golfPending, setGolfPending] = useState<GolfPending | null>(null);
 
   useEffect(() => {
     if (!golfOpen) return;
@@ -65,7 +68,7 @@ export default function PosTill() {
   }, [golfOpen, golfDate]);
 
   const resetGolf = () => {
-    setGolfSlotId(null); setGolfPlayers(1); setGolfName(""); setGolfPhone(""); setGolfFee(""); setGolfIncludeCart(true);
+    setGolfSlotId(null); setGolfPlayers(1); setGolfName(""); setGolfPhone(""); setGolfFee("");
   };
 
   const selectedSlot = golfSlots.find(s => s.id === golfSlotId) ?? null;
@@ -73,32 +76,22 @@ export default function PosTill() {
   const golfFeesTotal = Number.isFinite(feePerPlayer) && feePerPlayer >= 0
     ? Math.round(feePerPlayer * golfPlayers * 100) / 100 : 0;
 
-  const bookGolf = async (method: "cash" | "card") => {
-    if (!golfSlotId || !golfName.trim() || golfSaving) return;
-    const includeItems = golfIncludeCart && cart.length > 0;
-    setGolfSaving(true);
-    try {
-      const r = await api<any>("/api/pos/walk-in-bookings", {
-        method: "POST",
-        body: JSON.stringify({
-          tee_time_id: golfSlotId,
-          players: golfPlayers,
-          guest_name: golfName.trim(),
-          guest_phone: golfPhone.trim() || undefined,
-          green_fee_per_player: golfFee.trim() === "" ? undefined : feePerPlayer,
-          payment_method: method,
-          items: includeItems ? cart.map(l => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity })) : undefined,
-        }),
-      });
-      setGolfOpen(false);
-      resetGolf();
-      if (includeItems) { setCart([]); load(); }
-      setGolfReceipt(r);
-    } catch (err: any) {
-      toast({ title: "Booking failed", description: err.message, variant: "destructive" });
-    } finally {
-      setGolfSaving(false);
-    }
+  // Adds the configured golf booking to the current sale as a line item — the
+  // booking is only created when the sale is paid (cash/card).
+  const addGolfToCart = () => {
+    if (!golfSlotId || !golfName.trim() || !selectedSlot) return;
+    setGolfPending({
+      tee_time_id: golfSlotId,
+      players: golfPlayers,
+      guest_name: golfName.trim(),
+      guest_phone: golfPhone.trim(),
+      fee_per_player: Number.isFinite(feePerPlayer) && feePerPlayer >= 0 ? feePerPlayer : 0,
+      fees_total: golfFeesTotal,
+      date: golfDate,
+      time: selectedSlot.time,
+    });
+    setGolfOpen(false);
+    resetGolf();
   };
 
   const load = useCallback(() => {
@@ -168,23 +161,45 @@ export default function PosTill() {
 
   const discountTotal = preview?.discount_total ?? 0;
   const displayTotal = preview != null ? preview.total : subtotal;
+  const grandTotal = Math.round((displayTotal + (golfPending?.fees_total ?? 0)) * 100) / 100;
 
   const pay = async (method: "cash" | "card") => {
-    if (cart.length === 0 || paying) return;
+    if ((cart.length === 0 && !golfPending) || paying) return;
     setPaying(true);
     try {
-      const sale = await api<any>("/api/pos/sales", {
-        method: "POST",
-        body: JSON.stringify({
-          payment_method: method,
-          items: cart.map(l => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity })),
-        }),
-      });
-      setReceipt(sale);
-      setCart([]);
-      load();
+      if (golfPending) {
+        // One combined payment: the booking + all cart products in a single
+        // atomic transaction on the server.
+        const r = await api<any>("/api/pos/walk-in-bookings", {
+          method: "POST",
+          body: JSON.stringify({
+            tee_time_id: golfPending.tee_time_id,
+            players: golfPending.players,
+            guest_name: golfPending.guest_name,
+            guest_phone: golfPending.guest_phone || undefined,
+            green_fee_per_player: golfPending.fee_per_player,
+            payment_method: method,
+            items: cart.length > 0 ? cart.map(l => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity })) : undefined,
+          }),
+        });
+        setGolfReceipt(r);
+        setGolfPending(null);
+        setCart([]);
+        load();
+      } else {
+        const sale = await api<any>("/api/pos/sales", {
+          method: "POST",
+          body: JSON.stringify({
+            payment_method: method,
+            items: cart.map(l => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity })),
+          }),
+        });
+        setReceipt(sale);
+        setCart([]);
+        load();
+      }
     } catch (err: any) {
-      toast({ title: "Sale failed", description: err.message, variant: "destructive" });
+      toast({ title: golfPending ? "Payment failed" : "Sale failed", description: err.message, variant: "destructive" });
     } finally {
       setPaying(false);
     }
@@ -256,7 +271,23 @@ export default function PosTill() {
           <h2 className="font-bold text-lg">Current Sale</h2>
         </div>
         <div className="flex-1 overflow-y-auto p-3 space-y-2">
-          {cart.length === 0 && <p className="text-sm text-muted-foreground text-center py-10">Scan or tap products to add them.</p>}
+          {cart.length === 0 && !golfPending && <p className="text-sm text-muted-foreground text-center py-10">Scan or tap products to add them.</p>}
+          {golfPending && (
+            <div className="flex items-center gap-2 border border-[#1a5c38]/40 bg-[#f0f7f2] rounded-lg p-2" data-testid="cart-line-golf">
+              <Flag className="h-4 w-4 text-[#1a5c38] shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate">Golf booking — {golfPending.guest_name}</p>
+                <p className="text-xs text-muted-foreground">
+                  {golfPending.date} at {golfPending.time} · {golfPending.players} player{golfPending.players === 1 ? "" : "s"}
+                  {golfPending.fee_per_player > 0 ? ` · ${fmt(golfPending.fee_per_player)} each` : ""}
+                </p>
+              </div>
+              <div className="w-20 text-right text-sm font-semibold">{fmt(golfPending.fees_total)}</div>
+              <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive" onClick={() => setGolfPending(null)} data-testid="button-remove-golf">
+                <Trash2 className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          )}
           {cart.map(l => (
             <div key={l.key} className="flex items-center gap-2 border rounded-lg p-2" data-testid={`cart-line-${l.key}`}>
               <div className="flex-1 min-w-0">
@@ -286,16 +317,22 @@ export default function PosTill() {
                 <span data-testid="text-cart-discount">-{fmt(discountTotal)}</span>
               </div>
             )}
+            {golfPending && (
+              <div className="flex justify-between text-sm text-[#1a5c38] font-medium">
+                <span>Green fees</span>
+                <span data-testid="text-cart-green-fees">{fmt(golfPending.fees_total)}</span>
+              </div>
+            )}
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
-              <span data-testid="text-cart-total">{fmt(displayTotal)}</span>
+              <span data-testid="text-cart-total">{fmt(grandTotal)}</span>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-2">
-            <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={cart.length === 0 || paying} onClick={() => pay("cash")} data-testid="button-pay-cash">
+            <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={(cart.length === 0 && !golfPending) || paying} onClick={() => pay("cash")} data-testid="button-pay-cash">
               <Banknote className="h-4 w-4 mr-2" /> Cash
             </Button>
-            <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={cart.length === 0 || paying} onClick={() => pay("card")} data-testid="button-pay-card">
+            <Button className="h-12 bg-[#1a5c38] hover:bg-[#164d30]" disabled={(cart.length === 0 && !golfPending) || paying} onClick={() => pay("card")} data-testid="button-pay-card">
               <CreditCard className="h-4 w-4 mr-2" /> Card
             </Button>
           </div>
@@ -400,55 +437,19 @@ export default function PosTill() {
                 <Input value={golfPhone} onChange={e => setGolfPhone(e.target.value)} placeholder="082 123 4567" className="h-9" data-testid="input-golf-phone" />
               </div>
             </div>
-            {cart.length > 0 && (
-              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
-                <input
-                  type="checkbox"
-                  checked={golfIncludeCart}
-                  onChange={e => setGolfIncludeCart(e.target.checked)}
-                  className="h-4 w-4 accent-[#1a5c38]"
-                  data-testid="checkbox-golf-include-cart"
-                />
-                <span className="text-sm flex-1">
-                  Include till cart ({cart.reduce((n, l) => n + l.quantity, 0)} item{cart.reduce((n, l) => n + l.quantity, 0) === 1 ? "" : "s"})
-                </span>
-                <span className="text-sm font-semibold">{fmt(displayTotal)}</span>
-              </label>
-            )}
             <div className="flex items-center justify-between border-t pt-3">
               <div>
-                {golfIncludeCart && cart.length > 0 ? (
-                  <>
-                    <p className="text-xs text-muted-foreground">
-                      Green fees {fmt(golfFeesTotal)} + products {fmt(displayTotal)}
-                    </p>
-                    <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(Math.round((golfFeesTotal + displayTotal) * 100) / 100)}</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs text-muted-foreground">Total green fees</p>
-                    <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(golfFeesTotal)}</p>
-                  </>
-                )}
+                <p className="text-xs text-muted-foreground">Total green fees</p>
+                <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(golfFeesTotal)}</p>
               </div>
-              <div className="flex gap-2">
-                <Button
-                  className="h-11 bg-[#1a5c38] hover:bg-[#164d30]"
-                  disabled={!golfSlotId || !golfName.trim() || golfSaving || !Number.isFinite(feePerPlayer) || feePerPlayer < 0}
-                  onClick={() => bookGolf("cash")}
-                  data-testid="button-golf-cash"
-                >
-                  <Banknote className="h-4 w-4 mr-2" /> Cash
-                </Button>
-                <Button
-                  className="h-11 bg-[#1a5c38] hover:bg-[#164d30]"
-                  disabled={!golfSlotId || !golfName.trim() || golfSaving || !Number.isFinite(feePerPlayer) || feePerPlayer < 0}
-                  onClick={() => bookGolf("card")}
-                  data-testid="button-golf-card"
-                >
-                  <CreditCard className="h-4 w-4 mr-2" /> Card
-                </Button>
-              </div>
+              <Button
+                className="h-11 bg-[#1a5c38] hover:bg-[#164d30]"
+                disabled={!golfSlotId || !golfName.trim() || !Number.isFinite(feePerPlayer) || feePerPlayer < 0}
+                onClick={addGolfToCart}
+                data-testid="button-golf-add-to-cart"
+              >
+                <Plus className="h-4 w-4 mr-2" /> Add to sale
+              </Button>
             </div>
           </div>
         </DialogContent>

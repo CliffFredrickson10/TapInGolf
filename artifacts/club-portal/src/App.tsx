@@ -9,6 +9,7 @@ import { ReviewReportsPendingProvider } from "@/context/ReviewReportsPendingCont
 import { Layout } from "@/components/layout";
 import { StaffLayout } from "@/components/staff-layout";
 import { ResellerLayout } from "@/components/reseller-layout";
+import { PosLayout } from "@/components/pos-layout";
 import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
@@ -50,6 +51,17 @@ import { Redirect } from "wouter";
 import PortalUsers from "@/pages/portal-users";
 import Scorecard from "@/pages/scorecard";
 import RulesFormats from "@/pages/rules-formats";
+import Outlets from "@/pages/outlets";
+import PosTill from "@/pages/pos/till";
+import PosTables from "@/pages/pos/tables";
+import PosOrder from "@/pages/pos/order";
+import PosProducts from "@/pages/pos/products";
+import PosSuppliers from "@/pages/pos/suppliers";
+import PosStockOrders from "@/pages/pos/stock-orders";
+import PosPromotions from "@/pages/pos/promotions";
+import PosStaffPage from "@/pages/pos/staff";
+import PosTransactions from "@/pages/pos/transactions";
+import PosReports from "@/pages/pos/reports";
 
 function SectionGuard({ section, children }: { section: string; children: React.ReactNode }) {
   const { canView, canEdit } = useAuth();
@@ -73,7 +85,7 @@ function SectionGuard({ section, children }: { section: string; children: React.
 }
 
 function Router() {
-  const { club, staff, reseller, loading } = useAuth();
+  const { club, staff, reseller, posStaff, posOutlet, loading } = useAuth();
   const [location] = useLocation();
 
   if (loading) {
@@ -114,6 +126,28 @@ function Router() {
           </ReviewReportsPendingProvider>
         </ReportsPendingProvider>
       </HnaPendingProvider>
+    );
+  }
+  if (posStaff) {
+    const isManager = posStaff.role === "manager";
+    const isProShop = posOutlet?.type === "pro_shop";
+    return (
+      <PosLayout>
+        <Switch>
+          <Route path="/" component={isProShop ? PosTill : PosTables} />
+          <Route path="/orders/:id" component={PosOrder} />
+          {isManager && <Route path="/products" component={PosProducts} />}
+          {isManager && <Route path="/suppliers" component={PosSuppliers} />}
+          {isManager && <Route path="/stock-orders" component={PosStockOrders} />}
+          {isManager && <Route path="/promotions" component={PosPromotions} />}
+          {isManager && <Route path="/staff" component={PosStaffPage} />}
+          {isManager && <Route path="/transactions" component={PosTransactions} />}
+          {isManager && <Route path="/reports" component={PosReports} />}
+          <Route>
+            <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+          </Route>
+        </Switch>
+      </PosLayout>
     );
   }
   if (reseller) {
@@ -193,6 +227,7 @@ function Router() {
           <Redirect to="/bookings" />
         </Route>
         <Route path="/portal-users" component={PortalUsers} />
+        <Route path="/outlets" component={Outlets} />
         <Route>
           <div className="p-8">
             <h1 className="text-2xl font-bold">Page not found</h1>

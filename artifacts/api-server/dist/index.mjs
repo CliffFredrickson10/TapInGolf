@@ -18886,14 +18886,14 @@ var require_etag = __commonJS({
   "../../node_modules/.pnpm/etag@1.8.1/node_modules/etag/index.js"(exports, module) {
     "use strict";
     module.exports = etag;
-    var crypto9 = __require("crypto");
+    var crypto11 = __require("crypto");
     var Stats = __require("fs").Stats;
     var toString = Object.prototype.toString;
     function entitytag(entity) {
       if (entity.length === 0) {
         return '"0-2jmj7l5rSw0yVb/vlWAYkK/YBwk"';
       }
-      var hash2 = crypto9.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
+      var hash2 = crypto11.createHash("sha1").update(entity, "utf8").digest("base64").substring(0, 27);
       var len = typeof entity === "string" ? Buffer.byteLength(entity, "utf8") : entity.length;
       return '"' + len.toString(16) + "-" + hash2 + '"';
     }
@@ -20616,27 +20616,27 @@ var require_router = __commonJS({
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var methods = METHODS.map((method) => method.toLowerCase());
-    module.exports = Router28;
+    module.exports = Router29;
     module.exports.Route = Route;
-    function Router28(options) {
-      if (!(this instanceof Router28)) {
-        return new Router28(options);
+    function Router29(options) {
+      if (!(this instanceof Router29)) {
+        return new Router29(options);
       }
       const opts = options || {};
-      function router28(req, res, next) {
-        router28.handle(req, res, next);
+      function router29(req, res, next) {
+        router29.handle(req, res, next);
       }
-      Object.setPrototypeOf(router28, this);
-      router28.caseSensitive = opts.caseSensitive;
-      router28.mergeParams = opts.mergeParams;
-      router28.params = {};
-      router28.strict = opts.strict;
-      router28.stack = [];
-      return router28;
+      Object.setPrototypeOf(router29, this);
+      router29.caseSensitive = opts.caseSensitive;
+      router29.mergeParams = opts.mergeParams;
+      router29.params = {};
+      router29.strict = opts.strict;
+      router29.stack = [];
+      return router29;
     }
-    Router28.prototype = function() {
+    Router29.prototype = function() {
     };
-    Router28.prototype.param = function param(name, fn) {
+    Router29.prototype.param = function param(name, fn) {
       if (!name) {
         throw new TypeError("argument name is required");
       }
@@ -20656,7 +20656,7 @@ var require_router = __commonJS({
       params.push(fn);
       return this;
     };
-    Router28.prototype.handle = function handle(req, res, callback) {
+    Router29.prototype.handle = function handle(req, res, callback) {
       if (!callback) {
         throw new TypeError("argument callback is required");
       }
@@ -20783,7 +20783,7 @@ var require_router = __commonJS({
         }
       }
     };
-    Router28.prototype.use = function use(handler) {
+    Router29.prototype.use = function use(handler) {
       let offset = 0;
       let path4 = "/";
       if (typeof handler !== "function") {
@@ -20816,7 +20816,7 @@ var require_router = __commonJS({
       }
       return this;
     };
-    Router28.prototype.route = function route(path4) {
+    Router29.prototype.route = function route(path4) {
       const route2 = new Route(path4);
       const layer = new Layer(path4, {
         sensitive: this.caseSensitive,
@@ -20831,7 +20831,7 @@ var require_router = __commonJS({
       return route2;
     };
     methods.concat("all").forEach(function(method) {
-      Router28.prototype[method] = function(path4) {
+      Router29.prototype[method] = function(path4) {
         const route = this.route(path4);
         route[method].apply(route, slice.call(arguments, 1));
         return this;
@@ -21014,13 +21014,13 @@ var require_application = __commonJS({
     var compileTrust = require_utils3().compileTrust;
     var resolve = __require("node:path").resolve;
     var once = require_once();
-    var Router28 = require_router();
+    var Router29 = require_router();
     var slice = Array.prototype.slice;
     var flatten = Array.prototype.flat;
     var app2 = exports = module.exports = {};
     var trustProxyDefaultSymbol = "@@symbol:trust_proxy_default";
     app2.init = function init() {
-      var router28 = null;
+      var router29 = null;
       this.cache = /* @__PURE__ */ Object.create(null);
       this.engines = /* @__PURE__ */ Object.create(null);
       this.settings = /* @__PURE__ */ Object.create(null);
@@ -21029,13 +21029,13 @@ var require_application = __commonJS({
         configurable: true,
         enumerable: true,
         get: function getrouter() {
-          if (router28 === null) {
-            router28 = new Router28({
+          if (router29 === null) {
+            router29 = new Router29({
               caseSensitive: this.enabled("case sensitive routing"),
               strict: this.enabled("strict routing")
             });
           }
-          return router28;
+          return router29;
         }
       });
     };
@@ -21106,15 +21106,15 @@ var require_application = __commonJS({
       if (fns.length === 0) {
         throw new TypeError("app.use() requires a middleware function");
       }
-      var router28 = this.router;
+      var router29 = this.router;
       fns.forEach(function(fn2) {
         if (!fn2 || !fn2.handle || !fn2.set) {
-          return router28.use(path4, fn2);
+          return router29.use(path4, fn2);
         }
         debug7(".use app under %s", path4);
         fn2.mountpath = path4;
         fn2.parent = this;
-        router28.use(path4, function mounted_app(req, res, next) {
+        router29.use(path4, function mounted_app(req, res, next) {
           var orig = req.app;
           fn2.handle(req, res, function(err) {
             Object.setPrototypeOf(req, orig.request);
@@ -22368,17 +22368,17 @@ var require_content_disposition = __commonJS({
 // ../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js
 var require_cookie_signature = __commonJS({
   "../../node_modules/.pnpm/cookie-signature@1.2.2/node_modules/cookie-signature/index.js"(exports) {
-    var crypto9 = __require("crypto");
+    var crypto11 = __require("crypto");
     exports.sign = function(val, secret) {
       if ("string" != typeof val) throw new TypeError("Cookie value must be provided as a string.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
-      return val + "." + crypto9.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
+      return val + "." + crypto11.createHmac("sha256", secret).update(val).digest("base64").replace(/\=+$/, "");
     };
     exports.unsign = function(input, secret) {
       if ("string" != typeof input) throw new TypeError("Signed cookie string must be provided.");
       if (null == secret) throw new TypeError("Secret key must be provided.");
       var tentativeValue = input.slice(0, input.lastIndexOf(".")), expectedInput = exports.sign(tentativeValue, secret), expectedBuffer = Buffer.from(expectedInput), inputBuffer = Buffer.from(input);
-      return expectedBuffer.length === inputBuffer.length && crypto9.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
+      return expectedBuffer.length === inputBuffer.length && crypto11.timingSafeEqual(expectedBuffer, inputBuffer) ? tentativeValue : false;
     };
   }
 });
@@ -23687,7 +23687,7 @@ var require_express = __commonJS({
     var EventEmitter2 = __require("node:events").EventEmitter;
     var mixin = require_merge_descriptors();
     var proto = require_application();
-    var Router28 = require_router();
+    var Router29 = require_router();
     var req = require_request();
     var res = require_response();
     exports = module.exports = createApplication;
@@ -23709,8 +23709,8 @@ var require_express = __commonJS({
     exports.application = proto;
     exports.request = req;
     exports.response = res;
-    exports.Route = Router28.Route;
-    exports.Router = Router28;
+    exports.Route = Router29.Route;
+    exports.Router = Router29;
     exports.json = bodyParser.json;
     exports.raw = bodyParser.raw;
     exports.static = require_serve_static();
@@ -34822,7 +34822,7 @@ var require_cert_signatures = __commonJS({
 var require_sasl = __commonJS({
   "../../node_modules/.pnpm/pg@8.20.0/node_modules/pg/lib/crypto/sasl.js"(exports, module) {
     "use strict";
-    var crypto9 = require_utils7();
+    var crypto11 = require_utils7();
     var { signatureAlgorithmHashFromCertificate } = require_cert_signatures();
     function startSession(mechanisms, stream) {
       const candidates = ["SCRAM-SHA-256"];
@@ -34834,7 +34834,7 @@ var require_sasl = __commonJS({
       if (mechanism === "SCRAM-SHA-256-PLUS" && typeof stream.getPeerCertificate !== "function") {
         throw new Error("SASL: Mechanism SCRAM-SHA-256-PLUS requires a certificate");
       }
-      const clientNonce = crypto9.randomBytes(18).toString("base64");
+      const clientNonce = crypto11.randomBytes(18).toString("base64");
       const gs2Header = mechanism === "SCRAM-SHA-256-PLUS" ? "p=tls-server-end-point" : stream ? "y" : "n";
       return {
         mechanism,
@@ -34869,20 +34869,20 @@ var require_sasl = __commonJS({
         const peerCert = stream.getPeerCertificate().raw;
         let hashName = signatureAlgorithmHashFromCertificate(peerCert);
         if (hashName === "MD5" || hashName === "SHA-1") hashName = "SHA-256";
-        const certHash = await crypto9.hashByName(hashName, peerCert);
+        const certHash = await crypto11.hashByName(hashName, peerCert);
         const bindingData = Buffer.concat([Buffer.from("p=tls-server-end-point,,"), Buffer.from(certHash)]);
         channelBinding = bindingData.toString("base64");
       }
       const clientFinalMessageWithoutProof = "c=" + channelBinding + ",r=" + sv.nonce;
       const authMessage = clientFirstMessageBare + "," + serverFirstMessage + "," + clientFinalMessageWithoutProof;
       const saltBytes = Buffer.from(sv.salt, "base64");
-      const saltedPassword = await crypto9.deriveKey(password, saltBytes, sv.iteration);
-      const clientKey = await crypto9.hmacSha256(saltedPassword, "Client Key");
-      const storedKey = await crypto9.sha256(clientKey);
-      const clientSignature = await crypto9.hmacSha256(storedKey, authMessage);
+      const saltedPassword = await crypto11.deriveKey(password, saltBytes, sv.iteration);
+      const clientKey = await crypto11.hmacSha256(saltedPassword, "Client Key");
+      const storedKey = await crypto11.sha256(clientKey);
+      const clientSignature = await crypto11.hmacSha256(storedKey, authMessage);
       const clientProof = xorBuffers(Buffer.from(clientKey), Buffer.from(clientSignature)).toString("base64");
-      const serverKey = await crypto9.hmacSha256(saltedPassword, "Server Key");
-      const serverSignatureBytes = await crypto9.hmacSha256(serverKey, authMessage);
+      const serverKey = await crypto11.hmacSha256(saltedPassword, "Server Key");
+      const serverSignatureBytes = await crypto11.hmacSha256(serverKey, authMessage);
       session.message = "SASLResponse";
       session.serverSignature = Buffer.from(serverSignatureBytes).toString("base64");
       session.response = clientFinalMessageWithoutProof + ",p=" + clientProof;
@@ -37050,7 +37050,7 @@ var require_client = __commonJS({
     var Query2 = require_query();
     var defaults2 = require_defaults();
     var Connection2 = require_connection();
-    var crypto9 = require_utils7();
+    var crypto11 = require_utils7();
     var activeQueryDeprecationNotice = nodeUtils.deprecate(
       () => {
       },
@@ -37285,7 +37285,7 @@ var require_client = __commonJS({
       _handleAuthMD5Password(msg) {
         this._getPassword(async () => {
           try {
-            const hashedPassword = await crypto9.postgresMd5PasswordHash(this.user, this.password, msg.salt);
+            const hashedPassword = await crypto11.postgresMd5PasswordHash(this.user, this.password, msg.salt);
             this.connection.password(hashedPassword);
           } catch (e) {
             this.emit("error", e);
@@ -52705,9 +52705,9 @@ var require_disk = __commonJS({
     var fs2 = __require("fs");
     var os = __require("os");
     var path4 = __require("path");
-    var crypto9 = __require("crypto");
+    var crypto11 = __require("crypto");
     function getFilename(req, file, cb) {
-      crypto9.randomBytes(16, function(err, raw) {
+      crypto11.randomBytes(16, function(err, raw) {
         cb(err, err ? void 0 : raw.toString("hex"));
       });
     }
@@ -56467,7 +56467,7 @@ var init_autoTeeGen = __esm({
 });
 
 // src/app.ts
-var import_express28 = __toESM(require_express2(), 1);
+var import_express29 = __toESM(require_express2(), 1);
 var import_cors = __toESM(require_lib3(), 1);
 var import_pino_http = __toESM(require_logger(), 1);
 import path3 from "path";
@@ -57392,11 +57392,11 @@ function parsePathRewriteRules(rewriteConfig) {
 var debug4 = Debug.extend("router");
 async function getTarget(req, res, config) {
   let newTarget;
-  const router28 = config.router;
-  if (isPlainObject(router28)) {
-    newTarget = getTargetFromProxyTable(req, router28);
-  } else if (typeof router28 === "function") {
-    newTarget = await router28(req, res, config);
+  const router29 = config.router;
+  if (isPlainObject(router29)) {
+    newTarget = getTargetFromProxyTable(req, router29);
+  } else if (typeof router29 === "function") {
+    newTarget = await router29(req, res, config);
   }
   return newTarget;
 }
@@ -57643,7 +57643,7 @@ function createProxyMiddleware(options) {
 var debug6 = Debug.extend("response-interceptor");
 
 // src/routes/index.ts
-var import_express27 = __toESM(require_express2(), 1);
+var import_express28 = __toESM(require_express2(), 1);
 
 // src/routes/health.ts
 var import_express = __toESM(require_express2(), 1);
@@ -80919,40 +80919,1655 @@ router26.post("/standing/holds/:id/decline", async (req, res) => {
 });
 var standing_default = router26;
 
-// src/routes/index.ts
+// src/routes/pos.ts
+var import_express27 = __toESM(require_express2(), 1);
+init_bcryptjs();
+init_pg();
+import crypto10 from "crypto";
+
+// src/lib/posAuth.ts
+init_pg();
+import crypto9 from "crypto";
+var SECRET4 = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
+function generatePosToken(staffId, outletId, clubId, role) {
+  const payload = Buffer.from(
+    JSON.stringify({
+      sub: staffId,
+      outlet: outletId,
+      club: clubId,
+      role,
+      type: "pos_staff",
+      iat: Date.now(),
+      exp: Date.now() + 7 * 24 * 60 * 60 * 1e3
+    })
+  ).toString("base64url");
+  const sig = crypto9.createHmac("sha256", SECRET4).update(payload).digest("hex");
+  return `${payload}.${sig}`;
+}
+function verifyPosToken(token) {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto9.createHmac("sha256", SECRET4).update(payload).digest("hex");
+  try {
+    if (!crypto9.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.type !== "pos_staff") return null;
+    if (data.exp < Date.now()) return null;
+    if (data.role !== "manager" && data.role !== "waiter") return null;
+    return { staffId: data.sub, outletId: data.outlet, clubId: data.club, role: data.role };
+  } catch {
+    return null;
+  }
+}
+async function requirePosAuth(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const payload = verifyPosToken(header.slice(7));
+  if (!payload) {
+    res.status(401).json({ message: "Invalid or expired token" });
+    return;
+  }
+  const staff = await row(
+    `SELECT s.id, s.outlet_id, s.club_id, s.name, s.email, s.role, s.active,
+            o.name AS outlet_name, o.type AS outlet_type, o.active AS outlet_active
+     FROM pos_staff s
+     JOIN pos_outlets o ON o.id = s.outlet_id
+     WHERE s.id = ? AND s.outlet_id = ? AND s.active = 1`,
+    [payload.staffId, payload.outletId]
+  );
+  if (!staff || !staff.outlet_active) {
+    res.status(401).json({ message: "Account not found or inactive" });
+    return;
+  }
+  req.posStaff = staff;
+  next();
+}
+function requirePosManager(req, res, next) {
+  const staff = req.posStaff;
+  if (!staff || staff.role !== "manager") {
+    res.status(403).json({ message: "Manager access required" });
+    return;
+  }
+  next();
+}
+function getPosStaff(req) {
+  return req.posStaff;
+}
+
+// src/routes/pos.ts
+init_logger();
 var router27 = (0, import_express27.Router)();
-router27.use(health_default);
-router27.use(auth_default);
-router27.use(geofencing_default);
-router27.use(clubs_default);
-router27.use(bookings_default);
-router27.use(standing_default);
-router27.use(friends_default);
-router27.use(ads_default);
-router27.use(messages_default);
-router27.use(vouchers_default);
-router27.use(cancellationVouchers_default);
-router27.use(admin_default);
-router27.use(notifications_default);
-router27.use(events_default);
-router27.use(portal_default);
-router27.use(storage_default);
-router27.use(payments_default);
-router27.use(settings_default);
-router27.use(map_default);
-router27.use(hnaVerification_default);
-router27.use(moderation_default);
-router27.use(bans_default);
-router27.use(knockout_default);
-router27.use(scoring_default);
-router27.use(support_default);
-router27.use(resale_default);
-var routes_default = router27;
+var SECRET5 = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
+function verifyPortalToken(token) {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto10.createHmac("sha256", SECRET5).update(payload).digest("hex");
+  try {
+    if (!crypto10.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.exp < Date.now()) return null;
+    if (data.type === "club") return { clubId: data.sub, isAdmin: true };
+    if (data.type === "club_user") return { clubId: data.sub, isAdmin: data.role === "admin" };
+    return null;
+  } catch {
+    return null;
+  }
+}
+async function requireClubAdmin(req, res, next) {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const payload = verifyPortalToken(header.slice(7));
+  if (!payload) {
+    res.status(401).json({ message: "Invalid or expired token" });
+    return;
+  }
+  if (!payload.isAdmin) {
+    res.status(403).json({ message: "Admin access required" });
+    return;
+  }
+  const club = await row("SELECT id, name FROM clubs WHERE id = ? AND active = 1", [payload.clubId]);
+  if (!club) {
+    res.status(401).json({ message: "Club not found" });
+    return;
+  }
+  req.club = club;
+  next();
+}
+function getClub4(req) {
+  return req.club;
+}
+var OUTLET_TYPES = ["pro_shop", "bar", "restaurant"];
+router27.get("/portal/pos/outlets", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const outlets = await query(
+    `SELECT o.id, o.name, o.type, o.active, o.created_at,
+       (SELECT COUNT(*)::int FROM pos_staff s WHERE s.outlet_id = o.id AND s.active = 1) AS staff_count,
+       (SELECT COUNT(*)::int FROM pos_products p WHERE p.outlet_id = o.id AND p.active = 1) AS product_count
+     FROM pos_outlets o WHERE o.club_id = ? ORDER BY o.id`,
+    [club.id]
+  );
+  res.json({ outlets });
+});
+router27.post("/portal/pos/outlets", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const name = String(req.body?.name ?? "").trim();
+  const type = String(req.body?.type ?? "");
+  if (!name) {
+    res.status(400).json({ message: "Outlet name is required" });
+    return;
+  }
+  if (!OUTLET_TYPES.includes(type)) {
+    res.status(400).json({ message: "Type must be pro_shop, bar or restaurant" });
+    return;
+  }
+  const id = await exec("INSERT INTO pos_outlets (club_id, name, type) VALUES (?, ?, ?)", [club.id, name, type]);
+  res.status(201).json({ id, name, type, active: 1 });
+});
+router27.put("/portal/pos/outlets/:id", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) {
+    res.status(404).json({ message: "Outlet not found" });
+    return;
+  }
+  const { name, active } = req.body ?? {};
+  await run(
+    "UPDATE pos_outlets SET name = COALESCE(?, name), active = COALESCE(?, active) WHERE id = ?",
+    [name != null ? String(name).trim() : null, active != null ? active ? 1 : 0 : null, id]
+  );
+  res.json({ success: true });
+});
+router27.get("/portal/pos/outlets/:id/staff", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) {
+    res.status(404).json({ message: "Outlet not found" });
+    return;
+  }
+  const staff = await query(
+    "SELECT id, name, email, role, active, created_at FROM pos_staff WHERE outlet_id = ? ORDER BY role, name",
+    [id]
+  );
+  res.json({ staff });
+});
+router27.post("/portal/pos/outlets/:id/staff", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) {
+    res.status(404).json({ message: "Outlet not found" });
+    return;
+  }
+  const name = String(req.body?.name ?? "").trim();
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  const role = String(req.body?.role ?? "manager");
+  if (!name || !email || !password) {
+    res.status(400).json({ message: "Name, email and password are required" });
+    return;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ message: "Password must be at least 6 characters" });
+    return;
+  }
+  if (role !== "manager" && role !== "waiter") {
+    res.status(400).json({ message: "Role must be manager or waiter" });
+    return;
+  }
+  const existing = await row("SELECT id FROM pos_staff WHERE email = ?", [email]);
+  if (existing) {
+    res.status(409).json({ message: "An outlet account with this email already exists" });
+    return;
+  }
+  const hash2 = await bcryptjs_default.hash(password, 10);
+  const staffId = await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [id, club.id, name, email, hash2, role]
+  );
+  res.status(201).json({ id: staffId, name, email, role, active: 1 });
+});
+router27.put("/portal/pos/staff/:id", requireClubAdmin, async (req, res) => {
+  const club = getClub4(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const staff = await row("SELECT id FROM pos_staff WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!staff) {
+    res.status(404).json({ message: "Staff member not found" });
+    return;
+  }
+  const { active, password, name } = req.body ?? {};
+  if (password != null) {
+    if (String(password).length < 6) {
+      res.status(400).json({ message: "Password must be at least 6 characters" });
+      return;
+    }
+    const hash2 = await bcryptjs_default.hash(String(password), 10);
+    await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash2, id]);
+  }
+  await run(
+    "UPDATE pos_staff SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? active ? 1 : 0 : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+router27.post("/pos/auth/login", async (req, res) => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  if (!email || !password) {
+    res.status(400).json({ message: "Email and password required" });
+    return;
+  }
+  const staff = await row(
+    `SELECT s.id, s.outlet_id, s.club_id, s.name, s.email, s.password_hash, s.role, s.active,
+            o.name AS outlet_name, o.type AS outlet_type, o.active AS outlet_active,
+            c.name AS club_name
+     FROM pos_staff s
+     JOIN pos_outlets o ON o.id = s.outlet_id
+     JOIN clubs c ON c.id = s.club_id
+     WHERE s.email = ? LIMIT 1`,
+    [email]
+  );
+  if (!staff || !staff.active || !staff.outlet_active) {
+    res.status(401).json({ message: "Invalid credentials" });
+    return;
+  }
+  const valid = await bcryptjs_default.compare(password, staff.password_hash);
+  if (!valid) {
+    res.status(401).json({ message: "Invalid credentials" });
+    return;
+  }
+  const token = generatePosToken(staff.id, staff.outlet_id, staff.club_id, staff.role);
+  res.json({
+    token,
+    staff: { id: staff.id, name: staff.name, email: staff.email, role: staff.role },
+    outlet: { id: staff.outlet_id, name: staff.outlet_name, type: staff.outlet_type, club_name: staff.club_name }
+  });
+});
+router27.get("/pos/me", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const club = await row("SELECT name FROM clubs WHERE id = ?", [s.club_id]);
+  res.json({
+    staff: { id: s.id, name: s.name, email: s.email, role: s.role },
+    outlet: { id: s.outlet_id, name: s.outlet_name, type: s.outlet_type, club_name: club?.name ?? "" }
+  });
+});
+router27.get("/pos/categories", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const categories = await query(
+    "SELECT id, name, sort_order FROM pos_categories WHERE outlet_id = ? ORDER BY sort_order, name",
+    [s.outlet_id]
+  );
+  res.json({ categories });
+});
+router27.post("/pos/categories", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  if (!name) {
+    res.status(400).json({ message: "Category name is required" });
+    return;
+  }
+  const sortOrder = Number(req.body?.sort_order ?? 0) || 0;
+  const id = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, ?, ?)", [s.outlet_id, name, sortOrder]);
+  res.status(201).json({ id, name, sort_order: sortOrder });
+});
+router27.put("/pos/categories/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const cat = await row("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!cat) {
+    res.status(404).json({ message: "Category not found" });
+    return;
+  }
+  const { name, sort_order } = req.body ?? {};
+  await run(
+    "UPDATE pos_categories SET name = COALESCE(?, name), sort_order = COALESCE(?, sort_order) WHERE id = ?",
+    [name != null ? String(name).trim() : null, sort_order != null ? Number(sort_order) : null, id]
+  );
+  res.json({ success: true });
+});
+router27.delete("/pos/categories/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const deleted = await run("DELETE FROM pos_categories WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!deleted) {
+    res.status(404).json({ message: "Category not found" });
+    return;
+  }
+  res.json({ success: true });
+});
+async function productWithVariants(productId) {
+  const product = await row(
+    `SELECT p.*, c.name AS category_name FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE p.id = ?`,
+    [productId]
+  );
+  if (!product) return null;
+  const variants = await query(
+    "SELECT id, size, colour, barcode, sku, price, stock_qty, active FROM pos_variants WHERE product_id = ? AND active = 1 ORDER BY id",
+    [productId]
+  );
+  return { ...product, price: Number(product.price), variants: variants.map((v) => ({ ...v, price: v.price != null ? Number(v.price) : null })) };
+}
+router27.get("/pos/products", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const search = String(req.query["search"] ?? "").trim().toLowerCase();
+  const categoryId = req.query["category_id"] ? parseInt(String(req.query["category_id"]), 10) : null;
+  const includeInactive = req.query["include_inactive"] === "1" && s.role === "manager";
+  const conditions = ["p.outlet_id = ?"];
+  const params = [s.outlet_id];
+  if (!includeInactive) conditions.push("p.active = 1");
+  if (categoryId) {
+    conditions.push("p.category_id = ?");
+    params.push(categoryId);
+  }
+  if (search) {
+    conditions.push("(LOWER(p.name) LIKE ? OR LOWER(COALESCE(p.brand,'')) LIKE ? OR p.barcode = ? OR LOWER(COALESCE(p.sku,'')) = ?)");
+    params.push(`%${search}%`, `%${search}%`, search, search);
+  }
+  const products = await query(
+    `SELECT p.id, p.category_id, p.name, p.brand, p.description, p.price, p.barcode, p.sku,
+            p.stock_qty, p.low_stock_threshold, p.has_variants, p.active, c.name AS category_name
+     FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY p.name`,
+    params
+  );
+  const ids = products.map((p) => p.id);
+  let variantsByProduct = {};
+  if (ids.length > 0) {
+    const variants = await query(
+      `SELECT id, product_id, size, colour, barcode, sku, price, stock_qty
+       FROM pos_variants WHERE product_id IN (${ids.map(() => "?").join(",")}) AND active = 1 ORDER BY id`,
+      ids
+    );
+    for (const v of variants) {
+      (variantsByProduct[v.product_id] ??= []).push({ ...v, price: v.price != null ? Number(v.price) : null });
+    }
+  }
+  res.json({
+    products: products.map((p) => ({
+      ...p,
+      price: Number(p.price),
+      variants: variantsByProduct[p.id] ?? [],
+      total_stock: p.has_variants ? (variantsByProduct[p.id] ?? []).reduce((sum, v) => sum + v.stock_qty, 0) : p.stock_qty
+    }))
+  });
+});
+router27.get("/pos/products/lookup", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const barcode = String(req.query["barcode"] ?? "").trim();
+  if (!barcode) {
+    res.status(400).json({ message: "barcode is required" });
+    return;
+  }
+  const variant = await row(
+    `SELECT v.id AS variant_id, v.size, v.colour, v.barcode, v.sku, v.price AS variant_price, v.stock_qty AS variant_stock,
+            p.id AS product_id, p.name, p.brand, p.price AS product_price, p.category_id
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE (v.barcode = ? OR v.sku = ?) AND p.outlet_id = ? AND v.active = 1 AND p.active = 1
+     LIMIT 1`,
+    [barcode, barcode, s.outlet_id]
+  );
+  if (variant) {
+    res.json({
+      found: true,
+      product_id: variant.product_id,
+      variant_id: variant.variant_id,
+      name: variant.name,
+      brand: variant.brand,
+      variant_label: [variant.size, variant.colour].filter(Boolean).join(" / "),
+      price: Number(variant.variant_price ?? variant.product_price),
+      stock_qty: variant.variant_stock
+    });
+    return;
+  }
+  const product = await row(
+    `SELECT id, name, brand, price, stock_qty, has_variants FROM pos_products
+     WHERE (barcode = ? OR sku = ?) AND outlet_id = ? AND active = 1 LIMIT 1`,
+    [barcode, barcode, s.outlet_id]
+  );
+  if (product) {
+    if (product.has_variants) {
+      const full = await productWithVariants(product.id);
+      res.json({ found: true, needs_variant: true, product: full });
+      return;
+    }
+    res.json({
+      found: true,
+      product_id: product.id,
+      variant_id: null,
+      name: product.name,
+      brand: product.brand,
+      variant_label: null,
+      price: Number(product.price),
+      stock_qty: product.stock_qty
+    });
+    return;
+  }
+  res.json({ found: false });
+});
+router27.post("/pos/products", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const { name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, category_id, variants } = req.body ?? {};
+  const nameStr = String(name ?? "").trim();
+  if (!nameStr) {
+    res.status(400).json({ message: "Product name is required" });
+    return;
+  }
+  const priceNum = Number(price);
+  if (!Number.isFinite(priceNum) || priceNum < 0) {
+    res.status(400).json({ message: "A valid price is required" });
+    return;
+  }
+  if (category_id != null) {
+    const cat = await row("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [category_id, s.outlet_id]);
+    if (!cat) {
+      res.status(400).json({ message: "Invalid category" });
+      return;
+    }
+  }
+  const hasVariants = Array.isArray(variants) && variants.length > 0;
+  const productId = await exec(
+    `INSERT INTO pos_products (outlet_id, category_id, name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, has_variants)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      s.outlet_id,
+      category_id ?? null,
+      nameStr,
+      brand ? String(brand).trim() : null,
+      description ?? null,
+      priceNum,
+      barcode ? String(barcode).trim() : null,
+      sku ? String(sku).trim() : null,
+      hasVariants ? 0 : Math.max(0, Math.round(Number(stock_qty) || 0)),
+      Math.max(0, Math.round(Number(low_stock_threshold) || 5)),
+      hasVariants ? 1 : 0
+    ]
+  );
+  if (hasVariants) {
+    for (const v of variants) {
+      await exec(
+        "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, price, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [
+          productId,
+          v.size ? String(v.size).trim() : null,
+          v.colour ? String(v.colour).trim() : null,
+          v.barcode ? String(v.barcode).trim() : null,
+          v.sku ? String(v.sku).trim() : null,
+          v.price != null && v.price !== "" ? Number(v.price) : null,
+          Math.max(0, Math.round(Number(v.stock_qty) || 0))
+        ]
+      );
+    }
+  }
+  const full = await productWithVariants(productId);
+  res.status(201).json(full);
+});
+router27.put("/pos/products/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const product = await row("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!product) {
+    res.status(404).json({ message: "Product not found" });
+    return;
+  }
+  const { name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, category_id, active, variants } = req.body ?? {};
+  if (category_id != null) {
+    const cat = await row("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [category_id, s.outlet_id]);
+    if (!cat) {
+      res.status(400).json({ message: "Invalid category" });
+      return;
+    }
+  }
+  await run(
+    `UPDATE pos_products SET
+       name = COALESCE(?, name), brand = ?, description = ?,
+       price = COALESCE(?, price), barcode = ?, sku = ?,
+       stock_qty = COALESCE(?, stock_qty), low_stock_threshold = COALESCE(?, low_stock_threshold),
+       category_id = ?, active = COALESCE(?, active)
+     WHERE id = ?`,
+    [
+      name != null ? String(name).trim() : null,
+      brand !== void 0 ? brand ? String(brand).trim() : null : null,
+      description !== void 0 ? description || null : null,
+      price != null ? Number(price) : null,
+      barcode !== void 0 ? barcode ? String(barcode).trim() : null : null,
+      sku !== void 0 ? sku ? String(sku).trim() : null : null,
+      product.has_variants ? null : stock_qty != null ? Math.max(0, Math.round(Number(stock_qty))) : null,
+      low_stock_threshold != null ? Math.max(0, Math.round(Number(low_stock_threshold))) : null,
+      category_id ?? null,
+      active != null ? active ? 1 : 0 : null,
+      id
+    ]
+  );
+  if (Array.isArray(variants)) {
+    const keepIds = [];
+    for (const v of variants) {
+      if (v.id) {
+        const existing = await row("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [v.id, id]);
+        if (!existing) continue;
+        await run(
+          "UPDATE pos_variants SET size = ?, colour = ?, barcode = ?, sku = ?, price = ?, stock_qty = COALESCE(?, stock_qty) WHERE id = ?",
+          [
+            v.size ? String(v.size).trim() : null,
+            v.colour ? String(v.colour).trim() : null,
+            v.barcode ? String(v.barcode).trim() : null,
+            v.sku ? String(v.sku).trim() : null,
+            v.price != null && v.price !== "" ? Number(v.price) : null,
+            v.stock_qty != null ? Math.max(0, Math.round(Number(v.stock_qty))) : null,
+            v.id
+          ]
+        );
+        keepIds.push(v.id);
+      } else {
+        const newId = await exec(
+          "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, price, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [
+            id,
+            v.size ? String(v.size).trim() : null,
+            v.colour ? String(v.colour).trim() : null,
+            v.barcode ? String(v.barcode).trim() : null,
+            v.sku ? String(v.sku).trim() : null,
+            v.price != null && v.price !== "" ? Number(v.price) : null,
+            Math.max(0, Math.round(Number(v.stock_qty) || 0))
+          ]
+        );
+        keepIds.push(newId);
+      }
+    }
+    if (keepIds.length > 0) {
+      await run(
+        `UPDATE pos_variants SET active = 0 WHERE product_id = ? AND id NOT IN (${keepIds.map(() => "?").join(",")})`,
+        [id, ...keepIds]
+      );
+    } else {
+      await run("UPDATE pos_variants SET active = 0 WHERE product_id = ?", [id]);
+    }
+    await run("UPDATE pos_products SET has_variants = ? WHERE id = ?", [keepIds.length > 0 ? 1 : 0, id]);
+  }
+  const full = await productWithVariants(id);
+  res.json(full);
+});
+router27.delete("/pos/products/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run("UPDATE pos_products SET active = 0 WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!updated) {
+    res.status(404).json({ message: "Product not found" });
+    return;
+  }
+  res.json({ success: true });
+});
+router27.post("/pos/products/:id/adjust-stock", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const product = await row("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!product) {
+    res.status(404).json({ message: "Product not found" });
+    return;
+  }
+  const change = Math.round(Number(req.body?.change));
+  if (!Number.isFinite(change) || change === 0) {
+    res.status(400).json({ message: "A non-zero change is required" });
+    return;
+  }
+  const variantId = req.body?.variant_id ? parseInt(String(req.body.variant_id), 10) : null;
+  if (product.has_variants) {
+    if (!variantId) {
+      res.status(400).json({ message: "variant_id is required for this product" });
+      return;
+    }
+    const variant = await row("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [variantId, id]);
+    if (!variant) {
+      res.status(404).json({ message: "Variant not found" });
+      return;
+    }
+    await run("UPDATE pos_variants SET stock_qty = stock_qty + ? WHERE id = ?", [change, variantId]);
+  } else {
+    await run("UPDATE pos_products SET stock_qty = stock_qty + ? WHERE id = ?", [change, id]);
+  }
+  await exec(
+    "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, created_by) VALUES (?, ?, ?, ?, 'adjustment', ?)",
+    [s.outlet_id, id, variantId, change, s.id]
+  );
+  res.json({ success: true });
+});
+router27.get("/pos/suppliers", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const suppliers = await query(
+    "SELECT id, name, contact_name, email, phone, notes, active FROM pos_suppliers WHERE outlet_id = ? ORDER BY name",
+    [s.outlet_id]
+  );
+  res.json({ suppliers });
+});
+router27.post("/pos/suppliers", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  if (!name) {
+    res.status(400).json({ message: "Supplier name is required" });
+    return;
+  }
+  const { contact_name, email, phone, notes } = req.body ?? {};
+  const id = await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone, notes) VALUES (?, ?, ?, ?, ?, ?)",
+    [s.outlet_id, name, contact_name || null, email || null, phone || null, notes || null]
+  );
+  res.status(201).json({ id, name });
+});
+router27.put("/pos/suppliers/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const supplier = await row("SELECT id FROM pos_suppliers WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!supplier) {
+    res.status(404).json({ message: "Supplier not found" });
+    return;
+  }
+  const { name, contact_name, email, phone, notes, active } = req.body ?? {};
+  await run(
+    `UPDATE pos_suppliers SET name = COALESCE(?, name), contact_name = ?, email = ?, phone = ?, notes = ?,
+       active = COALESCE(?, active) WHERE id = ?`,
+    [
+      name != null ? String(name).trim() : null,
+      contact_name || null,
+      email || null,
+      phone || null,
+      notes || null,
+      active != null ? active ? 1 : 0 : null,
+      id
+    ]
+  );
+  res.json({ success: true });
+});
+router27.get("/pos/stock-orders", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const orders = await query(
+    `SELECT so.id, so.status, so.notes, so.created_at, so.received_at,
+            sup.name AS supplier_name, st.name AS created_by_name,
+            (SELECT COUNT(*)::int FROM pos_stock_order_items i WHERE i.stock_order_id = so.id) AS item_count,
+            (SELECT COALESCE(SUM(i.quantity * i.unit_cost), 0) FROM pos_stock_order_items i WHERE i.stock_order_id = so.id) AS total_cost
+     FROM pos_stock_orders so
+     JOIN pos_suppliers sup ON sup.id = so.supplier_id
+     LEFT JOIN pos_staff st ON st.id = so.created_by
+     WHERE so.outlet_id = ?
+     ORDER BY so.created_at DESC LIMIT 200`,
+    [s.outlet_id]
+  );
+  res.json({ orders: orders.map((o) => ({ ...o, total_cost: Number(o.total_cost) })) });
+});
+router27.get("/pos/stock-orders/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await row(
+    `SELECT so.*, sup.name AS supplier_name FROM pos_stock_orders so
+     JOIN pos_suppliers sup ON sup.id = so.supplier_id
+     WHERE so.id = ? AND so.outlet_id = ?`,
+    [id, s.outlet_id]
+  );
+  if (!order) {
+    res.status(404).json({ message: "Stock order not found" });
+    return;
+  }
+  const items = await query(
+    `SELECT i.id, i.product_id, i.variant_id, i.quantity, i.unit_cost,
+            p.name AS product_name, v.size, v.colour
+     FROM pos_stock_order_items i
+     JOIN pos_products p ON p.id = i.product_id
+     LEFT JOIN pos_variants v ON v.id = i.variant_id
+     WHERE i.stock_order_id = ? ORDER BY i.id`,
+    [id]
+  );
+  res.json({
+    ...order,
+    items: items.map((i) => ({
+      ...i,
+      unit_cost: Number(i.unit_cost),
+      variant_label: [i.size, i.colour].filter(Boolean).join(" / ") || null
+    }))
+  });
+});
+router27.post("/pos/stock-orders", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const supplierId = parseInt(String(req.body?.supplier_id ?? ""), 10);
+  const items = req.body?.items;
+  if (!supplierId) {
+    res.status(400).json({ message: "supplier_id is required" });
+    return;
+  }
+  const supplier = await row("SELECT id FROM pos_suppliers WHERE id = ? AND outlet_id = ? AND active = 1", [supplierId, s.outlet_id]);
+  if (!supplier) {
+    res.status(400).json({ message: "Invalid supplier" });
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ message: "At least one item is required" });
+    return;
+  }
+  for (const item of items) {
+    const qty = Math.round(Number(item?.quantity));
+    if (!Number.isFinite(qty) || qty <= 0) {
+      res.status(400).json({ message: "Each item needs a positive quantity" });
+      return;
+    }
+    const product = await row("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [item.product_id, s.outlet_id]);
+    if (!product) {
+      res.status(400).json({ message: "Item product not found in this outlet" });
+      return;
+    }
+    if (product.has_variants) {
+      if (!item.variant_id) {
+        res.status(400).json({ message: `Product ${product.id} requires a variant` });
+        return;
+      }
+      const variant = await row("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [item.variant_id, item.product_id]);
+      if (!variant) {
+        res.status(400).json({ message: "Item variant not found" });
+        return;
+      }
+    }
+  }
+  const orderId = await exec(
+    "INSERT INTO pos_stock_orders (outlet_id, supplier_id, status, notes, created_by) VALUES (?, ?, 'ordered', ?, ?)",
+    [s.outlet_id, supplierId, req.body?.notes || null, s.id]
+  );
+  for (const item of items) {
+    await exec(
+      "INSERT INTO pos_stock_order_items (stock_order_id, product_id, variant_id, quantity, unit_cost) VALUES (?, ?, ?, ?, ?)",
+      [orderId, item.product_id, item.variant_id ?? null, Math.round(Number(item.quantity)), Number(item.unit_cost) || 0]
+    );
+  }
+  res.status(201).json({ id: orderId, status: "ordered" });
+});
+router27.post("/pos/stock-orders/:id/receive", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  try {
+    await withTransaction(async (client) => {
+      const orderRes = await clientQuery(
+        client,
+        "SELECT id, status FROM pos_stock_orders WHERE id = ? AND outlet_id = ? FOR UPDATE",
+        [id, s.outlet_id]
+      );
+      const order = orderRes.rows[0];
+      if (!order) throw Object.assign(new Error("Stock order not found"), { status: 404 });
+      if (order.status !== "ordered") throw Object.assign(new Error(`Order is already ${order.status}`), { status: 409 });
+      const itemsRes = await clientQuery(
+        client,
+        "SELECT product_id, variant_id, quantity FROM pos_stock_order_items WHERE stock_order_id = ?",
+        [id]
+      );
+      for (const item of itemsRes.rows) {
+        if (item.variant_id) {
+          const upd = await clientQuery(
+            client,
+            `UPDATE pos_variants v SET stock_qty = v.stock_qty + ?
+             FROM pos_products p
+             WHERE v.id = ? AND p.id = v.product_id AND p.id = ? AND p.outlet_id = ?`,
+            [item.quantity, item.variant_id, item.product_id, s.outlet_id]
+          );
+          if (upd.rowCount !== 1) {
+            throw Object.assign(new Error("Stock order line references an item outside this outlet"), { status: 409 });
+          }
+        } else {
+          const upd = await clientQuery(
+            client,
+            "UPDATE pos_products SET stock_qty = stock_qty + ? WHERE id = ? AND outlet_id = ?",
+            [item.quantity, item.product_id, s.outlet_id]
+          );
+          if (upd.rowCount !== 1) {
+            throw Object.assign(new Error("Stock order line references an item outside this outlet"), { status: 409 });
+          }
+        }
+        await clientQuery(
+          client,
+          "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, ref_id, created_by) VALUES (?, ?, ?, ?, 'stock_order', ?, ?)",
+          [s.outlet_id, item.product_id, item.variant_id ?? null, item.quantity, id, s.id]
+        );
+      }
+      await clientQuery(client, "UPDATE pos_stock_orders SET status = 'received', received_at = NOW() WHERE id = ?", [id]);
+    });
+    res.json({ success: true, status: "received" });
+  } catch (err) {
+    if (err.status) {
+      res.status(err.status).json({ message: err.message });
+      return;
+    }
+    logger.error({ err, orderId: id }, "Failed to receive stock order");
+    res.status(500).json({ message: "Failed to receive stock order" });
+  }
+});
+router27.post("/pos/stock-orders/:id/cancel", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run(
+    "UPDATE pos_stock_orders SET status = 'cancelled' WHERE id = ? AND outlet_id = ? AND status = 'ordered'",
+    [id, s.outlet_id]
+  );
+  if (!updated) {
+    res.status(409).json({ message: "Order cannot be cancelled" });
+    return;
+  }
+  res.json({ success: true });
+});
+router27.get("/pos/promotions", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const promotions = await query(
+    `SELECT pr.*, c.name AS category_name, p.name AS product_name
+     FROM pos_promotions pr
+     LEFT JOIN pos_categories c ON c.id = pr.category_id
+     LEFT JOIN pos_products p ON p.id = pr.product_id
+     WHERE pr.outlet_id = ? ORDER BY pr.created_at DESC`,
+    [s.outlet_id]
+  );
+  res.json({ promotions: promotions.map((p) => ({ ...p, discount_value: Number(p.discount_value) })) });
+});
+router27.post("/pos/promotions", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  const discountType = String(req.body?.discount_type ?? "");
+  const discountValue = Number(req.body?.discount_value);
+  const appliesTo = String(req.body?.applies_to ?? "all");
+  if (!name) {
+    res.status(400).json({ message: "Promotion name is required" });
+    return;
+  }
+  if (discountType !== "percentage" && discountType !== "amount") {
+    res.status(400).json({ message: "discount_type must be percentage or amount" });
+    return;
+  }
+  if (!Number.isFinite(discountValue) || discountValue <= 0) {
+    res.status(400).json({ message: "A positive discount value is required" });
+    return;
+  }
+  if (discountType === "percentage" && discountValue > 100) {
+    res.status(400).json({ message: "Percentage cannot exceed 100" });
+    return;
+  }
+  if (!["all", "category", "product"].includes(appliesTo)) {
+    res.status(400).json({ message: "Invalid applies_to" });
+    return;
+  }
+  let categoryId = null;
+  let productId = null;
+  if (appliesTo === "category") {
+    categoryId = parseInt(String(req.body?.category_id ?? ""), 10);
+    const cat = await row("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [categoryId, s.outlet_id]);
+    if (!cat) {
+      res.status(400).json({ message: "Invalid category" });
+      return;
+    }
+  }
+  if (appliesTo === "product") {
+    productId = parseInt(String(req.body?.product_id ?? ""), 10);
+    const prod = await row("SELECT id FROM pos_products WHERE id = ? AND outlet_id = ?", [productId, s.outlet_id]);
+    if (!prod) {
+      res.status(400).json({ message: "Invalid product" });
+      return;
+    }
+  }
+  const daysOfWeek = req.body?.days_of_week ? String(req.body.days_of_week) : null;
+  const startTime = req.body?.start_time || null;
+  const endTime = req.body?.end_time || null;
+  const id = await exec(
+    `INSERT INTO pos_promotions (outlet_id, name, discount_type, discount_value, applies_to, category_id, product_id, days_of_week, start_time, end_time)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [s.outlet_id, name, discountType, discountValue, appliesTo, categoryId, productId, daysOfWeek, startTime, endTime]
+  );
+  res.status(201).json({ id, name });
+});
+router27.put("/pos/promotions/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const promo = await row("SELECT id FROM pos_promotions WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!promo) {
+    res.status(404).json({ message: "Promotion not found" });
+    return;
+  }
+  const { active, name } = req.body ?? {};
+  await run(
+    "UPDATE pos_promotions SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? active ? 1 : 0 : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+router27.delete("/pos/promotions/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const deleted = await run("DELETE FROM pos_promotions WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!deleted) {
+    res.status(404).json({ message: "Promotion not found" });
+    return;
+  }
+  res.json({ success: true });
+});
+function saNow() {
+  const d = new Date(Date.now() + 2 * 60 * 60 * 1e3);
+  const hhmm = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  return { day: d.getUTCDay(), hhmm };
+}
+async function activePromotions(outletId) {
+  const promos = await query(
+    "SELECT id, discount_type, discount_value, applies_to, category_id, product_id, days_of_week, start_time, end_time FROM pos_promotions WHERE outlet_id = ? AND active = 1",
+    [outletId]
+  );
+  const { day, hhmm } = saNow();
+  return promos.filter((p) => {
+    if (p.days_of_week) {
+      const days = String(p.days_of_week).split(",").map((v) => parseInt(v.trim(), 10));
+      if (!days.includes(day)) return false;
+    }
+    const start = p.start_time ? String(p.start_time).slice(0, 5) : null;
+    const end = p.end_time ? String(p.end_time).slice(0, 5) : null;
+    if (start && hhmm < start) return false;
+    if (end && hhmm > end) return false;
+    return true;
+  }).map((p) => ({ ...p, discount_value: Number(p.discount_value) }));
+}
+function bestLineDiscount(promos, item) {
+  const lineSubtotal = item.unit_price * item.quantity;
+  let best = 0;
+  let bestId = null;
+  for (const p of promos) {
+    if (p.applies_to === "category" && p.category_id !== item.category_id) continue;
+    if (p.applies_to === "product" && p.product_id !== item.product_id) continue;
+    let d = 0;
+    if (p.discount_type === "percentage") d = lineSubtotal * (p.discount_value / 100);
+    else d = Math.min(p.discount_value * item.quantity, lineSubtotal);
+    if (d > best) {
+      best = d;
+      bestId = p.id;
+    }
+  }
+  return { discount: Math.round(best * 100) / 100, promotionId: bestId };
+}
+async function orderWithTotals(orderId, outletId) {
+  const order = await row(
+    `SELECT o.*, opener.name AS opened_by_name, closer.name AS closed_by_name
+     FROM pos_orders o
+     LEFT JOIN pos_staff opener ON opener.id = o.opened_by
+     LEFT JOIN pos_staff closer ON closer.id = o.closed_by
+     WHERE o.id = ? AND o.outlet_id = ?`,
+    [orderId, outletId]
+  );
+  if (!order) return null;
+  const items = await query(
+    `SELECT i.*, p.category_id FROM pos_order_items i
+     JOIN pos_products p ON p.id = i.product_id
+     WHERE i.order_id = ? ORDER BY i.id`,
+    [orderId]
+  );
+  if (order.status === "open") {
+    const promos = await activePromotions(outletId);
+    let subtotal = 0, discountTotal = 0;
+    const withDiscounts = items.map((i) => {
+      const unitPrice = Number(i.unit_price);
+      const line = unitPrice * i.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: i.product_id,
+        category_id: i.category_id,
+        unit_price: unitPrice,
+        quantity: i.quantity
+      });
+      subtotal += line;
+      discountTotal += discount;
+      return { ...i, unit_price: unitPrice, discount, promotion_id: promotionId, line_total: Math.round((line - discount) * 100) / 100 };
+    });
+    return {
+      ...order,
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount_total: Math.round(discountTotal * 100) / 100,
+      total: Math.round((subtotal - discountTotal) * 100) / 100,
+      items: withDiscounts
+    };
+  }
+  return {
+    ...order,
+    subtotal: Number(order.subtotal),
+    discount_total: Number(order.discount_total),
+    total: Number(order.total),
+    items: items.map((i) => ({ ...i, unit_price: Number(i.unit_price), discount: Number(i.discount), line_total: Number(i.line_total) }))
+  };
+}
+router27.get("/pos/orders", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const status = String(req.query["status"] ?? "open");
+  if (!["open", "paid", "cancelled"].includes(status)) {
+    res.status(400).json({ message: "Invalid status" });
+    return;
+  }
+  const orders = await query(
+    `SELECT o.id, o.order_type, o.table_name, o.status, o.created_at, o.paid_at,
+            opener.name AS opened_by_name,
+            (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
+     FROM pos_orders o
+     LEFT JOIN pos_staff opener ON opener.id = o.opened_by
+     WHERE o.outlet_id = ? AND o.status = ?
+     ORDER BY o.created_at ASC`,
+    [s.outlet_id, status]
+  );
+  const result = [];
+  for (const o of orders) {
+    const full = await orderWithTotals(o.id, s.outlet_id);
+    result.push({ ...o, total: full?.total ?? 0 });
+  }
+  res.json({ orders: result });
+});
+router27.post("/pos/orders", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const orderType = String(req.body?.order_type ?? "");
+  if (!["table", "takeaway", "counter"].includes(orderType)) {
+    res.status(400).json({ message: "order_type must be table, takeaway or counter" });
+    return;
+  }
+  const tableName = orderType === "table" ? String(req.body?.table_name ?? "").trim() : null;
+  if (orderType === "table" && !tableName) {
+    res.status(400).json({ message: "table_name is required for table orders" });
+    return;
+  }
+  const id = await exec(
+    "INSERT INTO pos_orders (outlet_id, order_type, table_name, opened_by) VALUES (?, ?, ?, ?)",
+    [s.outlet_id, orderType, tableName, s.id]
+  );
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.status(201).json(full);
+});
+router27.get("/pos/orders/:id", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await orderWithTotals(id, s.outlet_id);
+  if (!order) {
+    res.status(404).json({ message: "Order not found" });
+    return;
+  }
+  res.json(order);
+});
+router27.post("/pos/orders/:id/items", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await row("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) {
+    res.status(404).json({ message: "Order not found" });
+    return;
+  }
+  if (order.status !== "open") {
+    res.status(409).json({ message: "Order is no longer open" });
+    return;
+  }
+  const productId = parseInt(String(req.body?.product_id ?? ""), 10);
+  const variantId = req.body?.variant_id ? parseInt(String(req.body.variant_id), 10) : null;
+  const quantity = Math.max(1, Math.round(Number(req.body?.quantity) || 1));
+  const product = await row(
+    "SELECT id, name, price, has_variants FROM pos_products WHERE id = ? AND outlet_id = ? AND active = 1",
+    [productId, s.outlet_id]
+  );
+  if (!product) {
+    res.status(400).json({ message: "Product not found in this outlet" });
+    return;
+  }
+  let unitPrice = Number(product.price);
+  let variantLabel = null;
+  if (product.has_variants) {
+    if (!variantId) {
+      res.status(400).json({ message: "This product requires a variant selection" });
+      return;
+    }
+    const variant = await row("SELECT id, size, colour, price FROM pos_variants WHERE id = ? AND product_id = ? AND active = 1", [variantId, productId]);
+    if (!variant) {
+      res.status(400).json({ message: "Variant not found" });
+      return;
+    }
+    if (variant.price != null) unitPrice = Number(variant.price);
+    variantLabel = [variant.size, variant.colour].filter(Boolean).join(" / ") || null;
+  }
+  const existing = await row(
+    "SELECT id, quantity FROM pos_order_items WHERE order_id = ? AND product_id = ? AND variant_id IS NOT DISTINCT FROM ?",
+    [id, productId, variantId]
+  );
+  if (existing) {
+    await run("UPDATE pos_order_items SET quantity = quantity + ?, line_total = unit_price * (quantity + ?) WHERE id = ?", [quantity, quantity, existing.id]);
+  } else {
+    await exec(
+      "INSERT INTO pos_order_items (order_id, product_id, variant_id, name, variant_label, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [id, productId, variantId, product.name, variantLabel, quantity, unitPrice, unitPrice * quantity]
+    );
+  }
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+router27.put("/pos/orders/:id/items/:itemId", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const itemId = parseInt(String(req.params["itemId"] ?? ""), 10);
+  const order = await row("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) {
+    res.status(404).json({ message: "Order not found" });
+    return;
+  }
+  if (order.status !== "open") {
+    res.status(409).json({ message: "Order is no longer open" });
+    return;
+  }
+  const quantity = Math.round(Number(req.body?.quantity));
+  if (!Number.isFinite(quantity) || quantity < 0) {
+    res.status(400).json({ message: "Invalid quantity" });
+    return;
+  }
+  if (quantity === 0) {
+    await run("DELETE FROM pos_order_items WHERE id = ? AND order_id = ?", [itemId, id]);
+  } else {
+    const updated = await run("UPDATE pos_order_items SET quantity = ?, line_total = unit_price * ? WHERE id = ? AND order_id = ?", [quantity, quantity, itemId, id]);
+    if (!updated) {
+      res.status(404).json({ message: "Item not found" });
+      return;
+    }
+  }
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+router27.delete("/pos/orders/:id/items/:itemId", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const itemId = parseInt(String(req.params["itemId"] ?? ""), 10);
+  const order = await row("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) {
+    res.status(404).json({ message: "Order not found" });
+    return;
+  }
+  if (order.status !== "open") {
+    res.status(409).json({ message: "Order is no longer open" });
+    return;
+  }
+  await run("DELETE FROM pos_order_items WHERE id = ? AND order_id = ?", [itemId, id]);
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+async function finalizeOrderPayment(orderId, outletId, staffId, paymentMethod) {
+  return withTransaction(async (client) => {
+    const orderRes = await clientQuery(
+      client,
+      "SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ? FOR UPDATE",
+      [orderId, outletId]
+    );
+    const order = orderRes.rows[0];
+    if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
+    if (order.status !== "open") throw Object.assign(new Error(`Order is already ${order.status}`), { status: 409 });
+    const itemsRes = await clientQuery(
+      client,
+      `SELECT i.id, i.product_id, i.variant_id, i.name, i.variant_label, i.quantity, i.unit_price, p.category_id, p.has_variants
+       FROM pos_order_items i JOIN pos_products p ON p.id = i.product_id
+       WHERE i.order_id = ? AND p.outlet_id = ?`,
+      [orderId, outletId]
+    );
+    const items = itemsRes.rows;
+    if (items.length === 0) throw Object.assign(new Error("Order has no items"), { status: 400 });
+    const promos = await activePromotions(outletId);
+    let subtotal = 0, discountTotal = 0;
+    for (const item of items) {
+      const unitPrice = Number(item.unit_price);
+      const line = unitPrice * item.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: item.product_id,
+        category_id: item.category_id,
+        unit_price: unitPrice,
+        quantity: item.quantity
+      });
+      subtotal += line;
+      discountTotal += discount;
+      await clientQuery(
+        client,
+        "UPDATE pos_order_items SET discount = ?, promotion_id = ?, line_total = ? WHERE id = ?",
+        [discount, promotionId, Math.round((line - discount) * 100) / 100, item.id]
+      );
+      const itemLabel = [item.name, item.variant_label].filter(Boolean).join(" ");
+      if (item.variant_id) {
+        const upd = await clientQuery(
+          client,
+          `UPDATE pos_variants v SET stock_qty = v.stock_qty - ?
+           FROM pos_products p
+           WHERE v.id = ? AND p.id = v.product_id AND p.id = ? AND p.outlet_id = ? AND v.stock_qty >= ?`,
+          [item.quantity, item.variant_id, item.product_id, outletId, item.quantity]
+        );
+        if (upd.rowCount !== 1) {
+          throw Object.assign(new Error(`Insufficient stock for ${itemLabel}`), { status: 409 });
+        }
+      } else {
+        const upd = await clientQuery(
+          client,
+          "UPDATE pos_products SET stock_qty = stock_qty - ? WHERE id = ? AND outlet_id = ? AND stock_qty >= ?",
+          [item.quantity, item.product_id, outletId, item.quantity]
+        );
+        if (upd.rowCount !== 1) {
+          throw Object.assign(new Error(`Insufficient stock for ${itemLabel}`), { status: 409 });
+        }
+      }
+      await clientQuery(
+        client,
+        "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, ref_id, created_by) VALUES (?, ?, ?, ?, 'sale', ?, ?)",
+        [outletId, item.product_id, item.variant_id ?? null, -item.quantity, orderId, staffId]
+      );
+    }
+    const total = Math.round((subtotal - discountTotal) * 100) / 100;
+    await clientQuery(
+      client,
+      `UPDATE pos_orders SET status = 'paid', payment_method = ?, subtotal = ?, discount_total = ?, total = ?,
+         closed_by = ?, paid_at = NOW() WHERE id = ?`,
+      [paymentMethod, Math.round(subtotal * 100) / 100, Math.round(discountTotal * 100) / 100, total, staffId, orderId]
+    );
+    return { subtotal: Math.round(subtotal * 100) / 100, discount_total: Math.round(discountTotal * 100) / 100, total };
+  });
+}
+router27.post("/pos/orders/:id/pay", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const paymentMethod = String(req.body?.payment_method ?? "");
+  if (paymentMethod !== "cash" && paymentMethod !== "card") {
+    res.status(400).json({ message: "payment_method must be cash or card" });
+    return;
+  }
+  try {
+    await finalizeOrderPayment(id, s.outlet_id, s.id, paymentMethod);
+    const full = await orderWithTotals(id, s.outlet_id);
+    res.json(full);
+  } catch (err) {
+    if (err.status) {
+      res.status(err.status).json({ message: err.message });
+      return;
+    }
+    logger.error({ err, orderId: id }, "Failed to finalize POS payment");
+    res.status(500).json({ message: "Failed to complete payment" });
+  }
+});
+router27.post("/pos/orders/:id/cancel", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run(
+    "UPDATE pos_orders SET status = 'cancelled', closed_by = ? WHERE id = ? AND outlet_id = ? AND status = 'open'",
+    [s.id, id, s.outlet_id]
+  );
+  if (!updated) {
+    res.status(409).json({ message: "Order cannot be cancelled" });
+    return;
+  }
+  res.json({ success: true });
+});
+async function resolveSaleItems(items, outletId) {
+  const resolved = [];
+  for (const item of items) {
+    const productId = parseInt(String(item?.product_id ?? ""), 10);
+    const variantId = item?.variant_id ? parseInt(String(item.variant_id), 10) : null;
+    const quantity = Math.max(1, Math.round(Number(item?.quantity) || 1));
+    const product = await row(
+      "SELECT id, name, price, category_id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ? AND active = 1",
+      [productId, outletId]
+    );
+    if (!product) throw Object.assign(new Error("Product not found in this outlet"), { status: 400 });
+    let unitPrice = Number(product.price);
+    let variantLabel = null;
+    if (product.has_variants) {
+      if (!variantId) throw Object.assign(new Error(`${product.name} requires a variant selection`), { status: 400 });
+      const variant = await row("SELECT id, size, colour, price FROM pos_variants WHERE id = ? AND product_id = ? AND active = 1", [variantId, productId]);
+      if (!variant) throw Object.assign(new Error("Variant not found"), { status: 400 });
+      if (variant.price != null) unitPrice = Number(variant.price);
+      variantLabel = [variant.size, variant.colour].filter(Boolean).join(" / ") || null;
+    }
+    resolved.push({ productId, variantId, quantity, unitPrice, name: product.name, variantLabel, categoryId: product.category_id ?? null });
+  }
+  return resolved;
+}
+router27.post("/pos/sales/preview", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const items = req.body?.items;
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ message: "At least one item is required" });
+    return;
+  }
+  try {
+    const resolved = await resolveSaleItems(items, s.outlet_id);
+    const promos = await activePromotions(s.outlet_id);
+    let subtotal = 0, discountTotal = 0;
+    const lines = resolved.map((r) => {
+      const line = r.unitPrice * r.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: r.productId,
+        category_id: r.categoryId,
+        unit_price: r.unitPrice,
+        quantity: r.quantity
+      });
+      subtotal += line;
+      discountTotal += discount;
+      return {
+        product_id: r.productId,
+        variant_id: r.variantId,
+        quantity: r.quantity,
+        unit_price: r.unitPrice,
+        discount,
+        promotion_id: promotionId,
+        line_total: Math.round((line - discount) * 100) / 100
+      };
+    });
+    res.json({
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount_total: Math.round(discountTotal * 100) / 100,
+      total: Math.round((subtotal - discountTotal) * 100) / 100,
+      lines
+    });
+  } catch (err) {
+    if (err.status) {
+      res.status(err.status).json({ message: err.message });
+      return;
+    }
+    logger.error({ err }, "Failed to preview sale");
+    res.status(500).json({ message: "Failed to preview sale" });
+  }
+});
+router27.post("/pos/sales", requirePosAuth, async (req, res) => {
+  const s = getPosStaff(req);
+  const items = req.body?.items;
+  const paymentMethod = String(req.body?.payment_method ?? "");
+  if (paymentMethod !== "cash" && paymentMethod !== "card") {
+    res.status(400).json({ message: "payment_method must be cash or card" });
+    return;
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    res.status(400).json({ message: "At least one item is required" });
+    return;
+  }
+  let resolved;
+  try {
+    resolved = await resolveSaleItems(items, s.outlet_id);
+  } catch (err) {
+    res.status(err.status ?? 500).json({ message: err.message ?? "Failed to validate sale items" });
+    return;
+  }
+  const orderId = await exec(
+    "INSERT INTO pos_orders (outlet_id, order_type, opened_by) VALUES (?, 'counter', ?)",
+    [s.outlet_id, s.id]
+  );
+  for (const r of resolved) {
+    await exec(
+      "INSERT INTO pos_order_items (order_id, product_id, variant_id, name, variant_label, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [orderId, r.productId, r.variantId, r.name, r.variantLabel, r.quantity, r.unitPrice, r.unitPrice * r.quantity]
+    );
+  }
+  try {
+    await finalizeOrderPayment(orderId, s.outlet_id, s.id, paymentMethod);
+    const full = await orderWithTotals(orderId, s.outlet_id);
+    res.status(201).json(full);
+  } catch (err) {
+    await run("UPDATE pos_orders SET status = 'cancelled' WHERE id = ? AND status = 'open'", [orderId]);
+    if (err.status) {
+      res.status(err.status).json({ message: err.message });
+      return;
+    }
+    logger.error({ err, orderId }, "Failed to complete pro shop sale");
+    res.status(500).json({ message: "Failed to complete sale" });
+  }
+});
+router27.get("/pos/staff", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const staff = await query(
+    "SELECT id, name, email, role, active, created_at FROM pos_staff WHERE outlet_id = ? ORDER BY role, name",
+    [s.outlet_id]
+  );
+  res.json({ staff });
+});
+router27.post("/pos/staff", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  if (!name || !email || !password) {
+    res.status(400).json({ message: "Name, email and password are required" });
+    return;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ message: "Password must be at least 6 characters" });
+    return;
+  }
+  const existing = await row("SELECT id FROM pos_staff WHERE email = ?", [email]);
+  if (existing) {
+    res.status(409).json({ message: "An outlet account with this email already exists" });
+    return;
+  }
+  const hash2 = await bcryptjs_default.hash(password, 10);
+  const id = await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, 'waiter')",
+    [s.outlet_id, s.club_id, name, email, hash2]
+  );
+  res.status(201).json({ id, name, email, role: "waiter", active: 1 });
+});
+router27.put("/pos/staff/:id", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const target = await row("SELECT id, role FROM pos_staff WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!target) {
+    res.status(404).json({ message: "Staff member not found" });
+    return;
+  }
+  if (target.role === "manager" && target.id !== s.id) {
+    res.status(403).json({ message: "Managers cannot modify other managers \u2014 ask your club admin" });
+    return;
+  }
+  const { active, password, name } = req.body ?? {};
+  if (password != null) {
+    if (String(password).length < 6) {
+      res.status(400).json({ message: "Password must be at least 6 characters" });
+      return;
+    }
+    const hash2 = await bcryptjs_default.hash(String(password), 10);
+    await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash2, id]);
+  }
+  await run(
+    "UPDATE pos_staff SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? active ? 1 : 0 : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+router27.get("/pos/transactions", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const conditions = ["o.outlet_id = ?", "o.status = 'paid'"];
+  const params = [s.outlet_id];
+  if (req.query["from"]) {
+    conditions.push("o.paid_at >= ?::date");
+    params.push(String(req.query["from"]));
+  }
+  if (req.query["to"]) {
+    conditions.push("o.paid_at < (?::date + INTERVAL '1 day')");
+    params.push(String(req.query["to"]));
+  }
+  if (req.query["payment_method"]) {
+    conditions.push("o.payment_method = ?");
+    params.push(String(req.query["payment_method"]));
+  }
+  if (req.query["staff_id"]) {
+    conditions.push("o.closed_by = ?");
+    params.push(parseInt(String(req.query["staff_id"]), 10));
+  }
+  const transactions = await query(
+    `SELECT o.id, o.order_type, o.table_name, o.subtotal, o.discount_total, o.total, o.payment_method,
+            o.paid_at, o.created_at, closer.name AS staff_name,
+            (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
+     FROM pos_orders o
+     LEFT JOIN pos_staff closer ON closer.id = o.closed_by
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY o.paid_at DESC LIMIT 500`,
+    params
+  );
+  res.json({
+    transactions: transactions.map((t) => ({
+      ...t,
+      subtotal: Number(t.subtotal),
+      discount_total: Number(t.discount_total),
+      total: Number(t.total)
+    }))
+  });
+});
+router27.get("/pos/reports/summary", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const from = req.query["from"] ? String(req.query["from"]) : null;
+  const to = req.query["to"] ? String(req.query["to"]) : null;
+  const dateCond = ["o.outlet_id = ?", "o.status = 'paid'"];
+  const params = [s.outlet_id];
+  if (from) {
+    dateCond.push("o.paid_at >= ?::date");
+    params.push(from);
+  }
+  if (to) {
+    dateCond.push("o.paid_at < (?::date + INTERVAL '1 day')");
+    params.push(to);
+  }
+  const where = dateCond.join(" AND ");
+  const totals = await row(
+    `SELECT COUNT(*)::int AS transaction_count, COALESCE(SUM(o.total), 0) AS total_sales,
+            COALESCE(SUM(o.discount_total), 0) AS total_discounts,
+            COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'cash'), 0) AS cash_sales,
+            COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'card'), 0) AS card_sales
+     FROM pos_orders o WHERE ${where}`,
+    params
+  );
+  const byDay = await query(
+    `SELECT (o.paid_at AT TIME ZONE 'UTC' + INTERVAL '2 hours')::date AS day,
+            COUNT(*)::int AS transactions, COALESCE(SUM(o.total), 0) AS sales
+     FROM pos_orders o WHERE ${where}
+     GROUP BY day ORDER BY day`,
+    params
+  );
+  const topProducts = await query(
+    `SELECT i.product_id, i.name, COALESCE(SUM(i.quantity), 0)::int AS units, COALESCE(SUM(i.line_total), 0) AS sales
+     FROM pos_order_items i JOIN pos_orders o ON o.id = i.order_id
+     WHERE ${where}
+     GROUP BY i.product_id, i.name ORDER BY sales DESC LIMIT 10`,
+    params
+  );
+  const byCategory = await query(
+    `SELECT COALESCE(c.name, 'Uncategorised') AS category, COALESCE(SUM(i.quantity), 0)::int AS units, COALESCE(SUM(i.line_total), 0) AS sales
+     FROM pos_order_items i
+     JOIN pos_orders o ON o.id = i.order_id
+     JOIN pos_products p ON p.id = i.product_id
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE ${where}
+     GROUP BY c.name ORDER BY sales DESC`,
+    params
+  );
+  const byStaff = await query(
+    `SELECT st.id AS staff_id, st.name, COUNT(*)::int AS transactions, COALESCE(SUM(o.total), 0) AS sales
+     FROM pos_orders o JOIN pos_staff st ON st.id = o.closed_by
+     WHERE ${where}
+     GROUP BY st.id, st.name ORDER BY sales DESC`,
+    params
+  );
+  res.json({
+    totals: {
+      transaction_count: totals?.transaction_count ?? 0,
+      total_sales: Number(totals?.total_sales ?? 0),
+      total_discounts: Number(totals?.total_discounts ?? 0),
+      cash_sales: Number(totals?.cash_sales ?? 0),
+      card_sales: Number(totals?.card_sales ?? 0)
+    },
+    by_day: byDay.map((d) => ({ ...d, sales: Number(d.sales) })),
+    top_products: topProducts.map((p) => ({ ...p, sales: Number(p.sales) })),
+    by_category: byCategory.map((c) => ({ ...c, sales: Number(c.sales) })),
+    by_staff: byStaff.map((w) => ({ ...w, sales: Number(w.sales) }))
+  });
+});
+router27.get("/pos/reports/stock", requirePosAuth, requirePosManager, async (req, res) => {
+  const s = getPosStaff(req);
+  const products = await query(
+    `SELECT p.id, p.name, p.brand, p.has_variants, p.stock_qty, p.low_stock_threshold,
+            c.name AS category_name
+     FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE p.outlet_id = ? AND p.active = 1
+     ORDER BY p.name`,
+    [s.outlet_id]
+  );
+  const ids = products.map((p) => p.id);
+  let variantsByProduct = {};
+  if (ids.length > 0) {
+    const variants = await query(
+      `SELECT id, product_id, size, colour, sku, stock_qty FROM pos_variants
+       WHERE product_id IN (${ids.map(() => "?").join(",")}) AND active = 1 ORDER BY id`,
+      ids
+    );
+    for (const v of variants) (variantsByProduct[v.product_id] ??= []).push(v);
+  }
+  res.json({
+    stock: products.map((p) => {
+      const variants = variantsByProduct[p.id] ?? [];
+      const total = p.has_variants ? variants.reduce((sum, v) => sum + v.stock_qty, 0) : p.stock_qty;
+      return {
+        id: p.id,
+        name: p.name,
+        brand: p.brand,
+        category_name: p.category_name,
+        has_variants: p.has_variants,
+        total_stock: total,
+        low_stock_threshold: p.low_stock_threshold,
+        low_stock: total <= p.low_stock_threshold,
+        variants: variants.map((v) => ({
+          id: v.id,
+          label: [v.size, v.colour].filter(Boolean).join(" / ") || v.sku || `#${v.id}`,
+          stock_qty: v.stock_qty,
+          low_stock: v.stock_qty <= p.low_stock_threshold
+        }))
+      };
+    })
+  });
+});
+var pos_default = router27;
+
+// src/routes/index.ts
+var router28 = (0, import_express28.Router)();
+router28.use(health_default);
+router28.use(auth_default);
+router28.use(geofencing_default);
+router28.use(clubs_default);
+router28.use(bookings_default);
+router28.use(standing_default);
+router28.use(friends_default);
+router28.use(ads_default);
+router28.use(messages_default);
+router28.use(vouchers_default);
+router28.use(cancellationVouchers_default);
+router28.use(admin_default);
+router28.use(notifications_default);
+router28.use(events_default);
+router28.use(portal_default);
+router28.use(storage_default);
+router28.use(payments_default);
+router28.use(settings_default);
+router28.use(map_default);
+router28.use(hnaVerification_default);
+router28.use(moderation_default);
+router28.use(bans_default);
+router28.use(knockout_default);
+router28.use(scoring_default);
+router28.use(support_default);
+router28.use(resale_default);
+router28.use(pos_default);
+var routes_default = router28;
 
 // src/app.ts
 init_logger();
 var __dirname2 = path3.dirname(fileURLToPath(import.meta.url));
-var app = (0, import_express28.default)();
+var app = (0, import_express29.default)();
 app.use(
   (0, import_pino_http.default)({
     logger,
@@ -80973,11 +82588,11 @@ app.use(
   })
 );
 app.use((0, import_cors.default)());
-app.use("/api/stitch/webhook", import_express28.default.raw({ type: "*/*" }));
-app.use(import_express28.default.json());
-app.use(import_express28.default.urlencoded({ extended: true }));
+app.use("/api/stitch/webhook", import_express29.default.raw({ type: "*/*" }));
+app.use(import_express29.default.json());
+app.use(import_express29.default.urlencoded({ extended: true }));
 var logosDir = path3.resolve(__dirname2, "../logos");
-app.use("/api/logos", import_express28.default.static(logosDir));
+app.use("/api/logos", import_express29.default.static(logosDir));
 app.get("/", (_req, res) => {
   res.json({ ok: true, service: "TapIn Golf API", ts: Date.now() });
 });
@@ -81005,7 +82620,7 @@ if (process.env.NODE_ENV !== "production") {
 }
 if (process.env.NODE_ENV === "production") {
   const clientDir = path3.resolve(__dirname2, "../../club-portal/dist/public");
-  app.use(import_express28.default.static(clientDir));
+  app.use(import_express29.default.static(clientDir));
   app.get(/^(?!\/api).*/, (_req, res) => {
     res.sendFile(path3.join(clientDir, "index.html"));
   });
@@ -82198,8 +83813,8 @@ async function seedData() {
     if (firstUser) {
       reviewerId = firstUser.id;
     } else {
-      const crypto9 = await import("crypto");
-      const demoHash = crypto9.createHmac("sha256", "tapin-seed-key").update("demo-reviewer-2024").digest("hex");
+      const crypto11 = await import("crypto");
+      const demoHash = crypto11.createHmac("sha256", "tapin-seed-key").update("demo-reviewer-2024").digest("hex");
       reviewerId = await exec(
         "INSERT INTO users (name, email, password_hash, role) VALUES (?, ?, ?, 'golfer')",
         ["Demo Golfer", "demo@tapingolf.co.za", demoHash]
@@ -82704,6 +84319,177 @@ async function seedAdOfferings() {
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
   await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_outlets (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name       VARCHAR(120) NOT NULL,
+      type       VARCHAR(20) NOT NULL CHECK (type IN ('pro_shop','bar','restaurant')),
+      active     SMALLINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_staff (
+      id            SERIAL PRIMARY KEY,
+      outlet_id     INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(120) NOT NULL,
+      email         VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role          VARCHAR(20) NOT NULL CHECK (role IN ('manager','waiter')),
+      active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_categories (
+      id         SERIAL PRIMARY KEY,
+      outlet_id  INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name       VARCHAR(120) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_products (
+      id                  SERIAL PRIMARY KEY,
+      outlet_id           INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      category_id         INT REFERENCES pos_categories(id) ON DELETE SET NULL,
+      name                VARCHAR(200) NOT NULL,
+      brand               VARCHAR(120),
+      description         TEXT,
+      price               DECIMAL(10,2) NOT NULL DEFAULT 0,
+      barcode             VARCHAR(80),
+      sku                 VARCHAR(80),
+      stock_qty           INT NOT NULL DEFAULT 0,
+      low_stock_threshold INT NOT NULL DEFAULT 5,
+      has_variants        SMALLINT NOT NULL DEFAULT 0,
+      active              SMALLINT NOT NULL DEFAULT 1,
+      created_at          TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_products_outlet ON pos_products (outlet_id)`);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_products_barcode ON pos_products (outlet_id, barcode)`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_variants (
+      id         SERIAL PRIMARY KEY,
+      product_id INT NOT NULL REFERENCES pos_products(id) ON DELETE CASCADE,
+      size       VARCHAR(60),
+      colour     VARCHAR(60),
+      barcode    VARCHAR(80),
+      sku        VARCHAR(80),
+      price      DECIMAL(10,2),
+      stock_qty  INT NOT NULL DEFAULT 0,
+      active     SMALLINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_variants_product ON pos_variants (product_id)`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_suppliers (
+      id           SERIAL PRIMARY KEY,
+      outlet_id    INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name         VARCHAR(200) NOT NULL,
+      contact_name VARCHAR(120),
+      email        VARCHAR(255),
+      phone        VARCHAR(50),
+      notes        TEXT,
+      active       SMALLINT NOT NULL DEFAULT 1,
+      created_at   TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_orders (
+      id          SERIAL PRIMARY KEY,
+      outlet_id   INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      supplier_id INT NOT NULL REFERENCES pos_suppliers(id),
+      status      VARCHAR(20) NOT NULL DEFAULT 'ordered'
+                    CHECK (status IN ('ordered','received','cancelled')),
+      notes       TEXT,
+      created_by  INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at  TIMESTAMP DEFAULT NOW(),
+      received_at TIMESTAMP
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_order_items (
+      id             SERIAL PRIMARY KEY,
+      stock_order_id INT NOT NULL REFERENCES pos_stock_orders(id) ON DELETE CASCADE,
+      product_id     INT NOT NULL REFERENCES pos_products(id),
+      variant_id     INT REFERENCES pos_variants(id),
+      quantity       INT NOT NULL,
+      unit_cost      DECIMAL(10,2) NOT NULL DEFAULT 0
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_movements (
+      id         SERIAL PRIMARY KEY,
+      outlet_id  INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      product_id INT NOT NULL REFERENCES pos_products(id) ON DELETE CASCADE,
+      variant_id INT REFERENCES pos_variants(id) ON DELETE CASCADE,
+      change     INT NOT NULL,
+      reason     VARCHAR(20) NOT NULL CHECK (reason IN ('sale','stock_order','adjustment')),
+      ref_id     INT,
+      created_by INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_stock_movements_outlet ON pos_stock_movements (outlet_id, created_at)`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_promotions (
+      id             SERIAL PRIMARY KEY,
+      outlet_id      INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name           VARCHAR(200) NOT NULL,
+      discount_type  VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage','amount')),
+      discount_value DECIMAL(10,2) NOT NULL,
+      applies_to     VARCHAR(20) NOT NULL DEFAULT 'all'
+                       CHECK (applies_to IN ('all','category','product')),
+      category_id    INT REFERENCES pos_categories(id) ON DELETE CASCADE,
+      product_id     INT REFERENCES pos_products(id) ON DELETE CASCADE,
+      days_of_week   VARCHAR(30),
+      start_time     TIME,
+      end_time       TIME,
+      active         SMALLINT NOT NULL DEFAULT 1,
+      created_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_orders (
+      id             SERIAL PRIMARY KEY,
+      outlet_id      INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      order_type     VARCHAR(20) NOT NULL CHECK (order_type IN ('table','takeaway','counter')),
+      table_name     VARCHAR(60),
+      status         VARCHAR(20) NOT NULL DEFAULT 'open'
+                       CHECK (status IN ('open','paid','cancelled')),
+      subtotal       DECIMAL(10,2) NOT NULL DEFAULT 0,
+      discount_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total          DECIMAL(10,2) NOT NULL DEFAULT 0,
+      payment_method VARCHAR(20) CHECK (payment_method IN ('cash','card')),
+      opened_by      INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      closed_by      INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      paid_at        TIMESTAMP
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_outlet ON pos_orders (outlet_id, status)`);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_paid ON pos_orders (outlet_id, paid_at)`);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_order_items (
+      id            SERIAL PRIMARY KEY,
+      order_id      INT NOT NULL REFERENCES pos_orders(id) ON DELETE CASCADE,
+      product_id    INT NOT NULL REFERENCES pos_products(id),
+      variant_id    INT REFERENCES pos_variants(id),
+      name          VARCHAR(200) NOT NULL,
+      variant_label VARCHAR(140),
+      quantity      INT NOT NULL DEFAULT 1,
+      unit_price    DECIMAL(10,2) NOT NULL,
+      discount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+      promotion_id  INT REFERENCES pos_promotions(id) ON DELETE SET NULL,
+      line_total    DECIMAL(10,2) NOT NULL
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_order_items_order ON pos_order_items (order_id)`);
+  await ddl(`
     DO $$
     BEGIN
       IF EXISTS (
@@ -82788,6 +84574,122 @@ async function seedScreenshotAccount() {
   }
   logger.info({ userId, bookingId, roundId }, "Screenshot test account seeded");
 }
+async function seedPosDemo() {
+  const existing = await row("SELECT id FROM pos_outlets LIMIT 1");
+  if (existing) return;
+  const club = await row("SELECT id FROM clubs WHERE active = 1 ORDER BY id LIMIT 1");
+  if (!club) return;
+  const bcrypt = await Promise.resolve().then(() => (init_bcryptjs(), bcryptjs_exports));
+  const pwHash = await bcrypt.hash("PosDemo2026!", 10);
+  const proShopId = await exec(
+    "INSERT INTO pos_outlets (club_id, name, type) VALUES (?, 'Pro Shop', 'pro_shop')",
+    [club.id]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Pro Shop Manager', 'proshop.demo@tapingolf.co.za', ?, 'manager')",
+    [proShopId, club.id, pwHash]
+  );
+  const catShoes = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Shoes', 1)", [proShopId]);
+  const catCloth = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Clothing', 2)", [proShopId]);
+  const catEquip = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Equipment', 3)", [proShopId]);
+  const catAcc = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Accessories', 4)", [proShopId]);
+  const shoeId = await exec(
+    "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, has_variants) VALUES (?, ?, 'Tour Pro Golf Shoes', 'FootJoy', 2199.00, 1)",
+    [proShopId, catShoes]
+  );
+  const shoeVariants = [
+    ["8", "White", "6001111000018", 6],
+    ["9", "White", "6001111000019", 8],
+    ["10", "White", "6001111000020", 5],
+    ["9", "Black", "6001111000119", 4],
+    ["10", "Black", "6001111000120", 3]
+  ];
+  for (const [size, colour, barcode, qty] of shoeVariants) {
+    await exec(
+      "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, stock_qty) VALUES (?, ?, ?, ?, ?, ?)",
+      [shoeId, size, colour, barcode, `FJ-TP-${colour.slice(0, 2).toUpperCase()}-${size}`, qty]
+    );
+  }
+  const poloId = await exec(
+    "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, has_variants) VALUES (?, ?, 'Performance Golf Polo', 'Nike', 899.00, 1)",
+    [proShopId, catCloth]
+  );
+  const poloVariants = [
+    ["M", "Navy", "6002222000031", 10],
+    ["L", "Navy", "6002222000032", 12],
+    ["XL", "Navy", "6002222000033", 7],
+    ["M", "Green", "6002222000041", 9],
+    ["L", "Green", "6002222000042", 2]
+  ];
+  for (const [size, colour, barcode, qty] of poloVariants) {
+    await exec(
+      "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, stock_qty) VALUES (?, ?, ?, ?, ?, ?)",
+      [poloId, size, colour, barcode, `NK-PP-${colour.slice(0, 2).toUpperCase()}-${size}`, qty]
+    );
+  }
+  const simpleProShop = [
+    [catEquip, "Pro V1 Golf Balls (Dozen)", "Titleist", 999, "6003333000012", 24],
+    [catEquip, "Premium Golf Glove", "Titleist", 349, "6003333000029", 15],
+    [catAcc, "Wooden Tees (50 pack)", "TapIn", 89, "6004444000015", 40],
+    [catAcc, "Golf Umbrella", "Callaway", 549, "6004444000022", 6],
+    [catAcc, "Club Logo Cap", "TapIn", 299, "6004444000039", 18]
+  ];
+  for (const [catId, name, brand, price, barcode, qty] of simpleProShop) {
+    await exec(
+      "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, barcode, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [proShopId, catId, name, brand, price, barcode, qty]
+    );
+  }
+  await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone) VALUES (?, 'Golf Wholesale SA', 'Pieter Botha', 'orders@golfwholesale.co.za', '+27114567890')",
+    [proShopId]
+  );
+  const barId = await exec(
+    "INSERT INTO pos_outlets (club_id, name, type) VALUES (?, 'Clubhouse Bar', 'bar')",
+    [club.id]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Bar Manager', 'bar.demo@tapingolf.co.za', ?, 'manager')",
+    [barId, club.id, pwHash]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Waiter', 'waiter.demo@tapingolf.co.za', ?, 'waiter')",
+    [barId, club.id, pwHash]
+  );
+  const catBeer = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Beers', 1)", [barId]);
+  const catWine = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Wine', 2)", [barId]);
+  const catSoft = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Soft Drinks', 3)", [barId]);
+  const catSnack = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Snacks', 4)", [barId]);
+  const barProducts = [
+    [catBeer, "Castle Lager 440ml", 42, 96],
+    [catBeer, "Heineken 330ml", 48, 72],
+    [catBeer, "Windhoek Draught 440ml", 45, 60],
+    [catWine, "House Red (Glass)", 55, 30],
+    [catWine, "House White (Glass)", 55, 30],
+    [catSoft, "Coca-Cola 300ml", 28, 120],
+    [catSoft, "Appletiser 330ml", 34, 48],
+    [catSoft, "Still Water 500ml", 22, 80],
+    [catSnack, "Biltong 100g", 65, 25],
+    [catSnack, "Salted Peanuts", 35, 40],
+    [catSnack, "Toasted Sandwich", 75, 20]
+  ];
+  for (const [catId, name, price, qty] of barProducts) {
+    await exec(
+      "INSERT INTO pos_products (outlet_id, category_id, name, price, stock_qty) VALUES (?, ?, ?, ?, ?)",
+      [barId, catId, name, price, qty]
+    );
+  }
+  await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone) VALUES (?, 'SAB Distributors', 'Thandi Nkosi', 'accounts@sabdist.co.za', '+27117891234')",
+    [barId]
+  );
+  await exec(
+    `INSERT INTO pos_promotions (outlet_id, name, discount_type, discount_value, applies_to, category_id, days_of_week, start_time, end_time)
+     VALUES (?, 'Happy Hour \u2014 Beers 20% off', 'percentage', 20, 'category', ?, '1,2,3,4,5', '16:00', '18:00')`,
+    [barId, catBeer]
+  );
+  logger.info({ proShopId, barId, clubId: club.id }, "POS demo outlets seeded");
+}
 async function migrate() {
   await applyLateAlters();
   await createSchema();
@@ -82795,6 +84697,7 @@ async function migrate() {
   await seedData();
   await seedAdOfferings();
   await seedScreenshotAccount();
+  await seedPosDemo();
   await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

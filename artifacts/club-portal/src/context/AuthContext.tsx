@@ -43,11 +43,27 @@ export interface ResellerInfo {
   username: string;
 }
 
+export interface PosStaffInfo {
+  id: number;
+  name: string;
+  email: string;
+  role: "manager" | "waiter";
+}
+
+export interface PosOutletInfo {
+  id: number;
+  name: string;
+  type: "pro_shop" | "bar" | "restaurant";
+  club_name: string;
+}
+
 interface AuthContextValue {
   club: ClubInfo | null;
   clubUser: ClubUserInfo | null;
   staff: StaffInfo | null;
   reseller: ResellerInfo | null;
+  posStaff: PosStaffInfo | null;
+  posOutlet: PosOutletInfo | null;
   clubs: StaffClub[];
   selectedClubId: number | null;
   setSelectedClubId: (id: number | null) => void;
@@ -59,6 +75,7 @@ interface AuthContextValue {
   clubUserLogin: (email: string, password: string) => Promise<void>;
   staffLogin: (email: string, password: string) => Promise<void>;
   resellerLogin: (username: string, password: string) => Promise<void>;
+  posLogin: (email: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -67,6 +84,8 @@ const AuthContext = createContext<AuthContextValue>({
   clubUser: null,
   staff: null,
   reseller: null,
+  posStaff: null,
+  posOutlet: null,
   clubs: [],
   selectedClubId: null,
   setSelectedClubId: () => {},
@@ -78,6 +97,7 @@ const AuthContext = createContext<AuthContextValue>({
   clubUserLogin: async () => {},
   staffLogin: async () => {},
   resellerLogin: async () => {},
+  posLogin: async () => {},
   logout: () => {},
 });
 
@@ -86,6 +106,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [clubUser, setClubUser] = useState<ClubUserInfo | null>(null);
   const [staff, setStaff] = useState<StaffInfo | null>(null);
   const [reseller, setReseller] = useState<ResellerInfo | null>(null);
+  const [posStaff, setPosStaff] = useState<PosStaffInfo | null>(null);
+  const [posOutlet, setPosOutlet] = useState<PosOutletInfo | null>(null);
   const [clubs, setClubs] = useState<StaffClub[]>([]);
   const [selectedClubId, setSelectedClubIdState] = useState<number | null>(getSelectedClubId());
   const [loading, setLoading] = useState(true);
@@ -122,6 +144,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } else if (mode === "reseller") {
       api<ResellerInfo>("/api/portal/reseller/me")
         .then((data) => setReseller(data))
+        .catch(() => clearToken())
+        .finally(() => setLoading(false));
+    } else if (mode === "pos") {
+      api<{ staff: PosStaffInfo; outlet: PosOutletInfo }>("/api/pos/me")
+        .then((data) => {
+          setPosStaff(data.staff);
+          setPosOutlet(data.outlet);
+        })
         .catch(() => clearToken())
         .finally(() => setLoading(false));
     } else if (mode === "club_user") {
@@ -188,12 +218,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setClubUser(null);
   }, []);
 
+  const posLogin = useCallback(async (email: string, password: string) => {
+    const data = await api<{ token: string; staff: PosStaffInfo; outlet: PosOutletInfo }>("/api/pos/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    });
+    setToken(data.token);
+    setMode("pos");
+    setPosStaff(data.staff);
+    setPosOutlet(data.outlet);
+    setClub(null);
+    setClubUser(null);
+    setReseller(null);
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     setClub(null);
     setClubUser(null);
     setStaff(null);
     setReseller(null);
+    setPosStaff(null);
+    setPosOutlet(null);
     setClubs([]);
     setSelectedClubIdState(null);
   }, []);
@@ -214,9 +260,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      club, clubUser, staff, reseller, clubs, selectedClubId, setSelectedClubId,
+      club, clubUser, staff, reseller, posStaff, posOutlet, clubs, selectedClubId, setSelectedClubId,
       loading, isClubAdmin, canView, canEdit,
-      login, clubUserLogin, staffLogin, resellerLogin, logout,
+      login, clubUserLogin, staffLogin, resellerLogin, posLogin, logout,
     }}>
       {children}
     </AuthContext.Provider>

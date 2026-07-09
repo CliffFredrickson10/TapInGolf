@@ -91,6 +91,16 @@ Run this via cPanel phpMyAdmin or SSH. Using `'%'` avoids needing to update the 
 - `standing_reservations` / `standing_reservation_members` / `standing_holds` — recurring weekly tee-time reservations: portal creates per day-of-week reservations for ≤4 members; a 5-min worker materializes per-seat holds that hide seats from public booking; members confirm in-app via normal booking/payment before the club-set deadline (`confirm_hours_before`) or the seat auto-releases
 - `reviews` — club ratings
 - `ads` — sponsored club ads by placement
+- POS (club portal): `pos_outlets` (pro_shop/bar/restaurant per club), `pos_staff` (manager/waiter, bcrypt + HMAC token type `pos_staff`, globally-unique email), `pos_categories`, `pos_products` + `pos_product_variants` (size/colour/barcode/SKU/stock per variant), `pos_suppliers`, `pos_stock_orders` + items (receive increments stock in a transaction), `pos_stock_movements` (audit trail), `pos_promotions` (percentage/amount, day-of-week + SA-time windows, best discount per line wins), `pos_orders` + `pos_order_items` (table/takeaway/counter; stock decrements at pay)
+
+## POS (Pro Shop / Bar / Restaurant)
+
+- Club admins manage outlets + manager logins at `/outlets` in the portal (routes `/api/portal/pos/*`, club or club_user-admin token).
+- Outlet staff sign in on the portal login "Outlet" tab (`POST /api/pos/auth/login`); all POS routes (`/api/pos/*`) are outlet- and club-scoped via the `pos_staff` token.
+- Pro shop UI = barcode till (keyboard-wedge scan → `/api/pos/products/lookup?barcode=`, variant picker when needed, one-shot `POST /api/pos/sales`). Bar/restaurant UI = tables & takeaway orders with mark-as-paid (cash/card).
+- Managers additionally get Products (variants), Suppliers, Stock Orders, Promotions, Staff (waiters only), Transactions, Reports. Waiters/cashiers see only the till/tables.
+- Demo logins (club 1): `proshop.demo@tapingolf.co.za`, `bar.demo@tapingolf.co.za` (managers), `waiter.demo@tapingolf.co.za` (waiter) — password `PosDemo2026!`.
+- Card terminals, kitchen routing, and member charge-to-account are intentionally out of scope; payment recording is method-only (cash/card) so a terminal can slot in later.
 
 ## Architecture decisions
 

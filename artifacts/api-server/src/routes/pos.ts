@@ -1,0 +1,1304 @@
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
+import crypto from "crypto";
+import bcrypt from "bcryptjs";
+import { query, row, exec, run, withTransaction, clientQuery } from "../lib/pg";
+import { generatePosToken, requirePosAuth, requirePosManager, getPosStaff } from "../lib/posAuth";
+import { logger } from "../lib/logger";
+
+const router: IRouter = Router();
+
+const SECRET = process.env["SESSION_SECRET"] ?? "tapingolf_club_portal_2026";
+
+// ─── Club-admin auth (club token OR club_user token with admin role) ─────────
+// Outlet management lives in the club portal — only the club account itself or
+// a portal user with the admin role may create outlets and manager logins.
+
+function verifyPortalToken(token: string): { clubId: number; isAdmin: boolean } | null {
+  const [payload, sig] = token.split(".");
+  if (!payload || !sig) return null;
+  const expected = crypto.createHmac("sha256", SECRET).update(payload).digest("hex");
+  try {
+    if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
+  } catch {
+    return null;
+  }
+  try {
+    const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    if (data.exp < Date.now()) return null;
+    if (data.type === "club") return { clubId: data.sub, isAdmin: true };
+    if (data.type === "club_user") return { clubId: data.sub, isAdmin: data.role === "admin" };
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+async function requireClubAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
+  const header = req.headers.authorization ?? "";
+  if (!header.startsWith("Bearer ")) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const payload = verifyPortalToken(header.slice(7));
+  if (!payload) { res.status(401).json({ message: "Invalid or expired token" }); return; }
+  if (!payload.isAdmin) { res.status(403).json({ message: "Admin access required" }); return; }
+  const club = await row<any>("SELECT id, name FROM clubs WHERE id = ? AND active = 1", [payload.clubId]);
+  if (!club) { res.status(401).json({ message: "Club not found" }); return; }
+  (req as any).club = club;
+  next();
+}
+
+function getClub(req: Request): any { return (req as any).club; }
+
+const OUTLET_TYPES = ["pro_shop", "bar", "restaurant"];
+
+// ─── Club admin: outlets & manager accounts ──────────────────────────────────
+
+router.get("/portal/pos/outlets", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const outlets = await query<any>(
+    `SELECT o.id, o.name, o.type, o.active, o.created_at,
+       (SELECT COUNT(*)::int FROM pos_staff s WHERE s.outlet_id = o.id AND s.active = 1) AS staff_count,
+       (SELECT COUNT(*)::int FROM pos_products p WHERE p.outlet_id = o.id AND p.active = 1) AS product_count
+     FROM pos_outlets o WHERE o.club_id = ? ORDER BY o.id`,
+    [club.id]
+  );
+  res.json({ outlets });
+});
+
+router.post("/portal/pos/outlets", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const name = String(req.body?.name ?? "").trim();
+  const type = String(req.body?.type ?? "");
+  if (!name) { res.status(400).json({ message: "Outlet name is required" }); return; }
+  if (!OUTLET_TYPES.includes(type)) { res.status(400).json({ message: "Type must be pro_shop, bar or restaurant" }); return; }
+  const id = await exec("INSERT INTO pos_outlets (club_id, name, type) VALUES (?, ?, ?)", [club.id, name, type]);
+  res.status(201).json({ id, name, type, active: 1 });
+});
+
+router.put("/portal/pos/outlets/:id", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row<any>("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) { res.status(404).json({ message: "Outlet not found" }); return; }
+  const { name, active } = req.body ?? {};
+  await run(
+    "UPDATE pos_outlets SET name = COALESCE(?, name), active = COALESCE(?, active) WHERE id = ?",
+    [name != null ? String(name).trim() : null, active != null ? (active ? 1 : 0) : null, id]
+  );
+  res.json({ success: true });
+});
+
+router.get("/portal/pos/outlets/:id/staff", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row<any>("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) { res.status(404).json({ message: "Outlet not found" }); return; }
+  const staff = await query<any>(
+    "SELECT id, name, email, role, active, created_at FROM pos_staff WHERE outlet_id = ? ORDER BY role, name",
+    [id]
+  );
+  res.json({ staff });
+});
+
+router.post("/portal/pos/outlets/:id/staff", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const outlet = await row<any>("SELECT id FROM pos_outlets WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!outlet) { res.status(404).json({ message: "Outlet not found" }); return; }
+  const name = String(req.body?.name ?? "").trim();
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  const role = String(req.body?.role ?? "manager");
+  if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
+  if (password.length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+  if (role !== "manager" && role !== "waiter") { res.status(400).json({ message: "Role must be manager or waiter" }); return; }
+  const existing = await row<any>("SELECT id FROM pos_staff WHERE email = ?", [email]);
+  if (existing) { res.status(409).json({ message: "An outlet account with this email already exists" }); return; }
+  const hash = await bcrypt.hash(password, 10);
+  const staffId = await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, ?)",
+    [id, club.id, name, email, hash, role]
+  );
+  res.status(201).json({ id: staffId, name, email, role, active: 1 });
+});
+
+router.put("/portal/pos/staff/:id", requireClubAdmin, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const staff = await row<any>("SELECT id FROM pos_staff WHERE id = ? AND club_id = ?", [id, club.id]);
+  if (!staff) { res.status(404).json({ message: "Staff member not found" }); return; }
+  const { active, password, name } = req.body ?? {};
+  if (password != null) {
+    if (String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+    const hash = await bcrypt.hash(String(password), 10);
+    await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash, id]);
+  }
+  await run(
+    "UPDATE pos_staff SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? (active ? 1 : 0) : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+
+// ─── POS staff auth ──────────────────────────────────────────────────────────
+
+router.post("/pos/auth/login", async (req: Request, res: Response): Promise<void> => {
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  if (!email || !password) { res.status(400).json({ message: "Email and password required" }); return; }
+  const staff = await row<any>(
+    `SELECT s.id, s.outlet_id, s.club_id, s.name, s.email, s.password_hash, s.role, s.active,
+            o.name AS outlet_name, o.type AS outlet_type, o.active AS outlet_active,
+            c.name AS club_name
+     FROM pos_staff s
+     JOIN pos_outlets o ON o.id = s.outlet_id
+     JOIN clubs c ON c.id = s.club_id
+     WHERE s.email = ? LIMIT 1`,
+    [email]
+  );
+  if (!staff || !staff.active || !staff.outlet_active) { res.status(401).json({ message: "Invalid credentials" }); return; }
+  const valid = await bcrypt.compare(password, staff.password_hash);
+  if (!valid) { res.status(401).json({ message: "Invalid credentials" }); return; }
+  const token = generatePosToken(staff.id, staff.outlet_id, staff.club_id, staff.role);
+  res.json({
+    token,
+    staff: { id: staff.id, name: staff.name, email: staff.email, role: staff.role },
+    outlet: { id: staff.outlet_id, name: staff.outlet_name, type: staff.outlet_type, club_name: staff.club_name },
+  });
+});
+
+router.get("/pos/me", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const club = await row<any>("SELECT name FROM clubs WHERE id = ?", [s.club_id]);
+  res.json({
+    staff: { id: s.id, name: s.name, email: s.email, role: s.role },
+    outlet: { id: s.outlet_id, name: s.outlet_name, type: s.outlet_type, club_name: club?.name ?? "" },
+  });
+});
+
+// ─── Categories ──────────────────────────────────────────────────────────────
+
+router.get("/pos/categories", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const categories = await query<any>(
+    "SELECT id, name, sort_order FROM pos_categories WHERE outlet_id = ? ORDER BY sort_order, name",
+    [s.outlet_id]
+  );
+  res.json({ categories });
+});
+
+router.post("/pos/categories", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  if (!name) { res.status(400).json({ message: "Category name is required" }); return; }
+  const sortOrder = Number(req.body?.sort_order ?? 0) || 0;
+  const id = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, ?, ?)", [s.outlet_id, name, sortOrder]);
+  res.status(201).json({ id, name, sort_order: sortOrder });
+});
+
+router.put("/pos/categories/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const cat = await row<any>("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!cat) { res.status(404).json({ message: "Category not found" }); return; }
+  const { name, sort_order } = req.body ?? {};
+  await run(
+    "UPDATE pos_categories SET name = COALESCE(?, name), sort_order = COALESCE(?, sort_order) WHERE id = ?",
+    [name != null ? String(name).trim() : null, sort_order != null ? Number(sort_order) : null, id]
+  );
+  res.json({ success: true });
+});
+
+router.delete("/pos/categories/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const deleted = await run("DELETE FROM pos_categories WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!deleted) { res.status(404).json({ message: "Category not found" }); return; }
+  res.json({ success: true });
+});
+
+// ─── Products & variants ─────────────────────────────────────────────────────
+
+async function productWithVariants(productId: number): Promise<any | null> {
+  const product = await row<any>(
+    `SELECT p.*, c.name AS category_name FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE p.id = ?`,
+    [productId]
+  );
+  if (!product) return null;
+  const variants = await query<any>(
+    "SELECT id, size, colour, barcode, sku, price, stock_qty, active FROM pos_variants WHERE product_id = ? AND active = 1 ORDER BY id",
+    [productId]
+  );
+  return { ...product, price: Number(product.price), variants: variants.map(v => ({ ...v, price: v.price != null ? Number(v.price) : null })) };
+}
+
+router.get("/pos/products", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const search = String(req.query["search"] ?? "").trim().toLowerCase();
+  const categoryId = req.query["category_id"] ? parseInt(String(req.query["category_id"]), 10) : null;
+  const includeInactive = req.query["include_inactive"] === "1" && s.role === "manager";
+
+  const conditions = ["p.outlet_id = ?"];
+  const params: any[] = [s.outlet_id];
+  if (!includeInactive) conditions.push("p.active = 1");
+  if (categoryId) { conditions.push("p.category_id = ?"); params.push(categoryId); }
+  if (search) {
+    conditions.push("(LOWER(p.name) LIKE ? OR LOWER(COALESCE(p.brand,'')) LIKE ? OR p.barcode = ? OR LOWER(COALESCE(p.sku,'')) = ?)");
+    params.push(`%${search}%`, `%${search}%`, search, search);
+  }
+  const products = await query<any>(
+    `SELECT p.id, p.category_id, p.name, p.brand, p.description, p.price, p.barcode, p.sku,
+            p.stock_qty, p.low_stock_threshold, p.has_variants, p.active, c.name AS category_name
+     FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY p.name`,
+    params
+  );
+  const ids = products.map(p => p.id);
+  let variantsByProduct: Record<number, any[]> = {};
+  if (ids.length > 0) {
+    const variants = await query<any>(
+      `SELECT id, product_id, size, colour, barcode, sku, price, stock_qty
+       FROM pos_variants WHERE product_id IN (${ids.map(() => "?").join(",")}) AND active = 1 ORDER BY id`,
+      ids
+    );
+    for (const v of variants) {
+      (variantsByProduct[v.product_id] ??= []).push({ ...v, price: v.price != null ? Number(v.price) : null });
+    }
+  }
+  res.json({
+    products: products.map(p => ({
+      ...p,
+      price: Number(p.price),
+      variants: variantsByProduct[p.id] ?? [],
+      total_stock: p.has_variants
+        ? (variantsByProduct[p.id] ?? []).reduce((sum: number, v: any) => sum + v.stock_qty, 0)
+        : p.stock_qty,
+    })),
+  });
+});
+
+router.get("/pos/products/lookup", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const barcode = String(req.query["barcode"] ?? "").trim();
+  if (!barcode) { res.status(400).json({ message: "barcode is required" }); return; }
+
+  // Try variant barcode first (pro shop items), then product barcode
+  const variant = await row<any>(
+    `SELECT v.id AS variant_id, v.size, v.colour, v.barcode, v.sku, v.price AS variant_price, v.stock_qty AS variant_stock,
+            p.id AS product_id, p.name, p.brand, p.price AS product_price, p.category_id
+     FROM pos_variants v
+     JOIN pos_products p ON p.id = v.product_id
+     WHERE (v.barcode = ? OR v.sku = ?) AND p.outlet_id = ? AND v.active = 1 AND p.active = 1
+     LIMIT 1`,
+    [barcode, barcode, s.outlet_id]
+  );
+  if (variant) {
+    res.json({
+      found: true,
+      product_id: variant.product_id,
+      variant_id: variant.variant_id,
+      name: variant.name,
+      brand: variant.brand,
+      variant_label: [variant.size, variant.colour].filter(Boolean).join(" / "),
+      price: Number(variant.variant_price ?? variant.product_price),
+      stock_qty: variant.variant_stock,
+    });
+    return;
+  }
+  const product = await row<any>(
+    `SELECT id, name, brand, price, stock_qty, has_variants FROM pos_products
+     WHERE (barcode = ? OR sku = ?) AND outlet_id = ? AND active = 1 LIMIT 1`,
+    [barcode, barcode, s.outlet_id]
+  );
+  if (product) {
+    if (product.has_variants) {
+      const full = await productWithVariants(product.id);
+      res.json({ found: true, needs_variant: true, product: full });
+      return;
+    }
+    res.json({
+      found: true,
+      product_id: product.id,
+      variant_id: null,
+      name: product.name,
+      brand: product.brand,
+      variant_label: null,
+      price: Number(product.price),
+      stock_qty: product.stock_qty,
+    });
+    return;
+  }
+  res.json({ found: false });
+});
+
+router.post("/pos/products", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const { name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, category_id, variants } = req.body ?? {};
+  const nameStr = String(name ?? "").trim();
+  if (!nameStr) { res.status(400).json({ message: "Product name is required" }); return; }
+  const priceNum = Number(price);
+  if (!Number.isFinite(priceNum) || priceNum < 0) { res.status(400).json({ message: "A valid price is required" }); return; }
+  if (category_id != null) {
+    const cat = await row<any>("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [category_id, s.outlet_id]);
+    if (!cat) { res.status(400).json({ message: "Invalid category" }); return; }
+  }
+  const hasVariants = Array.isArray(variants) && variants.length > 0;
+  const productId = await exec(
+    `INSERT INTO pos_products (outlet_id, category_id, name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, has_variants)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [s.outlet_id, category_id ?? null, nameStr, brand ? String(brand).trim() : null, description ?? null,
+     priceNum, barcode ? String(barcode).trim() : null, sku ? String(sku).trim() : null,
+     hasVariants ? 0 : Math.max(0, Math.round(Number(stock_qty) || 0)),
+     Math.max(0, Math.round(Number(low_stock_threshold) || 5)), hasVariants ? 1 : 0]
+  );
+  if (hasVariants) {
+    for (const v of variants) {
+      await exec(
+        "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, price, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        [productId, v.size ? String(v.size).trim() : null, v.colour ? String(v.colour).trim() : null,
+         v.barcode ? String(v.barcode).trim() : null, v.sku ? String(v.sku).trim() : null,
+         v.price != null && v.price !== "" ? Number(v.price) : null, Math.max(0, Math.round(Number(v.stock_qty) || 0))]
+      );
+    }
+  }
+  const full = await productWithVariants(productId);
+  res.status(201).json(full);
+});
+
+router.put("/pos/products/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const product = await row<any>("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!product) { res.status(404).json({ message: "Product not found" }); return; }
+  const { name, brand, description, price, barcode, sku, stock_qty, low_stock_threshold, category_id, active, variants } = req.body ?? {};
+  if (category_id != null) {
+    const cat = await row<any>("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [category_id, s.outlet_id]);
+    if (!cat) { res.status(400).json({ message: "Invalid category" }); return; }
+  }
+  await run(
+    `UPDATE pos_products SET
+       name = COALESCE(?, name), brand = ?, description = ?,
+       price = COALESCE(?, price), barcode = ?, sku = ?,
+       stock_qty = COALESCE(?, stock_qty), low_stock_threshold = COALESCE(?, low_stock_threshold),
+       category_id = ?, active = COALESCE(?, active)
+     WHERE id = ?`,
+    [name != null ? String(name).trim() : null,
+     brand !== undefined ? (brand ? String(brand).trim() : null) : null,
+     description !== undefined ? (description || null) : null,
+     price != null ? Number(price) : null,
+     barcode !== undefined ? (barcode ? String(barcode).trim() : null) : null,
+     sku !== undefined ? (sku ? String(sku).trim() : null) : null,
+     product.has_variants ? null : (stock_qty != null ? Math.max(0, Math.round(Number(stock_qty))) : null),
+     low_stock_threshold != null ? Math.max(0, Math.round(Number(low_stock_threshold))) : null,
+     category_id ?? null,
+     active != null ? (active ? 1 : 0) : null,
+     id]
+  );
+  if (Array.isArray(variants)) {
+    const keepIds: number[] = [];
+    for (const v of variants) {
+      if (v.id) {
+        const existing = await row<any>("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [v.id, id]);
+        if (!existing) continue;
+        await run(
+          "UPDATE pos_variants SET size = ?, colour = ?, barcode = ?, sku = ?, price = ?, stock_qty = COALESCE(?, stock_qty) WHERE id = ?",
+          [v.size ? String(v.size).trim() : null, v.colour ? String(v.colour).trim() : null,
+           v.barcode ? String(v.barcode).trim() : null, v.sku ? String(v.sku).trim() : null,
+           v.price != null && v.price !== "" ? Number(v.price) : null,
+           v.stock_qty != null ? Math.max(0, Math.round(Number(v.stock_qty))) : null, v.id]
+        );
+        keepIds.push(v.id);
+      } else {
+        const newId = await exec(
+          "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, price, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+          [id, v.size ? String(v.size).trim() : null, v.colour ? String(v.colour).trim() : null,
+           v.barcode ? String(v.barcode).trim() : null, v.sku ? String(v.sku).trim() : null,
+           v.price != null && v.price !== "" ? Number(v.price) : null, Math.max(0, Math.round(Number(v.stock_qty) || 0))]
+        );
+        keepIds.push(newId);
+      }
+    }
+    // Soft-deactivate removed variants (they may be referenced by past sales)
+    if (keepIds.length > 0) {
+      await run(
+        `UPDATE pos_variants SET active = 0 WHERE product_id = ? AND id NOT IN (${keepIds.map(() => "?").join(",")})`,
+        [id, ...keepIds]
+      );
+    } else {
+      await run("UPDATE pos_variants SET active = 0 WHERE product_id = ?", [id]);
+    }
+    await run("UPDATE pos_products SET has_variants = ? WHERE id = ?", [keepIds.length > 0 ? 1 : 0, id]);
+  }
+  const full = await productWithVariants(id);
+  res.json(full);
+});
+
+router.delete("/pos/products/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run("UPDATE pos_products SET active = 0 WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!updated) { res.status(404).json({ message: "Product not found" }); return; }
+  res.json({ success: true });
+});
+
+router.post("/pos/products/:id/adjust-stock", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const product = await row<any>("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!product) { res.status(404).json({ message: "Product not found" }); return; }
+  const change = Math.round(Number(req.body?.change));
+  if (!Number.isFinite(change) || change === 0) { res.status(400).json({ message: "A non-zero change is required" }); return; }
+  const variantId = req.body?.variant_id ? parseInt(String(req.body.variant_id), 10) : null;
+  if (product.has_variants) {
+    if (!variantId) { res.status(400).json({ message: "variant_id is required for this product" }); return; }
+    const variant = await row<any>("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [variantId, id]);
+    if (!variant) { res.status(404).json({ message: "Variant not found" }); return; }
+    await run("UPDATE pos_variants SET stock_qty = stock_qty + ? WHERE id = ?", [change, variantId]);
+  } else {
+    await run("UPDATE pos_products SET stock_qty = stock_qty + ? WHERE id = ?", [change, id]);
+  }
+  await exec(
+    "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, created_by) VALUES (?, ?, ?, ?, 'adjustment', ?)",
+    [s.outlet_id, id, variantId, change, s.id]
+  );
+  res.json({ success: true });
+});
+
+// ─── Suppliers ───────────────────────────────────────────────────────────────
+
+router.get("/pos/suppliers", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const suppliers = await query<any>(
+    "SELECT id, name, contact_name, email, phone, notes, active FROM pos_suppliers WHERE outlet_id = ? ORDER BY name",
+    [s.outlet_id]
+  );
+  res.json({ suppliers });
+});
+
+router.post("/pos/suppliers", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  if (!name) { res.status(400).json({ message: "Supplier name is required" }); return; }
+  const { contact_name, email, phone, notes } = req.body ?? {};
+  const id = await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone, notes) VALUES (?, ?, ?, ?, ?, ?)",
+    [s.outlet_id, name, contact_name || null, email || null, phone || null, notes || null]
+  );
+  res.status(201).json({ id, name });
+});
+
+router.put("/pos/suppliers/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const supplier = await row<any>("SELECT id FROM pos_suppliers WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!supplier) { res.status(404).json({ message: "Supplier not found" }); return; }
+  const { name, contact_name, email, phone, notes, active } = req.body ?? {};
+  await run(
+    `UPDATE pos_suppliers SET name = COALESCE(?, name), contact_name = ?, email = ?, phone = ?, notes = ?,
+       active = COALESCE(?, active) WHERE id = ?`,
+    [name != null ? String(name).trim() : null, contact_name || null, email || null, phone || null, notes || null,
+     active != null ? (active ? 1 : 0) : null, id]
+  );
+  res.json({ success: true });
+});
+
+// ─── Stock orders ────────────────────────────────────────────────────────────
+
+router.get("/pos/stock-orders", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const orders = await query<any>(
+    `SELECT so.id, so.status, so.notes, so.created_at, so.received_at,
+            sup.name AS supplier_name, st.name AS created_by_name,
+            (SELECT COUNT(*)::int FROM pos_stock_order_items i WHERE i.stock_order_id = so.id) AS item_count,
+            (SELECT COALESCE(SUM(i.quantity * i.unit_cost), 0) FROM pos_stock_order_items i WHERE i.stock_order_id = so.id) AS total_cost
+     FROM pos_stock_orders so
+     JOIN pos_suppliers sup ON sup.id = so.supplier_id
+     LEFT JOIN pos_staff st ON st.id = so.created_by
+     WHERE so.outlet_id = ?
+     ORDER BY so.created_at DESC LIMIT 200`,
+    [s.outlet_id]
+  );
+  res.json({ orders: orders.map(o => ({ ...o, total_cost: Number(o.total_cost) })) });
+});
+
+router.get("/pos/stock-orders/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await row<any>(
+    `SELECT so.*, sup.name AS supplier_name FROM pos_stock_orders so
+     JOIN pos_suppliers sup ON sup.id = so.supplier_id
+     WHERE so.id = ? AND so.outlet_id = ?`,
+    [id, s.outlet_id]
+  );
+  if (!order) { res.status(404).json({ message: "Stock order not found" }); return; }
+  const items = await query<any>(
+    `SELECT i.id, i.product_id, i.variant_id, i.quantity, i.unit_cost,
+            p.name AS product_name, v.size, v.colour
+     FROM pos_stock_order_items i
+     JOIN pos_products p ON p.id = i.product_id
+     LEFT JOIN pos_variants v ON v.id = i.variant_id
+     WHERE i.stock_order_id = ? ORDER BY i.id`,
+    [id]
+  );
+  res.json({
+    ...order,
+    items: items.map(i => ({
+      ...i,
+      unit_cost: Number(i.unit_cost),
+      variant_label: [i.size, i.colour].filter(Boolean).join(" / ") || null,
+    })),
+  });
+});
+
+router.post("/pos/stock-orders", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const supplierId = parseInt(String(req.body?.supplier_id ?? ""), 10);
+  const items = req.body?.items;
+  if (!supplierId) { res.status(400).json({ message: "supplier_id is required" }); return; }
+  const supplier = await row<any>("SELECT id FROM pos_suppliers WHERE id = ? AND outlet_id = ? AND active = 1", [supplierId, s.outlet_id]);
+  if (!supplier) { res.status(400).json({ message: "Invalid supplier" }); return; }
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ message: "At least one item is required" }); return; }
+
+  for (const item of items) {
+    const qty = Math.round(Number(item?.quantity));
+    if (!Number.isFinite(qty) || qty <= 0) { res.status(400).json({ message: "Each item needs a positive quantity" }); return; }
+    const product = await row<any>("SELECT id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ?", [item.product_id, s.outlet_id]);
+    if (!product) { res.status(400).json({ message: "Item product not found in this outlet" }); return; }
+    if (product.has_variants) {
+      if (!item.variant_id) { res.status(400).json({ message: `Product ${product.id} requires a variant` }); return; }
+      const variant = await row<any>("SELECT id FROM pos_variants WHERE id = ? AND product_id = ?", [item.variant_id, item.product_id]);
+      if (!variant) { res.status(400).json({ message: "Item variant not found" }); return; }
+    }
+  }
+
+  const orderId = await exec(
+    "INSERT INTO pos_stock_orders (outlet_id, supplier_id, status, notes, created_by) VALUES (?, ?, 'ordered', ?, ?)",
+    [s.outlet_id, supplierId, req.body?.notes || null, s.id]
+  );
+  for (const item of items) {
+    await exec(
+      "INSERT INTO pos_stock_order_items (stock_order_id, product_id, variant_id, quantity, unit_cost) VALUES (?, ?, ?, ?, ?)",
+      [orderId, item.product_id, item.variant_id ?? null, Math.round(Number(item.quantity)), Number(item.unit_cost) || 0]
+    );
+  }
+  res.status(201).json({ id: orderId, status: "ordered" });
+});
+
+router.post("/pos/stock-orders/:id/receive", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  try {
+    await withTransaction(async (client) => {
+      const orderRes = await clientQuery(client,
+        "SELECT id, status FROM pos_stock_orders WHERE id = ? AND outlet_id = ? FOR UPDATE", [id, s.outlet_id]);
+      const order = orderRes.rows[0];
+      if (!order) throw Object.assign(new Error("Stock order not found"), { status: 404 });
+      if (order.status !== "ordered") throw Object.assign(new Error(`Order is already ${order.status}`), { status: 409 });
+
+      const itemsRes = await clientQuery(client,
+        "SELECT product_id, variant_id, quantity FROM pos_stock_order_items WHERE stock_order_id = ?", [id]);
+      for (const item of itemsRes.rows) {
+        // Constrain every stock update to this outlet — reject if any line
+        // references a product/variant outside it (data integrity guard).
+        if (item.variant_id) {
+          const upd = await clientQuery(client,
+            `UPDATE pos_variants v SET stock_qty = v.stock_qty + ?
+             FROM pos_products p
+             WHERE v.id = ? AND p.id = v.product_id AND p.id = ? AND p.outlet_id = ?`,
+            [item.quantity, item.variant_id, item.product_id, s.outlet_id]);
+          if (upd.rowCount !== 1) {
+            throw Object.assign(new Error("Stock order line references an item outside this outlet"), { status: 409 });
+          }
+        } else {
+          const upd = await clientQuery(client,
+            "UPDATE pos_products SET stock_qty = stock_qty + ? WHERE id = ? AND outlet_id = ?",
+            [item.quantity, item.product_id, s.outlet_id]);
+          if (upd.rowCount !== 1) {
+            throw Object.assign(new Error("Stock order line references an item outside this outlet"), { status: 409 });
+          }
+        }
+        await clientQuery(client,
+          "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, ref_id, created_by) VALUES (?, ?, ?, ?, 'stock_order', ?, ?)",
+          [s.outlet_id, item.product_id, item.variant_id ?? null, item.quantity, id, s.id]);
+      }
+      await clientQuery(client, "UPDATE pos_stock_orders SET status = 'received', received_at = NOW() WHERE id = ?", [id]);
+    });
+    res.json({ success: true, status: "received" });
+  } catch (err: any) {
+    if (err.status) { res.status(err.status).json({ message: err.message }); return; }
+    logger.error({ err, orderId: id }, "Failed to receive stock order");
+    res.status(500).json({ message: "Failed to receive stock order" });
+  }
+});
+
+router.post("/pos/stock-orders/:id/cancel", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run(
+    "UPDATE pos_stock_orders SET status = 'cancelled' WHERE id = ? AND outlet_id = ? AND status = 'ordered'",
+    [id, s.outlet_id]
+  );
+  if (!updated) { res.status(409).json({ message: "Order cannot be cancelled" }); return; }
+  res.json({ success: true });
+});
+
+// ─── Promotions ──────────────────────────────────────────────────────────────
+
+router.get("/pos/promotions", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const promotions = await query<any>(
+    `SELECT pr.*, c.name AS category_name, p.name AS product_name
+     FROM pos_promotions pr
+     LEFT JOIN pos_categories c ON c.id = pr.category_id
+     LEFT JOIN pos_products p ON p.id = pr.product_id
+     WHERE pr.outlet_id = ? ORDER BY pr.created_at DESC`,
+    [s.outlet_id]
+  );
+  res.json({ promotions: promotions.map(p => ({ ...p, discount_value: Number(p.discount_value) })) });
+});
+
+router.post("/pos/promotions", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  const discountType = String(req.body?.discount_type ?? "");
+  const discountValue = Number(req.body?.discount_value);
+  const appliesTo = String(req.body?.applies_to ?? "all");
+  if (!name) { res.status(400).json({ message: "Promotion name is required" }); return; }
+  if (discountType !== "percentage" && discountType !== "amount") { res.status(400).json({ message: "discount_type must be percentage or amount" }); return; }
+  if (!Number.isFinite(discountValue) || discountValue <= 0) { res.status(400).json({ message: "A positive discount value is required" }); return; }
+  if (discountType === "percentage" && discountValue > 100) { res.status(400).json({ message: "Percentage cannot exceed 100" }); return; }
+  if (!["all", "category", "product"].includes(appliesTo)) { res.status(400).json({ message: "Invalid applies_to" }); return; }
+
+  let categoryId: number | null = null;
+  let productId: number | null = null;
+  if (appliesTo === "category") {
+    categoryId = parseInt(String(req.body?.category_id ?? ""), 10);
+    const cat = await row<any>("SELECT id FROM pos_categories WHERE id = ? AND outlet_id = ?", [categoryId, s.outlet_id]);
+    if (!cat) { res.status(400).json({ message: "Invalid category" }); return; }
+  }
+  if (appliesTo === "product") {
+    productId = parseInt(String(req.body?.product_id ?? ""), 10);
+    const prod = await row<any>("SELECT id FROM pos_products WHERE id = ? AND outlet_id = ?", [productId, s.outlet_id]);
+    if (!prod) { res.status(400).json({ message: "Invalid product" }); return; }
+  }
+  const daysOfWeek = req.body?.days_of_week ? String(req.body.days_of_week) : null;
+  const startTime = req.body?.start_time || null;
+  const endTime = req.body?.end_time || null;
+  const id = await exec(
+    `INSERT INTO pos_promotions (outlet_id, name, discount_type, discount_value, applies_to, category_id, product_id, days_of_week, start_time, end_time)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [s.outlet_id, name, discountType, discountValue, appliesTo, categoryId, productId, daysOfWeek, startTime, endTime]
+  );
+  res.status(201).json({ id, name });
+});
+
+router.put("/pos/promotions/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const promo = await row<any>("SELECT id FROM pos_promotions WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!promo) { res.status(404).json({ message: "Promotion not found" }); return; }
+  const { active, name } = req.body ?? {};
+  await run(
+    "UPDATE pos_promotions SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? (active ? 1 : 0) : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+
+router.delete("/pos/promotions/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const deleted = await run("DELETE FROM pos_promotions WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!deleted) { res.status(404).json({ message: "Promotion not found" }); return; }
+  res.json({ success: true });
+});
+
+// ─── Promotion engine ────────────────────────────────────────────────────────
+// Evaluated in South Africa time (UTC+2, no DST). getUTCDay(): Sun=0 … Sat=6.
+
+function saNow(): { day: number; hhmm: string } {
+  const d = new Date(Date.now() + 2 * 60 * 60 * 1000);
+  const hhmm = `${String(d.getUTCHours()).padStart(2, "0")}:${String(d.getUTCMinutes()).padStart(2, "0")}`;
+  return { day: d.getUTCDay(), hhmm };
+}
+
+interface PromoRow {
+  id: number; discount_type: string; discount_value: number; applies_to: string;
+  category_id: number | null; product_id: number | null;
+  days_of_week: string | null; start_time: string | null; end_time: string | null;
+}
+
+async function activePromotions(outletId: number): Promise<PromoRow[]> {
+  const promos = await query<any>(
+    "SELECT id, discount_type, discount_value, applies_to, category_id, product_id, days_of_week, start_time, end_time FROM pos_promotions WHERE outlet_id = ? AND active = 1",
+    [outletId]
+  );
+  const { day, hhmm } = saNow();
+  return promos.filter((p) => {
+    if (p.days_of_week) {
+      const days = String(p.days_of_week).split(",").map((v: string) => parseInt(v.trim(), 10));
+      if (!days.includes(day)) return false;
+    }
+    const start = p.start_time ? String(p.start_time).slice(0, 5) : null;
+    const end = p.end_time ? String(p.end_time).slice(0, 5) : null;
+    if (start && hhmm < start) return false;
+    if (end && hhmm > end) return false;
+    return true;
+  }).map((p) => ({ ...p, discount_value: Number(p.discount_value) }));
+}
+
+// Best (largest) discount per line; returns { discount, promotionId }.
+function bestLineDiscount(
+  promos: PromoRow[],
+  item: { product_id: number; category_id: number | null; unit_price: number; quantity: number }
+): { discount: number; promotionId: number | null } {
+  const lineSubtotal = item.unit_price * item.quantity;
+  let best = 0;
+  let bestId: number | null = null;
+  for (const p of promos) {
+    if (p.applies_to === "category" && p.category_id !== item.category_id) continue;
+    if (p.applies_to === "product" && p.product_id !== item.product_id) continue;
+    let d = 0;
+    if (p.discount_type === "percentage") d = lineSubtotal * (p.discount_value / 100);
+    else d = Math.min(p.discount_value * item.quantity, lineSubtotal);
+    if (d > best) { best = d; bestId = p.id; }
+  }
+  return { discount: Math.round(best * 100) / 100, promotionId: bestId };
+}
+
+async function orderWithTotals(orderId: number, outletId: number): Promise<any | null> {
+  const order = await row<any>(
+    `SELECT o.*, opener.name AS opened_by_name, closer.name AS closed_by_name
+     FROM pos_orders o
+     LEFT JOIN pos_staff opener ON opener.id = o.opened_by
+     LEFT JOIN pos_staff closer ON closer.id = o.closed_by
+     WHERE o.id = ? AND o.outlet_id = ?`,
+    [orderId, outletId]
+  );
+  if (!order) return null;
+  const items = await query<any>(
+    `SELECT i.*, p.category_id FROM pos_order_items i
+     JOIN pos_products p ON p.id = i.product_id
+     WHERE i.order_id = ? ORDER BY i.id`,
+    [orderId]
+  );
+  if (order.status === "open") {
+    // Live totals — promotions re-evaluated on each read so time windows apply
+    const promos = await activePromotions(outletId);
+    let subtotal = 0, discountTotal = 0;
+    const withDiscounts = items.map((i) => {
+      const unitPrice = Number(i.unit_price);
+      const line = unitPrice * i.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: i.product_id, category_id: i.category_id, unit_price: unitPrice, quantity: i.quantity,
+      });
+      subtotal += line;
+      discountTotal += discount;
+      return { ...i, unit_price: unitPrice, discount, promotion_id: promotionId, line_total: Math.round((line - discount) * 100) / 100 };
+    });
+    return {
+      ...order,
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount_total: Math.round(discountTotal * 100) / 100,
+      total: Math.round((subtotal - discountTotal) * 100) / 100,
+      items: withDiscounts,
+    };
+  }
+  return {
+    ...order,
+    subtotal: Number(order.subtotal), discount_total: Number(order.discount_total), total: Number(order.total),
+    items: items.map((i) => ({ ...i, unit_price: Number(i.unit_price), discount: Number(i.discount), line_total: Number(i.line_total) })),
+  };
+}
+
+// ─── Orders (tables / takeaway / counter) ────────────────────────────────────
+
+router.get("/pos/orders", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const status = String(req.query["status"] ?? "open");
+  if (!["open", "paid", "cancelled"].includes(status)) { res.status(400).json({ message: "Invalid status" }); return; }
+  const orders = await query<any>(
+    `SELECT o.id, o.order_type, o.table_name, o.status, o.created_at, o.paid_at,
+            opener.name AS opened_by_name,
+            (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
+     FROM pos_orders o
+     LEFT JOIN pos_staff opener ON opener.id = o.opened_by
+     WHERE o.outlet_id = ? AND o.status = ?
+     ORDER BY o.created_at ASC`,
+    [s.outlet_id, status]
+  );
+  // Compute live totals for open orders (promotions applied)
+  const result = [];
+  for (const o of orders) {
+    const full = await orderWithTotals(o.id, s.outlet_id);
+    result.push({ ...o, total: full?.total ?? 0 });
+  }
+  res.json({ orders: result });
+});
+
+router.post("/pos/orders", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const orderType = String(req.body?.order_type ?? "");
+  if (!["table", "takeaway", "counter"].includes(orderType)) { res.status(400).json({ message: "order_type must be table, takeaway or counter" }); return; }
+  const tableName = orderType === "table" ? String(req.body?.table_name ?? "").trim() : null;
+  if (orderType === "table" && !tableName) { res.status(400).json({ message: "table_name is required for table orders" }); return; }
+  const id = await exec(
+    "INSERT INTO pos_orders (outlet_id, order_type, table_name, opened_by) VALUES (?, ?, ?, ?)",
+    [s.outlet_id, orderType, tableName, s.id]
+  );
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.status(201).json(full);
+});
+
+router.get("/pos/orders/:id", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await orderWithTotals(id, s.outlet_id);
+  if (!order) { res.status(404).json({ message: "Order not found" }); return; }
+  res.json(order);
+});
+
+router.post("/pos/orders/:id/items", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const order = await row<any>("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) { res.status(404).json({ message: "Order not found" }); return; }
+  if (order.status !== "open") { res.status(409).json({ message: "Order is no longer open" }); return; }
+
+  const productId = parseInt(String(req.body?.product_id ?? ""), 10);
+  const variantId = req.body?.variant_id ? parseInt(String(req.body.variant_id), 10) : null;
+  const quantity = Math.max(1, Math.round(Number(req.body?.quantity) || 1));
+  const product = await row<any>(
+    "SELECT id, name, price, has_variants FROM pos_products WHERE id = ? AND outlet_id = ? AND active = 1",
+    [productId, s.outlet_id]
+  );
+  if (!product) { res.status(400).json({ message: "Product not found in this outlet" }); return; }
+
+  let unitPrice = Number(product.price);
+  let variantLabel: string | null = null;
+  if (product.has_variants) {
+    if (!variantId) { res.status(400).json({ message: "This product requires a variant selection" }); return; }
+    const variant = await row<any>("SELECT id, size, colour, price FROM pos_variants WHERE id = ? AND product_id = ? AND active = 1", [variantId, productId]);
+    if (!variant) { res.status(400).json({ message: "Variant not found" }); return; }
+    if (variant.price != null) unitPrice = Number(variant.price);
+    variantLabel = [variant.size, variant.colour].filter(Boolean).join(" / ") || null;
+  }
+
+  // Merge with an existing identical line
+  const existing = await row<any>(
+    "SELECT id, quantity FROM pos_order_items WHERE order_id = ? AND product_id = ? AND variant_id IS NOT DISTINCT FROM ?",
+    [id, productId, variantId]
+  );
+  if (existing) {
+    await run("UPDATE pos_order_items SET quantity = quantity + ?, line_total = unit_price * (quantity + ?) WHERE id = ?", [quantity, quantity, existing.id]);
+  } else {
+    await exec(
+      "INSERT INTO pos_order_items (order_id, product_id, variant_id, name, variant_label, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [id, productId, variantId, product.name, variantLabel, quantity, unitPrice, unitPrice * quantity]
+    );
+  }
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+
+router.put("/pos/orders/:id/items/:itemId", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const itemId = parseInt(String(req.params["itemId"] ?? ""), 10);
+  const order = await row<any>("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) { res.status(404).json({ message: "Order not found" }); return; }
+  if (order.status !== "open") { res.status(409).json({ message: "Order is no longer open" }); return; }
+  const quantity = Math.round(Number(req.body?.quantity));
+  if (!Number.isFinite(quantity) || quantity < 0) { res.status(400).json({ message: "Invalid quantity" }); return; }
+  if (quantity === 0) {
+    await run("DELETE FROM pos_order_items WHERE id = ? AND order_id = ?", [itemId, id]);
+  } else {
+    const updated = await run("UPDATE pos_order_items SET quantity = ?, line_total = unit_price * ? WHERE id = ? AND order_id = ?", [quantity, quantity, itemId, id]);
+    if (!updated) { res.status(404).json({ message: "Item not found" }); return; }
+  }
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+
+router.delete("/pos/orders/:id/items/:itemId", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const itemId = parseInt(String(req.params["itemId"] ?? ""), 10);
+  const order = await row<any>("SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!order) { res.status(404).json({ message: "Order not found" }); return; }
+  if (order.status !== "open") { res.status(409).json({ message: "Order is no longer open" }); return; }
+  await run("DELETE FROM pos_order_items WHERE id = ? AND order_id = ?", [itemId, id]);
+  const full = await orderWithTotals(id, s.outlet_id);
+  res.json(full);
+});
+
+// Finalize: lock in promotion discounts, decrement stock, record movements.
+async function finalizeOrderPayment(orderId: number, outletId: number, staffId: number, paymentMethod: string): Promise<any> {
+  return withTransaction(async (client) => {
+    const orderRes = await clientQuery(client,
+      "SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ? FOR UPDATE", [orderId, outletId]);
+    const order = orderRes.rows[0];
+    if (!order) throw Object.assign(new Error("Order not found"), { status: 404 });
+    if (order.status !== "open") throw Object.assign(new Error(`Order is already ${order.status}`), { status: 409 });
+
+    const itemsRes = await clientQuery(client,
+      `SELECT i.id, i.product_id, i.variant_id, i.name, i.variant_label, i.quantity, i.unit_price, p.category_id, p.has_variants
+       FROM pos_order_items i JOIN pos_products p ON p.id = i.product_id
+       WHERE i.order_id = ? AND p.outlet_id = ?`, [orderId, outletId]);
+    const items = itemsRes.rows;
+    if (items.length === 0) throw Object.assign(new Error("Order has no items"), { status: 400 });
+
+    const promos = await activePromotions(outletId);
+    let subtotal = 0, discountTotal = 0;
+    for (const item of items) {
+      const unitPrice = Number(item.unit_price);
+      const line = unitPrice * item.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: item.product_id, category_id: item.category_id, unit_price: unitPrice, quantity: item.quantity,
+      });
+      subtotal += line;
+      discountTotal += discount;
+      await clientQuery(client,
+        "UPDATE pos_order_items SET discount = ?, promotion_id = ?, line_total = ? WHERE id = ?",
+        [discount, promotionId, Math.round((line - discount) * 100) / 100, item.id]);
+
+      // Decrement stock + movement audit trail. Capacity is enforced inside the
+      // mutating statement (stock_qty >= qty) so concurrent sales can't oversell,
+      // and every update is constrained to this outlet.
+      const itemLabel = [item.name, item.variant_label].filter(Boolean).join(" ");
+      if (item.variant_id) {
+        const upd = await clientQuery(client,
+          `UPDATE pos_variants v SET stock_qty = v.stock_qty - ?
+           FROM pos_products p
+           WHERE v.id = ? AND p.id = v.product_id AND p.id = ? AND p.outlet_id = ? AND v.stock_qty >= ?`,
+          [item.quantity, item.variant_id, item.product_id, outletId, item.quantity]);
+        if (upd.rowCount !== 1) {
+          throw Object.assign(new Error(`Insufficient stock for ${itemLabel}`), { status: 409 });
+        }
+      } else {
+        const upd = await clientQuery(client,
+          "UPDATE pos_products SET stock_qty = stock_qty - ? WHERE id = ? AND outlet_id = ? AND stock_qty >= ?",
+          [item.quantity, item.product_id, outletId, item.quantity]);
+        if (upd.rowCount !== 1) {
+          throw Object.assign(new Error(`Insufficient stock for ${itemLabel}`), { status: 409 });
+        }
+      }
+      await clientQuery(client,
+        "INSERT INTO pos_stock_movements (outlet_id, product_id, variant_id, change, reason, ref_id, created_by) VALUES (?, ?, ?, ?, 'sale', ?, ?)",
+        [outletId, item.product_id, item.variant_id ?? null, -item.quantity, orderId, staffId]);
+    }
+    const total = Math.round((subtotal - discountTotal) * 100) / 100;
+    await clientQuery(client,
+      `UPDATE pos_orders SET status = 'paid', payment_method = ?, subtotal = ?, discount_total = ?, total = ?,
+         closed_by = ?, paid_at = NOW() WHERE id = ?`,
+      [paymentMethod, Math.round(subtotal * 100) / 100, Math.round(discountTotal * 100) / 100, total, staffId, orderId]);
+    return { subtotal: Math.round(subtotal * 100) / 100, discount_total: Math.round(discountTotal * 100) / 100, total };
+  });
+}
+
+router.post("/pos/orders/:id/pay", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const paymentMethod = String(req.body?.payment_method ?? "");
+  if (paymentMethod !== "cash" && paymentMethod !== "card") { res.status(400).json({ message: "payment_method must be cash or card" }); return; }
+  try {
+    await finalizeOrderPayment(id, s.outlet_id, s.id, paymentMethod);
+    const full = await orderWithTotals(id, s.outlet_id);
+    res.json(full);
+  } catch (err: any) {
+    if (err.status) { res.status(err.status).json({ message: err.message }); return; }
+    logger.error({ err, orderId: id }, "Failed to finalize POS payment");
+    res.status(500).json({ message: "Failed to complete payment" });
+  }
+});
+
+router.post("/pos/orders/:id/cancel", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const updated = await run(
+    "UPDATE pos_orders SET status = 'cancelled', closed_by = ? WHERE id = ? AND outlet_id = ? AND status = 'open'",
+    [s.id, id, s.outlet_id]
+  );
+  if (!updated) { res.status(409).json({ message: "Order cannot be cancelled" }); return; }
+  res.json({ success: true });
+});
+
+// Validate + resolve sale line items (prices, variants) for the given outlet.
+// Throws { status, message } on any invalid line.
+async function resolveSaleItems(items: any[], outletId: number): Promise<any[]> {
+  const resolved: any[] = [];
+  for (const item of items) {
+    const productId = parseInt(String(item?.product_id ?? ""), 10);
+    const variantId = item?.variant_id ? parseInt(String(item.variant_id), 10) : null;
+    const quantity = Math.max(1, Math.round(Number(item?.quantity) || 1));
+    const product = await row<any>(
+      "SELECT id, name, price, category_id, has_variants FROM pos_products WHERE id = ? AND outlet_id = ? AND active = 1",
+      [productId, outletId]
+    );
+    if (!product) throw Object.assign(new Error("Product not found in this outlet"), { status: 400 });
+    let unitPrice = Number(product.price);
+    let variantLabel: string | null = null;
+    if (product.has_variants) {
+      if (!variantId) throw Object.assign(new Error(`${product.name} requires a variant selection`), { status: 400 });
+      const variant = await row<any>("SELECT id, size, colour, price FROM pos_variants WHERE id = ? AND product_id = ? AND active = 1", [variantId, productId]);
+      if (!variant) throw Object.assign(new Error("Variant not found"), { status: 400 });
+      if (variant.price != null) unitPrice = Number(variant.price);
+      variantLabel = [variant.size, variant.colour].filter(Boolean).join(" / ") || null;
+    }
+    resolved.push({ productId, variantId, quantity, unitPrice, name: product.name, variantLabel, categoryId: product.category_id ?? null });
+  }
+  return resolved;
+}
+
+// Live cart preview for the pro-shop till: applies active promotions so the
+// running total reflects discounts before payment. No data is written.
+router.post("/pos/sales/preview", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const items = req.body?.items;
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ message: "At least one item is required" }); return; }
+  try {
+    const resolved = await resolveSaleItems(items, s.outlet_id);
+    const promos = await activePromotions(s.outlet_id);
+    let subtotal = 0, discountTotal = 0;
+    const lines = resolved.map((r) => {
+      const line = r.unitPrice * r.quantity;
+      const { discount, promotionId } = bestLineDiscount(promos, {
+        product_id: r.productId, category_id: r.categoryId, unit_price: r.unitPrice, quantity: r.quantity,
+      });
+      subtotal += line;
+      discountTotal += discount;
+      return {
+        product_id: r.productId, variant_id: r.variantId, quantity: r.quantity,
+        unit_price: r.unitPrice, discount, promotion_id: promotionId,
+        line_total: Math.round((line - discount) * 100) / 100,
+      };
+    });
+    res.json({
+      subtotal: Math.round(subtotal * 100) / 100,
+      discount_total: Math.round(discountTotal * 100) / 100,
+      total: Math.round((subtotal - discountTotal) * 100) / 100,
+      lines,
+    });
+  } catch (err: any) {
+    if (err.status) { res.status(err.status).json({ message: err.message }); return; }
+    logger.error({ err }, "Failed to preview sale");
+    res.status(500).json({ message: "Failed to preview sale" });
+  }
+});
+
+// One-shot pro-shop sale: create counter order + items + pay atomically.
+router.post("/pos/sales", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const items = req.body?.items;
+  const paymentMethod = String(req.body?.payment_method ?? "");
+  if (paymentMethod !== "cash" && paymentMethod !== "card") { res.status(400).json({ message: "payment_method must be cash or card" }); return; }
+  if (!Array.isArray(items) || items.length === 0) { res.status(400).json({ message: "At least one item is required" }); return; }
+
+  let resolved: any[];
+  try {
+    resolved = await resolveSaleItems(items, s.outlet_id);
+  } catch (err: any) {
+    res.status(err.status ?? 500).json({ message: err.message ?? "Failed to validate sale items" });
+    return;
+  }
+
+  const orderId = await exec(
+    "INSERT INTO pos_orders (outlet_id, order_type, opened_by) VALUES (?, 'counter', ?)",
+    [s.outlet_id, s.id]
+  );
+  for (const r of resolved) {
+    await exec(
+      "INSERT INTO pos_order_items (order_id, product_id, variant_id, name, variant_label, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+      [orderId, r.productId, r.variantId, r.name, r.variantLabel, r.quantity, r.unitPrice, r.unitPrice * r.quantity]
+    );
+  }
+  try {
+    await finalizeOrderPayment(orderId, s.outlet_id, s.id, paymentMethod);
+    const full = await orderWithTotals(orderId, s.outlet_id);
+    res.status(201).json(full);
+  } catch (err: any) {
+    // Roll the shell order back so it doesn't linger as an open ghost
+    await run("UPDATE pos_orders SET status = 'cancelled' WHERE id = ? AND status = 'open'", [orderId]);
+    if (err.status) { res.status(err.status).json({ message: err.message }); return; }
+    logger.error({ err, orderId }, "Failed to complete pro shop sale");
+    res.status(500).json({ message: "Failed to complete sale" });
+  }
+});
+
+// ─── Staff management (manager) ──────────────────────────────────────────────
+
+router.get("/pos/staff", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const staff = await query<any>(
+    "SELECT id, name, email, role, active, created_at FROM pos_staff WHERE outlet_id = ? ORDER BY role, name",
+    [s.outlet_id]
+  );
+  res.json({ staff });
+});
+
+router.post("/pos/staff", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const name = String(req.body?.name ?? "").trim();
+  const email = String(req.body?.email ?? "").trim().toLowerCase();
+  const password = String(req.body?.password ?? "");
+  if (!name || !email || !password) { res.status(400).json({ message: "Name, email and password are required" }); return; }
+  if (password.length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+  const existing = await row<any>("SELECT id FROM pos_staff WHERE email = ?", [email]);
+  if (existing) { res.status(409).json({ message: "An outlet account with this email already exists" }); return; }
+  const hash = await bcrypt.hash(password, 10);
+  // Managers may only create waiters/cashiers — manager accounts come from the club admin
+  const id = await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, ?, ?, ?, 'waiter')",
+    [s.outlet_id, s.club_id, name, email, hash]
+  );
+  res.status(201).json({ id, name, email, role: "waiter", active: 1 });
+});
+
+router.put("/pos/staff/:id", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const id = parseInt(String(req.params["id"] ?? ""), 10);
+  const target = await row<any>("SELECT id, role FROM pos_staff WHERE id = ? AND outlet_id = ?", [id, s.outlet_id]);
+  if (!target) { res.status(404).json({ message: "Staff member not found" }); return; }
+  if (target.role === "manager" && target.id !== s.id) { res.status(403).json({ message: "Managers cannot modify other managers — ask your club admin" }); return; }
+  const { active, password, name } = req.body ?? {};
+  if (password != null) {
+    if (String(password).length < 6) { res.status(400).json({ message: "Password must be at least 6 characters" }); return; }
+    const hash = await bcrypt.hash(String(password), 10);
+    await run("UPDATE pos_staff SET password_hash = ? WHERE id = ?", [hash, id]);
+  }
+  await run(
+    "UPDATE pos_staff SET active = COALESCE(?, active), name = COALESCE(?, name) WHERE id = ?",
+    [active != null ? (active ? 1 : 0) : null, name != null ? String(name).trim() : null, id]
+  );
+  res.json({ success: true });
+});
+
+// ─── Transactions (manager) ──────────────────────────────────────────────────
+
+router.get("/pos/transactions", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const conditions = ["o.outlet_id = ?", "o.status = 'paid'"];
+  const params: any[] = [s.outlet_id];
+  if (req.query["from"]) { conditions.push("o.paid_at >= ?::date"); params.push(String(req.query["from"])); }
+  if (req.query["to"]) { conditions.push("o.paid_at < (?::date + INTERVAL '1 day')"); params.push(String(req.query["to"])); }
+  if (req.query["payment_method"]) { conditions.push("o.payment_method = ?"); params.push(String(req.query["payment_method"])); }
+  if (req.query["staff_id"]) { conditions.push("o.closed_by = ?"); params.push(parseInt(String(req.query["staff_id"]), 10)); }
+  const transactions = await query<any>(
+    `SELECT o.id, o.order_type, o.table_name, o.subtotal, o.discount_total, o.total, o.payment_method,
+            o.paid_at, o.created_at, closer.name AS staff_name,
+            (SELECT COUNT(*)::int FROM pos_order_items i WHERE i.order_id = o.id) AS item_count
+     FROM pos_orders o
+     LEFT JOIN pos_staff closer ON closer.id = o.closed_by
+     WHERE ${conditions.join(" AND ")}
+     ORDER BY o.paid_at DESC LIMIT 500`,
+    params
+  );
+  res.json({
+    transactions: transactions.map(t => ({
+      ...t, subtotal: Number(t.subtotal), discount_total: Number(t.discount_total), total: Number(t.total),
+    })),
+  });
+});
+
+// ─── Reports (manager) ───────────────────────────────────────────────────────
+
+router.get("/pos/reports/summary", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const from = req.query["from"] ? String(req.query["from"]) : null;
+  const to = req.query["to"] ? String(req.query["to"]) : null;
+  const dateCond = ["o.outlet_id = ?", "o.status = 'paid'"];
+  const params: any[] = [s.outlet_id];
+  if (from) { dateCond.push("o.paid_at >= ?::date"); params.push(from); }
+  if (to) { dateCond.push("o.paid_at < (?::date + INTERVAL '1 day')"); params.push(to); }
+  const where = dateCond.join(" AND ");
+
+  const totals = await row<any>(
+    `SELECT COUNT(*)::int AS transaction_count, COALESCE(SUM(o.total), 0) AS total_sales,
+            COALESCE(SUM(o.discount_total), 0) AS total_discounts,
+            COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'cash'), 0) AS cash_sales,
+            COALESCE(SUM(o.total) FILTER (WHERE o.payment_method = 'card'), 0) AS card_sales
+     FROM pos_orders o WHERE ${where}`, params);
+
+  const byDay = await query<any>(
+    `SELECT (o.paid_at AT TIME ZONE 'UTC' + INTERVAL '2 hours')::date AS day,
+            COUNT(*)::int AS transactions, COALESCE(SUM(o.total), 0) AS sales
+     FROM pos_orders o WHERE ${where}
+     GROUP BY day ORDER BY day`, params);
+
+  const topProducts = await query<any>(
+    `SELECT i.product_id, i.name, COALESCE(SUM(i.quantity), 0)::int AS units, COALESCE(SUM(i.line_total), 0) AS sales
+     FROM pos_order_items i JOIN pos_orders o ON o.id = i.order_id
+     WHERE ${where}
+     GROUP BY i.product_id, i.name ORDER BY sales DESC LIMIT 10`, params);
+
+  const byCategory = await query<any>(
+    `SELECT COALESCE(c.name, 'Uncategorised') AS category, COALESCE(SUM(i.quantity), 0)::int AS units, COALESCE(SUM(i.line_total), 0) AS sales
+     FROM pos_order_items i
+     JOIN pos_orders o ON o.id = i.order_id
+     JOIN pos_products p ON p.id = i.product_id
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE ${where}
+     GROUP BY c.name ORDER BY sales DESC`, params);
+
+  const byStaff = await query<any>(
+    `SELECT st.id AS staff_id, st.name, COUNT(*)::int AS transactions, COALESCE(SUM(o.total), 0) AS sales
+     FROM pos_orders o JOIN pos_staff st ON st.id = o.closed_by
+     WHERE ${where}
+     GROUP BY st.id, st.name ORDER BY sales DESC`, params);
+
+  res.json({
+    totals: {
+      transaction_count: totals?.transaction_count ?? 0,
+      total_sales: Number(totals?.total_sales ?? 0),
+      total_discounts: Number(totals?.total_discounts ?? 0),
+      cash_sales: Number(totals?.cash_sales ?? 0),
+      card_sales: Number(totals?.card_sales ?? 0),
+    },
+    by_day: byDay.map(d => ({ ...d, sales: Number(d.sales) })),
+    top_products: topProducts.map(p => ({ ...p, sales: Number(p.sales) })),
+    by_category: byCategory.map(c => ({ ...c, sales: Number(c.sales) })),
+    by_staff: byStaff.map(w => ({ ...w, sales: Number(w.sales) })),
+  });
+});
+
+router.get("/pos/reports/stock", requirePosAuth, requirePosManager, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const products = await query<any>(
+    `SELECT p.id, p.name, p.brand, p.has_variants, p.stock_qty, p.low_stock_threshold,
+            c.name AS category_name
+     FROM pos_products p
+     LEFT JOIN pos_categories c ON c.id = p.category_id
+     WHERE p.outlet_id = ? AND p.active = 1
+     ORDER BY p.name`,
+    [s.outlet_id]
+  );
+  const ids = products.map(p => p.id);
+  let variantsByProduct: Record<number, any[]> = {};
+  if (ids.length > 0) {
+    const variants = await query<any>(
+      `SELECT id, product_id, size, colour, sku, stock_qty FROM pos_variants
+       WHERE product_id IN (${ids.map(() => "?").join(",")}) AND active = 1 ORDER BY id`,
+      ids
+    );
+    for (const v of variants) (variantsByProduct[v.product_id] ??= []).push(v);
+  }
+  res.json({
+    stock: products.map(p => {
+      const variants = variantsByProduct[p.id] ?? [];
+      const total = p.has_variants ? variants.reduce((sum: number, v: any) => sum + v.stock_qty, 0) : p.stock_qty;
+      return {
+        id: p.id, name: p.name, brand: p.brand, category_name: p.category_name,
+        has_variants: p.has_variants, total_stock: total, low_stock_threshold: p.low_stock_threshold,
+        low_stock: total <= p.low_stock_threshold,
+        variants: variants.map((v: any) => ({
+          id: v.id, label: [v.size, v.colour].filter(Boolean).join(" / ") || v.sku || `#${v.id}`,
+          stock_qty: v.stock_qty, low_stock: v.stock_qty <= p.low_stock_threshold,
+        })),
+      };
+    }),
+  });
+});
+
+export default router;

@@ -25,6 +25,7 @@ import scoringRouter from "./scoring";
 import supportRouter from "./support";
 import standingRouter from "./standing";
 import resaleRouter from "./resale";
+import posRouter from "./pos";
 
 const router: IRouter = Router();
 
@@ -54,5 +55,6 @@ router.use(knockoutRouter);
 router.use(scoringRouter);
 router.use(supportRouter);
 router.use(resaleRouter);
+router.use(posRouter);
 
 export default router;

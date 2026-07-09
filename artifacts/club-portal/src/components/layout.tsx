@@ -2,7 +2,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import { LogOut, ShieldCheck, UserCircle2 } from "lucide-react";
+import { LogOut, ShieldCheck, Store, UserCircle2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ALL_NAV_ITEMS } from "@/lib/nav-items";
 
@@ -88,6 +88,19 @@ export function Layout({ children }: { children: React.ReactNode }) {
               </Link>
             );
           })}
+
+          {isClubAdmin && (
+            <Link href="/outlets">
+              <div className={`flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all cursor-pointer text-sm font-medium ${
+                location === "/outlets" || location.startsWith("/outlets")
+                  ? "bg-white/20 text-white"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
+              }`} data-testid="nav-outlets">
+                <Store className="h-4 w-4 flex-shrink-0" />
+                <span className="flex-1">Outlets (POS)</span>
+              </div>
+            </Link>
+          )}
 
           {isClubAdmin && (
             <Link href="/portal-users">

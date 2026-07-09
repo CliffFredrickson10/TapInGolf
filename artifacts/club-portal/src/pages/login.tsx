@@ -27,10 +27,10 @@ function BrandLogo() {
   );
 }
 
-type Tab = "club" | "club_user" | "staff" | "reseller";
+type Tab = "club" | "club_user" | "staff" | "reseller" | "pos";
 
 export default function Login() {
-  const { login, clubUserLogin, staffLogin, resellerLogin } = useAuth();
+  const { login, clubUserLogin, staffLogin, resellerLogin, posLogin } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<Tab>("club");
   const [username, setUsername] = useState("");
@@ -55,6 +55,8 @@ export default function Login() {
         await staffLogin(email.trim().toLowerCase(), password);
       } else if (tab === "club_user") {
         await clubUserLogin(email.trim().toLowerCase(), password);
+      } else if (tab === "pos") {
+        await posLogin(email.trim().toLowerCase(), password);
       } else if (tab === "reseller") {
         await resellerLogin(username.trim().toLowerCase(), password);
       } else {
@@ -84,7 +86,7 @@ export default function Login() {
                 Back
               </button>
             ) : (
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
+              <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-muted mb-4">
                 <button
                   type="button"
                   onClick={() => switchTab("club")}
@@ -112,10 +114,19 @@ export default function Login() {
                 >
                   Reseller
                 </button>
+                <button
+                  type="button"
+                  onClick={() => switchTab("pos")}
+                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                    tab === "pos" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Outlet
+                </button>
               </div>
             )}
             <CardTitle className="text-xl">
-              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : tab === "reseller" ? "Reseller sign in" : "Sign in to your club"}
+              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : tab === "reseller" ? "Reseller sign in" : tab === "pos" ? "Outlet sign in" : "Sign in to your club"}
             </CardTitle>
             <CardDescription>
               {tab === "staff"
@@ -124,6 +135,8 @@ export default function Login() {
                 ? "Sign in with your club staff email and password."
                 : tab === "reseller"
                 ? "Sign in with your reseller account to buy listed tee times."
+                : tab === "pos"
+                ? "Pro shop, bar & restaurant staff — sign in to your outlet POS."
                 : "Enter your club credentials to access the management portal."}
             </CardDescription>
           </CardHeader>

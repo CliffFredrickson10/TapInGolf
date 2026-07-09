@@ -1934,6 +1934,190 @@ async function seedAdOfferings(): Promise<void> {
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_next_match_id INT REFERENCES knockout_matches(id) ON DELETE SET NULL`);
   await ddl(`ALTER TABLE knockout_matches ADD COLUMN IF NOT EXISTS loser_slot_position VARCHAR(10)`);
 
+  // ── POS: pro shop / bar / restaurant outlets ─────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_outlets (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name       VARCHAR(120) NOT NULL,
+      type       VARCHAR(20) NOT NULL CHECK (type IN ('pro_shop','bar','restaurant')),
+      active     SMALLINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_staff (
+      id            SERIAL PRIMARY KEY,
+      outlet_id     INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      club_id       INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      name          VARCHAR(120) NOT NULL,
+      email         VARCHAR(255) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      role          VARCHAR(20) NOT NULL CHECK (role IN ('manager','waiter')),
+      active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_categories (
+      id         SERIAL PRIMARY KEY,
+      outlet_id  INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name       VARCHAR(120) NOT NULL,
+      sort_order INT NOT NULL DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_products (
+      id                  SERIAL PRIMARY KEY,
+      outlet_id           INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      category_id         INT REFERENCES pos_categories(id) ON DELETE SET NULL,
+      name                VARCHAR(200) NOT NULL,
+      brand               VARCHAR(120),
+      description         TEXT,
+      price               DECIMAL(10,2) NOT NULL DEFAULT 0,
+      barcode             VARCHAR(80),
+      sku                 VARCHAR(80),
+      stock_qty           INT NOT NULL DEFAULT 0,
+      low_stock_threshold INT NOT NULL DEFAULT 5,
+      has_variants        SMALLINT NOT NULL DEFAULT 0,
+      active              SMALLINT NOT NULL DEFAULT 1,
+      created_at          TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_products_outlet ON pos_products (outlet_id)`);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_products_barcode ON pos_products (outlet_id, barcode)`);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_variants (
+      id         SERIAL PRIMARY KEY,
+      product_id INT NOT NULL REFERENCES pos_products(id) ON DELETE CASCADE,
+      size       VARCHAR(60),
+      colour     VARCHAR(60),
+      barcode    VARCHAR(80),
+      sku        VARCHAR(80),
+      price      DECIMAL(10,2),
+      stock_qty  INT NOT NULL DEFAULT 0,
+      active     SMALLINT NOT NULL DEFAULT 1,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_variants_product ON pos_variants (product_id)`);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_suppliers (
+      id           SERIAL PRIMARY KEY,
+      outlet_id    INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name         VARCHAR(200) NOT NULL,
+      contact_name VARCHAR(120),
+      email        VARCHAR(255),
+      phone        VARCHAR(50),
+      notes        TEXT,
+      active       SMALLINT NOT NULL DEFAULT 1,
+      created_at   TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_orders (
+      id          SERIAL PRIMARY KEY,
+      outlet_id   INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      supplier_id INT NOT NULL REFERENCES pos_suppliers(id),
+      status      VARCHAR(20) NOT NULL DEFAULT 'ordered'
+                    CHECK (status IN ('ordered','received','cancelled')),
+      notes       TEXT,
+      created_by  INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at  TIMESTAMP DEFAULT NOW(),
+      received_at TIMESTAMP
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_order_items (
+      id             SERIAL PRIMARY KEY,
+      stock_order_id INT NOT NULL REFERENCES pos_stock_orders(id) ON DELETE CASCADE,
+      product_id     INT NOT NULL REFERENCES pos_products(id),
+      variant_id     INT REFERENCES pos_variants(id),
+      quantity       INT NOT NULL,
+      unit_cost      DECIMAL(10,2) NOT NULL DEFAULT 0
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_stock_movements (
+      id         SERIAL PRIMARY KEY,
+      outlet_id  INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      product_id INT NOT NULL REFERENCES pos_products(id) ON DELETE CASCADE,
+      variant_id INT REFERENCES pos_variants(id) ON DELETE CASCADE,
+      change     INT NOT NULL,
+      reason     VARCHAR(20) NOT NULL CHECK (reason IN ('sale','stock_order','adjustment')),
+      ref_id     INT,
+      created_by INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_stock_movements_outlet ON pos_stock_movements (outlet_id, created_at)`);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_promotions (
+      id             SERIAL PRIMARY KEY,
+      outlet_id      INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      name           VARCHAR(200) NOT NULL,
+      discount_type  VARCHAR(20) NOT NULL CHECK (discount_type IN ('percentage','amount')),
+      discount_value DECIMAL(10,2) NOT NULL,
+      applies_to     VARCHAR(20) NOT NULL DEFAULT 'all'
+                       CHECK (applies_to IN ('all','category','product')),
+      category_id    INT REFERENCES pos_categories(id) ON DELETE CASCADE,
+      product_id     INT REFERENCES pos_products(id) ON DELETE CASCADE,
+      days_of_week   VARCHAR(30),
+      start_time     TIME,
+      end_time       TIME,
+      active         SMALLINT NOT NULL DEFAULT 1,
+      created_at     TIMESTAMP DEFAULT NOW()
+    )
+  `);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_orders (
+      id             SERIAL PRIMARY KEY,
+      outlet_id      INT NOT NULL REFERENCES pos_outlets(id) ON DELETE CASCADE,
+      order_type     VARCHAR(20) NOT NULL CHECK (order_type IN ('table','takeaway','counter')),
+      table_name     VARCHAR(60),
+      status         VARCHAR(20) NOT NULL DEFAULT 'open'
+                       CHECK (status IN ('open','paid','cancelled')),
+      subtotal       DECIMAL(10,2) NOT NULL DEFAULT 0,
+      discount_total DECIMAL(10,2) NOT NULL DEFAULT 0,
+      total          DECIMAL(10,2) NOT NULL DEFAULT 0,
+      payment_method VARCHAR(20) CHECK (payment_method IN ('cash','card')),
+      opened_by      INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      closed_by      INT REFERENCES pos_staff(id) ON DELETE SET NULL,
+      created_at     TIMESTAMP DEFAULT NOW(),
+      paid_at        TIMESTAMP
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_outlet ON pos_orders (outlet_id, status)`);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_orders_paid ON pos_orders (outlet_id, paid_at)`);
+
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS pos_order_items (
+      id            SERIAL PRIMARY KEY,
+      order_id      INT NOT NULL REFERENCES pos_orders(id) ON DELETE CASCADE,
+      product_id    INT NOT NULL REFERENCES pos_products(id),
+      variant_id    INT REFERENCES pos_variants(id),
+      name          VARCHAR(200) NOT NULL,
+      variant_label VARCHAR(140),
+      quantity      INT NOT NULL DEFAULT 1,
+      unit_price    DECIMAL(10,2) NOT NULL,
+      discount      DECIMAL(10,2) NOT NULL DEFAULT 0,
+      promotion_id  INT REFERENCES pos_promotions(id) ON DELETE SET NULL,
+      line_total    DECIMAL(10,2) NOT NULL
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_pos_order_items_order ON pos_order_items (order_id)`);
+
   // ── Fix knockout_rounds unique constraint to include bracket ──────────────
   // The original constraint was UNIQUE (event_id, round_number), which
   // prevents a consolation round from sharing round_number=1 with the main
@@ -2047,6 +2231,133 @@ async function seedScreenshotAccount(): Promise<void> {
   logger.info({ userId, bookingId, roundId }, "Screenshot test account seeded");
 }
 
+async function seedPosDemo(): Promise<void> {
+  // Idempotent — skip if any outlet already exists.
+  const existing = await row<{ id: number }>("SELECT id FROM pos_outlets LIMIT 1");
+  if (existing) return;
+
+  const club = await row<{ id: number }>("SELECT id FROM clubs WHERE active = 1 ORDER BY id LIMIT 1");
+  if (!club) return;
+
+  const bcrypt = await import("bcryptjs");
+  const pwHash = await bcrypt.hash("PosDemo2026!", 10);
+
+  // ── Pro shop outlet ────────────────────────────────────────────────────────
+  const proShopId = await exec(
+    "INSERT INTO pos_outlets (club_id, name, type) VALUES (?, 'Pro Shop', 'pro_shop')", [club.id]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Pro Shop Manager', 'proshop.demo@tapingolf.co.za', ?, 'manager')",
+    [proShopId, club.id, pwHash]
+  );
+  const catShoes = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Shoes', 1)", [proShopId]);
+  const catCloth = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Clothing', 2)", [proShopId]);
+  const catEquip = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Equipment', 3)", [proShopId]);
+  const catAcc   = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Accessories', 4)", [proShopId]);
+
+  const shoeId = await exec(
+    "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, has_variants) VALUES (?, ?, 'Tour Pro Golf Shoes', 'FootJoy', 2199.00, 1)",
+    [proShopId, catShoes]
+  );
+  const shoeVariants: [string, string, string, number][] = [
+    ["8",  "White", "6001111000018", 6],
+    ["9",  "White", "6001111000019", 8],
+    ["10", "White", "6001111000020", 5],
+    ["9",  "Black", "6001111000119", 4],
+    ["10", "Black", "6001111000120", 3],
+  ];
+  for (const [size, colour, barcode, qty] of shoeVariants) {
+    await exec(
+      "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, stock_qty) VALUES (?, ?, ?, ?, ?, ?)",
+      [shoeId, size, colour, barcode, `FJ-TP-${colour.slice(0, 2).toUpperCase()}-${size}`, qty]
+    );
+  }
+
+  const poloId = await exec(
+    "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, has_variants) VALUES (?, ?, 'Performance Golf Polo', 'Nike', 899.00, 1)",
+    [proShopId, catCloth]
+  );
+  const poloVariants: [string, string, string, number][] = [
+    ["M", "Navy",  "6002222000031", 10],
+    ["L", "Navy",  "6002222000032", 12],
+    ["XL", "Navy", "6002222000033", 7],
+    ["M", "Green", "6002222000041", 9],
+    ["L", "Green", "6002222000042", 2],
+  ];
+  for (const [size, colour, barcode, qty] of poloVariants) {
+    await exec(
+      "INSERT INTO pos_variants (product_id, size, colour, barcode, sku, stock_qty) VALUES (?, ?, ?, ?, ?, ?)",
+      [poloId, size, colour, barcode, `NK-PP-${colour.slice(0, 2).toUpperCase()}-${size}`, qty]
+    );
+  }
+
+  const simpleProShop: [number, string, string, number, string, number][] = [
+    [catEquip, "Pro V1 Golf Balls (Dozen)", "Titleist",  999.00, "6003333000012", 24],
+    [catEquip, "Premium Golf Glove",        "Titleist",  349.00, "6003333000029", 15],
+    [catAcc,   "Wooden Tees (50 pack)",     "TapIn",      89.00, "6004444000015", 40],
+    [catAcc,   "Golf Umbrella",             "Callaway",  549.00, "6004444000022", 6],
+    [catAcc,   "Club Logo Cap",             "TapIn",     299.00, "6004444000039", 18],
+  ];
+  for (const [catId, name, brand, price, barcode, qty] of simpleProShop) {
+    await exec(
+      "INSERT INTO pos_products (outlet_id, category_id, name, brand, price, barcode, stock_qty) VALUES (?, ?, ?, ?, ?, ?, ?)",
+      [proShopId, catId, name, brand, price, barcode, qty]
+    );
+  }
+  await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone) VALUES (?, 'Golf Wholesale SA', 'Pieter Botha', 'orders@golfwholesale.co.za', '+27114567890')",
+    [proShopId]
+  );
+
+  // ── Bar outlet ────────────────────────────────────────────────────────────
+  const barId = await exec(
+    "INSERT INTO pos_outlets (club_id, name, type) VALUES (?, 'Clubhouse Bar', 'bar')", [club.id]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Bar Manager', 'bar.demo@tapingolf.co.za', ?, 'manager')",
+    [barId, club.id, pwHash]
+  );
+  await exec(
+    "INSERT INTO pos_staff (outlet_id, club_id, name, email, password_hash, role) VALUES (?, ?, 'Demo Waiter', 'waiter.demo@tapingolf.co.za', ?, 'waiter')",
+    [barId, club.id, pwHash]
+  );
+  const catBeer = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Beers', 1)", [barId]);
+  const catWine = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Wine', 2)", [barId]);
+  const catSoft = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Soft Drinks', 3)", [barId]);
+  const catSnack = await exec("INSERT INTO pos_categories (outlet_id, name, sort_order) VALUES (?, 'Snacks', 4)", [barId]);
+
+  const barProducts: [number, string, number, number][] = [
+    [catBeer,  "Castle Lager 440ml",       42.00, 96],
+    [catBeer,  "Heineken 330ml",           48.00, 72],
+    [catBeer,  "Windhoek Draught 440ml",   45.00, 60],
+    [catWine,  "House Red (Glass)",        55.00, 30],
+    [catWine,  "House White (Glass)",      55.00, 30],
+    [catSoft,  "Coca-Cola 300ml",          28.00, 120],
+    [catSoft,  "Appletiser 330ml",         34.00, 48],
+    [catSoft,  "Still Water 500ml",        22.00, 80],
+    [catSnack, "Biltong 100g",             65.00, 25],
+    [catSnack, "Salted Peanuts",           35.00, 40],
+    [catSnack, "Toasted Sandwich",         75.00, 20],
+  ];
+  for (const [catId, name, price, qty] of barProducts) {
+    await exec(
+      "INSERT INTO pos_products (outlet_id, category_id, name, price, stock_qty) VALUES (?, ?, ?, ?, ?)",
+      [barId, catId, name, price, qty]
+    );
+  }
+  await exec(
+    "INSERT INTO pos_suppliers (outlet_id, name, contact_name, email, phone) VALUES (?, 'SAB Distributors', 'Thandi Nkosi', 'accounts@sabdist.co.za', '+27117891234')",
+    [barId]
+  );
+  await exec(
+    `INSERT INTO pos_promotions (outlet_id, name, discount_type, discount_value, applies_to, category_id, days_of_week, start_time, end_time)
+     VALUES (?, 'Happy Hour — Beers 20% off', 'percentage', 20, 'category', ?, '1,2,3,4,5', '16:00', '18:00')`,
+    [barId, catBeer]
+  );
+
+  logger.info({ proShopId, barId, clubId: club.id }, "POS demo outlets seeded");
+}
+
 export async function migrate(): Promise<void> {
   await applyLateAlters();
   await createSchema();
@@ -2054,6 +2365,7 @@ export async function migrate(): Promise<void> {
   await seedData();
   await seedAdOfferings();
   await seedScreenshotAccount();
+  await seedPosDemo();
   await reconcileSlotPlayerCounts();
   logger.info("Migrations complete");
 }

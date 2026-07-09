@@ -1,4 +1,4 @@
-export type SessionMode = "club" | "staff" | "club_user" | "reseller";
+export type SessionMode = "club" | "staff" | "club_user" | "reseller" | "pos";
 
 export function getToken(): string | null {
   return localStorage.getItem("club_token");

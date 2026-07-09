@@ -7,7 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
-import { ScanBarcode, Plus, Minus, Trash2, Banknote, CreditCard } from "lucide-react";
+import { Label } from "@/components/ui/label";
+import { ScanBarcode, Plus, Minus, Trash2, Banknote, CreditCard, Flag } from "lucide-react";
 
 interface Variant { id: number; size: string | null; colour: string | null; barcode: string | null; sku: string | null; price: number | null; stock_qty: number; }
 interface Product {
@@ -36,6 +37,65 @@ export default function PosTill() {
   const [preview, setPreview] = useState<{ subtotal: number; discount_total: number; total: number } | null>(null);
   const barcodeRef = useRef<HTMLInputElement>(null);
   const previewSeq = useRef(0);
+
+  // Walk-in golf booking
+  interface GolfSlot { id: number; time: string; tee_start_type: string; session_type: string; max_players: number; available: number; }
+  const todayISO = () => new Date(Date.now() + 2 * 3600_000).toISOString().slice(0, 10);
+  const [golfOpen, setGolfOpen] = useState(false);
+  const [golfDate, setGolfDate] = useState(todayISO());
+  const [golfSlots, setGolfSlots] = useState<GolfSlot[]>([]);
+  const [golfSlotsLoading, setGolfSlotsLoading] = useState(false);
+  const [golfSlotId, setGolfSlotId] = useState<number | null>(null);
+  const [golfPlayers, setGolfPlayers] = useState(1);
+  const [golfName, setGolfName] = useState("");
+  const [golfPhone, setGolfPhone] = useState("");
+  const [golfFee, setGolfFee] = useState("");
+  const [golfSaving, setGolfSaving] = useState(false);
+  const [golfReceipt, setGolfReceipt] = useState<any | null>(null);
+
+  useEffect(() => {
+    if (!golfOpen) return;
+    setGolfSlotsLoading(true);
+    setGolfSlotId(null);
+    api<{ slots: GolfSlot[] }>(`/api/pos/tee-times?date=${golfDate}`)
+      .then(r => setGolfSlots(r.slots))
+      .catch(() => setGolfSlots([]))
+      .finally(() => setGolfSlotsLoading(false));
+  }, [golfOpen, golfDate]);
+
+  const resetGolf = () => {
+    setGolfSlotId(null); setGolfPlayers(1); setGolfName(""); setGolfPhone(""); setGolfFee("");
+  };
+
+  const selectedSlot = golfSlots.find(s => s.id === golfSlotId) ?? null;
+  const feePerPlayer = golfFee.trim() === "" ? 0 : Number(golfFee);
+  const golfTotal = Number.isFinite(feePerPlayer) && feePerPlayer >= 0
+    ? Math.round(feePerPlayer * golfPlayers * 100) / 100 : 0;
+
+  const bookGolf = async (method: "cash" | "card") => {
+    if (!golfSlotId || !golfName.trim() || golfSaving) return;
+    setGolfSaving(true);
+    try {
+      const r = await api<any>("/api/pos/walk-in-bookings", {
+        method: "POST",
+        body: JSON.stringify({
+          tee_time_id: golfSlotId,
+          players: golfPlayers,
+          guest_name: golfName.trim(),
+          guest_phone: golfPhone.trim() || undefined,
+          green_fee_per_player: golfFee.trim() === "" ? undefined : feePerPlayer,
+          payment_method: method,
+        }),
+      });
+      setGolfOpen(false);
+      resetGolf();
+      setGolfReceipt(r);
+    } catch (err: any) {
+      toast({ title: "Booking failed", description: err.message, variant: "destructive" });
+    } finally {
+      setGolfSaving(false);
+    }
+  };
 
   const load = useCallback(() => {
     api<{ products: Product[] }>("/api/pos/products").then(r => setProducts(r.products)).catch(() => {});
@@ -155,6 +215,9 @@ export default function PosTill() {
             className="w-56 h-11"
             data-testid="input-product-search"
           />
+          <Button type="button" variant="outline" className="h-11" onClick={() => setGolfOpen(true)} data-testid="button-golf-booking">
+            <Flag className="h-4 w-4 mr-2 text-[#1a5c38]" /> Golf booking
+          </Button>
         </form>
         <div className="flex gap-1.5 flex-wrap">
           <Button size="sm" variant={activeCat == null ? "default" : "outline"} className={activeCat == null ? "bg-[#1a5c38]" : ""} onClick={() => setActiveCat(null)}>All</Button>
@@ -254,6 +317,135 @@ export default function PosTill() {
               </button>
             ))}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={golfOpen} onOpenChange={(o) => { setGolfOpen(o); if (!o) resetGolf(); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-[#1a5c38]" /> Walk-in golf booking
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1">
+              <Label className="text-xs">Date</Label>
+              <Input type="date" value={golfDate} onChange={e => setGolfDate(e.target.value)} className="h-9" data-testid="input-golf-date" />
+            </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Tee time</Label>
+              {golfSlotsLoading ? (
+                <p className="text-sm text-muted-foreground py-2">Loading tee times…</p>
+              ) : golfSlots.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No tee times for this date.</p>
+              ) : (
+                <div className="grid grid-cols-4 gap-1.5 max-h-40 overflow-y-auto pr-1">
+                  {golfSlots.map(sl => (
+                    <button
+                      key={sl.id}
+                      type="button"
+                      disabled={sl.available < 1}
+                      onClick={() => { setGolfSlotId(sl.id); if (golfPlayers > sl.available) setGolfPlayers(sl.available); }}
+                      className={`border rounded-md px-2 py-1.5 text-sm text-center transition-colors
+                        ${sl.available < 1 ? "opacity-40 cursor-not-allowed" :
+                          golfSlotId === sl.id ? "bg-[#1a5c38] text-white border-[#1a5c38]" : "hover:bg-muted"}`}
+                      data-testid={`golf-slot-${sl.id}`}
+                    >
+                      <span className="font-semibold">{sl.time}</span>
+                      <span className={`block text-[10px] ${golfSlotId === sl.id ? "text-white/80" : "text-muted-foreground"}`}>
+                        {sl.available < 1 ? "Full" : `${sl.available} open`}{sl.tee_start_type === "tenth_tee" || sl.tee_start_type === "10th Tee" ? " · 10th" : ""}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Players</Label>
+                <div className="flex gap-1.5">
+                  {[1, 2, 3, 4].map(n => (
+                    <Button
+                      key={n} type="button" size="sm"
+                      variant={golfPlayers === n ? "default" : "outline"}
+                      className={golfPlayers === n ? "bg-[#1a5c38]" : ""}
+                      disabled={selectedSlot != null && n > selectedSlot.available}
+                      onClick={() => setGolfPlayers(n)}
+                      data-testid={`golf-players-${n}`}
+                    >{n}</Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Green fee per player (R)</Label>
+                <Input
+                  type="number" min="0" step="0.01" value={golfFee}
+                  onChange={e => setGolfFee(e.target.value)}
+                  placeholder="0.00" className="h-9"
+                  data-testid="input-golf-fee"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Lead player name *</Label>
+                <Input value={golfName} onChange={e => setGolfName(e.target.value)} placeholder="e.g. John Smith" className="h-9" data-testid="input-golf-name" />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Phone (optional)</Label>
+                <Input value={golfPhone} onChange={e => setGolfPhone(e.target.value)} placeholder="082 123 4567" className="h-9" data-testid="input-golf-phone" />
+              </div>
+            </div>
+            <div className="flex items-center justify-between border-t pt-3">
+              <div>
+                <p className="text-xs text-muted-foreground">Total green fees</p>
+                <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(golfTotal)}</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  className="h-11 bg-[#1a5c38] hover:bg-[#164d30]"
+                  disabled={!golfSlotId || !golfName.trim() || golfSaving || !Number.isFinite(feePerPlayer) || feePerPlayer < 0}
+                  onClick={() => bookGolf("cash")}
+                  data-testid="button-golf-cash"
+                >
+                  <Banknote className="h-4 w-4 mr-2" /> Cash
+                </Button>
+                <Button
+                  className="h-11 bg-[#1a5c38] hover:bg-[#164d30]"
+                  disabled={!golfSlotId || !golfName.trim() || golfSaving || !Number.isFinite(feePerPlayer) || feePerPlayer < 0}
+                  onClick={() => bookGolf("card")}
+                  data-testid="button-golf-card"
+                >
+                  <CreditCard className="h-4 w-4 mr-2" /> Card
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!golfReceipt} onOpenChange={(o) => { if (!o) { setGolfReceipt(null); barcodeRef.current?.focus(); } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader><DialogTitle>Booking confirmed</DialogTitle></DialogHeader>
+          {golfReceipt && (
+            <div className="space-y-2 text-sm">
+              <div className="rounded-lg bg-[#f0f7f2] border border-[#1a5c38]/20 p-3 text-center">
+                <p className="text-xs text-muted-foreground">Booking reference</p>
+                <p className="text-lg font-bold text-[#1a5c38]" data-testid="text-golf-booking-ref">{golfReceipt.booking_ref}</p>
+              </div>
+              <div className="flex justify-between"><span>Tee time</span><span className="font-medium">{golfReceipt.date} at {golfReceipt.time}</span></div>
+              <div className="flex justify-between"><span>Lead player</span><span className="font-medium">{golfReceipt.guest_name}</span></div>
+              <div className="flex justify-between"><span>Players</span><span className="font-medium">{golfReceipt.players}</span></div>
+              {Number(golfReceipt.total) > 0 && (
+                <div className="flex justify-between border-t pt-2 font-bold">
+                  <span>Paid ({golfReceipt.payment_method})</span><span>{fmt(Number(golfReceipt.total))}</span>
+                </div>
+              )}
+              <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={() => { setGolfReceipt(null); barcodeRef.current?.focus(); }} data-testid="button-golf-done">
+                Done
+              </Button>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

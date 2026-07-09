@@ -1611,4 +1611,124 @@ router.get("/pos/reports/stock", requirePosAuth, requirePosManager, async (req: 
   });
 });
 
+// ─── Walk-in golf bookings (pro shop till) ───────────────────────────────────
+// Pro shop staff can book a tee time for walk-in golfers at the counter and
+// take payment (cash/card). Bookings are created with booking_source
+// 'club_counter' so they appear on the portal schedule and roll into the
+// monthly counter-booking invoice exactly like portal walk-ins.
+
+function requireProShop(req: Request, res: Response, next: NextFunction): void {
+  const s = getPosStaff(req);
+  if (!s || s.outlet_type !== "pro_shop") {
+    res.status(403).json({ message: "Golf bookings are only available at pro shop outlets" });
+    return;
+  }
+  next();
+}
+
+router.get("/pos/tee-times", requirePosAuth, requireProShop, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const date = String(req.query["date"] ?? "").trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { res.status(400).json({ message: "date (YYYY-MM-DD) required" }); return; }
+  // The slots table can contain duplicate rows per date/time — offer the
+  // lowest-id row per (tee_time, tee_start_type) as the bookable slot.
+  const slots = await query<any>(
+    `SELECT DISTINCT ON (pts.tee_time, pts.tee_start_type)
+            pts.id, pts.tee_time AS time, pts.tee_start_type, pts.session_type,
+            pts.max_players, pts.player_count,
+            GREATEST(COALESCE(pts.max_players, 4) - COALESCE(pts.player_count, 0), 0) AS available
+     FROM portal_tee_slots pts
+     WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1 AND pts.event_id IS NULL
+     ORDER BY pts.tee_time, pts.tee_start_type, pts.id`,
+    [s.club_id, date]
+  );
+  res.json({
+    slots: slots.map(sl => ({
+      id: sl.id,
+      time: String(sl.time).slice(0, 5),
+      tee_start_type: sl.tee_start_type,
+      session_type: sl.session_type,
+      max_players: sl.max_players ?? 4,
+      available: Number(sl.available),
+    })),
+  });
+});
+
+router.post("/pos/walk-in-bookings", requirePosAuth, requireProShop, async (req: Request, res: Response): Promise<void> => {
+  const s = getPosStaff(req);
+  const teeTimeId = parseInt(String(req.body?.tee_time_id ?? ""), 10);
+  const players = parseInt(String(req.body?.players ?? ""), 10);
+  const guestName = String(req.body?.guest_name ?? "").trim();
+  const guestPhone = String(req.body?.guest_phone ?? "").trim() || null;
+  const paymentMethod = String(req.body?.payment_method ?? "");
+  if (!Number.isFinite(teeTimeId) || teeTimeId < 1) { res.status(400).json({ message: "tee_time_id required" }); return; }
+  if (!Number.isFinite(players) || players < 1 || players > 4) { res.status(400).json({ message: "players must be 1-4" }); return; }
+  if (!guestName) { res.status(400).json({ message: "Guest name is required" }); return; }
+  if (paymentMethod !== "cash" && paymentMethod !== "card") { res.status(400).json({ message: "payment_method must be cash or card" }); return; }
+  let feePerPlayer = 0;
+  if (req.body?.green_fee_per_player != null && String(req.body.green_fee_per_player).trim() !== "") {
+    feePerPlayer = Number(req.body.green_fee_per_player);
+    if (!Number.isFinite(feePerPlayer) || feePerPlayer < 0) { res.status(400).json({ message: "green_fee_per_player must be zero or a positive amount" }); return; }
+    feePerPlayer = Math.round(feePerPlayer * 100) / 100;
+  }
+  const totalAmount = Math.round(feePerPlayer * players * 100) / 100;
+
+  const names: string[] = Array.isArray(req.body?.player_names)
+    ? req.body.player_names.map((n: any) => String(n ?? "").trim()).slice(0, players)
+    : [];
+
+  try {
+    const created = await withTransaction(async (client) => {
+      await client.query("SELECT pg_advisory_xact_lock(hashtext('portal_slot_' || $1::text))", [teeTimeId]);
+      // Atomic capacity check: only claims the seats if they are still free.
+      const upd = await clientQuery(client,
+        `UPDATE portal_tee_slots
+         SET player_count = COALESCE(player_count, 0) + ?
+         WHERE id = ? AND club_id = ? AND is_active = 1 AND event_id IS NULL
+           AND COALESCE(player_count, 0) + ? <= COALESCE(max_players, 4)
+         RETURNING id, date::text AS date, tee_time`,
+        [players, teeTimeId, s.club_id, players]
+      );
+      if (upd.rows.length === 0) {
+        const slot = await clientQuery(client,
+          "SELECT id, GREATEST(COALESCE(max_players,4) - COALESCE(player_count,0), 0) AS available FROM portal_tee_slots WHERE id = ? AND club_id = ?",
+          [teeTimeId, s.club_id]);
+        const available = slot.rows[0] ? Number(slot.rows[0].available) : 0;
+        throw Object.assign(new Error(slot.rows[0] ? `Only ${available} slot(s) available` : "Tee time not found"), { statusCode: slot.rows[0] ? 400 : 404 });
+      }
+
+      const bookingRef = `POS-${crypto.randomUUID().slice(0, 8).toUpperCase()}`;
+      const ins = await clientQuery(client,
+        `INSERT INTO bookings (user_id, portal_slot_id, players, total_amount, my_amount, club_amount, platform_fee,
+           booking_ref, payment_method, status, holes, booking_source, guest_name, guest_email, guest_phone)
+         VALUES (NULL, ?, ?, ?, 0, ?, 0, ?, ?, 'confirmed', 18, 'club_counter', ?, NULL, ?)
+         RETURNING id`,
+        [teeTimeId, players, totalAmount, totalAmount, bookingRef, paymentMethod, guestName, guestPhone]
+      );
+      const bookingId: number = ins.rows[0].id;
+      for (let i = 0; i < players; i++) {
+        const pName = names[i] || (i === 0 ? guestName : `${guestName} guest ${i + 1}`);
+        await clientQuery(client,
+          "INSERT INTO booking_players (booking_id, user_id, guest_name, guest_email, paid) VALUES (?, NULL, ?, NULL, 1)",
+          [bookingId, pName]
+        );
+      }
+      return {
+        id: bookingId, booking_ref: bookingRef,
+        date: String(upd.rows[0].date).slice(0, 10), time: String(upd.rows[0].tee_time).slice(0, 5),
+      };
+    });
+
+    logger.info({ bookingId: created.id, staffId: s.id, outletId: s.outlet_id, players, totalAmount }, "POS walk-in booking created");
+    res.json({
+      ...created, players, guest_name: guestName,
+      green_fee_per_player: feePerPlayer, total: totalAmount, payment_method: paymentMethod,
+    });
+  } catch (err: any) {
+    if (err?.statusCode) { res.status(err.statusCode).json({ message: err.message }); return; }
+    logger.error({ err }, "POS walk-in booking failed");
+    res.status(500).json({ message: "Could not create booking" });
+  }
+});
+
 export default router;

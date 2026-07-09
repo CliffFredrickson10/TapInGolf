@@ -36,10 +36,18 @@ export interface StaffClub {
   location?: string | null;
 }
 
+export interface ResellerInfo {
+  id: number;
+  name: string;
+  contact_email: string;
+  username: string;
+}
+
 interface AuthContextValue {
   club: ClubInfo | null;
   clubUser: ClubUserInfo | null;
   staff: StaffInfo | null;
+  reseller: ResellerInfo | null;
   clubs: StaffClub[];
   selectedClubId: number | null;
   setSelectedClubId: (id: number | null) => void;
@@ -50,6 +58,7 @@ interface AuthContextValue {
   login: (username: string, password: string) => Promise<void>;
   clubUserLogin: (email: string, password: string) => Promise<void>;
   staffLogin: (email: string, password: string) => Promise<void>;
+  resellerLogin: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -57,6 +66,7 @@ const AuthContext = createContext<AuthContextValue>({
   club: null,
   clubUser: null,
   staff: null,
+  reseller: null,
   clubs: [],
   selectedClubId: null,
   setSelectedClubId: () => {},
@@ -67,6 +77,7 @@ const AuthContext = createContext<AuthContextValue>({
   login: async () => {},
   clubUserLogin: async () => {},
   staffLogin: async () => {},
+  resellerLogin: async () => {},
   logout: () => {},
 });
 
@@ -74,6 +85,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [club, setClub] = useState<ClubInfo | null>(null);
   const [clubUser, setClubUser] = useState<ClubUserInfo | null>(null);
   const [staff, setStaff] = useState<StaffInfo | null>(null);
+  const [reseller, setReseller] = useState<ResellerInfo | null>(null);
   const [clubs, setClubs] = useState<StaffClub[]>([]);
   const [selectedClubId, setSelectedClubIdState] = useState<number | null>(getSelectedClubId());
   const [loading, setLoading] = useState(true);
@@ -105,6 +117,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setStaff({ id: data.user.id, name: data.user.name, email: data.user.email });
           await loadClubs().catch(() => {});
         })
+        .catch(() => clearToken())
+        .finally(() => setLoading(false));
+    } else if (mode === "reseller") {
+      api<ResellerInfo>("/api/portal/reseller/me")
+        .then((data) => setReseller(data))
         .catch(() => clearToken())
         .finally(() => setLoading(false));
     } else if (mode === "club_user") {
@@ -159,11 +176,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await loadClubs().catch(() => {});
   }, [loadClubs]);
 
+  const resellerLogin = useCallback(async (username: string, password: string) => {
+    const data = await api<{ token: string; reseller: ResellerInfo }>("/api/portal/reseller/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    setToken(data.token);
+    setMode("reseller");
+    setReseller(data.reseller);
+    setClub(null);
+    setClubUser(null);
+  }, []);
+
   const logout = useCallback(() => {
     clearToken();
     setClub(null);
     setClubUser(null);
     setStaff(null);
+    setReseller(null);
     setClubs([]);
     setSelectedClubIdState(null);
   }, []);
@@ -184,9 +214,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider value={{
-      club, clubUser, staff, clubs, selectedClubId, setSelectedClubId,
+      club, clubUser, staff, reseller, clubs, selectedClubId, setSelectedClubId,
       loading, isClubAdmin, canView, canEdit,
-      login, clubUserLogin, staffLogin, logout,
+      login, clubUserLogin, staffLogin, resellerLogin, logout,
     }}>
       {children}
     </AuthContext.Provider>

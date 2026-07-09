@@ -1813,6 +1813,51 @@ async function applyLateAlters() {
     )
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_support_messages_created ON support_messages (created_at DESC)");
+
+  // ── Reseller tee-time marketplace ─────────────────────────────────────────
+  // Clubs opt in via resale_enabled; reseller companies log into the portal
+  // with their own accounts, browse listed slots and buy them via Stitch.
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS resale_enabled SMALLINT NOT NULL DEFAULT 0");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS resellers (
+      id            SERIAL PRIMARY KEY,
+      name          VARCHAR(200) NOT NULL,
+      contact_email VARCHAR(200) NOT NULL,
+      username      VARCHAR(100) NOT NULL UNIQUE,
+      password_hash VARCHAR(255) NOT NULL,
+      active        SMALLINT NOT NULL DEFAULT 1,
+      created_at    TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS resale_listings (
+      id         SERIAL PRIMARY KEY,
+      club_id    INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      slot_id    INT NOT NULL REFERENCES portal_tee_slots(id) ON DELETE CASCADE,
+      price      DECIMAL(10,2) NOT NULL,
+      status     VARCHAR(12) NOT NULL DEFAULT 'listed',
+      sold_at    TIMESTAMP,
+      created_at TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  // At most one active (listed or sold) listing per slot — an unlisted slot can
+  // be re-listed later, so the uniqueness is partial.
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_resale_listings_active_slot ON resale_listings (slot_id) WHERE status IN ('listed','sold')");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_resale_listings_club ON resale_listings (club_id, status)");
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS resale_purchases (
+      id                SERIAL PRIMARY KEY,
+      listing_id        INT NOT NULL REFERENCES resale_listings(id) ON DELETE CASCADE,
+      reseller_id       INT NOT NULL REFERENCES resellers(id) ON DELETE CASCADE,
+      amount            DECIMAL(10,2) NOT NULL,
+      stitch_payment_id VARCHAR(100),
+      status            VARCHAR(12) NOT NULL DEFAULT 'pending',
+      confirmed_at      TIMESTAMP,
+      created_at        TIMESTAMP DEFAULT NOW()
+    )
+  `);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_resale_purchases_listing ON resale_purchases (listing_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_resale_purchases_reseller ON resale_purchases (reseller_id, created_at DESC)");
 }
 
 async function seedAdOfferings(): Promise<void> {

@@ -442,6 +442,11 @@ router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {
      FROM portal_tee_slots pts
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      WHERE pts.club_id = ? AND pts.date = ? AND pts.is_active = 1
+       -- slots listed (or sold) on the reseller marketplace are hidden from public booking
+       AND NOT EXISTS (
+         SELECT 1 FROM resale_listings rl
+         WHERE rl.slot_id = pts.id AND rl.status IN ('listed','sold')
+       )
      ORDER BY pts.tee_time ASC`,
     [authUser?.id ?? 0, clubId, date]
   );

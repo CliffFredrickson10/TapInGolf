@@ -8,6 +8,8 @@ import { saveUserNotification } from "../lib/userNotifications";
 import { createStitchPayment, getStitchPayment } from "../lib/stitch";
 import { sendInvoiceEmail } from "../lib/otp";
 import { getUserTierPrices } from "../lib/pricing";
+import { confirmResalePurchase } from "./resale";
+import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
@@ -460,7 +462,11 @@ router.post("/bookings", async (req, res): Promise<void> => {
        ) AS available
      FROM portal_tee_slots pts
      JOIN clubs c ON c.id = pts.club_id
-     WHERE pts.id = ? AND pts.is_active = 1`,
+     WHERE pts.id = ? AND pts.is_active = 1
+       AND NOT EXISTS (
+         SELECT 1 FROM resale_listings rl
+         WHERE rl.slot_id = pts.id AND rl.status IN ('listed','sold')
+       )`,
     [user.id, parseInt(tee_time_id)]
   );
 
@@ -1038,6 +1044,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
          AND player_count + ? <= max_players - (
            SELECT COUNT(*)::int FROM standing_holds sh
            WHERE sh.slot_id = portal_tee_slots.id AND sh.status = 'held' AND sh.user_id <> ?
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM resale_listings rl
+           WHERE rl.slot_id = portal_tee_slots.id AND rl.status IN ('listed','sold')
          )`,
       [numPlayers, parseInt(tee_time_id), numPlayers, user.id]
     );
@@ -1908,6 +1918,20 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
             }]);
           }
         }
+      }
+    }
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  // Reseller marketplace purchase: externalReference is "resale-<purchaseId>"
+  if (externalRef.startsWith("resale-")) {
+    const purchaseId = parseInt(externalRef.slice(7), 10);
+    if (!isNaN(purchaseId)) {
+      try {
+        await confirmResalePurchase(purchaseId);
+      } catch (err) {
+        logger.error({ err, purchaseId }, "resale purchase confirmation failed in webhook");
       }
     }
     res.status(200).json({ received: true });

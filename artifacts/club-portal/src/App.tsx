@@ -8,6 +8,7 @@ import { ReportsPendingProvider } from "@/context/ReportsPendingContext";
 import { ReviewReportsPendingProvider } from "@/context/ReviewReportsPendingContext";
 import { Layout } from "@/components/layout";
 import { StaffLayout } from "@/components/staff-layout";
+import { ResellerLayout } from "@/components/reseller-layout";
 import Login from "@/pages/login";
 import ForgotPassword from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
@@ -35,6 +36,12 @@ import StaffAds from "@/pages/staff/ads";
 import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import StaffGuestLeads from "@/pages/staff/guest-leads";
+import StaffResellers from "@/pages/staff/resellers";
+import Resale from "@/pages/resale";
+import ResellerSearch from "@/pages/reseller/search";
+import ResellerClub from "@/pages/reseller/club";
+import ResellerPurchases from "@/pages/reseller/purchases";
+import ResaleSuccess from "@/pages/reseller/resale-success";
 import Payments from "@/pages/payments";
 import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
@@ -66,7 +73,7 @@ function SectionGuard({ section, children }: { section: string; children: React.
 }
 
 function Router() {
-  const { club, staff, loading } = useAuth();
+  const { club, staff, reseller, loading } = useAuth();
   const [location] = useLocation();
 
   if (loading) {
@@ -98,6 +105,7 @@ function Router() {
                 <Route path="/vouchers" component={StaffVouchers} />
                 <Route path="/reminder-settings" component={StaffReminderSettings} />
                 <Route path="/guest-leads" component={StaffGuestLeads} />
+                <Route path="/resellers" component={StaffResellers} />
                 <Route>
                   <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
                 </Route>
@@ -106,6 +114,21 @@ function Router() {
           </ReviewReportsPendingProvider>
         </ReportsPendingProvider>
       </HnaPendingProvider>
+    );
+  }
+  if (reseller) {
+    return (
+      <ResellerLayout>
+        <Switch>
+          <Route path="/" component={ResellerSearch} />
+          <Route path="/clubs/:id" component={ResellerClub} />
+          <Route path="/purchases" component={ResellerPurchases} />
+          <Route path="/resale-success" component={ResaleSuccess} />
+          <Route>
+            <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
+          </Route>
+        </Switch>
+      </ResellerLayout>
     );
   }
   if (!club) return <Login />;
@@ -125,6 +148,9 @@ function Router() {
         </Route>
         <Route path="/bookings">
           <SectionGuard section="schedule"><Bookings /></SectionGuard>
+        </Route>
+        <Route path="/resale">
+          <SectionGuard section="schedule"><Resale /></SectionGuard>
         </Route>
         <Route path="/reviews">
           <SectionGuard section="reviews"><Reviews /></SectionGuard>

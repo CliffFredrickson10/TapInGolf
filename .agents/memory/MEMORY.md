@@ -9,3 +9,4 @@
 - [Stitch payment confirmation integrity](stitch-payment-confirmation.md) — verify with getStitchPayment before confirming (never trust success redirect); confirmations must be idempotent + status-guarded (pending->confirmed only, never resurrect cancelled)
 - [Standing holds × event lifecycle](standing-holds-event-lifecycle.md) — pending_publish events must never migrate/release standing holds; migration gates on status='active', publish runs the worker synchronously
 - [Standing holds concurrency](standing-holds-concurrency.md) — portal_tee_slots has duplicate rows per date/time (dedupe by MIN(id)); seat-consuming writes must check capacity in the mutating statement under advisory lock
+- [Token type isolation](token-type-isolation.md) — all HMAC verifiers must check `type`; user-token verifier must reject any payload carrying a `type` or portal/reseller tokens impersonate users under shared SESSION_SECRET

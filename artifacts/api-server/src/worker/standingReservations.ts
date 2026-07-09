@@ -152,6 +152,12 @@ export async function materializeStandingHolds(): Promise<number> {
              AND ev.event_id IS NOT NULL AND ev.is_active = 1
              AND COALESCE(ev.tee_start_type, 'any') = COALESCE(pts.tee_start_type, 'any')
          )
+         -- skip slots listed (or sold) on the reseller marketplace: they are
+         -- hidden from public booking, so a hold could never be confirmed
+         AND NOT EXISTS (
+           SELECT 1 FROM resale_listings rl
+           WHERE rl.slot_id = pts.id AND rl.status IN ('listed','sold')
+         )
        ORDER BY pts.date ASC, pts.tee_time ASC`
     );
 

@@ -19,6 +19,9 @@ export function verifyToken(token: string): number | null {
   if (!crypto.timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(sig, "hex"))) return null;
   try {
     const data = JSON.parse(Buffer.from(payload, "base64url").toString());
+    // Portal tokens (club / club_user / reseller) carry a `type` field and may be
+    // signed with the same SESSION_SECRET — never accept them as user tokens.
+    if (data.type !== undefined) return null;
     if (data.exp < Date.now()) return null;
     return data.sub as number;
   } catch {

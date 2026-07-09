@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Send, Bell, Inbox, XCircle, CheckCheck, ShieldOff, ChevronRight, Megaphone, Receipt } from "lucide-react";
+import { Send, Bell, Inbox, XCircle, CheckCheck, ShieldOff, ChevronRight, Megaphone, Receipt, Store } from "lucide-react";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
 
@@ -43,6 +43,7 @@ const INBOX_ICON: Record<string, { bg: string; text: string }> = {
   ban_appeal:   { bg: "bg-amber-100",  text: "text-amber-700" },
   ad_update:    { bg: "bg-purple-100", text: "text-purple-700"},
   invoice:      { bg: "bg-blue-100",   text: "text-blue-700"  },
+  resale_sold:  { bg: "bg-emerald-100",text: "text-emerald-700"},
   info:         { bg: "bg-blue-100",   text: "text-blue-700"  },
 };
 
@@ -66,6 +67,8 @@ function getDestination(type: string, meta: Record<string, any>): string | null 
       return meta.invoice_id ? "/invoices" : "/ads";
     case "invoice":
       return "/invoices";
+    case "resale_sold":
+      return "/resale";
     default:
       return null;
   }
@@ -76,6 +79,7 @@ function InboxIcon({ type, style }: { type: string; style: { bg: string; text: s
   if (type === "ban_appeal")   return <ShieldOff className={`h-4 w-4 ${style.text}`} />;
   if (type === "ad_update")    return <Megaphone className={`h-4 w-4 ${style.text}`} />;
   if (type === "invoice")      return <Receipt className={`h-4 w-4 ${style.text}`} />;
+  if (type === "resale_sold")  return <Store className={`h-4 w-4 ${style.text}`} />;
   return <Bell className={`h-4 w-4 ${style.text}`} />;
 }
 

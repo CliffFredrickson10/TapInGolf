@@ -27,10 +27,10 @@ function BrandLogo() {
   );
 }
 
-type Tab = "club" | "club_user" | "staff";
+type Tab = "club" | "club_user" | "staff" | "reseller";
 
 export default function Login() {
-  const { login, clubUserLogin, staffLogin } = useAuth();
+  const { login, clubUserLogin, staffLogin, resellerLogin } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<Tab>("club");
   const [username, setUsername] = useState("");
@@ -55,6 +55,8 @@ export default function Login() {
         await staffLogin(email.trim().toLowerCase(), password);
       } else if (tab === "club_user") {
         await clubUserLogin(email.trim().toLowerCase(), password);
+      } else if (tab === "reseller") {
+        await resellerLogin(username.trim().toLowerCase(), password);
       } else {
         await login(username.trim(), password);
       }
@@ -82,7 +84,7 @@ export default function Login() {
                 Back
               </button>
             ) : (
-              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted mb-4">
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
                 <button
                   type="button"
                   onClick={() => switchTab("club")}
@@ -101,28 +103,39 @@ export default function Login() {
                 >
                   Club Staff
                 </button>
+                <button
+                  type="button"
+                  onClick={() => switchTab("reseller")}
+                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                    tab === "reseller" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Reseller
+                </button>
               </div>
             )}
             <CardTitle className="text-xl">
-              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : "Sign in to your club"}
+              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : tab === "reseller" ? "Reseller sign in" : "Sign in to your club"}
             </CardTitle>
             <CardDescription>
               {tab === "staff"
                 ? "Sign in with your TapIn super-user account to manage all clubs."
                 : tab === "club_user"
                 ? "Sign in with your club staff email and password."
+                : tab === "reseller"
+                ? "Sign in with your reseller account to buy listed tee times."
                 : "Enter your club credentials to access the management portal."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {tab === "club" ? (
+              {tab === "club" || tab === "reseller" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="username">Club Username</Label>
+                  <Label htmlFor="username">{tab === "reseller" ? "Username" : "Club Username"}</Label>
                   <Input
                     id="username"
                     type="text"
-                    placeholder="e.g. glendower_golf_club"
+                    placeholder={tab === "reseller" ? "your reseller username" : "e.g. glendower_golf_club"}
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required

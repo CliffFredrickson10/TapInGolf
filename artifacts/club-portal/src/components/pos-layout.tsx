@@ -2,33 +2,38 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/context/AuthContext";
 import {
   ShoppingCart, LayoutGrid, Package, Truck, ClipboardList,
-  BadgePercent, Users, Receipt, BarChart3, LogOut,
+  BadgePercent, Users, Receipt, BarChart3, LogOut, Lock,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 export function PosLayout({ children }: { children: React.ReactNode }) {
   const [location] = useLocation();
-  const { posStaff, posOutlet, logout } = useAuth();
+  const { posOutlet, activeWaiter, logout } = useAuth();
 
-  const isManager = posStaff?.role === "manager";
+  // Navigation is driven by whoever has UNLOCKED the terminal, not by the
+  // signed-in manager session — until someone enters their PIN, no nav items
+  // are shown, and waiters/cashiers only ever see the till/tables screen.
+  const isManager = activeWaiter?.role === "manager";
   const isProShop = posOutlet?.type === "pro_shop";
 
-  const navItems = [
-    isProShop
-      ? { href: "/", label: "Till", icon: ShoppingCart }
-      : { href: "/", label: "Tables & Orders", icon: LayoutGrid },
-    ...(isManager
-      ? [
-          { href: "/products", label: "Products", icon: Package },
-          { href: "/suppliers", label: "Suppliers", icon: Truck },
-          { href: "/stock-orders", label: "Stock Orders", icon: ClipboardList },
-          { href: "/promotions", label: "Promotions", icon: BadgePercent },
-          { href: "/staff", label: "Staff", icon: Users },
-          { href: "/transactions", label: "Transactions", icon: Receipt },
-          { href: "/reports", label: "Reports", icon: BarChart3 },
-        ]
-      : []),
-  ];
+  const navItems = activeWaiter
+    ? [
+        isProShop
+          ? { href: "/", label: "Till", icon: ShoppingCart }
+          : { href: "/", label: "Tables & Orders", icon: LayoutGrid },
+        ...(isManager
+          ? [
+              { href: "/products", label: "Products", icon: Package },
+              { href: "/suppliers", label: "Suppliers", icon: Truck },
+              { href: "/stock-orders", label: "Stock Orders", icon: ClipboardList },
+              { href: "/promotions", label: "Promotions", icon: BadgePercent },
+              { href: "/staff", label: "Staff", icon: Users },
+              { href: "/transactions", label: "Transactions", icon: Receipt },
+              { href: "/reports", label: "Reports", icon: BarChart3 },
+            ]
+          : []),
+      ]
+    : [];
 
   const typeLabel = posOutlet?.type === "pro_shop" ? "Pro Shop" : posOutlet?.type === "bar" ? "Bar" : "Restaurant";
 
@@ -41,8 +46,16 @@ export function PosLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs text-white/60 mt-0.5">{posOutlet?.club_name}</p>
         </div>
         <div className="px-5 py-3 border-b border-white/10">
-          <p className="text-xs font-medium text-white truncate">{posStaff?.name}</p>
-          <p className="text-[10px] text-white/50 capitalize">{posStaff?.role}</p>
+          {activeWaiter ? (
+            <>
+              <p className="text-xs font-medium text-white truncate" data-testid="text-pos-active-staff">{activeWaiter.name}</p>
+              <p className="text-[10px] text-white/50 capitalize">{activeWaiter.role}</p>
+            </>
+          ) : (
+            <p className="text-xs font-medium text-white/60 flex items-center gap-1.5" data-testid="text-pos-locked">
+              <Lock className="h-3 w-3" /> Terminal locked
+            </p>
+          )}
         </div>
         <nav className="flex-1 px-3 py-4 space-y-0.5 overflow-y-auto">
           {navItems.map((item) => {

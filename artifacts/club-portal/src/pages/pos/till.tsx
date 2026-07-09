@@ -52,6 +52,7 @@ export default function PosTill() {
   const [golfFee, setGolfFee] = useState("");
   const [golfSaving, setGolfSaving] = useState(false);
   const [golfReceipt, setGolfReceipt] = useState<any | null>(null);
+  const [golfIncludeCart, setGolfIncludeCart] = useState(true);
 
   useEffect(() => {
     if (!golfOpen) return;
@@ -64,16 +65,17 @@ export default function PosTill() {
   }, [golfOpen, golfDate]);
 
   const resetGolf = () => {
-    setGolfSlotId(null); setGolfPlayers(1); setGolfName(""); setGolfPhone(""); setGolfFee("");
+    setGolfSlotId(null); setGolfPlayers(1); setGolfName(""); setGolfPhone(""); setGolfFee(""); setGolfIncludeCart(true);
   };
 
   const selectedSlot = golfSlots.find(s => s.id === golfSlotId) ?? null;
   const feePerPlayer = golfFee.trim() === "" ? 0 : Number(golfFee);
-  const golfTotal = Number.isFinite(feePerPlayer) && feePerPlayer >= 0
+  const golfFeesTotal = Number.isFinite(feePerPlayer) && feePerPlayer >= 0
     ? Math.round(feePerPlayer * golfPlayers * 100) / 100 : 0;
 
   const bookGolf = async (method: "cash" | "card") => {
     if (!golfSlotId || !golfName.trim() || golfSaving) return;
+    const includeItems = golfIncludeCart && cart.length > 0;
     setGolfSaving(true);
     try {
       const r = await api<any>("/api/pos/walk-in-bookings", {
@@ -85,10 +87,12 @@ export default function PosTill() {
           guest_phone: golfPhone.trim() || undefined,
           green_fee_per_player: golfFee.trim() === "" ? undefined : feePerPlayer,
           payment_method: method,
+          items: includeItems ? cart.map(l => ({ product_id: l.product_id, variant_id: l.variant_id, quantity: l.quantity })) : undefined,
         }),
       });
       setGolfOpen(false);
       resetGolf();
+      if (includeItems) { setCart([]); load(); }
       setGolfReceipt(r);
     } catch (err: any) {
       toast({ title: "Booking failed", description: err.message, variant: "destructive" });
@@ -396,10 +400,36 @@ export default function PosTill() {
                 <Input value={golfPhone} onChange={e => setGolfPhone(e.target.value)} placeholder="082 123 4567" className="h-9" data-testid="input-golf-phone" />
               </div>
             </div>
+            {cart.length > 0 && (
+              <label className="flex items-center gap-2 rounded-md border p-2.5 cursor-pointer hover:bg-muted/50">
+                <input
+                  type="checkbox"
+                  checked={golfIncludeCart}
+                  onChange={e => setGolfIncludeCart(e.target.checked)}
+                  className="h-4 w-4 accent-[#1a5c38]"
+                  data-testid="checkbox-golf-include-cart"
+                />
+                <span className="text-sm flex-1">
+                  Include till cart ({cart.reduce((n, l) => n + l.quantity, 0)} item{cart.reduce((n, l) => n + l.quantity, 0) === 1 ? "" : "s"})
+                </span>
+                <span className="text-sm font-semibold">{fmt(displayTotal)}</span>
+              </label>
+            )}
             <div className="flex items-center justify-between border-t pt-3">
               <div>
-                <p className="text-xs text-muted-foreground">Total green fees</p>
-                <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(golfTotal)}</p>
+                {golfIncludeCart && cart.length > 0 ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Green fees {fmt(golfFeesTotal)} + products {fmt(displayTotal)}
+                    </p>
+                    <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(Math.round((golfFeesTotal + displayTotal) * 100) / 100)}</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-xs text-muted-foreground">Total green fees</p>
+                    <p className="text-xl font-bold text-[#1a5c38]" data-testid="text-golf-total">{fmt(golfFeesTotal)}</p>
+                  </>
+                )}
               </div>
               <div className="flex gap-2">
                 <Button
@@ -436,9 +466,15 @@ export default function PosTill() {
               <div className="flex justify-between"><span>Tee time</span><span className="font-medium">{golfReceipt.date} at {golfReceipt.time}</span></div>
               <div className="flex justify-between"><span>Lead player</span><span className="font-medium">{golfReceipt.guest_name}</span></div>
               <div className="flex justify-between"><span>Players</span><span className="font-medium">{golfReceipt.players}</span></div>
-              {Number(golfReceipt.total) > 0 && (
+              {golfReceipt.sale && (
+                <>
+                  <div className="flex justify-between"><span>Green fees</span><span className="font-medium">{fmt(Number(golfReceipt.green_fee_total ?? 0))}</span></div>
+                  <div className="flex justify-between"><span>Products</span><span className="font-medium">{fmt(Number(golfReceipt.products_total ?? 0))}</span></div>
+                </>
+              )}
+              {Number(golfReceipt.grand_total ?? golfReceipt.total) > 0 && (
                 <div className="flex justify-between border-t pt-2 font-bold">
-                  <span>Paid ({golfReceipt.payment_method})</span><span>{fmt(Number(golfReceipt.total))}</span>
+                  <span>Paid ({golfReceipt.payment_method})</span><span data-testid="text-golf-receipt-total">{fmt(Number(golfReceipt.grand_total ?? golfReceipt.total))}</span>
                 </div>
               )}
               <Button className="w-full bg-[#1a5c38] hover:bg-[#164d30]" onClick={() => { setGolfReceipt(null); barcodeRef.current?.focus(); }} data-testid="button-golf-done">

@@ -1210,7 +1210,13 @@ router.delete("/pos/orders/:id/items/:itemId", requirePosAuth, async (req: Reque
 // If amountPaid is provided, the tip is worked out as amountPaid - bill total
 // (never negative); the outlet's automatic service fee is locked in either way.
 async function finalizeOrderPayment(orderId: number, outletId: number, staffId: number, paymentMethod: string, amountPaid: number | null = null): Promise<any> {
-  return withTransaction(async (client) => {
+  return withTransaction((client) => finalizeOrderPaymentOn(client, orderId, outletId, staffId, paymentMethod, amountPaid));
+}
+
+// Same as finalizeOrderPayment but runs on an existing transaction client so
+// callers can combine the sale with other writes (e.g. a walk-in golf booking)
+// in one atomic transaction.
+async function finalizeOrderPaymentOn(client: any, orderId: number, outletId: number, staffId: number, paymentMethod: string, amountPaid: number | null = null): Promise<any> {
     const orderRes = await clientQuery(client,
       "SELECT id, status FROM pos_orders WHERE id = ? AND outlet_id = ? FOR UPDATE", [orderId, outletId]);
     const order = orderRes.rows[0];
@@ -1274,7 +1280,6 @@ async function finalizeOrderPayment(orderId: number, outletId: number, staffId: 
       [paymentMethod, Math.round(subtotal * 100) / 100, Math.round(discountTotal * 100) / 100, total,
        serviceFee, tip, amountPaid, staffId, orderId]);
     return { subtotal: Math.round(subtotal * 100) / 100, discount_total: Math.round(discountTotal * 100) / 100, service_fee: serviceFee, tip_amount: tip, total };
-  });
 }
 
 router.post("/pos/orders/:id/pay", requirePosAuth, async (req: Request, res: Response): Promise<void> => {
@@ -1677,6 +1682,21 @@ router.post("/pos/walk-in-bookings", requirePosAuth, requireProShop, async (req:
     ? req.body.player_names.map((n: any) => String(n ?? "").trim()).slice(0, players)
     : [];
 
+  // Optional: sell products (from the till cart) together with the booking —
+  // one combined payment, all-or-nothing in a single transaction.
+  let resolvedItems: any[] = [];
+  if (req.body?.items != null) {
+    if (!Array.isArray(req.body.items)) { res.status(400).json({ message: "items must be an array" }); return; }
+    if (req.body.items.length > 0) {
+      try {
+        resolvedItems = await resolveSaleItems(req.body.items, s.outlet_id);
+      } catch (err: any) {
+        res.status(err.status ?? 500).json({ message: err.message ?? "Failed to validate sale items" });
+        return;
+      }
+    }
+  }
+
   try {
     const created = await withTransaction(async (client) => {
       await client.query("SELECT pg_advisory_xact_lock(hashtext('portal_slot_' || $1::text))", [teeTimeId]);
@@ -1713,19 +1733,46 @@ router.post("/pos/walk-in-bookings", requirePosAuth, requireProShop, async (req:
           [bookingId, pName]
         );
       }
+
+      // Sell the cart items in the same transaction: a stock failure rolls the
+      // booking back too, so the golfer is never booked without their goods
+      // (and vice versa).
+      let sale: any = null;
+      if (resolvedItems.length > 0) {
+        const orderRes = await clientQuery(client,
+          "INSERT INTO pos_orders (outlet_id, order_type, opened_by) VALUES (?, 'counter', ?) RETURNING id",
+          [s.outlet_id, s.id]
+        );
+        const orderId: number = orderRes.rows[0].id;
+        for (const r of resolvedItems) {
+          await clientQuery(client,
+            "INSERT INTO pos_order_items (order_id, product_id, variant_id, name, variant_label, quantity, unit_price, line_total) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            [orderId, r.productId, r.variantId, r.name, r.variantLabel, r.quantity, r.unitPrice, r.unitPrice * r.quantity]
+          );
+        }
+        const totals = await finalizeOrderPaymentOn(client, orderId, s.outlet_id, s.id, paymentMethod);
+        sale = { order_id: orderId, ...totals };
+      }
+
       return {
         id: bookingId, booking_ref: bookingRef,
         date: String(upd.rows[0].date).slice(0, 10), time: String(upd.rows[0].tee_time).slice(0, 5),
+        sale,
       };
     });
 
-    logger.info({ bookingId: created.id, staffId: s.id, outletId: s.outlet_id, players, totalAmount }, "POS walk-in booking created");
+    const productsTotal = created.sale ? Number(created.sale.total) : 0;
+    const grandTotal = Math.round((totalAmount + productsTotal) * 100) / 100;
+    logger.info({ bookingId: created.id, staffId: s.id, outletId: s.outlet_id, players, totalAmount, productsTotal }, "POS walk-in booking created");
     res.json({
       ...created, players, guest_name: guestName,
-      green_fee_per_player: feePerPlayer, total: totalAmount, payment_method: paymentMethod,
+      green_fee_per_player: feePerPlayer, green_fee_total: totalAmount,
+      products_total: productsTotal, total: totalAmount, grand_total: grandTotal,
+      payment_method: paymentMethod,
     });
   } catch (err: any) {
-    if (err?.statusCode) { res.status(err.statusCode).json({ message: err.message }); return; }
+    const status = err?.statusCode ?? err?.status;
+    if (status) { res.status(status).json({ message: err.message }); return; }
     logger.error({ err }, "POS walk-in booking failed");
     res.status(500).json({ message: "Could not create booking" });
   }

@@ -86,7 +86,7 @@ export default function Login() {
                 Back
               </button>
             ) : (
-              <div className="grid grid-cols-4 gap-1 p-1 rounded-lg bg-muted mb-4">
+              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
                 <button
                   type="button"
                   onClick={() => switchTab("club")}
@@ -95,15 +95,6 @@ export default function Login() {
                   }`}
                 >
                   Club Admin
-                </button>
-                <button
-                  type="button"
-                  onClick={() => switchTab("club_user")}
-                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                    tab === "club_user" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Club Staff
                 </button>
                 <button
                   type="button"

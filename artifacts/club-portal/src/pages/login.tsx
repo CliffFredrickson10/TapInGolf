@@ -98,21 +98,21 @@ export default function Login() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => switchTab("reseller")}
-                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                    tab === "reseller" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Reseller
-                </button>
-                <button
-                  type="button"
                   onClick={() => switchTab("pos")}
                   className={`text-xs font-medium py-2 rounded-md transition-colors ${
                     tab === "pos" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
                   Outlet
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchTab("reseller")}
+                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
+                    tab === "reseller" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  Reseller
                 </button>
               </div>
             )}

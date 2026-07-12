@@ -56,3 +56,6 @@ path = "scripts/post-merge.sh"
 timeoutMs = 120000
 
 [workflows]
+
+[objectStorage]
+defaultBucketID = "replit-objstore-84963b93-3198-4091-8590-43a78f978496"

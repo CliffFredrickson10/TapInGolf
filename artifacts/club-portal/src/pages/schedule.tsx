@@ -84,6 +84,9 @@ interface TeeTime {
   event_id?: number | null;
   event_name?: string | null;
   shotgun_start?: boolean | number | null;
+  // Seats held for a standing (recurring) reservation, awaiting member confirmation.
+  standing_held?: number;
+  standing_names?: string | null;
 }
 
 interface Booking {
@@ -116,7 +119,10 @@ type SlotKind =
   | { kind: "blocked"; slotIndex: number }
   // effectiveStatus: booking status for non-split bookings; per-player
   // "confirmed" / "pending" for split-bill bookings.
-  | { kind: "booked"; booking: Booking; playerIndex: number; effectiveStatus: string };
+  | { kind: "booked"; booking: Booking; playerIndex: number; effectiveStatus: string }
+  // Seat held by a standing reservation — reserved for a member until the
+  // confirmation deadline, at which point it either becomes a booking or reopens.
+  | { kind: "standing"; name: string | null };
 
 interface Block {
   start: string;
@@ -207,6 +213,19 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
       if (slots[i].kind === "open") { slots[i] = { kind: "unavailable" }; extra--; }
     }
   }
+  // Standing-reservation holds occupy open seats (they are hidden from public
+  // booking but are not bookings yet — members still need to confirm).
+  let standingLeft = tt.standing_held ?? 0;
+  if (standingLeft > 0) {
+    const names = (tt.standing_names ?? "").split(",").map(s => s.trim()).filter(Boolean);
+    let nameIdx = 0;
+    for (let i = 0; i < COLS && standingLeft > 0; i++) {
+      if (slots[i].kind === "open") {
+        slots[i] = { kind: "standing", name: names[nameIdx++] ?? null };
+        standingLeft--;
+      }
+    }
+  }
   return slots;
 }
 
@@ -237,6 +256,7 @@ function slotBg(s: SlotKind) {
   if (s.kind === "unavailable") return CELL_BG.unavailable;
   if (s.kind === "blocked") return CELL_BG.blocked;
   if (s.kind === "na") return CELL_BG.na;
+  if (s.kind === "standing") return "bg-purple-50";
   return CELL_BG[s.effectiveStatus] ?? CELL_BG.pending;
 }
 
@@ -2104,6 +2124,7 @@ export default function Schedule() {
                         slot.kind === "booked" ? `Manage: ${slot.booking.booking_ref}` :
                         slot.kind === "open" ? "Add booking for this slot" :
                         slot.kind === "blocked" ? "Click to unblock this slot" :
+                        slot.kind === "standing" ? `Standing reservation${slot.name ? ` — ${slot.name}` : ""} (awaiting member confirmation)` :
                         undefined
                       }
                     >
@@ -2118,6 +2139,12 @@ export default function Schedule() {
                       )}
                       {slot.kind === "unavailable" && <span className="font-medium text-red-400">Unavailable</span>}
                       {slot.kind === "blocked" && <span className="font-medium text-orange-500">Blocked</span>}
+                      {slot.kind === "standing" && (
+                        <span className="flex items-center justify-between w-full gap-1 min-w-0">
+                          <span className="truncate leading-tight font-medium text-purple-700">{slot.name ?? "Standing"}</span>
+                          <span className="flex-shrink-0 text-[8px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200 font-bold">Standing</span>
+                        </span>
+                      )}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}
                       {slot.kind === "booked" && (
                         <span className="flex items-center justify-between w-full gap-1 min-w-0">

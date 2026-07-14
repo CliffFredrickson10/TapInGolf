@@ -2108,7 +2108,7 @@ export default function Schedule() {
                       })
                     : slots.map((slot, i) => (
                     <div key={i}
-                      className={`px-3 py-2 border-l ${borderCol} text-xs flex items-center transition-all
+                      className={`px-3 py-2 border-l ${borderCol} text-xs flex items-center transition-all min-w-0 overflow-hidden
                         ${slotBg(slot)}
                         ${!isTournament && slot.kind === "booked" ? "cursor-pointer hover:brightness-95" : ""}
                         ${!isTournament && slot.kind === "open" ? "cursor-pointer hover:brightness-95" : ""}

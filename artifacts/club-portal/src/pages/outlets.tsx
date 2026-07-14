@@ -218,13 +218,13 @@ export default function Outlets() {
       </Dialog>
 
       <Dialog open={!!staffOutlet} onOpenChange={(o) => !o && setStaffOutlet(null)}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="w-[calc(100vw-2rem)] sm:max-w-2xl max-h-[85vh] overflow-y-auto">
           <DialogHeader><DialogTitle>{staffOutlet?.name} — staff & logins</DialogTitle></DialogHeader>
-          <div className="space-y-3">
+          <div className="space-y-3 min-w-0">
             <Button size="sm" className="bg-[#1a5c38] hover:bg-[#164d30]" onClick={() => setAddStaffOpen(true)} data-testid="button-add-outlet-staff">
               <Plus className="h-3.5 w-3.5 mr-1.5" /> Add account
             </Button>
-            <div className="border rounded-lg overflow-hidden">
+            <div className="border rounded-lg overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -237,9 +237,9 @@ export default function Outlets() {
                 <TableBody>
                   {staff.map(m => (
                     <TableRow key={m.id} data-testid={`outlet-staff-row-${m.id}`}>
-                      <TableCell>
-                        <p className="font-medium text-sm">{m.name}</p>
-                        <p className="text-xs text-muted-foreground">{m.email}</p>
+                      <TableCell className="max-w-[220px]">
+                        <p className="font-medium text-sm truncate">{m.name}</p>
+                        <p className="text-xs text-muted-foreground truncate" title={m.email ?? undefined}>{m.email}</p>
                       </TableCell>
                       <TableCell><Badge variant={m.role === "manager" ? "default" : "secondary"} className={m.role === "manager" ? "bg-[#1a5c38]" : ""}>{m.role}</Badge></TableCell>
                       <TableCell>{m.active ? <Badge variant="secondary">Active</Badge> : <Badge variant="outline">Disabled</Badge>}</TableCell>

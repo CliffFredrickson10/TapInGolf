@@ -1,17 +1,18 @@
 import { Platform } from "react-native";
 
 const domain = process.env.EXPO_PUBLIC_DOMAIN;
+const devPort = process.env.EXPO_PUBLIC_API_PORT || "3000";
 export const API_BASE = domain
   ? `https://${domain}/api`
   : Platform.OS === "web"
   ? "/api"
-  : "http://localhost/api";
+  : `http://localhost:${devPort}/api`;
 
 const API_ORIGIN = domain
   ? `https://${domain}`
   : Platform.OS === "web"
   ? ""
-  : "http://localhost";
+  : `http://localhost:${devPort}`;
 
 /** Converts a relative /api/... path returned by the server into a full URL. */
 export function toAbsoluteUrl(path: string): string {

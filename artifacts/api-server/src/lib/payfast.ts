@@ -1,9 +1,13 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 
-const DEFAULT_PAYFAST_MERCHANT_ID = "36155079";
-const DEFAULT_PAYFAST_MERCHANT_KEY = "tbuwwtf6pisnl";
-const DEFAULT_PAYFAST_PASSPHRASE = "Pretoria2026";
-const DEFAULT_PAYFAST_URL = "https://www.payfast.co.za/eng/process";
+const isSandbox = process.env.PAYFAST_SANDBOX === "1";
+
+const DEFAULT_PAYFAST_MERCHANT_ID = isSandbox ? "10000100" : "36155079";
+const DEFAULT_PAYFAST_MERCHANT_KEY = isSandbox ? "46f0cd694581a" : "tbuwwtf6pisnl";
+const DEFAULT_PAYFAST_PASSPHRASE = isSandbox ? "jt7NOE43FZPn" : "Pretoria2026";
+const DEFAULT_PAYFAST_URL = isSandbox
+  ? "https://sandbox.payfast.co.za/eng/process"
+  : "https://www.payfast.co.za/eng/process";
 
 export const PLATFORM_FEE_PER_PLAYER = 11.5;
 

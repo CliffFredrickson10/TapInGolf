@@ -43,6 +43,8 @@ interface LineItem {
   date?: string;
   time?: string;
   players?: number;
+  reseller_name?: string;
+  sale_amount?: number;
   amount: number;
 }
 
@@ -55,7 +57,7 @@ interface ClubInvoice {
   vat_rate: number;
   vat_amount: number;
   total_amount: number;
-  invoice_type: "prepaid_rounds" | "counter_bookings" | "ad_campaign";
+  invoice_type: "prepaid_rounds" | "counter_bookings" | "ad_campaign" | "resale_fees";
   status: "unpaid" | "paid" | "cancelled";
   stitch_payment_url: string | null;
   paid_at: string | null;
@@ -76,6 +78,7 @@ function capitalize(s: string) {
 function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEmail: string): string {
   const isCounter = inv.invoice_type === "counter_bookings";
   const isAd      = inv.invoice_type === "ad_campaign";
+  const isResale  = inv.invoice_type === "resale_fees";
   const vatPct    = Math.round((Number(inv.vat_rate) || 0.15) * 100);
   const total     = Number(inv.total_amount);
   const vatAmt    = Number(inv.vat_amount) || Math.round(total * vatPct / (100 + vatPct) * 100) / 100;
@@ -109,6 +112,15 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
         </td>
         <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(li.amount).toFixed(2)}</td>
       </tr>`;
+    } else if (isResale) {
+      return `
+      <tr>
+        <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6">
+          <strong>${li.reseller_name ?? "Reseller"}</strong>
+          <span style="color:#6b7280;font-size:12px"> &mdash; ${li.date ?? ""} ${li.time ?? ""}${li.sale_amount != null ? ` &mdash; sold for R ${Number(li.sale_amount).toFixed(2)}` : ""}</span>
+        </td>
+        <td style="padding:12px 10px;border-bottom:1px solid #f3f4f6;text-align:right">R ${Number(li.amount).toFixed(2)}</td>
+      </tr>`;
     } else if (isCounter) {
       const slots = Number(li.players ?? 1);
       return `
@@ -134,9 +146,11 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
     }
   }).join("");
 
-  const detailLabel = isAd ? "Ad Campaign" : isCounter ? "Counter Bookings" : "Prepaid Rounds — Member Import";
+  const detailLabel = isAd ? "Ad Campaign" : isResale ? "Resale Marketplace Fees" : isCounter ? "Counter Bookings" : "Prepaid Rounds — Member Import";
   const unitLabel   = isAd
     ? inv.description
+    : isResale
+    ? `${inv.line_items.length} resale sale${inv.line_items.length !== 1 ? "s" : ""}`
     : isCounter
     ? `${inv.total_rounds} player slot${inv.total_rounds !== 1 ? "s" : ""}`
     : `${inv.total_rounds} round${inv.total_rounds !== 1 ? "s" : ""} across ${inv.line_items.length} member${inv.line_items.length !== 1 ? "s" : ""}`;
@@ -196,7 +210,7 @@ function generatePlatformInvoiceHTML(inv: ClubInvoice, clubName: string, clubEma
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
           <div><div style="color:#6b7280;font-size:12px">Service</div><div style="font-weight:600;font-size:14px;margin-top:3px">${detailLabel}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Volume</div><div style="font-weight:600;font-size:14px;margin-top:3px">${unitLabel}</div></div>
-          <div><div style="color:#6b7280;font-size:12px">Rate (incl. VAT)</div><div style="font-weight:600;font-size:14px;margin-top:3px">R ${Number(inv.platform_fee_rate).toFixed(2)} / ${isCounter ? "player slot" : "round"}</div></div>
+          <div><div style="color:#6b7280;font-size:12px">Rate (incl. VAT)</div><div style="font-weight:600;font-size:14px;margin-top:3px">${isResale ? `${Number(inv.platform_fee_rate)}% of sale price` : `R ${Number(inv.platform_fee_rate).toFixed(2)} / ${isCounter ? "player slot" : "round"}`}</div></div>
           <div><div style="color:#6b7280;font-size:12px">Invoice Date</div><div style="font-weight:600;font-size:14px;margin-top:3px">${new Date(inv.created_at).toLocaleDateString("en-ZA", { day: "2-digit", month: "short", year: "numeric" })}</div></div>
         </div>
       </div>
@@ -341,13 +355,16 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
 
   const [open, setOpen] = useState(false);
   const isCounter = inv.invoice_type === "counter_bookings";
+  const isResale  = inv.invoice_type === "resale_fees";
   const items = inv.line_items ?? [];
   const vatPct = Math.round((Number(inv.vat_rate) || 0.15) * 100);
   const total  = Number(inv.total_amount);
   const vatAmt = Number(inv.vat_amount) || Math.round(total * vatPct / (100 + vatPct) * 100) / 100;
   const exclVat = Math.round((total - vatAmt) * 100) / 100;
 
-  const summaryLabel = isCounter
+  const summaryLabel = isResale
+    ? `${items.length} resale sale${items.length !== 1 ? "s" : ""}`
+    : isCounter
     ? `${inv.total_rounds} player slot${inv.total_rounds !== 1 ? "s" : ""} across ${items.length} booking${items.length !== 1 ? "s" : ""}`
     : `${inv.total_rounds} round${inv.total_rounds !== 1 ? "s" : ""} across ${items.length} member${items.length !== 1 ? "s" : ""}`;
 
@@ -367,13 +384,13 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
             <thead>
               <tr className="bg-muted/40 border-b">
                 <th className="text-left px-3 py-2 font-medium text-muted-foreground">
-                  {isCounter ? "Booking" : "Member"}
+                  {isResale ? "Sale" : isCounter ? "Booking" : "Member"}
                 </th>
-                {!isCounter && (
+                {!isCounter && !isResale && (
                   <th className="text-left px-3 py-2 font-medium text-muted-foreground hidden sm:table-cell">Type</th>
                 )}
                 <th className="text-center px-3 py-2 font-medium text-muted-foreground">
-                  {isCounter ? "Players" : "Rounds"}
+                  {isResale ? "Sale price" : isCounter ? "Players" : "Rounds"}
                 </th>
                 <th className="text-right px-3 py-2 font-medium text-muted-foreground">Fee (incl. VAT)</th>
               </tr>
@@ -385,7 +402,14 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
                     <div className="flex items-center gap-2">
                       <User className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
                       <div className="min-w-0">
-                        {isCounter ? (
+                        {isResale ? (
+                          <>
+                            <p className="font-medium truncate text-foreground">{li.reseller_name ?? "Reseller"}</p>
+                            {(li.date || li.time) && (
+                              <p className="text-xs text-muted-foreground">{li.date} {li.time}</p>
+                            )}
+                          </>
+                        ) : isCounter ? (
                           <>
                             {li.guest_name && (
                               <p className="font-medium truncate text-foreground">{li.guest_name}</p>
@@ -408,13 +432,13 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
                       </div>
                     </div>
                   </td>
-                  {!isCounter && (
+                  {!isCounter && !isResale && (
                     <td className="px-3 py-2 text-muted-foreground hidden sm:table-cell text-xs capitalize">
                       {capitalize(li.membership_type ?? "")}
                     </td>
                   )}
                   <td className="px-3 py-2 text-center font-medium">
-                    {isCounter ? (li.players ?? 1) : li.rounds}
+                    {isResale ? (li.sale_amount != null ? fmtRand(li.sale_amount) : "—") : isCounter ? (li.players ?? 1) : li.rounds}
                   </td>
                   <td className="px-3 py-2 text-right font-medium">{fmtRand(li.amount)}</td>
                 </tr>
@@ -422,19 +446,19 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
             </tbody>
             <tfoot>
               <tr className="border-t bg-muted/20">
-                <td colSpan={isCounter ? 2 : 3} className="px-3 py-2 text-muted-foreground text-sm">
+                <td colSpan={isCounter || isResale ? 2 : 3} className="px-3 py-2 text-muted-foreground text-sm">
                   Subtotal (excl. VAT)
                 </td>
                 <td className="px-3 py-2 text-right text-muted-foreground text-sm">{fmtRand(exclVat)}</td>
               </tr>
               <tr className="bg-muted/20">
-                <td colSpan={isCounter ? 2 : 3} className="px-3 py-1.5 text-muted-foreground text-xs">
+                <td colSpan={isCounter || isResale ? 2 : 3} className="px-3 py-1.5 text-muted-foreground text-xs">
                   VAT ({vatPct}%)
                 </td>
                 <td className="px-3 py-1.5 text-right text-muted-foreground text-xs">{fmtRand(vatAmt)}</td>
               </tr>
               <tr className="bg-muted/10 border-t">
-                <td colSpan={isCounter ? 2 : 3} className="px-3 py-2 font-semibold text-foreground">
+                <td colSpan={isCounter || isResale ? 2 : 3} className="px-3 py-2 font-semibold text-foreground">
                   Total (incl. VAT)
                 </td>
                 <td className="px-3 py-2 text-right font-bold text-[#1a5c38]">{fmtRand(total)}</td>
@@ -442,7 +466,9 @@ function InvoiceBreakdown({ inv }: { inv: ClubInvoice }) {
             </tfoot>
           </table>
           <div className="px-3 py-2 bg-muted/20 border-t text-xs text-muted-foreground">
-            {isCounter
+            {isResale
+              ? `Rate: ${Number(inv.platform_fee_rate)}% of sale price (incl. VAT) — TapIn resale marketplace fee`
+              : isCounter
               ? `Rate: R${Number(inv.platform_fee_rate).toFixed(2)} per player slot (incl. VAT) — TapIn platform fee`
               : `Rate: R${Number(inv.platform_fee_rate).toFixed(2)} per prepaid round (incl. VAT) — TapIn platform fee`}
           </div>
@@ -771,6 +797,17 @@ export default function Invoices() {
                   onDownload={downloadInvoice}
                   emptyMessage="No outstanding prepaid round invoices"
                 />
+                <InvoiceSection
+                  title="Resale Marketplace"
+                  invoices={unpaid.filter(i => i.invoice_type === "resale_fees")}
+                  status="unpaid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No outstanding resale marketplace invoices"
+                />
                 <p className="text-xs text-muted-foreground px-1">
                   "Pay Now" opens the Stitch secure checkout in a new tab. Once payment is confirmed the invoice is automatically marked as paid.
                 </p>
@@ -821,6 +858,17 @@ export default function Invoices() {
                   onPay={payNow}
                   onDownload={downloadInvoice}
                   emptyMessage="No paid prepaid round invoices"
+                />
+                <InvoiceSection
+                  title="Resale Marketplace"
+                  invoices={paid.filter(i => i.invoice_type === "resale_fees")}
+                  status="paid"
+                  clubName={clubName}
+                  clubEmail={clubEmail}
+                  refreshingId={refreshingId}
+                  onPay={payNow}
+                  onDownload={downloadInvoice}
+                  emptyMessage="No paid resale marketplace invoices"
                 />
               </>
             )}

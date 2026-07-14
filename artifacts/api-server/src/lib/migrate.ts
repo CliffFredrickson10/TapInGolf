@@ -1858,6 +1858,10 @@ async function applyLateAlters() {
   `);
   await ddl("CREATE INDEX IF NOT EXISTS idx_resale_purchases_listing ON resale_purchases (listing_id, status)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_resale_purchases_reseller ON resale_purchases (reseller_id, created_at DESC)");
+  // TapIn commission on resale sales is billed monthly (like counter bookings);
+  // invoice_id marks a confirmed purchase as billed.
+  await ddl("ALTER TABLE resale_purchases ADD COLUMN IF NOT EXISTS invoice_id INT REFERENCES club_invoices(id)");
+  await ddl("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('resale_fee_pct', '10') ON CONFLICT (setting_key) DO NOTHING");
 }
 
 async function seedAdOfferings(): Promise<void> {

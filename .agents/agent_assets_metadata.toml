@@ -161,3 +161,15 @@ id = "5KdQyCS3PnlsygQs82mq0"
 uri = "file://artifacts/tapin-golf/store-listing.md"
 type = "text"
 title = "ASO-optimised store listing (Play + App Store)"
+
+[[outputs]]
+id = "OYDNk48HxFI2ypQ7ioFJ1"
+uri = "file://exports/tapin_golf_source.zip"
+type = "unspecified"
+title = "TapIn Golf — full source code (zip)"
+
+[[outputs]]
+id = "Woa5Pthnqa-EzfwCKuO0f"
+uri = "file://exports/tapin_golf_db_dump.sql.gz"
+type = "unspecified"
+title = "TapIn Golf — full PostgreSQL database dump (gzipped SQL)"

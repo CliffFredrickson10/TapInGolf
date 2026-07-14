@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
 import { getUser } from "../lib/auth";
-import { createStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl } from "../lib/payfast";
 
 const router: IRouter = Router();
 
@@ -23,7 +23,7 @@ router.get("/payments/methods", async (req, res): Promise<void> => {
   res.json({ wallet: { balance }, methods: [] });
 });
 
-// POST /payments/wallet/topup-url — create a Stitch payment URL for wallet top-up
+// POST /payments/wallet/topup-url — create a PayFast payment URL for wallet top-up
 router.post("/payments/wallet/topup-url", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
@@ -40,12 +40,16 @@ router.post("/payments/wallet/topup-url", async (req, res): Promise<void> => {
   );
   const host = req.get("host") ?? "";
 
-  const pr = await createStitchPayment({
+  const pr = buildPayFastPaymentUrl({
     amount,
-    payerName:         user.name,
-    payerEmail:        user.email,
     merchantReference: `wallet-${topupId}`,
-    redirectUrl:       `https://${host}/booking/success`,
+    itemName: "TapIn Golf - Wallet Top Up",
+    returnUrl: `https://${host}/booking/success`,
+    cancelUrl: `https://${host}/booking/cancel`,
+    notifyUrl: `https://${host}/api/payfast/notify`,
+    payerFirstName: user.name?.split(" ")[0],
+    payerLastName: user.name?.split(" ").slice(1).join(" ") || undefined,
+    payerEmail: user.email,
   });
 
   res.json({ payment_url: pr.url, topup_id: topupId });

@@ -856,7 +856,7 @@ async function createSchema(): Promise<void> {
       invoice_ref        VARCHAR(60) NOT NULL UNIQUE,
       description        TEXT NOT NULL,
       total_rounds       INT NOT NULL DEFAULT 0,
-      platform_fee_rate  DECIMAL(10,2) NOT NULL DEFAULT 10,
+      platform_fee_rate  DECIMAL(10,2) NOT NULL DEFAULT 11.50,
       total_amount       DECIMAL(10,2) NOT NULL,
       status             VARCHAR(20) NOT NULL DEFAULT 'unpaid',
       stitch_payment_id  VARCHAR(100),
@@ -1405,7 +1405,7 @@ async function seedData(): Promise<void> {
     []
   );
   await exec(
-    "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_flat', '10') ON CONFLICT (setting_key) DO NOTHING",
+    "INSERT INTO platform_settings (setting_key, setting_value) VALUES ('platform_fee_flat', '11.50') ON CONFLICT (setting_key) DO NOTHING",
     []
   );
   await exec(
@@ -1479,7 +1479,7 @@ async function reconcileSlotPlayerCounts(): Promise<void> {
   // are cancelled so they stop holding seats.
   await exec(
     `UPDATE bookings SET status = 'cancelled'
-      WHERE payment_method = 'stitch'
+      WHERE payment_method IN ('stitch', 'payfast')
         AND status IN ('pending','confirmed')
         AND created_at < NOW() - INTERVAL '15 minutes'
         AND NOT EXISTS (
@@ -1543,6 +1543,12 @@ async function applyLateAlters() {
   await ddl("CREATE INDEX IF NOT EXISTS idx_ad_billing_cycles_request ON ad_billing_cycles (ad_request_id)");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS ad_request_id INT REFERENCES ad_requests(id) ON DELETE SET NULL");
   await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS ad_billing_cycle_id INT REFERENCES ad_billing_cycles(id) ON DELETE SET NULL");
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS payfast_merchant_id VARCHAR(50)");
+  await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS payfast_payment_id VARCHAR(100)");
+  await ddl("ALTER TABLE resale_purchases ADD COLUMN IF NOT EXISTS payfast_payment_id VARCHAR(100)");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS payfast_payment_id VARCHAR(100)");
+  await ddl("ALTER TABLE club_invoices ADD COLUMN IF NOT EXISTS payfast_payment_url VARCHAR(500)");
+  await ddl("UPDATE platform_settings SET setting_value = '11.50' WHERE setting_key = 'platform_fee_flat' AND setting_value = '10'");
   await ddl("ALTER TABLE ads ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE ad_requests ADD COLUMN IF NOT EXISTS layout VARCHAR(20) NOT NULL DEFAULT 'classic'");
   await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS fiscal_year_start_month SMALLINT NOT NULL DEFAULT 1");

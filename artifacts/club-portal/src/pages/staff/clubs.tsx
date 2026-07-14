@@ -18,6 +18,7 @@ interface ClubRow {
   featured: number;
   created_at: string;
   username: string | null;
+  payfast_merchant_id: string | null;
 }
 
 const SA_PROVINCES = [
@@ -109,6 +110,73 @@ function ClubCredentialsDialog({ club, onClose, onUpdated }: {
   );
 }
 
+// ── PayFast Merchant ID Dialog ──────────────────────────────────────────────────
+function PayFastDialog({ club, onClose, onUpdated }: {
+  club: ClubRow;
+  onClose: () => void;
+  onUpdated: (clubId: number, merchantId: string | null) => void;
+}) {
+  const { toast } = useToast();
+  const [merchantId, setMerchantId] = useState(club.payfast_merchant_id ?? "");
+  const [saving, setSaving] = useState(false);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const data = await api<{ payfast_merchant_id: string | null }>(`/api/admin/clubs/${club.id}/payfast`, {
+        method: "PUT",
+        body: JSON.stringify({ payfast_merchant_id: merchantId.trim() || null }),
+      });
+      onUpdated(club.id, data.payfast_merchant_id);
+      toast({ title: "PayFast merchant ID updated", description: club.name });
+      onClose();
+    } catch (e: any) {
+      toast({ title: "Error", description: e.message, variant: "destructive" });
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <Dialog open onOpenChange={onClose}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            PayFast — {club.name}
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <p className="text-xs text-muted-foreground">
+            Set this club's <strong>PayFast Merchant ID</strong> to enable split payments. When a golfer books, TapIn takes R11.50 per player and the rest is paid out to this merchant account.
+          </p>
+          <div className="space-y-1.5">
+            <label className="text-sm font-medium">PayFast Merchant ID</label>
+            <Input
+              placeholder="e.g. 10000100"
+              value={merchantId}
+              onChange={e => setMerchantId(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">Leave blank to disable split payments for this club (TapIn receives full amount).</p>
+          </div>
+          {club.payfast_merchant_id && (
+            <div className="rounded-lg bg-muted/50 border px-3 py-2 text-xs text-muted-foreground">
+              Current: <span className="font-mono font-medium text-foreground">{club.payfast_merchant_id}</span>
+            </div>
+          )}
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" onClick={onClose}>Cancel</Button>
+          <Button
+            className="bg-[#1a5c38] hover:bg-[#154d30]"
+            onClick={save}
+            disabled={saving}
+          >
+            {saving ? "Saving…" : "Save"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 // ── Main page ──────────────────────────────────────────────────────────────────
 export default function StaffClubs() {
   const { toast } = useToast();
@@ -121,6 +189,7 @@ export default function StaffClubs() {
   const [page, setPage] = useState(1);
   const [toggling, setToggling] = useState<number | null>(null);
   const [credsClub, setCredsClub] = useState<ClubRow | null>(null);
+  const [payfastClub, setPayfastClub] = useState<ClubRow | null>(null);
   const LIMIT = 30;
 
   const load = useCallback(async () => {
@@ -168,6 +237,10 @@ export default function StaffClubs() {
 
   const handleCredentialsUpdated = (clubId: number, username: string) => {
     setClubs(prev => prev.map(c => c.id === clubId ? { ...c, username } : c));
+  };
+
+  const handlePayfastUpdated = (clubId: number, merchantId: string | null) => {
+    setClubs(prev => prev.map(c => c.id === clubId ? { ...c, payfast_merchant_id: merchantId } : c));
   };
 
   const totalPages = Math.max(1, Math.ceil(total / LIMIT));
@@ -225,6 +298,7 @@ export default function StaffClubs() {
               <th className="text-center px-4 py-3 font-semibold">Holes</th>
               <th className="text-right px-4 py-3 font-semibold">Price from</th>
               <th className="text-center px-4 py-3 font-semibold">Club Admin</th>
+              <th className="text-center px-4 py-3 font-semibold">PayFast</th>
               <th className="text-center px-4 py-3 font-semibold">Featured</th>
               <th className="text-center px-4 py-3 font-semibold">Active</th>
             </tr>
@@ -233,14 +307,14 @@ export default function StaffClubs() {
             {loading ? (
               Array.from({ length: 10 }).map((_, i) => (
                 <tr key={i} className="border-b last:border-0">
-                  {[0,1,2,3,4,5,6,7].map(j => (
+                  {[0,1,2,3,4,5,6,7,8].map(j => (
                     <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-full" /></td>
                   ))}
                 </tr>
               ))
             ) : clubs.length === 0 ? (
               <tr>
-                <td colSpan={8} className="text-center py-12 text-muted-foreground">
+                <td colSpan={9} className="text-center py-12 text-muted-foreground">
                   No clubs found
                 </td>
               </tr>
@@ -266,6 +340,19 @@ export default function StaffClubs() {
                     >
                       <ShieldCheck className="h-3 w-3" />
                       {c.username ? c.username : "Set up"}
+                    </button>
+                  </td>
+                  <td className="px-4 py-3 text-center">
+                    <button
+                      onClick={() => setPayfastClub(c)}
+                      className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold transition-colors ${
+                        c.payfast_merchant_id
+                          ? "bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                          : "bg-gray-100 text-gray-500 hover:bg-emerald-50 hover:text-emerald-600"
+                      }`}
+                      title="Edit PayFast merchant ID"
+                    >
+                      {c.payfast_merchant_id ? c.payfast_merchant_id : "Set up"}
                     </button>
                   </td>
                   <td className="px-4 py-3 text-center">
@@ -325,6 +412,14 @@ export default function StaffClubs() {
           club={credsClub}
           onClose={() => setCredsClub(null)}
           onUpdated={handleCredentialsUpdated}
+        />
+      )}
+
+      {payfastClub && (
+        <PayFastDialog
+          club={payfastClub}
+          onClose={() => setPayfastClub(null)}
+          onUpdated={handlePayfastUpdated}
         />
       )}
     </div>

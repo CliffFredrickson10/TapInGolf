@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
 import { getUser, isStaff, isPlatform } from "../lib/auth";
-import { createStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl, PLATFORM_FEE_PER_PLAYER } from "../lib/payfast";
 import { randomUUID } from "crypto";
 import path from "path";
 import multer from "multer";
@@ -140,7 +140,7 @@ router.get("/admin/revenue/summary", async (req, res): Promise<void> => {
   ]);
 
   res.json({
-    platform_fee_flat:   feeSetting ? parseFloat(feeSetting.setting_value) : 10,
+    platform_fee_flat:   feeSetting ? parseFloat(feeSetting.setting_value) : PLATFORM_FEE_PER_PLAYER,
     vat_pct:             vatSetting ? parseFloat(vatSetting.setting_value) : 15,
     total_bookings:      parseInt(summary?.total_bookings ?? "0"),
     total_collected:     parseFloat(summary?.total_collected ?? "0"),
@@ -310,7 +310,7 @@ router.get("/settings", async (_req, res): Promise<void> => {
   ]);
   res.json({
     vat_pct:          vatSetting  ? parseFloat(vatSetting.setting_value)  : 15,
-    platform_fee_flat: feeSetting ? parseFloat(feeSetting.setting_value)  : 10,
+    platform_fee_flat: feeSetting ? parseFloat(feeSetting.setting_value)  : PLATFORM_FEE_PER_PLAYER,
   });
 });
 
@@ -389,7 +389,7 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
   const [clubs, total] = await Promise.all([
     query<any>(
       `SELECT c.id, c.name, c.location, c.province, c.holes, c.price_from,
-              c.active, c.featured, c.created_at, c.username
+             c.active, c.featured, c.created_at, c.username, c.payfast_merchant_id
        FROM clubs c ${whereSQL} ORDER BY c.name ASC LIMIT ? OFFSET ?`,
       [...params, limit, offset]
     ),
@@ -397,6 +397,26 @@ router.get("/admin/clubs-list", async (req, res): Promise<void> => {
   ]);
 
   res.json({ clubs, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+
+router.put("/admin/clubs/:id/payfast", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = parseInt(req.params.id, 10);
+  if (isNaN(clubId)) { res.status(400).json({ message: "Invalid club id" }); return; }
+  const { payfast_merchant_id } = req.body ?? {};
+  const merchantId = String(payfast_merchant_id ?? "").trim() || null;
+  await exec("UPDATE clubs SET payfast_merchant_id = ? WHERE id = ?", [merchantId, clubId]);
+  res.json({ success: true, payfast_merchant_id: merchantId });
+});
+
+router.get("/admin/clubs/:id/payfast", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const clubId = parseInt(req.params.id, 10);
+  const club = await row<any>("SELECT payfast_merchant_id FROM clubs WHERE id = ?", [clubId]);
+  if (!club) { res.status(404).json({ message: "Club not found" }); return; }
+  res.json({ payfast_merchant_id: club.payfast_merchant_id });
 });
 
 // GET /admin/clubs/:id/portal-accounts — list portal accounts for a club
@@ -871,25 +891,27 @@ router.post("/admin/ad-requests/:id/approve", async (req, res): Promise<void> =>
     );
     invoiceId = invRows?.[0]?.id ?? null;
 
-    // Try to auto-generate a Stitch payment link on the invoice
+    // Try to auto-generate a PayFast payment link on the invoice
     if (invoiceId) {
       try {
         const host = `https://${req.get("host")}`;
-        const payment = await createStitchPayment({
-          amount:            invoiceAmount,
-          payerName:         existing.headline,
+        const payment = buildPayFastPaymentUrl({
+          amount: invoiceAmount,
           merchantReference: `invoice-${invoiceId}`,
-          redirectUrl:       `${host}/api/portal/invoice-success`,
+          itemName: `TapIn Golf - Invoice ${invoiceRef}`,
+          returnUrl: `${host}/club-portal/invoices`,
+          cancelUrl: `${host}/club-portal/invoices`,
+          notifyUrl: `${host}/api/payfast/notify`,
         });
         await exec(
-          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-          [payment.id, payment.url, invoiceId]
+          "UPDATE club_invoices SET payfast_payment_id = ?, payfast_payment_url = ? WHERE id = ?",
+          [payment.paymentId, payment.url, invoiceId]
         );
         finalLink = payment.url;
-      } catch { /* Stitch not configured — club will pay via portal Pay Now button */ }
+      } catch { /* PayFast not configured — club will pay via portal Pay Now button */ }
     }
 
-    // Keep payment_link on ad_requests pointing at the Stitch URL for staff reference
+    // Keep payment_link on ad_requests pointing at the PayFast URL for staff reference
     if (finalLink) {
       await exec("UPDATE ad_requests SET payment_link = ? WHERE id = ?", [finalLink, reqId]);
     }

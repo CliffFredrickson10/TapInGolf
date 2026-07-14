@@ -1,5 +1,5 @@
 import { query, row, exec } from "../lib/pg";
-import { createStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl } from "../lib/payfast";
 import { logger } from "../lib/logger";
 
 // Runs hourly; on the 1st of each month bills all live monthly-billed ad campaigns
@@ -59,7 +59,6 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
   const host = process.env["REPLIT_DEV_DOMAIN"]
     ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
     : "https://tapingolf.co.za";
-  const redirectUrl = `${host}/api/portal/invoice-success`;
 
   for (const ad of liveAds) {
     try {
@@ -106,24 +105,29 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
       );
       const invoiceId: number | null = invRows?.[0]?.id ?? null;
 
-      // Try to generate a Stitch payment link on the invoice (merchantReference = invoice-<id>)
+      // Try to generate a PayFast payment link on the invoice (merchantReference = invoice-<id>)
       let paymentUrl: string | null = null;
       if (invoiceId) {
         try {
-          const payment = await createStitchPayment({
+          const payer = ad.club_name?.trim() ? ad.club_name.trim().split(/\s+/) : [];
+          const payment = buildPayFastPaymentUrl({
             amount,
-            payerName:         ad.club_name,
             merchantReference: `invoice-${invoiceId}`,
-            redirectUrl,
-            payerEmail:        ad.club_email ?? undefined,
+            itemName: `TapIn Golf - Invoice ${invoiceRef}`,
+            returnUrl: `${host}/club-portal/invoices`,
+            cancelUrl: `${host}/club-portal/invoices`,
+            notifyUrl: `${host}/api/payfast/notify`,
+            payerFirstName: payer[0],
+            payerLastName: payer.slice(1).join(" ") || undefined,
+            payerEmail: ad.club_email ?? undefined,
           });
           await exec(
-            "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-            [payment.id, payment.url, invoiceId]
+            "UPDATE club_invoices SET payfast_payment_id = ?, payfast_payment_url = ? WHERE id = ?",
+            [payment.paymentId, payment.url, invoiceId]
           );
           paymentUrl = payment.url;
         } catch (payErr: any) {
-          logger.warn({ err: payErr, cycleId, invoiceId }, "Monthly ad billing: Stitch link failed");
+          logger.warn({ err: payErr, cycleId, invoiceId }, "Monthly ad billing: PayFast link failed");
         }
       }
 
@@ -231,20 +235,25 @@ async function runMonthlyAdBillingCycle(): Promise<void> {
       let paymentUrl: string | null = null;
       if (invoiceId) {
         try {
-          const payment = await createStitchPayment({
+          const payer = ad.club_name?.trim() ? ad.club_name.trim().split(/\s+/) : [];
+          const payment = buildPayFastPaymentUrl({
             amount,
-            payerName:         ad.club_name,
             merchantReference: `invoice-${invoiceId}`,
-            redirectUrl,
-            payerEmail:        ad.club_email ?? undefined,
+            itemName: `TapIn Golf - Invoice ${invoiceRef}`,
+            returnUrl: `${host}/club-portal/invoices`,
+            cancelUrl: `${host}/club-portal/invoices`,
+            notifyUrl: `${host}/api/payfast/notify`,
+            payerFirstName: payer[0],
+            payerLastName: payer.slice(1).join(" ") || undefined,
+            payerEmail: ad.club_email ?? undefined,
           });
           await exec(
-            "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-            [payment.id, payment.url, invoiceId]
+            "UPDATE club_invoices SET payfast_payment_id = ?, payfast_payment_url = ? WHERE id = ?",
+            [payment.paymentId, payment.url, invoiceId]
           );
           paymentUrl = payment.url;
         } catch (payErr: any) {
-          logger.warn({ err: payErr, cycleId, invoiceId }, "Quarterly ad billing: Stitch link failed");
+          logger.warn({ err: payErr, cycleId, invoiceId }, "Quarterly ad billing: PayFast link failed");
         }
       }
 

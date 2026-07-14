@@ -3,7 +3,7 @@ import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { query, row, exec, run } from "../lib/pg";
 import { getUser, isStaff } from "../lib/auth";
-import { createStitchPayment, getStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl, PLATFORM_FEE_PER_PLAYER } from "../lib/payfast";
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
@@ -140,7 +140,7 @@ export async function confirmResalePurchase(purchaseId: number): Promise<"confir
         "INSERT INTO club_inbox_notifications (club_id, type, title, body, meta) VALUES (?, 'resale_sold', ?, ?, ?)",
         [info.club_id,
          "💰 Tee Time Sold to Reseller",
-         `${info.reseller_name} bought your listed tee time on ${dateStr} at ${timeStr} for R${amount.toFixed(2)}. Payment has been confirmed via Stitch.`,
+         `${info.reseller_name} bought your listed tee time on ${dateStr} at ${timeStr} for R${amount.toFixed(2)}. Payment has been confirmed via PayFast.`,
          JSON.stringify({ listing_id: purchase.listing_id, purchase_id: purchaseId, date: dateStr, tee_time: timeStr, amount, reseller: info.reseller_name })]
       );
     }
@@ -237,14 +237,14 @@ router.get("/portal/reseller/clubs/:id/listings", requireResellerAuth, async (re
   });
 });
 
-// Buy a listing: create a pending purchase + Stitch hosted payment link.
+// Buy a listing: create a pending purchase + PayFast hosted payment link.
 router.post("/portal/reseller/listings/:id/buy", requireResellerAuth, async (req: Request, res: Response): Promise<void> => {
   const reseller = getReseller(req);
   const listingId = parseInt(String(req.params.id), 10);
   if (isNaN(listingId)) { res.status(400).json({ message: "Invalid listing id" }); return; }
 
   const listing = await row<any>(
-    `SELECT rl.id, rl.price, rl.status, rl.club_id, pts.date, pts.tee_time, c.name AS club_name, c.active, c.resale_enabled
+    `SELECT rl.id, rl.price, rl.status, rl.club_id, pts.date, pts.tee_time, pts.max_players, c.name AS club_name, c.active, c.resale_enabled
      FROM resale_listings rl
      JOIN portal_tee_slots pts ON pts.id = rl.slot_id
      JOIN clubs c ON c.id = rl.club_id
@@ -283,18 +283,25 @@ router.post("/portal/reseller/listings/:id/buy", requireResellerAuth, async (req
 
   const host = req.get("host") ?? "";
   try {
-    const pr = await createStitchPayment({
-      amount:            price,
-      payerName:         reseller.name,
-      payerEmail:        reseller.contact_email || undefined,
+    const clubInfo = await row<any>("SELECT c.payfast_merchant_id FROM clubs c WHERE c.id = ?", [listing.club_id]);
+    const pr = buildPayFastPaymentUrl({
+      amount: price,
       merchantReference: `resale-${purchaseId}`,
-      redirectUrl:       `https://${host}/club-portal/resale-success`,
+      itemName: "TapIn Golf - Resale Tee Time",
+      players: Math.max(1, parseInt(String(listing.max_players ?? 1), 10) || 1),
+      clubMerchantId: clubInfo?.payfast_merchant_id || undefined,
+      returnUrl: `https://${host}/club-portal/resale-success`,
+      cancelUrl: `https://${host}/club-portal/resale-cancel`,
+      notifyUrl: `https://${host}/api/payfast/notify`,
+      payerFirstName: reseller.name?.split(" ")[0],
+      payerLastName: reseller.name?.split(" ").slice(1).join(" ") || undefined,
+      payerEmail: reseller.contact_email || undefined,
     });
-    await run("UPDATE resale_purchases SET stitch_payment_id = ? WHERE id = ?", [pr.id, purchaseId]);
+    await run("UPDATE resale_purchases SET payfast_payment_id = ? WHERE id = ?", [pr.paymentId, purchaseId]);
     res.json({ purchase_id: purchaseId, payment_url: pr.url, amount: price });
   } catch (err: any) {
     await run("UPDATE resale_purchases SET status = 'cancelled' WHERE id = ? AND status = 'pending'", [purchaseId]);
-    logger.error({ err, listingId }, "failed to create Stitch payment for resale purchase");
+    logger.error({ err, listingId, platformFeePerPlayer: PLATFORM_FEE_PER_PLAYER }, "failed to create PayFast payment for resale purchase");
     res.status(502).json({ message: "Could not start the payment. Please try again." });
   }
 });
@@ -332,35 +339,19 @@ router.get("/portal/reseller/purchases", requireResellerAuth, async (req: Reques
   });
 });
 
-// Verify a pending purchase against Stitch directly (used by the portal after
-// the redirect — the webhook remains the primary confirmation path; this never
-// trusts the redirect itself, it re-checks the payment status with Stitch).
+// Verify a pending purchase after redirect by checking the latest status.
 router.post("/portal/reseller/purchases/:id/verify", requireResellerAuth, async (req: Request, res: Response): Promise<void> => {
   const reseller = getReseller(req);
   const purchaseId = parseInt(String(req.params.id), 10);
   if (isNaN(purchaseId)) { res.status(400).json({ message: "Invalid purchase id" }); return; }
   const purchase = await row<any>(
-    "SELECT id, status, stitch_payment_id FROM resale_purchases WHERE id = ? AND reseller_id = ?",
+    "SELECT id, status, payfast_payment_id FROM resale_purchases WHERE id = ? AND reseller_id = ?",
     [purchaseId, reseller.id]
   );
   if (!purchase) { res.status(404).json({ message: "Purchase not found" }); return; }
   if (purchase.status !== "pending") { res.json({ status: purchase.status }); return; }
-  if (!purchase.stitch_payment_id) { res.json({ status: "pending" }); return; }
-
-  try {
-    const detail = await getStitchPayment(purchase.stitch_payment_id);
-    const paid = detail && ["PAID", "COMPLETED"].includes(String(detail.status ?? "").toUpperCase());
-    if (paid) {
-      const outcome = await confirmResalePurchase(purchaseId);
-      const p2 = await row<any>("SELECT status FROM resale_purchases WHERE id = ?", [purchaseId]);
-      res.json({ status: p2?.status ?? "pending", outcome });
-      return;
-    }
-    res.json({ status: "pending" });
-  } catch (err) {
-    logger.warn({ err, purchaseId }, "resale purchase verify failed");
-    res.status(502).json({ message: "Could not verify the payment right now" });
-  }
+  if (!purchase.payfast_payment_id) { res.json({ status: "pending" }); return; }
+  res.json({ status: "pending" });
 });
 
 // ─── Club-side listing management ───────────────────────────────────────────

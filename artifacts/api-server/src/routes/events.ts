@@ -2,7 +2,6 @@ import { Router, type IRouter } from "express";
 import { query, row, exec, run } from "../lib/pg";
 import { getUser, isStaff, effectiveClubId } from "../lib/auth";
 import { sendPushNotifications } from "../lib/notifications";
-import { createStitchPayment } from "../lib/stitch";
 import { getUserTierPrices } from "../lib/pricing";
 
 const router: IRouter = Router();

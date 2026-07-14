@@ -1737,25 +1737,30 @@ router.post("/events/:id/pay", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── Stitch ────────────────────────────────────────────────────────────────
+  // ── PayFast ───────────────────────────────────────────────────────────────
   if (fee <= 0) {
     // Free entry (honorary member, complimentary tier, etc.) — mark paid immediately
     await exec("UPDATE event_registrations SET payment_status = 'paid', payment_method = 'free', paid_at = NOW() WHERE id = ?", [reg.id]);
     res.json({ paid: true });
     return;
   }
-  const { createStitchPayment } = await import("../lib/stitch");
+  const { buildPayFastPaymentUrl } = await import("../lib/payfast");
   const host = process.env.REPLIT_DEV_DOMAIN ?? "localhost:8080";
   const merchantReference = `event-${evId}-user-${user.id}`;
   try {
-    const paymentUrl = await createStitchPayment({
+    const payment = buildPayFastPaymentUrl({
       amount: fee,
-      currency: "ZAR",
       merchantReference,
-      redirectUrl: `https://${host}/booking/success`,
+      itemName: "TapIn Golf - Event Entry",
+      returnUrl: `https://${host}/booking/success`,
+      cancelUrl: `https://${host}/booking/cancel`,
+      notifyUrl: `https://${host}/api/payfast/notify`,
+      payerFirstName: user.name?.split(" ")[0],
+      payerLastName: user.name?.split(" ").slice(1).join(" ") || undefined,
+      payerEmail: user.email ?? undefined,
     });
-    await exec("UPDATE event_registrations SET payment_status = 'pending', payment_method = 'stitch' WHERE id = ?", [reg.id]);
-    res.json({ payment_url: paymentUrl });
+    await exec("UPDATE event_registrations SET payment_status = 'pending', payment_method = 'payfast' WHERE id = ?", [reg.id]);
+    res.json({ payment_url: payment.url });
   } catch (e: any) {
     res.status(502).json({ message: e?.message ?? "Payment initiation failed" });
   }

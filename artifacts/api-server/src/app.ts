@@ -37,6 +37,7 @@ app.use(cors());
 // parser BEFORE express.json() so the global JSON parser doesn't consume it.
 app.use("/api/stitch/webhook", express.raw({ type: "*/*" }));
 app.use(express.json());
+// PayFast IPN uses application/x-www-form-urlencoded which express.urlencoded handles by default.
 app.use(express.urlencoded({ extended: true }));
 
 // Serve downloaded club logos from the logos/ directory (sibling of dist/)

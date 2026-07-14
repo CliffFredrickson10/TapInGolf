@@ -5,7 +5,7 @@ import { getUser } from "../lib/auth";
 import { isHnaVerified } from "../lib/hna";
 import { sendPushNotifications } from "../lib/notifications";
 import { saveUserNotification } from "../lib/userNotifications";
-import { createStitchPayment, getStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl, validatePayFastIPN, PLATFORM_FEE_PER_PLAYER } from "../lib/payfast";
 import { sendInvoiceEmail } from "../lib/otp";
 import { getUserTierPrices } from "../lib/pricing";
 import { confirmResalePurchase } from "./resale";
@@ -126,6 +126,47 @@ function generateRef(): string {
   return "TG" + crypto.randomBytes(4).toString("hex").toUpperCase();
 }
 
+function splitName(name?: string | null): { firstName?: string; lastName?: string } {
+  const trimmed = name?.trim();
+  if (!trimmed) return {};
+  const parts = trimmed.split(/\s+/);
+  return {
+    firstName: parts[0],
+    lastName: parts.slice(1).join(" ") || undefined,
+  };
+}
+
+async function getSlotClubPayFastMerchantId(slotId: number): Promise<string | undefined> {
+  const clubRow = await row<any>(
+    `SELECT c.payfast_merchant_id
+       FROM portal_tee_slots pts
+       JOIN clubs c ON c.id = pts.club_id
+      WHERE pts.id = ?`,
+    [slotId]
+  );
+  return clubRow?.payfast_merchant_id || undefined;
+}
+
+async function getBookingPayFastDetails(bookingId: number): Promise<{
+  clubMerchantId?: string;
+  bookingRef?: string;
+  players?: number;
+}> {
+  const booking = await row<any>(
+    `SELECT b.booking_ref, b.players, c.payfast_merchant_id
+       FROM bookings b
+       JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       JOIN clubs c ON c.id = pts.club_id
+      WHERE b.id = ?`,
+    [bookingId]
+  );
+  return {
+    clubMerchantId: booking?.payfast_merchant_id || undefined,
+    bookingRef: booking?.booking_ref ?? undefined,
+    players: booking?.players != null ? parseInt(String(booking.players), 10) : undefined,
+  };
+}
+
 // Release seats reserved by Stitch checkouts that were never completed.
 // Such bookings stay 'pending' (the webhook confirms them on payment); past a
 // short grace window they are cancelled so the slot opens back up.
@@ -135,7 +176,7 @@ async function releaseStalePendingBookings(): Promise<void> {
       UPDATE bookings b SET status = 'cancelled'
       WHERE b.status = 'pending'
         AND (
-          b.payment_method IN ('stitch','pay_at_club')
+          b.payment_method IN ('stitch','payfast','pay_at_club')
           -- prepaid greens with unpaid add-ons: still waiting on a Stitch payment
           OR (b.payment_method = 'prepaid' AND EXISTS (
             SELECT 1 FROM booking_players bp
@@ -434,13 +475,14 @@ router.post("/bookings", async (req, res): Promise<void> => {
     tee_time_id, players = 1, split_bill = false,
     friend_ids = [],        // legacy field — kept for backward compat
     players_data,           // preferred: Array<{user_id?:number, guest_name?:string}>
-    payment_method = "stitch", voucher_code, include_cart = false,
+    payment_method: requestedPaymentMethod = "stitch", voucher_code, include_cart = false,
     include_range_balls = false, range_balls_selected_price, include_club_hire = false,
     holes = 18,             // 9 or 18
     hna_number = null,      // HNA membership number — upgrades non-members to affiliated_visitor tier
     event_id: bodyEventId,  // optional: event being booked into (used for pay_at_club rounds calc)
     knockout_match_id = null, // optional: link booking to a knockout tournament match
   } = req.body ?? {};
+  const payment_method = requestedPaymentMethod === "stitch" ? "payfast" : requestedPaymentMethod;
 
   // Normalise to players_data: prefer explicit players_data, fall back to friend_ids
   const rawPlayers: Array<{ user_id?: number; guest_name?: string; tier_type?: string }> =
@@ -511,7 +553,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const voucherOk   = !clubPm || clubPm.voucher_enabled == null || !!clubPm.voucher_enabled;
     const payAtClubOk = clubPm && !!clubPm.pay_at_club_enabled;
 
-    if (payment_method === "stitch"      && !stitchOk)    { res.status(400).json({ message: "Online card/EFT payment is not accepted by this club." }); return; }
+    if (payment_method === "payfast"     && !stitchOk)    { res.status(400).json({ message: "Online card/EFT payment is not accepted by this club." }); return; }
     if (payment_method === "prepaid"     && !prepaidOk)   { res.status(400).json({ message: "Prepaid rounds are not accepted by this club." }); return; }
     if (payment_method === "pay_at_club" && !payAtClubOk) { res.status(400).json({ message: "This club does not accept pay-at-club bookings." }); return; }
     if (voucher_code && !voucherOk)                       { res.status(400).json({ message: "Voucher codes are not accepted by this club." }); return; }
@@ -885,9 +927,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
   // booking stays pending, a Stitch link is issued for the add-ons amount, and
   // the prepaid round is only deducted once the payment is confirmed.
   const prepaidAddonsDue = payment_method === "prepaid" && splitAmount > 0.005;
-  // Payment methods that settle later via Stitch redirect/webhook
-  const needsStitchLink =
+  // Payment methods that settle later via PayFast redirect/IPN
+  const needsPaymentLink =
     effectivePaymentMethod === "stitch" ||
+    effectivePaymentMethod === "payfast" ||
     effectivePaymentMethod === "pay_at_club" ||
     prepaidAddonsDue;
 
@@ -898,7 +941,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
 
   // Load platform flat fee (default R10)
   const feeSetting = await row<any>("SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'");
-  const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const platformFee = feeSetting ? parseFloat(feeSetting.setting_value) : PLATFORM_FEE_PER_PLAYER;
   const clubAmount  = Math.round((totalAmount - platformFee) * 100) / 100;
 
   // ── Pay-at-club: commitment fee calculation ─────────────────────────────────
@@ -975,7 +1018,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     // Confirm immediately only for payments settled at creation (prepaid without
     // add-ons, wallet, voucher). Stitch bookings, pay_at_club and prepaid-with-
     // add-ons stay 'pending' until the payment webhook confirms them.
-    if (!needsStitchLink) {
+    if (!needsPaymentLink) {
       await clientQuery(client, "UPDATE bookings SET status = 'confirmed' WHERE id = ?", [bookingId]);
     }
     if (appliedVoucher) {
@@ -1020,7 +1063,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     }
     // For payments settled at creation (prepaid without add-ons, wallet, voucher)
     // the organizer is paid immediately
-    if (!needsStitchLink) {
+    if (!needsPaymentLink) {
       await clientQuery(client,
         "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
         [effectivePaymentMethod, bookingId, user.id]
@@ -1070,28 +1113,36 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
 
   // Auto-send invoice for payments confirmed immediately (prepaid / wallet / voucher)
-  if (!needsStitchLink) {
+  if (!needsPaymentLink) {
     fireInvoiceEmail(bookingId).catch(() => {});
     syncEventRegistration(bookingId).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
-  if (needsStitchLink) {
+  if (needsPaymentLink) {
     const host = req.get("host") ?? "";
     try {
-      const pr = await createStitchPayment({
-        amount:            chargeAmount,
-        payerName:         user.name,
-        payerEmail:        user.email,
+      const slotId = parseInt(String(tee_time_id), 10);
+      const clubMerchantId = Number.isFinite(slotId) ? await getSlotClubPayFastMerchantId(slotId) : undefined;
+      const payer = splitName(user.name);
+      const useSplit = payment_method !== "pay_at_club";
+      const pr = buildPayFastPaymentUrl({
+        amount: chargeAmount,
         merchantReference: String(bookingId),
-        redirectUrl:       `https://${host}/booking/success`,
+        itemName: `TapIn Golf Booking #${ref}`,
+        players: useSplit ? numPlayers : undefined,
+        clubMerchantId: useSplit ? clubMerchantId : undefined,
+        returnUrl: `https://${host}/booking/success`,
+        cancelUrl: `https://${host}/booking/cancel`,
+        notifyUrl: `https://${host}/api/payfast/notify`,
+        payerFirstName: payer.firstName,
+        payerLastName: payer.lastName,
+        payerEmail: user.email,
       });
       paymentUrl = pr.url;
-      // Store the payment ID so the app can verify payment on return without
-      // relying solely on the webhook.
-      await exec("UPDATE bookings SET stitch_payment_id = ? WHERE id = ?", [pr.id, bookingId]);
-    } catch (stitchErr: any) {
-      // Stitch call failed — cancel the booking, release the reserved seats,
+      await exec("UPDATE bookings SET payfast_payment_id = ? WHERE id = ?", [pr.paymentId, bookingId]);
+    } catch (payfastErr: any) {
+      // PayFast link creation failed — cancel the booking, release the reserved seats,
       // and restore any voucher value that was deducted in the booking transaction.
       try {
         await withTransaction(async (client) => {
@@ -1111,10 +1162,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
           }
         });
       } catch { /* best-effort rollback */ }
-      const isConfig = (stitchErr.message ?? "").includes("not configured");
+      const isConfig = (payfastErr.message ?? "").includes("not configured");
       res.status(isConfig ? 503 : 502).json({
         message: isConfig
-          ? "Payment gateway not configured. Set STITCH_CLIENT_ID and STITCH_CLIENT_SECRET."
+          ? "Payment gateway not configured."
           : "Failed to initiate payment. Please try again.",
       });
       return;
@@ -1205,7 +1256,14 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
   if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
 
   const amount = bp.amount ? parseFloat(bp.amount) : parseFloat(booking.total_amount) / parseInt(booking.players);
-  const { payment_method = "stitch", secondary_payment_method } = req.body as { payment_method?: string; secondary_payment_method?: string };
+  const {
+    payment_method: requestedPaymentMethod = "stitch",
+    secondary_payment_method: requestedSecondaryPaymentMethod,
+  } = req.body as { payment_method?: string; secondary_payment_method?: string };
+  const payment_method = requestedPaymentMethod === "stitch" ? "payfast" : requestedPaymentMethod;
+  const secondary_payment_method = requestedSecondaryPaymentMethod === "stitch"
+    ? "payfast"
+    : requestedSecondaryPaymentMethod;
 
   // ── Prepaid rounds payment ─────────────────────────────────────────────────
   if (payment_method === "prepaid") {
@@ -1277,16 +1335,24 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
       return;
     }
 
-    // secondary = "stitch" — create Stitch payment for add-ons only;
-    // pending_prepaid_greens = 1 signals the webhook to deduct the prepaid round on confirmation.
+    // secondary = "payfast" — create PayFast payment for add-ons only;
+    // pending_prepaid_greens = 1 signals the webhook/IPN to deduct the prepaid round on confirmation.
     await exec("UPDATE booking_players SET pending_prepaid_greens = 1 WHERE booking_id = ? AND user_id = ?", [id, user.id]);
     const host2 = req.get("host") ?? "";
-    const pr2 = await createStitchPayment({
-      amount:            addonsAmount,
-      payerName:         user.name,
-      payerEmail:        user.email,
+    const payFastDetails = await getBookingPayFastDetails(id);
+    const payer2 = splitName(user.name);
+    const pr2 = buildPayFastPaymentUrl({
+      amount: addonsAmount,
       merchantReference: `${id}-player-${user.id}`,
-      redirectUrl:       `https://${host2}/booking/success`,
+      itemName: "TapIn Golf - Player Payment",
+      players: 1,
+      clubMerchantId: payFastDetails.clubMerchantId,
+      returnUrl: `https://${host2}/booking/success`,
+      cancelUrl: `https://${host2}/booking/cancel`,
+      notifyUrl: `https://${host2}/api/payfast/notify`,
+      payerFirstName: payer2.firstName,
+      payerLastName: payer2.lastName,
+      payerEmail: user.email,
     });
     res.json({ payment_url: pr2.url, amount: addonsAmount, booking_id: id });
     return;
@@ -1306,20 +1372,28 @@ router.post("/bookings/:id/pay", async (req, res): Promise<void> => {
     return;
   }
 
-  // ── Stitch payment (default) ───────────────────────────────────────────────
+  // ── PayFast payment (default) ──────────────────────────────────────────────
   const host = req.get("host") ?? "";
-  const pr = await createStitchPayment({
+  const payFastDetails = await getBookingPayFastDetails(id);
+  const payer = splitName(user.name);
+  const pr = buildPayFastPaymentUrl({
     amount,
-    payerName:         user.name,
-    payerEmail:        user.email,
     merchantReference: `${id}-player-${user.id}`,
-    redirectUrl:       `https://${host}/booking/success`,
+    itemName: "TapIn Golf - Player Payment",
+    players: 1,
+    clubMerchantId: payFastDetails.clubMerchantId,
+    returnUrl: `https://${host}/booking/success`,
+    cancelUrl: `https://${host}/booking/cancel`,
+    notifyUrl: `https://${host}/api/payfast/notify`,
+    payerFirstName: payer.firstName,
+    payerLastName: payer.lastName,
+    payerEmail: user.email,
   });
 
   res.json({ payment_url: pr.url, amount, booking_id: id });
 });
 
-// Resume an abandoned organizer payment. When the organizer creates a Stitch /
+// Resume an abandoned organizer payment. When the organizer creates a PayFast /
 // pay-at-club booking but never completes the hosted payment, the booking stays
 // 'pending'. This re-issues a fresh payment link for the SAME booking using the
 // original merchantReference (<bookingId>) so the existing confirm-payment and
@@ -1333,7 +1407,7 @@ router.post("/bookings/:id/resume-payment", async (req, res): Promise<void> => {
   if (isNaN(id)) { res.status(400).json({ message: "Invalid booking id" }); return; }
 
   const booking = await row<any>(
-    "SELECT id, user_id, status, payment_method, my_amount FROM bookings WHERE id = ?",
+    "SELECT id, user_id, status, payment_method, my_amount, players, booking_ref FROM bookings WHERE id = ?",
     [id]
   );
   if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
@@ -1343,7 +1417,12 @@ router.post("/bookings/:id/resume-payment", async (req, res): Promise<void> => {
   }
   // "prepaid" here means the greens are covered by a prepaid round but the
   // add-ons (my_amount) still need to be settled online.
-  if (booking.payment_method !== "stitch" && booking.payment_method !== "pay_at_club" && booking.payment_method !== "prepaid") {
+  if (
+    booking.payment_method !== "stitch" &&
+    booking.payment_method !== "payfast" &&
+    booking.payment_method !== "pay_at_club" &&
+    booking.payment_method !== "prepaid"
+  ) {
     res.status(400).json({ message: "This booking cannot be paid online." }); return;
   }
 
@@ -1351,14 +1430,23 @@ router.post("/bookings/:id/resume-payment", async (req, res): Promise<void> => {
   if (!(amount > 0)) { res.status(400).json({ message: "Nothing left to pay on this booking." }); return; }
 
   const host = req.get("host") ?? "";
-  const pr = await createStitchPayment({
+  const payFastDetails = await getBookingPayFastDetails(id);
+  const payer = splitName(user.name);
+  const useSplit = booking.payment_method !== "pay_at_club";
+  const pr = buildPayFastPaymentUrl({
     amount,
-    payerName:         user.name,
-    payerEmail:        user.email,
     merchantReference: String(id),
-    redirectUrl:       `https://${host}/booking/success`,
+    itemName: `TapIn Golf Booking #${booking.booking_ref}`,
+    players: useSplit ? booking.players : undefined,
+    clubMerchantId: useSplit ? payFastDetails.clubMerchantId : undefined,
+    returnUrl: `https://${host}/booking/success`,
+    cancelUrl: `https://${host}/booking/cancel`,
+    notifyUrl: `https://${host}/api/payfast/notify`,
+    payerFirstName: payer.firstName,
+    payerLastName: payer.lastName,
+    payerEmail: user.email,
   });
-  await exec("UPDATE bookings SET stitch_payment_id = ? WHERE id = ?", [pr.id, id]);
+  await exec("UPDATE bookings SET payfast_payment_id = ? WHERE id = ?", [pr.paymentId, id]);
 
   res.json({ payment_url: pr.url, amount, booking_id: id });
 });
@@ -1659,9 +1747,7 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
   });
 });
 
-// Confirm a Stitch booking payment by polling Stitch directly.
-// Called by the app when the WebView lands on the success redirect URL —
-// more reliable than waiting for the webhook in dev (where the domain rotates).
+// Confirm a PayFast booking payment by checking the booking status after redirect.
 router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => {
   const user = await getUser(req);
   if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
@@ -1669,7 +1755,7 @@ router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => 
   if (isNaN(bookingId)) { res.status(400).json({ message: "Invalid booking id" }); return; }
 
   const booking = await row<any>(
-    "SELECT id, user_id, status, stitch_payment_id FROM bookings WHERE id = ?",
+    "SELECT id, user_id, status, payfast_payment_id FROM bookings WHERE id = ?",
     [bookingId]
   );
   if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
@@ -1681,54 +1767,27 @@ router.post("/bookings/:id/confirm-payment", async (req, res): Promise<void> => 
     return;
   }
 
-  // Verify the payment with Stitch before confirming. The success redirect
-  // alone is not proof of payment (a user can navigate to it directly), so we
-  // query Stitch by the stored payment id and require a PAID/COMPLETED status
-  // whose merchantReference matches this booking. This works in dev too (it
-  // queries Stitch directly rather than relying on the webhook).
-  if (!booking.stitch_payment_id) {
+  if (!booking.payfast_payment_id) {
     res.status(402).json({ confirmed: false, message: "No payment to verify for this booking" });
     return;
   }
 
-  let detail;
-  try {
-    detail = await getStitchPayment(String(booking.stitch_payment_id));
-  } catch (e: any) {
-    res.status(502).json({ confirmed: false, message: "Could not verify payment with Stitch" });
+  // PayFast confirms payments via IPN (POST /api/payfast/notify).
+  // When the app polls after redirect, we just check current status.
+  if (booking.status === "pending") {
+    res.status(402).json({
+      confirmed: false,
+      status: "pending",
+      message: "Payment confirmation pending — please wait a moment",
+    });
     return;
   }
 
-  const payStatus = (detail?.status ?? "").toUpperCase();
-  const refMatches = (detail?.merchantReference ?? "") === String(bookingId);
-  if (!detail || (payStatus !== "PAID" && payStatus !== "COMPLETED") || !refMatches) {
-    res.status(402).json({ confirmed: false, status: booking.status, message: "Payment not completed yet" });
-    return;
-  }
-
-  // Payment verified — run the same logic the webhook would run. The status
-  // guard keeps this idempotent and prevents resurrecting a cancelled booking.
-  // Settlement only runs when THIS request claims the pending→confirmed
-  // transition; if the webhook won the race it has already settled the
-  // organizer row (and we must not overwrite e.g. 'prepaid_stitch' → 'stitch').
-  const claimed = await run(
-    "UPDATE bookings SET status = 'confirmed' WHERE id = ? AND status = 'pending'",
-    [bookingId]
-  );
-  if (claimed === 1) {
-    await settleOrganizerPaid(bookingId);
-    fireInvoiceEmail(bookingId).catch(() => {});
-    syncEventRegistration(bookingId).catch(() => {});
-  }
-
-  res.json({ confirmed: true, status: "confirmed" });
+  res.json({ confirmed: true, status: booking.status });
 });
 
-// Mark the organizer's booking_players row paid after a verified Stitch payment.
-// If the organizer paid greens with a prepaid round and only the add-ons went
-// through Stitch (pending_prepaid_greens = 1), deduct the reserved prepaid round
-// now and record the combined method as 'prepaid_stitch'.
-async function settleOrganizerPaid(bookingId: number): Promise<void> {
+// Mark the organizer's booking_players row paid after a verified payment.
+async function settleOrganizerPaid(bookingId: number, paymentMethod: "stitch" | "payfast" = "payfast"): Promise<void> {
   const org = await row<any>(
     `SELECT bp.user_id, bp.pending_prepaid_greens
      FROM booking_players bp
@@ -1752,77 +1811,24 @@ async function settleOrganizerPaid(bookingId: number): Promise<void> {
       );
     }
     await run(
-      "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
-      [bookingId, org.user_id]
+      `UPDATE booking_players
+          SET paid = 1, payment_method = ?, pending_prepaid_greens = 0
+        WHERE booking_id = ? AND user_id = ?`,
+      [`prepaid_${paymentMethod}`, bookingId, org.user_id]
     );
   } else {
     await run(
-      "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
-      [bookingId, bookingId]
+      "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = (SELECT user_id FROM bookings WHERE id = ?)",
+      [paymentMethod, bookingId, bookingId]
     );
   }
 }
 
-// Stitch Express webhook — server-to-server payment notification (via Svix).
-// Payload: { amount, id (payment id), status:"PAID", type, linkId, ... }. The
-// merchantReference (our identifier) is NOT in the payload, so we fetch the
-// payment by its id to resolve it. The raw-body parser for this route is mounted
-// in app.ts so Svix signature verification works.
-router.post("/stitch/webhook", async (req, res): Promise<void> => {
-  const raw: string = Buffer.isBuffer(req.body)
-    ? req.body.toString("utf8")
-    : JSON.stringify(req.body ?? {});
-
-  const secret = process.env["STITCH_WEBHOOK_SECRET"];
-
-  if (secret) {
-    // Verify the Svix signature over the raw body before trusting the payload.
-    const ok = verifySvixSignature(
-      secret,
-      req.header("svix-id") ?? "",
-      req.header("svix-timestamp") ?? "",
-      req.header("svix-signature") ?? "",
-      raw,
-    );
-    if (!ok) {
-      res.status(400).send("Invalid signature");
-      return;
-    }
-  }
-
-  let body: Record<string, unknown>;
-  try { body = JSON.parse(raw); } catch { body = {}; }
-
-  // Status: Express sends "PAID"; tolerate the legacy "completed" too.
-  const status: string = String(
-    (body["status"] as string) ??
-    ((body["paymentInitiationRequest"] as any)?.status ?? ""),
-  ).toUpperCase();
-
-  if (status !== "PAID" && status !== "COMPLETED") {
-    res.status(200).json({ received: true });
-    return;
-  }
-
-  // Resolve our merchantReference. Express omits it from the event, so look it
-  // up by the payment id; fall back to any inline reference for safety.
-  let externalRef: string =
-    (body["merchantReference"] as string) ??
-    (body["externalReference"] as string) ??
-    ((body["paymentInitiationRequest"] as any)?.externalReference ?? "");
-
-  const paymentId = body["id"] as string | undefined;
-  if (!externalRef && paymentId) {
-    try {
-      const detail = await getStitchPayment(String(paymentId));
-      externalRef = detail?.merchantReference ?? "";
-    } catch { /* ignore — handled by the empty-ref guard below */ }
-  }
-
-  if (!externalRef) {
-    res.status(200).json({ received: true });
-    return;
-  }
+async function processCompletedPaymentReference(
+  externalRef: string,
+  paymentMethod: "stitch" | "payfast",
+): Promise<void> {
+  const providerLabel = paymentMethod === "payfast" ? "PayFast" : "Stitch";
 
   // Wallet top-up: externalReference is "wallet-<topupId>"
   if (externalRef.startsWith("wallet-")) {
@@ -1833,8 +1839,6 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         [topupId]
       );
       if (topup) {
-        // Idempotent: only the delivery that actually flips pending→completed
-        // credits the wallet, so duplicate/retried webhooks can't double-credit.
         const claimed = await run(
           "UPDATE wallet_topups SET status = 'completed' WHERE id = ? AND status = 'pending'",
           [topupId]
@@ -1849,11 +1853,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         }
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Event entry payment: externalReference is "event-<eventId>-user-<userId>"
   if (externalRef.startsWith("event-")) {
     const parts   = externalRef.split("-");
     const eventId = parseInt(parts[1] ?? "", 10);
@@ -1862,7 +1864,6 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
       const ev = await row<any>("SELECT id, name, max_participants FROM golf_events WHERE id = ?", [eventId]);
       const u  = await row<any>("SELECT id, push_token FROM users WHERE id = ?", [userId]);
 
-      // Check if field is full (first to pay = confirmed spot)
       let fieldFull = false;
       if (ev?.max_participants) {
         const paid = await row<any>(
@@ -1873,7 +1874,6 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
       }
 
       if (fieldFull) {
-        // Field is full — reject this player and notify them
         await run(
           "UPDATE event_registrations SET status = 'rejected' WHERE event_id = ? AND user_id = ? AND status = 'approved'",
           [eventId, userId]
@@ -1896,7 +1896,6 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
           }
         }
       } else {
-        // Spot available — confirm payment
         const claimed = await run(
           "UPDATE event_registrations SET payment_status = 'paid', paid_at = NOW() WHERE event_id = ? AND user_id = ? AND payment_status != 'paid'",
           [eventId, userId]
@@ -1920,11 +1919,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         }
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Reseller marketplace purchase: externalReference is "resale-<purchaseId>"
   if (externalRef.startsWith("resale-")) {
     const purchaseId = parseInt(externalRef.slice(7), 10);
     if (!isNaN(purchaseId)) {
@@ -1934,11 +1931,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         logger.error({ err, purchaseId }, "resale purchase confirmation failed in webhook");
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Monthly ad billing cycle payment: externalReference is "ad-billing-<cycleId>"
   if (externalRef.startsWith("ad-billing-")) {
     const cycleId = parseInt(externalRef.slice(11), 10);
     if (!isNaN(cycleId)) {
@@ -1968,11 +1963,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         }
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Ad request payment: externalReference is "ad-<requestId>"
   if (externalRef.startsWith("ad-")) {
     const reqId = parseInt(externalRef.slice(3), 10);
     if (!isNaN(reqId)) {
@@ -2015,11 +2008,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         );
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Club invoice payment: externalReference is "invoice-<invoiceId>"
   if (externalRef.startsWith("invoice-")) {
     const invoiceId = parseInt(externalRef.split("-")[1] ?? "", 10);
     if (!isNaN(invoiceId)) {
@@ -2105,11 +2096,9 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         }
       }
     }
-    res.status(200).json({ received: true });
     return;
   }
 
-  // Booking payment: externalReference is "<bookingId>" or "<bookingId>-player-<userId>"
   const [rawId] = externalRef.split("-player-");
   const bookingId = parseInt(rawId, 10);
   if (!isNaN(bookingId)) {
@@ -2138,13 +2127,13 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
             );
           }
           await run(
-            "UPDATE booking_players SET paid = 1, payment_method = 'prepaid_stitch', pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
-            [bookingId, userId]
+            "UPDATE booking_players SET paid = 1, payment_method = ?, pending_prepaid_greens = 0 WHERE booking_id = ? AND user_id = ?",
+            [`prepaid_${paymentMethod}`, bookingId, userId]
           );
         } else {
           await run(
-            "UPDATE booking_players SET paid = 1, payment_method = 'stitch' WHERE booking_id = ? AND user_id = ?",
-            [bookingId, userId]
+            "UPDATE booking_players SET paid = 1, payment_method = ? WHERE booking_id = ? AND user_id = ?",
+            [paymentMethod, bookingId, userId]
           );
         }
       }
@@ -2158,13 +2147,93 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
         [bookingId]
       );
       if (claimed === 1) {
-        await settleOrganizerPaid(bookingId);
-        // Auto-send invoice after Stitch payment confirmation (fire-and-forget)
+        await settleOrganizerPaid(bookingId, paymentMethod);
         fireInvoiceEmail(bookingId).catch(() => {});
         syncEventRegistration(bookingId).catch(() => {});
       }
     }
   }
+  logger.info({ externalRef, providerLabel }, "Processed completed payment reference");
+}
+
+router.post("/payfast/notify", async (req, res): Promise<void> => {
+  const body = req.body as Record<string, string>;
+  const valid = await validatePayFastIPN(body, req.ip ?? "");
+  if (!valid) {
+    res.status(400).send("Invalid signature");
+    return;
+  }
+
+  if (body["payment_status"] !== "COMPLETE") {
+    res.status(200).send("OK");
+    return;
+  }
+
+  const externalRef = body["m_payment_id"] ?? "";
+  if (!externalRef) {
+    res.status(200).send("OK");
+    return;
+  }
+
+  await processCompletedPaymentReference(externalRef, "payfast");
+  res.status(200).send("OK");
+});
+
+// Deprecated Stitch webhook kept for backward compatibility with old payments.
+router.post("/stitch/webhook", async (req, res): Promise<void> => {
+  const raw: string = Buffer.isBuffer(req.body)
+    ? req.body.toString("utf8")
+    : JSON.stringify(req.body ?? {});
+
+  const secret = process.env["STITCH_WEBHOOK_SECRET"];
+
+  if (secret) {
+    const ok = verifySvixSignature(
+      secret,
+      req.header("svix-id") ?? "",
+      req.header("svix-timestamp") ?? "",
+      req.header("svix-signature") ?? "",
+      raw,
+    );
+    if (!ok) {
+      res.status(400).send("Invalid signature");
+      return;
+    }
+  }
+
+  let body: Record<string, unknown>;
+  try { body = JSON.parse(raw); } catch { body = {}; }
+
+  const status: string = String(
+    (body["status"] as string) ??
+    ((body["paymentInitiationRequest"] as any)?.status ?? ""),
+  ).toUpperCase();
+
+  if (status !== "PAID" && status !== "COMPLETED") {
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  let externalRef: string =
+    (body["merchantReference"] as string) ??
+    (body["externalReference"] as string) ??
+    ((body["paymentInitiationRequest"] as any)?.externalReference ?? "");
+
+  const paymentId = body["id"] as string | undefined;
+  if (!externalRef && paymentId) {
+    try {
+      const { getStitchPayment } = await import("../lib/stitch");
+      const detail = await getStitchPayment(String(paymentId));
+      externalRef = detail?.merchantReference ?? "";
+    } catch { /* ignore — handled by the empty-ref guard below */ }
+  }
+
+  if (!externalRef) {
+    res.status(200).json({ received: true });
+    return;
+  }
+
+  await processCompletedPaymentReference(externalRef, "stitch");
 
   res.status(200).json({ received: true });
 });

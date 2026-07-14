@@ -1,6 +1,6 @@
 import { randomUUID } from "crypto";
 import { query, row, exec, withTransaction, clientQuery } from "../lib/pg";
-import { createStitchPayment } from "../lib/stitch";
+import { buildPayFastPaymentUrl, PLATFORM_FEE_PER_PLAYER } from "../lib/payfast";
 import { logger } from "../lib/logger";
 
 // Run once an hour; on the 1st of each month generate counter booking invoices
@@ -58,12 +58,11 @@ async function runMonthlyInvoiceCycle(): Promise<void> {
   const feeSetting = await row<any>(
     "SELECT setting_value FROM platform_settings WHERE setting_key = 'platform_fee_flat'"
   );
-  const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : 10;
+  const feePerSlot = feeSetting ? parseFloat(feeSetting.setting_value) : PLATFORM_FEE_PER_PLAYER;
 
   const host = process.env["REPLIT_DEV_DOMAIN"]
     ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
     : "https://tapingolf.co.za";
-  const redirectUrl = `${host}/api/portal/invoice-success`;
 
   for (const { club_id } of clubs) {
     try {
@@ -120,23 +119,28 @@ async function runMonthlyInvoiceCycle(): Promise<void> {
         [invoiceId, ...ids]
       );
 
-      // Try to create Stitch payment link — non-fatal
+      // Try to create PayFast payment link — non-fatal
       let paymentUrl: string | null = null;
       try {
-        const payment = await createStitchPayment({
-          amount:            totalAmount,
-          payerName:         club.name,
+        const payer = club.name?.trim() ? club.name.trim().split(/\s+/) : [];
+        const payment = buildPayFastPaymentUrl({
+          amount: totalAmount,
           merchantReference: `invoice-${invoiceId}`,
-          redirectUrl,
-          payerEmail:        club.email ?? undefined,
+          itemName: `TapIn Golf - Invoice ${invoiceRef}`,
+          returnUrl: `${host}/club-portal/invoices`,
+          cancelUrl: `${host}/club-portal/invoices`,
+          notifyUrl: `${host}/api/payfast/notify`,
+          payerFirstName: payer[0],
+          payerLastName: payer.slice(1).join(" ") || undefined,
+          payerEmail: club.email ?? undefined,
         });
         await exec(
-          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-          [payment.id, payment.url, invoiceId]
+          "UPDATE club_invoices SET payfast_payment_id = ?, payfast_payment_url = ? WHERE id = ?",
+          [payment.paymentId, payment.url, invoiceId]
         );
         paymentUrl = payment.url;
       } catch (payErr: any) {
-        logger.warn({ err: payErr, invoiceId }, "Monthly counter invoice: Stitch link failed");
+        logger.warn({ err: payErr, invoiceId }, "Monthly counter invoice: PayFast link failed");
       }
 
       // Send portal inbox notification
@@ -191,7 +195,6 @@ async function runResaleFeeInvoices(prevLabel: string): Promise<void> {
   const host = process.env["REPLIT_DEV_DOMAIN"]
     ? `https://${process.env["REPLIT_DEV_DOMAIN"]}`
     : "https://tapingolf.co.za";
-  const redirectUrl = `${host}/api/portal/invoice-success`;
 
   for (const { club_id } of clubs) {
     try {
@@ -263,20 +266,25 @@ async function runResaleFeeInvoices(prevLabel: string): Promise<void> {
 
       let paymentUrl: string | null = null;
       try {
-        const payment = await createStitchPayment({
-          amount:            totalAmount,
-          payerName:         club.name,
+        const payer = club.name?.trim() ? club.name.trim().split(/\s+/) : [];
+        const payment = buildPayFastPaymentUrl({
+          amount: totalAmount,
           merchantReference: `invoice-${invoiceId}`,
-          redirectUrl,
-          payerEmail:        club.email ?? undefined,
+          itemName: `TapIn Golf - Invoice ${invoiceRef}`,
+          returnUrl: `${host}/club-portal/invoices`,
+          cancelUrl: `${host}/club-portal/invoices`,
+          notifyUrl: `${host}/api/payfast/notify`,
+          payerFirstName: payer[0],
+          payerLastName: payer.slice(1).join(" ") || undefined,
+          payerEmail: club.email ?? undefined,
         });
         await exec(
-          "UPDATE club_invoices SET stitch_payment_id = ?, stitch_payment_url = ? WHERE id = ?",
-          [payment.id, payment.url, invoiceId]
+          "UPDATE club_invoices SET payfast_payment_id = ?, payfast_payment_url = ? WHERE id = ?",
+          [payment.paymentId, payment.url, invoiceId]
         );
         paymentUrl = payment.url;
       } catch (payErr: any) {
-        logger.warn({ err: payErr, invoiceId }, "Monthly resale fee invoice: Stitch link failed");
+        logger.warn({ err: payErr, invoiceId }, "Monthly resale fee invoice: PayFast link failed");
       }
 
       const notifBody = `Your ${prevLabel} resale marketplace fee invoice ${invoiceRef} for ${fmtRand(totalAmount)} (incl. VAT) is now available. Please pay via the Invoices page.`;

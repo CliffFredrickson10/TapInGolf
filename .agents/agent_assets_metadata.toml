@@ -179,3 +179,9 @@ id = "twIVLA0n_z1i4aOKPriQp"
 uri = "file://exports/tapin_golf_assets.zip"
 type = "unspecified"
 title = "TapIn Golf — club logos + store screenshots (61 MB)"
+
+[[outputs]]
+id = "LHNHf4VY3ZZiEOchHMkjX"
+uri = "file://exports/tapin_golf_complete.zip"
+type = "unspecified"
+title = "TapIn Golf — complete system (everything, 174 MB)"

@@ -434,7 +434,8 @@ router.get("/admin/split-payments", async (req, res): Promise<void> => {
   const [payments, total] = await Promise.all([
     query<any>(
       `SELECT sp.id, sp.booking_id, sp.club_id, sp.total_amount, sp.tapin_fee, sp.club_amount,
-              sp.players, sp.club_merchant_id, sp.status, sp.created_at, sp.updated_at,
+              sp.players, sp.club_merchant_id, sp.status, sp.payfast_payload, sp.payfast_response,
+              sp.created_at, sp.updated_at,
               c.name AS club_name, b.booking_ref, u.name AS player_name, u.email AS player_email
        FROM split_payments sp
        JOIN clubs c ON c.id = sp.club_id

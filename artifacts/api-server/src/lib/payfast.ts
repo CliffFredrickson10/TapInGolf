@@ -39,6 +39,8 @@ export interface PayFastPaymentResult {
   url: string;
   /** The m_payment_id used to identify this payment */
   paymentId: string;
+  /** The payload fields sent to PayFast (for logging) */
+  payload: Record<string, string>;
 }
 
 interface PayFastConfig {
@@ -149,9 +151,14 @@ function buildSignedUrl(fields: readonly PayFastField[], config: PayFastConfig):
 export function buildPayFastPaymentUrl(params: PayFastPaymentParams): PayFastPaymentResult {
   const config = getPayFastConfig();
   const fields = buildPaymentFields(params, config);
+  const payload: Record<string, string> = {};
+  for (const [key, value] of fields) {
+    if (key !== "merchant_key") payload[key] = value;
+  }
   return {
     url: buildSignedUrl(fields, config),
     paymentId: normalizeText(params.merchantReference, "merchantReference"),
+    payload,
   };
 }
 

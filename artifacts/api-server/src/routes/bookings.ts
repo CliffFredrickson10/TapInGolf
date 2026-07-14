@@ -1149,9 +1149,9 @@ router.post("/bookings", async (req, res): Promise<void> => {
         const tapInFee = Math.round(PLATFORM_FEE_PER_PLAYER * numPlayers * 100) / 100;
         const clubSplitAmount = Math.max(0, chargeAmount - tapInFee);
         await exec(
-          `INSERT INTO split_payments (booking_id, club_id, total_amount, tapin_fee, club_amount, players, club_merchant_id, status)
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
-          [bookingId, clubInfo.clubId, chargeAmount, tapInFee, clubSplitAmount, numPlayers, clubMerchantId || null]
+          `INSERT INTO split_payments (booking_id, club_id, total_amount, tapin_fee, club_amount, players, club_merchant_id, payfast_payload, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')`,
+          [bookingId, clubInfo.clubId, chargeAmount, tapInFee, clubSplitAmount, numPlayers, clubMerchantId || null, JSON.stringify(pr.payload)]
         );
       }
     } catch (payfastErr: any) {
@@ -2183,12 +2183,22 @@ router.post("/payfast/notify", async (req, res): Promise<void> => {
     return;
   }
 
+  // Always store the IPN response on the matching split_payment
+  const ipnRef = body["m_payment_id"] ?? "";
+  if (ipnRef) {
+    await exec(
+      `UPDATE split_payments SET payfast_response = ?, updated_at = NOW()
+       WHERE booking_id = (SELECT id FROM bookings WHERE payfast_payment_id = ? LIMIT 1)`,
+      [JSON.stringify(body), ipnRef]
+    );
+  }
+
   if (body["payment_status"] !== "COMPLETE") {
     res.status(200).send("OK");
     return;
   }
 
-  const externalRef = body["m_payment_id"] ?? "";
+  const externalRef = ipnRef;
   if (!externalRef) {
     res.status(200).send("OK");
     return;

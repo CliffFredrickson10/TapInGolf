@@ -1573,12 +1573,18 @@ async function applyLateAlters() {
     club_merchant_id VARCHAR(50),
     status          VARCHAR(20) NOT NULL DEFAULT 'pending'
                       CHECK (status IN ('pending','completed','failed')),
+    payfast_payload JSONB,
+    payfast_response JSONB,
     created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
     updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
   )`);
   await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_booking ON split_payments (booking_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_club ON split_payments (club_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_status ON split_payments (status)");
+
+  // Add payload/response columns to existing split_payments tables
+  await ddl("ALTER TABLE split_payments ADD COLUMN IF NOT EXISTS payfast_payload JSONB");
+  await ddl("ALTER TABLE split_payments ADD COLUMN IF NOT EXISTS payfast_response JSONB");
   // Backfill price_tier for existing bookings that pre-date the column:
   // look up the user's membership_type at the booked club; fall back to non_affiliated_visitor.
   await query(`

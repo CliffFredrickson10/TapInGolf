@@ -335,7 +335,7 @@ export default function PaymentsScreen() {
                   >
                     <Ionicons name="card-outline" size={20} color={colors.primary} />
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.payMethodLabel, { color: colors.foreground }]}>Pay with Stitch</Text>
+                      <Text style={[styles.payMethodLabel, { color: colors.foreground }]}>Pay with PayFast</Text>
                       <Text style={[styles.payMethodSub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
                     </View>
                     {toppingUp ? <ActivityIndicator size="small" color={colors.primary} /> : <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />}

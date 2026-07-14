@@ -1541,7 +1541,7 @@ export default function EventDetailScreen() {
                     {reg?.division ? `  ·  Division: ${reg.division}` : ""}
                   </Text>
 
-                  {/* Stitch — always available */}
+                  {/* PayFast — always available */}
                   <TouchableOpacity
                     style={[styles.primaryBtn, { backgroundColor: colors.accent }]}
                     onPress={() => handlePay("stitch")}
@@ -1550,7 +1550,7 @@ export default function EventDetailScreen() {
                     {paying
                       ? <ActivityIndicator color="#fff" size="small" />
                       : <Text style={styles.primaryBtnText}>
-                          Pay via Stitch
+                          Pay via PayFast
                           {!event.use_tiered_pricing && event.entry_fee ? ` — R${event.entry_fee.toFixed(2)}` : ""}
                         </Text>
                     }

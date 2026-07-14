@@ -1010,7 +1010,7 @@ export default function NewBookingScreen() {
             >
               <Ionicons name="card-outline" size={22} color={paymentMethod === "stitch" ? colors.primary : colors.mutedForeground} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.payLabel, { color: colors.foreground }]}>Stitch</Text>
+                <Text style={[styles.payLabel, { color: colors.foreground }]}>PayFast</Text>
                 <Text style={[styles.paySub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
               </View>
               {paymentMethod === "stitch" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}

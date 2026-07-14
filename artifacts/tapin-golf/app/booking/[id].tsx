@@ -556,7 +556,7 @@ export default function BookingDetailScreen() {
               disabled={payLoading}
             >
               <Text style={styles.payConfirmText}>
-                {payLoading ? "Processing…" : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via Stitch`}
+                {payLoading ? "Processing…" : `Pay R${(booking.my_amount ?? 0).toFixed(2)} via PayFast`}
               </Text>
             </TouchableOpacity>
           </View>
@@ -772,7 +772,7 @@ export default function BookingDetailScreen() {
               </View>
             )}
 
-            {/* Stitch option */}
+            {/* PayFast option */}
             <TouchableOpacity
               style={[styles.payOption, {
                 backgroundColor: payMethod === "stitch" ? colors.primaryLight : colors.background,
@@ -782,7 +782,7 @@ export default function BookingDetailScreen() {
             >
               <Ionicons name="card-outline" size={20} color={payMethod === "stitch" ? colors.primary : colors.mutedForeground} />
               <View style={{ flex: 1 }}>
-                <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Stitch</Text>
+                <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>PayFast</Text>
                 <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
               </View>
               {payMethod === "stitch" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
@@ -851,7 +851,7 @@ export default function BookingDetailScreen() {
                   >
                     <Ionicons name="card-outline" size={20} color={secondaryPayMethod === "stitch" ? colors.primary : colors.mutedForeground} />
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>Stitch</Text>
+                      <Text style={[styles.payOptionLabel, { color: colors.foreground }]}>PayFast</Text>
                       <Text style={[styles.payOptionSub, { color: colors.mutedForeground }]}>Instant EFT, Debit/Credit card</Text>
                     </View>
                     {secondaryPayMethod === "stitch" && <Ionicons name="checkmark-circle" size={18} color={colors.primary} />}
@@ -905,12 +905,12 @@ export default function BookingDetailScreen() {
               const walletInsufficient =
                 (payMethod === "wallet" && walletBalance !== null && walletBalance < (booking.my_amount ?? 0)) ||
                 (hasSplit && secondaryPayMethod === "wallet" && walletBalance !== null && walletBalance < addonsAmt);
-              let btnLabel = `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "Stitch"}`;
+              let btnLabel = `Pay R${(booking.my_amount ?? 0).toFixed(2)} via ${payMethod === "wallet" ? "Wallet" : "PayFast"}`;
               if (payMethod === "prepaid") {
                 if (hasSplit) {
                   btnLabel = secondaryPayMethod === "wallet"
                     ? `Pay R${addonsAmt.toFixed(2)} via Wallet + Prepaid Round`
-                    : `Pay R${addonsAmt.toFixed(2)} via Stitch + Prepaid Round`;
+                    : `Pay R${addonsAmt.toFixed(2)} via PayFast + Prepaid Round`;
                 } else {
                   btnLabel = "Use Prepaid Round";
                 }

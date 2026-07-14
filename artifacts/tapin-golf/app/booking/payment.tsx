@@ -168,10 +168,10 @@ export default function PaymentScreen() {
             <Ionicons name="card-outline" size={40} color={colors.primary} />
           </View>
           <Text style={[styles.title, { color: colors.foreground }]}>
-            {isWalletTopup ? "Top Up Wallet" : "Stitch Payment"}
+            {isWalletTopup ? "Top Up Wallet" : "PayFast Payment"}
           </Text>
           <Text style={[styles.sub, { color: colors.mutedForeground }]}>
-            Tap the button below to open the Stitch secure payment page.{"\n"}
+            Tap the button below to open the PayFast secure payment page.{"\n"}
             Return here once your payment is complete.
           </Text>
 
@@ -180,7 +180,7 @@ export default function PaymentScreen() {
             onPress={openStitch}
           >
             <Ionicons name="open-outline" size={18} color="#fff" />
-            <Text style={styles.primaryBtnText}>Open Stitch</Text>
+            <Text style={styles.primaryBtnText}>Open PayFast</Text>
           </TouchableOpacity>
 
           {stitchOpened && (

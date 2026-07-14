@@ -166,7 +166,7 @@ title = "ASO-optimised store listing (Play + App Store)"
 id = "OYDNk48HxFI2ypQ7ioFJ1"
 uri = "file://exports/tapin_golf_source.zip"
 type = "unspecified"
-title = "TapIn Golf — source code (lean, 9.4 MB)"
+title = "TapIn Golf — complete source code (with lib/ workspace packages)"
 
 [[outputs]]
 id = "Woa5Pthnqa-EzfwCKuO0f"

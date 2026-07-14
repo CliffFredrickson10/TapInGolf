@@ -419,6 +419,37 @@ router.get("/admin/clubs/:id/payfast", async (req, res): Promise<void> => {
   res.json({ payfast_merchant_id: club.payfast_merchant_id });
 });
 
+// GET /admin/split-payments — list all split payments for staff
+router.get("/admin/split-payments", async (req, res): Promise<void> => {
+  const caller = await getUser(req);
+  if (!isPlatformAdmin(caller)) { res.status(403).json({ message: "Forbidden" }); return; }
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));
+  const offset = (page - 1) * limit;
+  const status = String(req.query.status ?? "").trim() || undefined;
+
+  const whereClause = status ? "WHERE sp.status = ?" : "";
+  const params: any[] = status ? [status] : [];
+
+  const [payments, total] = await Promise.all([
+    query<any>(
+      `SELECT sp.id, sp.booking_id, sp.club_id, sp.total_amount, sp.tapin_fee, sp.club_amount,
+              sp.players, sp.club_merchant_id, sp.status, sp.created_at, sp.updated_at,
+              c.name AS club_name, b.booking_ref, u.name AS player_name, u.email AS player_email
+       FROM split_payments sp
+       JOIN clubs c ON c.id = sp.club_id
+       JOIN bookings b ON b.id = sp.booking_id
+       JOIN users u ON u.id = b.user_id
+       ${whereClause}
+       ORDER BY sp.created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    ),
+    row<any>(`SELECT COUNT(*) AS total FROM split_payments sp ${whereClause}`, params),
+  ]);
+
+  res.json({ payments, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+
 // GET /admin/clubs/:id/portal-accounts — list portal accounts for a club
 router.get("/admin/clubs/:id/portal-accounts", async (req, res): Promise<void> => {
   const caller = await getUser(req);

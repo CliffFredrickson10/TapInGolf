@@ -824,6 +824,36 @@ router.put("/portal/bookings/:id/refund-processed", requireClubAuth, async (req:
 
 // ─── REVIEWS ─────────────────────────────────────────────────────────────────
 
+// GET /portal/split-payments — list split payments for this club
+router.get("/portal/split-payments", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const page = Math.max(1, parseInt(String(req.query.page ?? "1"), 10));
+  const limit = Math.min(100, Math.max(1, parseInt(String(req.query.limit ?? "50"), 10)));
+  const offset = (page - 1) * limit;
+  const status = String(req.query.status ?? "").trim() || undefined;
+
+  let whereClause = "WHERE sp.club_id = ?";
+  const params: any[] = [club.id];
+  if (status) { whereClause += " AND sp.status = ?"; params.push(status); }
+
+  const [payments, total] = await Promise.all([
+    query<any>(
+      `SELECT sp.id, sp.booking_id, sp.total_amount, sp.tapin_fee, sp.club_amount,
+              sp.players, sp.club_merchant_id, sp.status, sp.created_at, sp.updated_at,
+              b.booking_ref, u.name AS player_name, u.email AS player_email
+       FROM split_payments sp
+       JOIN bookings b ON b.id = sp.booking_id
+       JOIN users u ON u.id = b.user_id
+       ${whereClause}
+       ORDER BY sp.created_at DESC LIMIT ? OFFSET ?`,
+      [...params, limit, offset]
+    ),
+    row<any>(`SELECT COUNT(*) AS total FROM split_payments sp ${whereClause}`, params),
+  ]);
+
+  res.json({ payments, total: parseInt(total?.total ?? "0", 10), page, limit });
+});
+
 router.get("/portal/reviews", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const rows = await query<any>(

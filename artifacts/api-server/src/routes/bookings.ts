@@ -136,15 +136,16 @@ function splitName(name?: string | null): { firstName?: string; lastName?: strin
   };
 }
 
-async function getSlotClubPayFastMerchantId(slotId: number): Promise<string | undefined> {
+async function getSlotClubPayFastInfo(slotId: number): Promise<{ clubId: number; merchantId?: string } | undefined> {
   const clubRow = await row<any>(
-    `SELECT c.payfast_merchant_id
+    `SELECT c.id AS club_id, c.payfast_merchant_id
        FROM portal_tee_slots pts
        JOIN clubs c ON c.id = pts.club_id
       WHERE pts.id = ?`,
     [slotId]
   );
-  return clubRow?.payfast_merchant_id || undefined;
+  if (!clubRow) return undefined;
+  return { clubId: clubRow.club_id, merchantId: clubRow.payfast_merchant_id || undefined };
 }
 
 async function getBookingPayFastDetails(bookingId: number): Promise<{
@@ -1123,7 +1124,8 @@ router.post("/bookings", async (req, res): Promise<void> => {
     const host = req.get("host") ?? "";
     try {
       const slotId = parseInt(String(tee_time_id), 10);
-      const clubMerchantId = Number.isFinite(slotId) ? await getSlotClubPayFastMerchantId(slotId) : undefined;
+      const clubInfo = Number.isFinite(slotId) ? await getSlotClubPayFastInfo(slotId) : undefined;
+      const clubMerchantId = clubInfo?.merchantId;
       const payer = splitName(user.name);
       const useSplit = payment_method !== "pay_at_club";
       const pr = buildPayFastPaymentUrl({
@@ -1141,6 +1143,17 @@ router.post("/bookings", async (req, res): Promise<void> => {
       });
       paymentUrl = pr.url;
       await exec("UPDATE bookings SET payfast_payment_id = ? WHERE id = ?", [pr.paymentId, bookingId]);
+
+      // Log split payment entry
+      if (useSplit && clubInfo?.clubId) {
+        const tapInFee = Math.round(PLATFORM_FEE_PER_PLAYER * numPlayers * 100) / 100;
+        const clubSplitAmount = Math.max(0, chargeAmount - tapInFee);
+        await exec(
+          `INSERT INTO split_payments (booking_id, club_id, total_amount, tapin_fee, club_amount, players, club_merchant_id, status)
+           VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')`,
+          [bookingId, clubInfo.clubId, chargeAmount, tapInFee, clubSplitAmount, numPlayers, clubMerchantId || null]
+        );
+      }
     } catch (payfastErr: any) {
       // PayFast link creation failed — cancel the booking, release the reserved seats,
       // and restore any voucher value that was deducted in the booking transaction.
@@ -1684,6 +1697,7 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
 
   await withTransaction(async (client) => {
     await clientQuery(client, "UPDATE bookings SET status = 'cancelled' WHERE id = ?", [id]);
+    await clientQuery(client, "UPDATE split_payments SET status = 'failed', updated_at = NOW() WHERE booking_id = ? AND status = 'pending'", [id]);
     // Release the seats this booking reserved so the slot opens back up
     if (booking.portal_slot_id) {
       await clientQuery(client,
@@ -2147,6 +2161,11 @@ async function processCompletedPaymentReference(
         [bookingId]
       );
       if (claimed === 1) {
+        // Mark associated split payment as completed
+        await exec(
+          "UPDATE split_payments SET status = 'completed', updated_at = NOW() WHERE booking_id = ? AND status = 'pending'",
+          [bookingId]
+        );
         await settleOrganizerPaid(bookingId, paymentMethod);
         fireInvoiceEmail(bookingId).catch(() => {});
         syncEventRegistration(bookingId).catch(() => {});

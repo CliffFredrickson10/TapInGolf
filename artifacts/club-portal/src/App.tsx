@@ -39,12 +39,14 @@ import StaffVouchers from "@/pages/staff/vouchers";
 import StaffReminderSettings from "@/pages/staff/reminder-settings";
 import StaffGuestLeads from "@/pages/staff/guest-leads";
 import StaffResellers from "@/pages/staff/resellers";
+import StaffSplitPayments from "@/pages/staff/split-payments";
 import Resale from "@/pages/resale";
 import ResellerSearch from "@/pages/reseller/search";
 import ResellerClub from "@/pages/reseller/club";
 import ResellerPurchases from "@/pages/reseller/purchases";
 import ResaleSuccess from "@/pages/reseller/resale-success";
 import Payments from "@/pages/payments";
+import ClubSplitPayments from "@/pages/split-payments";
 import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
 import Bookings from "@/pages/bookings";
@@ -128,6 +130,7 @@ function Router() {
                 <Route path="/reminder-settings" component={StaffReminderSettings} />
                 <Route path="/guest-leads" component={StaffGuestLeads} />
                 <Route path="/resellers" component={StaffResellers} />
+                <Route path="/split-payments" component={StaffSplitPayments} />
                 <Route>
                   <div className="p-8"><h1 className="text-2xl font-bold">Page not found</h1></div>
                 </Route>
@@ -219,6 +222,9 @@ function Router() {
         </Route>
         <Route path="/payments">
           <SectionGuard section="payments"><Payments /></SectionGuard>
+        </Route>
+        <Route path="/split-payments">
+          <SectionGuard section="payments"><ClubSplitPayments /></SectionGuard>
         </Route>
         <Route path="/invoices">
           <SectionGuard section="members"><Invoices /></SectionGuard>

@@ -3,7 +3,7 @@ import {
   Calendar, Users, Ticket, Bell, CircleDollarSign, CreditCard,
   FileX2, Receipt, ShieldOff, BookOpen, ShieldCheck, Plus,
   UserPlus, Trophy, Download, Clock, RefreshCw, ClipboardList, BookMarked,
-  Store,
+  Store, Banknote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -23,6 +23,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/bookings",           label: "Bookings",           icon: BookOpen,        section: "schedule" },
   { href: "/resale",             label: "Resale Marketplace", icon: Store,           section: "schedule" },
   { href: "/payments",           label: "Payments",           icon: CreditCard,      section: "payments" },
+  { href: "/split-payments",     label: "Split Payments",     icon: Banknote,        section: "payments" },
   { href: "/events",             label: "Tournaments",        icon: Calendar,        section: "events" },
   { href: "/members",            label: "Members",            icon: Users,           section: "members" },
   { href: "/invoices",           label: "Invoices",           icon: Receipt,         section: "members" },

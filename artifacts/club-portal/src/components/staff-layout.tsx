@@ -19,6 +19,7 @@ import {
   AlarmClock,
   UserPlus,
   Store,
+  Banknote,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -38,6 +39,7 @@ const navItems = [
   { href: "/reminder-settings", label: "Reminder Settings", icon: AlarmClock },
   { href: "/guest-leads", label: "Guest Leads", icon: UserPlus },
   { href: "/resellers", label: "Resellers", icon: Store },
+  { href: "/split-payments", label: "Split Payments", icon: Banknote },
 ];
 
 // Pages that operate on a single selected club need the club selector shown.

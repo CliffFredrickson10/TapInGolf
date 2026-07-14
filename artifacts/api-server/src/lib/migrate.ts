@@ -1560,6 +1560,25 @@ async function applyLateAlters() {
   await ddl("ALTER TABLE bookings ADD COLUMN IF NOT EXISTS event_additional_fees DECIMAL(10,2) NOT NULL DEFAULT 0");
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS status VARCHAR(20) NOT NULL DEFAULT 'confirmed'");
   await ddl("ALTER TABLE event_teams ADD COLUMN IF NOT EXISTS requested_by INT REFERENCES users(id) ON DELETE SET NULL");
+
+  // Split payments tracking table
+  await ddl(`CREATE TABLE IF NOT EXISTS split_payments (
+    id              SERIAL PRIMARY KEY,
+    booking_id      INT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    total_amount    DECIMAL(10,2) NOT NULL,
+    tapin_fee       DECIMAL(10,2) NOT NULL,
+    club_amount     DECIMAL(10,2) NOT NULL,
+    players         INT NOT NULL DEFAULT 1,
+    club_merchant_id VARCHAR(50),
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending'
+                      CHECK (status IN ('pending','completed','failed')),
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_booking ON split_payments (booking_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_club ON split_payments (club_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_split_payments_status ON split_payments (status)");
   // Backfill price_tier for existing bookings that pre-date the column:
   // look up the user's membership_type at the booked club; fall back to non_affiliated_visitor.
   await query(`

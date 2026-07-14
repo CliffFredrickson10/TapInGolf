@@ -54,7 +54,7 @@ export default function Resale() {
   const [slotDate, setSlotDate] = useState(() => format(addDays(new Date(), 1), "yyyy-MM-dd"));
   const [slots, setSlots] = useState<EligibleSlot[]>([]);
   const [slotsLoading, setSlotsLoading] = useState(false);
-  const [selectedSlot, setSelectedSlot] = useState<EligibleSlot | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set());
   const [price, setPrice] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -92,7 +92,7 @@ export default function Resale() {
 
   const loadSlots = useCallback((date: string) => {
     setSlotsLoading(true);
-    setSelectedSlot(null);
+    setSelectedIds(new Set());
     api<{ slots: EligibleSlot[] }>(`/api/portal/resale/slots?date=${date}`)
       .then((data) => setSlots(data.slots))
       .catch((e) => toast({ title: "Error loading slots", description: e.message, variant: "destructive" }))
@@ -103,29 +103,53 @@ export default function Resale() {
     if (dialogOpen && /^\d{4}-\d{2}-\d{2}$/.test(slotDate)) loadSlots(slotDate);
   }, [dialogOpen, slotDate, loadSlots]);
 
+  const toggleSlot = (id: number) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
   const createListing = async () => {
-    if (!selectedSlot) return;
+    const chosen = slots.filter((s) => s.listable && selectedIds.has(s.id));
+    if (chosen.length === 0) return;
     const p = parseFloat(price);
     if (isNaN(p) || p < 1) {
       toast({ title: "Invalid price", description: "Price must be at least R1.00", variant: "destructive" });
       return;
     }
     setSaving(true);
-    try {
-      await api("/api/portal/resale/listings", {
-        method: "POST",
-        body: JSON.stringify({ slot_id: selectedSlot.id, price: p }),
-      });
-      toast({ title: "Slot listed", description: `${selectedSlot.tee_time} on ${slotDate} is now listed for R${p.toFixed(2)} and hidden from public booking.` });
-      setDialogOpen(false);
-      setPrice("");
-      setSelectedSlot(null);
-      load();
-    } catch (e: any) {
-      toast({ title: "Could not list slot", description: e.message, variant: "destructive" });
-    } finally {
-      setSaving(false);
+    const failed: string[] = [];
+    let listed = 0;
+    for (const s of chosen) {
+      try {
+        await api("/api/portal/resale/listings", {
+          method: "POST",
+          body: JSON.stringify({ slot_id: s.id, price: p }),
+        });
+        listed++;
+      } catch {
+        failed.push(s.tee_time);
+      }
     }
+    setSaving(false);
+    if (listed > 0) {
+      toast({
+        title: listed === 1 ? "Slot listed" : `${listed} slots listed`,
+        description: `Listed for R${p.toFixed(2)} each on ${slotDate} and hidden from public booking.`,
+      });
+    }
+    if (failed.length > 0) {
+      toast({ title: "Some slots could not be listed", description: failed.join(", "), variant: "destructive" });
+      loadSlots(slotDate);
+      load();
+      return;
+    }
+    setDialogOpen(false);
+    setPrice("");
+    setSelectedIds(new Set());
+    load();
   };
 
   const savePrice = async () => {
@@ -305,7 +329,26 @@ export default function Resale() {
               />
             </div>
             <div className="space-y-2">
-              <Label>Available slots</Label>
+              <div className="flex items-center justify-between">
+                <Label>Available slots{selectedIds.size > 0 ? ` (${selectedIds.size} selected)` : ""}</Label>
+                {!slotsLoading && slots.filter((s) => s.listable).length > 0 && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => {
+                      const listable = slots.filter((s) => s.listable);
+                      setSelectedIds((prev) =>
+                        prev.size === listable.length ? new Set() : new Set(listable.map((s) => s.id))
+                      );
+                    }}
+                    data-testid="button-select-all-slots"
+                  >
+                    {selectedIds.size === slots.filter((s) => s.listable).length ? "Deselect all" : "Select all"}
+                  </Button>
+                )}
+              </div>
               {slotsLoading ? (
                 <Skeleton className="h-24 w-full rounded-lg" />
               ) : slots.filter((s) => s.listable).length === 0 ? (
@@ -316,9 +359,9 @@ export default function Resale() {
                     <button
                       key={s.id}
                       type="button"
-                      onClick={() => setSelectedSlot(s)}
+                      onClick={() => toggleSlot(s.id)}
                       className={`text-sm py-2 rounded-lg border font-medium transition-colors ${
-                        selectedSlot?.id === s.id
+                        selectedIds.has(s.id)
                           ? "bg-[#1a5c38] text-white border-[#1a5c38]"
                           : "hover:border-[#1a5c38]/50"
                       }`}
@@ -348,11 +391,11 @@ export default function Resale() {
             <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
             <Button
               className="bg-[#1a5c38] hover:bg-[#164d30]"
-              disabled={!selectedSlot || !price || saving}
+              disabled={selectedIds.size === 0 || !price || saving}
               onClick={createListing}
               data-testid="button-confirm-list"
             >
-              {saving ? "Listing…" : "List slot"}
+              {saving ? "Listing…" : selectedIds.size > 1 ? `List ${selectedIds.size} slots` : "List slot"}
             </Button>
           </DialogFooter>
         </DialogContent>

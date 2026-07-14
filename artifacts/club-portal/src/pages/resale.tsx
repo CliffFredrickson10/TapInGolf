@@ -62,6 +62,10 @@ export default function Resale() {
   const [editListing, setEditListing] = useState<ResaleListing | null>(null);
   const [editPrice, setEditPrice] = useState("");
 
+  // Group (per-date) edit dialog
+  const [groupDate, setGroupDate] = useState<string | null>(null);
+  const [groupPrice, setGroupPrice] = useState("");
+
   const load = useCallback(() =>
     api<{ enabled: boolean; listings: ResaleListing[] }>("/api/portal/resale")
       .then((data) => { setEnabled(data.enabled); setListings(data.listings); })
@@ -182,8 +186,60 @@ export default function Resale() {
     }
   };
 
+  const saveGroupPrice = async () => {
+    if (!groupDate) return;
+    const p = parseFloat(groupPrice);
+    if (isNaN(p) || p < 1) {
+      toast({ title: "Invalid price", description: "Price must be at least R1.00", variant: "destructive" });
+      return;
+    }
+    const group = listings.filter((l) => l.status === "listed" && l.date === groupDate && !l.payment_pending);
+    setSaving(true);
+    const failed: string[] = [];
+    for (const l of group) {
+      try {
+        await api(`/api/portal/resale/listings/${l.id}`, { method: "PUT", body: JSON.stringify({ price: p }) });
+      } catch {
+        failed.push(l.tee_time);
+      }
+    }
+    setSaving(false);
+    if (failed.length > 0) {
+      toast({ title: "Some prices could not be updated", description: failed.join(", "), variant: "destructive" });
+    } else {
+      toast({ title: "Prices updated", description: `All listings on ${format(parseISO(groupDate), "d MMM yyyy")} set to R${p.toFixed(2)}.` });
+    }
+    setGroupDate(null);
+    load();
+  };
+
+  const unlistGroup = async (date: string) => {
+    const group = listings.filter((l) => l.status === "listed" && l.date === date && !l.payment_pending);
+    setSaving(true);
+    const failed: string[] = [];
+    for (const l of group) {
+      try {
+        await api(`/api/portal/resale/listings/${l.id}`, { method: "DELETE" });
+      } catch {
+        failed.push(l.tee_time);
+      }
+    }
+    setSaving(false);
+    if (failed.length > 0) {
+      toast({ title: "Some slots could not be unlisted", description: failed.join(", "), variant: "destructive" });
+    } else {
+      toast({ title: "Date unlisted", description: "All slots on this date are available for public booking again." });
+    }
+    load();
+  };
+
   const active = listings.filter((l) => l.status === "listed");
   const sold = listings.filter((l) => l.status === "sold");
+  const activeByDate = active.reduce<Record<string, ResaleListing[]>>((acc, l) => {
+    (acc[l.date] ??= []).push(l);
+    return acc;
+  }, {});
+  const activeDates = Object.keys(activeByDate).sort();
 
   return (
     <div className="p-8 max-w-5xl w-full mx-auto">
@@ -239,38 +295,84 @@ export default function Resale() {
                   No active listings. List an unsold slot to offer it to resellers.
                 </div>
               ) : (
-                <div className="divide-y">
-                  {active.map((l) => (
-                    <div key={l.id} className="flex items-center gap-4 py-3" data-testid={`row-listing-${l.id}`}>
-                      <div className="w-14 text-center">
-                        <div className="font-bold tabular-nums">{l.tee_time}</div>
-                        <div className="text-[10px] text-muted-foreground uppercase">{l.max_players}-ball</div>
-                      </div>
-                      <div className="flex-1 text-sm">{format(parseISO(l.date), "EEE, d MMM yyyy")}</div>
-                      <div className="font-semibold">R{l.price.toFixed(2)}</div>
-                      {l.payment_pending && <Badge variant="secondary">Payment in progress</Badge>}
-                      {!readOnly && (
-                        <div className="flex gap-1">
-                          <Button
-                            variant="ghost" size="icon" className="h-8 w-8"
-                            disabled={l.payment_pending}
-                            onClick={() => { setEditListing(l); setEditPrice(String(l.price)); }}
-                            data-testid={`button-edit-${l.id}`}
-                          >
-                            <Pencil className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive"
-                            disabled={l.payment_pending}
-                            onClick={() => unlist(l)}
-                            data-testid={`button-unlist-${l.id}`}
-                          >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                <div className="space-y-4">
+                  {activeDates.map((date) => {
+                    const group = activeByDate[date];
+                    const prices = Array.from(new Set(group.map((l) => l.price)));
+                    const priceLabel = prices.length === 1
+                      ? `R${prices[0].toFixed(2)}`
+                      : `R${Math.min(...prices).toFixed(2)} – R${Math.max(...prices).toFixed(2)}`;
+                    return (
+                      <div key={date} className="rounded-xl border" data-testid={`group-listing-${date}`}>
+                        <div className="flex items-center gap-3 px-4 py-2.5 border-b bg-muted/40 rounded-t-xl flex-wrap">
+                          <CalendarDays className="h-4 w-4 text-[#1a5c38] flex-shrink-0" />
+                          <div className="font-semibold text-sm">{format(parseISO(date), "EEE, d MMM yyyy")}</div>
+                          <Badge variant="secondary" className="font-normal">{group.length} {group.length === 1 ? "slot" : "slots"}</Badge>
+                          <div className="ml-auto flex items-center gap-2">
+                            <span className="text-sm font-semibold">{priceLabel}</span>
+                            {!readOnly && (
+                              <>
+                                <Button
+                                  variant="outline" size="sm" className="h-7 px-2 text-xs"
+                                  disabled={saving}
+                                  onClick={() => { setGroupDate(date); setGroupPrice(prices.length === 1 ? String(prices[0]) : ""); }}
+                                  data-testid={`button-edit-group-${date}`}
+                                >
+                                  <Pencil className="h-3 w-3 mr-1" /> Edit price
+                                </Button>
+                                <Button
+                                  variant="outline" size="sm" className="h-7 px-2 text-xs text-destructive hover:text-destructive"
+                                  disabled={saving || group.every((l) => l.payment_pending)}
+                                  onClick={() => unlistGroup(date)}
+                                  data-testid={`button-unlist-group-${date}`}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" /> Unlist all
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      )}
-                    </div>
-                  ))}
+                        <div className="flex flex-wrap gap-2 p-3">
+                          {group.map((l) => (
+                            <div
+                              key={l.id}
+                              className="inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-sm bg-white"
+                              data-testid={`row-listing-${l.id}`}
+                            >
+                              <span className="font-bold tabular-nums">{l.tee_time}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase">{l.max_players}-ball</span>
+                              {prices.length > 1 && <span className="text-xs font-medium">R{l.price.toFixed(2)}</span>}
+                              {l.payment_pending && <Badge variant="secondary" className="text-[10px]">Payment in progress</Badge>}
+                              {!readOnly && (
+                                <>
+                                  <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-foreground disabled:opacity-40"
+                                    disabled={l.payment_pending}
+                                    onClick={() => { setEditListing(l); setEditPrice(String(l.price)); }}
+                                    title="Edit this slot's price"
+                                    data-testid={`button-edit-${l.id}`}
+                                  >
+                                    <Pencil className="h-3 w-3" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="text-muted-foreground hover:text-destructive disabled:opacity-40"
+                                    disabled={l.payment_pending}
+                                    onClick={() => unlist(l)}
+                                    title="Unlist this slot"
+                                    data-testid={`button-unlist-${l.id}`}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </button>
+                                </>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
@@ -426,6 +528,37 @@ export default function Resale() {
             <Button variant="outline" onClick={() => setEditListing(null)}>Cancel</Button>
             <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={saving} onClick={savePrice} data-testid="button-save-price">
               {saving ? "Saving…" : "Save"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Group (per-date) edit price dialog */}
+      <Dialog open={!!groupDate} onOpenChange={(o) => { if (!o) setGroupDate(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Edit prices for the day</DialogTitle>
+            <DialogDescription>
+              {groupDate && `Sets one price for all ${activeByDate[groupDate]?.length ?? 0} listed slots on ${format(parseISO(groupDate), "EEE, d MMM yyyy")}.`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label htmlFor="group-price">Price (R)</Label>
+            <Input
+              id="group-price"
+              type="number"
+              min="1"
+              step="0.01"
+              placeholder="e.g. 1200.00"
+              value={groupPrice}
+              onChange={(e) => setGroupPrice(e.target.value)}
+              data-testid="input-group-price"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGroupDate(null)}>Cancel</Button>
+            <Button className="bg-[#1a5c38] hover:bg-[#164d30]" disabled={saving || !groupPrice} onClick={saveGroupPrice} data-testid="button-save-group-price">
+              {saving ? "Saving…" : "Save for all"}
             </Button>
           </DialogFooter>
         </DialogContent>

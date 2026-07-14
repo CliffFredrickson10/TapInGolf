@@ -480,7 +480,9 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
        ge.name AS event_name,
        COALESCE(ge.shotgun_start, 0) AS shotgun_start,
        COALESCE(sh.held_count, 0) AS standing_held,
-       sh.held_names AS standing_names
+       sh.held_names AS standing_names,
+       rl.status AS resale_status,
+       rl.price AS resale_price
      FROM portal_tee_slots pts
      LEFT JOIN golf_events ge ON ge.id = pts.event_id
      LEFT JOIN (
@@ -491,6 +493,7 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
        WHERE h.status = 'held'
        GROUP BY h.slot_id
      ) sh ON sh.slot_id = pts.id
+     LEFT JOIN resale_listings rl ON rl.slot_id = pts.id AND rl.status IN ('listed','sold')
      WHERE pts.club_id = ?
        AND (pts.event_id IS NULL OR ge.status != 'cancelled')`;
   const params: any[] = [club.id];
@@ -510,6 +513,8 @@ router.get("/portal/tee-times", requireClubAuth, async (req: Request, res: Respo
     blocked_slots: JSON.parse(r.blocked_slots ?? "[]"),
     standing_held: Number(r.standing_held ?? 0),
     standing_names: r.standing_names ?? null,
+    resale_status: r.resale_status ?? null,
+    resale_price: r.resale_price != null ? Number(r.resale_price) : null,
   })));
 });
 

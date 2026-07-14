@@ -87,6 +87,9 @@ interface TeeTime {
   // Seats held for a standing (recurring) reservation, awaiting member confirmation.
   standing_held?: number;
   standing_names?: string | null;
+  // Active resale-marketplace listing on this slot ('listed' | 'sold').
+  resale_status?: "listed" | "sold" | null;
+  resale_price?: number | null;
 }
 
 interface Booking {
@@ -122,7 +125,9 @@ type SlotKind =
   | { kind: "booked"; booking: Booking; playerIndex: number; effectiveStatus: string }
   // Seat held by a standing reservation — reserved for a member until the
   // confirmation deadline, at which point it either becomes a booking or reopens.
-  | { kind: "standing"; name: string | null };
+  | { kind: "standing"; name: string | null }
+  // Slot is on the reseller marketplace — hidden from public booking.
+  | { kind: "resale"; status: "listed" | "sold"; price: number | null };
 
 interface Block {
   start: string;
@@ -226,6 +231,15 @@ function buildSlots(tt: TeeTime, bookings: Booking[]): SlotKind[] {
       }
     }
   }
+  // A resale listing covers the whole slot — remaining open seats belong to
+  // the reseller marketplace, not to normal portal/public booking.
+  if (tt.resale_status === "listed" || tt.resale_status === "sold") {
+    for (let i = 0; i < COLS; i++) {
+      if (slots[i].kind === "open") {
+        slots[i] = { kind: "resale", status: tt.resale_status, price: tt.resale_price ?? null };
+      }
+    }
+  }
   return slots;
 }
 
@@ -257,6 +271,7 @@ function slotBg(s: SlotKind) {
   if (s.kind === "blocked") return CELL_BG.blocked;
   if (s.kind === "na") return CELL_BG.na;
   if (s.kind === "standing") return "bg-purple-50";
+  if (s.kind === "resale") return s.status === "sold" ? "bg-sky-100" : "bg-sky-50";
   return CELL_BG[s.effectiveStatus] ?? CELL_BG.pending;
 }
 
@@ -2125,6 +2140,9 @@ export default function Schedule() {
                         slot.kind === "open" ? "Add booking for this slot" :
                         slot.kind === "blocked" ? "Click to unblock this slot" :
                         slot.kind === "standing" ? `Standing reservation${slot.name ? ` — ${slot.name}` : ""} (awaiting member confirmation)` :
+                        slot.kind === "resale" ? (slot.status === "sold"
+                          ? "Sold on the resale marketplace"
+                          : `Listed on the resale marketplace${slot.price != null ? ` — R${slot.price}` : ""} (manage on the Resale page)`) :
                         undefined
                       }
                     >
@@ -2143,6 +2161,14 @@ export default function Schedule() {
                         <span className="flex items-center justify-between w-full gap-1 min-w-0">
                           <span className="truncate leading-tight font-medium text-purple-700">{slot.name ?? "Standing"}</span>
                           <span className="flex-shrink-0 text-[8px] px-1 py-0.5 rounded bg-purple-100 text-purple-700 border border-purple-200 font-bold">Standing</span>
+                        </span>
+                      )}
+                      {slot.kind === "resale" && (
+                        <span className="flex items-center justify-between w-full gap-1 min-w-0">
+                          <span className="truncate leading-tight font-medium text-sky-700">
+                            {slot.status === "sold" ? "Sold" : slot.price != null ? `R${slot.price}` : "Listed"}
+                          </span>
+                          <span className="flex-shrink-0 text-[8px] px-1 py-0.5 rounded bg-sky-100 text-sky-700 border border-sky-200 font-bold">Resale</span>
                         </span>
                       )}
                       {slot.kind === "na" && <span className="text-gray-300">—</span>}

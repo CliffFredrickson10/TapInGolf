@@ -11,6 +11,7 @@ import { StaffLayout } from "@/components/staff-layout";
 import { ResellerLayout } from "@/components/reseller-layout";
 import { PosLayout } from "@/components/pos-layout";
 import Login from "@/pages/login";
+import ResellerLogin from "@/pages/reseller-login";
 import ForgotPassword from "@/pages/forgot-password";
 import Dashboard from "@/pages/dashboard";
 import Profile from "@/pages/profile";
@@ -105,6 +106,7 @@ function Router() {
   }
 
   if (location === "/forgot-password") return <ForgotPassword />;
+  if (location === "/reseller-login") return <ResellerLogin />;
   if (staff) {
     return (
       <HnaPendingProvider>

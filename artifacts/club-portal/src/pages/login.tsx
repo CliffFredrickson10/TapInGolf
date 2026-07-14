@@ -27,10 +27,10 @@ function BrandLogo() {
   );
 }
 
-type Tab = "club" | "club_user" | "staff" | "reseller" | "pos";
+type Tab = "club" | "club_user" | "staff" | "pos";
 
 export default function Login() {
-  const { login, clubUserLogin, staffLogin, resellerLogin, posLogin } = useAuth();
+  const { login, clubUserLogin, staffLogin, posLogin } = useAuth();
   const [, navigate] = useLocation();
   const [tab, setTab] = useState<Tab>("club");
   const [username, setUsername] = useState("");
@@ -57,8 +57,6 @@ export default function Login() {
         await clubUserLogin(email.trim().toLowerCase(), password);
       } else if (tab === "pos") {
         await posLogin(email.trim().toLowerCase(), password);
-      } else if (tab === "reseller") {
-        await resellerLogin(username.trim().toLowerCase(), password);
       } else {
         await login(username.trim(), password);
       }
@@ -86,7 +84,7 @@ export default function Login() {
                 Back
               </button>
             ) : (
-              <div className="grid grid-cols-3 gap-1 p-1 rounded-lg bg-muted mb-4">
+              <div className="grid grid-cols-2 gap-1 p-1 rounded-lg bg-muted mb-4">
                 <button
                   type="button"
                   onClick={() => switchTab("club")}
@@ -105,27 +103,16 @@ export default function Login() {
                 >
                   Outlet
                 </button>
-                <button
-                  type="button"
-                  onClick={() => switchTab("reseller")}
-                  className={`text-xs font-medium py-2 rounded-md transition-colors ${
-                    tab === "reseller" ? "bg-white shadow-sm text-[#1a5c38]" : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  Reseller
-                </button>
               </div>
             )}
             <CardTitle className="text-xl">
-              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : tab === "reseller" ? "Reseller sign in" : tab === "pos" ? "Outlet sign in" : "Sign in to your club"}
+              {tab === "staff" ? "TapIn staff sign in" : tab === "club_user" ? "Club staff sign in" : tab === "pos" ? "Outlet sign in" : "Sign in to your club"}
             </CardTitle>
             <CardDescription>
               {tab === "staff"
                 ? "Sign in with your TapIn super-user account to manage all clubs."
                 : tab === "club_user"
                 ? "Sign in with your club staff email and password."
-                : tab === "reseller"
-                ? "Sign in with your reseller account to buy listed tee times."
                 : tab === "pos"
                 ? "Outlet managers — sign in to open the POS terminal. Waiters and cashiers unlock on the terminal with their PIN or fingerprint."
                 : "Enter your club credentials to access the management portal."}
@@ -133,13 +120,13 @@ export default function Login() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {tab === "club" || tab === "reseller" ? (
+              {tab === "club" ? (
                 <div className="space-y-2">
-                  <Label htmlFor="username">{tab === "reseller" ? "Username" : "Club Username"}</Label>
+                  <Label htmlFor="username">Club Username</Label>
                   <Input
                     id="username"
                     type="text"
-                    placeholder={tab === "reseller" ? "your reseller username" : "e.g. glendower_golf_club"}
+                    placeholder="e.g. glendower_golf_club"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
                     required
@@ -194,7 +181,10 @@ export default function Login() {
               </Button>
             </form>
 
-            <div className="flex items-center justify-end mt-5 pt-4 border-t">
+            <div className="flex items-center justify-between mt-5 pt-4 border-t">
+              <a href={`${import.meta.env.BASE_URL.replace(/\/$/, "")}/reseller-login`} className="text-xs text-[#1a5c38] hover:underline font-semibold">
+                Reseller login →
+              </a>
               <a href="/club-portal/forgot-password" className="text-xs text-[#1a5c38] hover:underline font-semibold">
                 Forgot password?
               </a>

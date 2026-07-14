@@ -166,10 +166,16 @@ title = "ASO-optimised store listing (Play + App Store)"
 id = "OYDNk48HxFI2ypQ7ioFJ1"
 uri = "file://exports/tapin_golf_source.zip"
 type = "unspecified"
-title = "TapIn Golf — full source code (zip)"
+title = "TapIn Golf — source code (lean, 9.4 MB)"
 
 [[outputs]]
 id = "Woa5Pthnqa-EzfwCKuO0f"
 uri = "file://exports/tapin_golf_db_dump.sql.gz"
 type = "unspecified"
 title = "TapIn Golf — full PostgreSQL database dump (gzipped SQL)"
+
+[[outputs]]
+id = "twIVLA0n_z1i4aOKPriQp"
+uri = "file://exports/tapin_golf_assets.zip"
+type = "unspecified"
+title = "TapIn Golf — club logos + store screenshots (61 MB)"

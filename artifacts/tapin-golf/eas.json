@@ -15,7 +15,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "5b48a272-2c21-419d-9e86-c9f280702dda-00-2gx85khwemwzd.kirk.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       }
     },
     "preview": {
@@ -27,7 +27,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "5b48a272-2c21-419d-9e86-c9f280702dda-00-2gx85khwemwzd.kirk.replit.dev"
+        "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       }
     },
     "production": {
@@ -39,7 +39,7 @@
         "simulator": false
       },
       "env": {
-        "EXPO_PUBLIC_DOMAIN": "tap-in-golf.replit.app"
+        "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       }
     }
   },

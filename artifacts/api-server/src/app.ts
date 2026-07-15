@@ -91,8 +91,8 @@ if (process.env.NODE_ENV !== "production") {
 // its relative /api calls work.
 if (process.env.NODE_ENV === "production") {
   const clientDir = path.resolve(__dirname, "../../club-portal/dist/public");
-  app.use(express.static(clientDir));
-  app.get(/^(?!\/api).*/, (_req, res) => {
+  app.use("/club-portal", express.static(clientDir));
+  app.get(/^\/club-portal(?:\/.*)?$/, (_req, res) => {
     res.sendFile(path.join(clientDir, "index.html"));
   });
 }

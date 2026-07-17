@@ -33,6 +33,7 @@ fi
 export DATABASE_URL="postgresql://tapingolf:Pretoria2026@localhost:1111/tapingolf"
 export PORT=3000
 export PAYFAST_SANDBOX=1
+export PRIVATE_OBJECT_DIR="$ROOT/storage-objects"
 
 # Kill existing processes on our ports
 echo "⏹️  Stopping existing servers..."

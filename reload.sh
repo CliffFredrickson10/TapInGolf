@@ -34,6 +34,10 @@ export PAYFAST_SANDBOX=1
 export PRIVATE_OBJECT_DIR="$ROOT/storage-objects"
 mkdir -p "$PRIVATE_OBJECT_DIR"
 
+# Ensure esbuild darwin binary is linked (pnpm override workaround)
+mkdir -p "$ROOT/node_modules/@esbuild"
+ln -sf ../.pnpm/@esbuild+darwin-arm64@0.27.3/node_modules/@esbuild/darwin-arm64 "$ROOT/node_modules/@esbuild/darwin-arm64" 2>/dev/null || true
+
 # Build API
 echo "🔨 Building API..."
 cd "$API_DIR"

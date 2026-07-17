@@ -438,7 +438,9 @@ export default function ExploreScreen() {
           {/* Results */}
           {teeSearchMeta && teeResults && (
             <Text style={[styles.teeWindowText, { color: colors.mutedForeground }]}>
-              Showing times from {teeSearchMeta.time_window?.from} to {teeSearchMeta.time_window?.to} within {teeSearchMeta.radius_km}km
+              {teeSearchMeta.fallback
+                ? `No nearby results — showing all available times from ${teeSearchMeta.time_window?.from} to ${teeSearchMeta.time_window?.to} (nearest first)`
+                : `Showing times from ${teeSearchMeta.time_window?.from} to ${teeSearchMeta.time_window?.to} within ${teeSearchMeta.radius_km}km`}
             </Text>
           )}
 

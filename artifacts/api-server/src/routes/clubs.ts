@@ -167,11 +167,64 @@ router.get("/clubs/tee-time-search", async (req, res): Promise<void> => {
     });
   }
 
+  // If no results found nearby, search all clubs sorted by distance
+  let fallback = false;
+  if (clubMap.size === 0) {
+    fallback = true;
+    const allResults = await query<any>(
+      `SELECT
+         c.id AS club_id, c.name AS club_name, c.location AS club_location,
+         c.logo_url, c.province,
+         ROUND((6371 * ACOS(LEAST(1, COS(RADIANS(?)) * COS(RADIANS(c.latitude)) * COS(RADIANS(c.longitude) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(c.latitude)))))::numeric, 1) AS distance_km,
+         pts.id AS slot_id, pts.tee_time, pts.max_players, pts.player_count,
+         GREATEST(0, pts.max_players - pts.player_count) AS available_slots,
+         pts.session_type, pts.tee_start_type
+       FROM portal_tee_slots pts
+       JOIN clubs c ON c.id = pts.club_id
+       WHERE c.active = 1
+         AND c.latitude IS NOT NULL AND c.latitude != 0
+         AND pts.date = ?
+         AND pts.tee_time >= ? AND pts.tee_time <= ?
+         AND pts.is_active = 1
+         AND GREATEST(0, pts.max_players - pts.player_count) > 0
+         AND NOT EXISTS (
+           SELECT 1 FROM resale_listings rl
+           WHERE rl.slot_id = pts.id AND rl.status IN ('listed','sold')
+         )
+       ORDER BY distance_km ASC, pts.tee_time ASC
+       LIMIT 100`,
+      [userLat, userLng, userLat, date, fromTime, toTime]
+    );
+
+    for (const r of allResults) {
+      if (!clubMap.has(r.club_id)) {
+        clubMap.set(r.club_id, {
+          club_id: r.club_id,
+          club_name: r.club_name,
+          club_location: r.club_location,
+          logo_url: r.logo_url,
+          province: r.province,
+          distance_km: parseFloat(r.distance_km),
+          slots: [],
+        });
+      }
+      clubMap.get(r.club_id).slots.push({
+        slot_id: r.slot_id,
+        tee_time: r.tee_time,
+        available_slots: parseInt(r.available_slots),
+        max_players: r.max_players,
+        session_type: r.session_type,
+        tee_start_type: r.tee_start_type,
+      });
+    }
+  }
+
   res.json({
     date,
     requested_time: time,
     time_window: { from: fromTime, to: toTime },
-    radius_km: radiusKm,
+    radius_km: fallback ? null : radiusKm,
+    fallback,
     clubs: Array.from(clubMap.values()),
   });
 });

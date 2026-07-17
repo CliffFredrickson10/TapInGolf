@@ -52,15 +52,9 @@ cd "$PORTAL_DIR"
 VITE_API_TARGET=http://localhost:3000 npx vite --port 5174 &
 PORTAL_PID=$!
 
-# Ensure app entry point is set for local dev
-cd "$APP_DIR"
-if grep -q '"main": "expo-router/entry"' package.json; then
-  sed -i '' 's|"main": "expo-router/entry"|"main": "./index.js"|' package.json
-  echo "📱 Switched app entry to ./index.js for local dev"
-fi
-
 # Start Expo
 echo "🚀 Starting Expo..."
+cd "$APP_DIR"
 EXPO_NO_METRO_WORKSPACE_ROOT=1 npx expo start --ios --clear &
 EXPO_PID=$!
 

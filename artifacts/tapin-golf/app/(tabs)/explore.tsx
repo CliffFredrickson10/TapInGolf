@@ -6,6 +6,7 @@ import React, { useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
+  Modal,
   Platform,
   ScrollView,
   StyleSheet,
@@ -14,6 +15,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import GolfBallLoader from "@/components/GolfBallLoader";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ClubCard, { Club } from "@/components/ClubCard";
@@ -59,6 +61,15 @@ export default function ExploreScreen() {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [counts, setCounts] = useState<Record<string, number>>({});
 
+  // Tee time search state
+  const [showTeeSearch, setShowTeeSearch] = useState(false);
+  const [teeDate, setTeeDate] = useState(new Date());
+  const [teeTime, setTeeTime] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showTimePicker, setShowTimePicker] = useState(false);
+  const [teeSearching, setTeeSearching] = useState(false);
+  const [teeResults, setTeeResults] = useState<any[] | null>(null);
+  const [teeSearchMeta, setTeeSearchMeta] = useState<any>(null);
   // When arriving from the dashboard search box (focus=1), focus the input so
   // the keyboard opens automatically. Clear the flag afterwards so plain
   // Explore-tab taps don't re-trigger it.
@@ -228,6 +239,44 @@ export default function ExploreScreen() {
     setLocating(false);
   };
 
+  // ─── Tee time search ────────────────────────────────────────────────────
+  const handleTeeTimeSearch = async () => {
+    // Ensure we have location
+    let coords = coordsRef.current;
+    if (!coords) {
+      const loc = await tryGetLocation(true);
+      if (loc) {
+        coords = loc;
+        coordsRef.current = loc;
+        setUserCoords(loc);
+      } else {
+        setLocationError("Location needed to search nearby tee times");
+        return;
+      }
+    }
+
+    setTeeSearching(true);
+    setTeeResults(null);
+    const dateStr = teeDate.toISOString().slice(0, 10);
+    const timeStr = `${String(teeTime.getHours()).padStart(2, "0")}:${String(teeTime.getMinutes()).padStart(2, "0")}`;
+
+    try {
+      const qs = new URLSearchParams({
+        lat: coords.lat.toString(),
+        lng: coords.lng.toString(),
+        date: dateStr,
+        time: timeStr,
+        radius: "50",
+      });
+      const data = await apiFetch(`/clubs/tee-time-search?${qs}`, user?.token);
+      setTeeResults(data.clubs ?? []);
+      setTeeSearchMeta(data);
+    } catch {
+      setTeeResults([]);
+    }
+    setTeeSearching(false);
+  };
+
   // ─── UI helpers ───────────────────────────────────────────────────────────
 
   const sortedByDistance = userCoords !== null;
@@ -307,7 +356,143 @@ export default function ExploreScreen() {
         >
           <Ionicons name="map-outline" size={18} color="#fff" />
         </TouchableOpacity>
+
+        {/* Tee Time Search button */}
+        <TouchableOpacity
+          style={[styles.iconBtn, { backgroundColor: showTeeSearch ? colors.primary : colors.card, borderColor: showTeeSearch ? colors.primary : colors.border }]}
+          onPress={() => { Haptics.selectionAsync(); setShowTeeSearch(true); }}
+        >
+          <Ionicons name="time-outline" size={18} color={showTeeSearch ? "#fff" : colors.foreground} />
+        </TouchableOpacity>
       </View>
+
+      {/* Tee Time Search Modal */}
+      <Modal visible={showTeeSearch} animationType="slide" presentationStyle="pageSheet">
+        <View style={[styles.teeModal, { backgroundColor: colors.background }]}>
+          <View style={styles.teeModalHeader}>
+            <Text style={[styles.teeModalTitle, { color: colors.foreground }]}>Find Tee Times</Text>
+            <TouchableOpacity onPress={() => { setShowTeeSearch(false); setTeeResults(null); }}>
+              <Ionicons name="close" size={24} color={colors.foreground} />
+            </TouchableOpacity>
+          </View>
+
+          <Text style={[styles.teeLabel, { color: colors.mutedForeground }]}>
+            Search available tee times at nearby clubs (±1 hour flexibility)
+          </Text>
+
+          {/* Date picker */}
+          <TouchableOpacity
+            style={[styles.teePickerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => setShowDatePicker(true)}
+          >
+            <Ionicons name="calendar-outline" size={18} color={colors.primary} />
+            <Text style={[styles.teePickerText, { color: colors.foreground }]}>
+              {teeDate.toLocaleDateString("en-ZA", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+            </Text>
+          </TouchableOpacity>
+          {showDatePicker && (
+            <DateTimePicker
+              value={teeDate}
+              mode="date"
+              minimumDate={new Date()}
+              onChange={(_, d) => { setShowDatePicker(Platform.OS === "ios"); if (d) setTeeDate(d); }}
+            />
+          )}
+
+          {/* Time picker */}
+          <TouchableOpacity
+            style={[styles.teePickerBtn, { backgroundColor: colors.card, borderColor: colors.border }]}
+            onPress={() => setShowTimePicker(true)}
+          >
+            <Ionicons name="time-outline" size={18} color={colors.primary} />
+            <Text style={[styles.teePickerText, { color: colors.foreground }]}>
+              {teeTime.toLocaleTimeString("en-ZA", { hour: "2-digit", minute: "2-digit", hour12: false })}
+            </Text>
+          </TouchableOpacity>
+          {showTimePicker && (
+            <DateTimePicker
+              value={teeTime}
+              mode="time"
+              is24Hour={true}
+              minuteInterval={5}
+              onChange={(_, d) => { setShowTimePicker(Platform.OS === "ios"); if (d) setTeeTime(d); }}
+            />
+          )}
+
+          {/* Search button */}
+          <TouchableOpacity
+            style={[styles.teeSearchBtn, { backgroundColor: colors.primary }]}
+            onPress={() => { Haptics.selectionAsync(); handleTeeTimeSearch(); }}
+            disabled={teeSearching}
+          >
+            {teeSearching ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <>
+                <Ionicons name="search" size={18} color="#fff" />
+                <Text style={styles.teeSearchBtnText}>Search Nearby Tee Times</Text>
+              </>
+            )}
+          </TouchableOpacity>
+
+          {/* Results */}
+          {teeSearchMeta && teeResults && (
+            <Text style={[styles.teeWindowText, { color: colors.mutedForeground }]}>
+              Showing times from {teeSearchMeta.time_window?.from} to {teeSearchMeta.time_window?.to} within {teeSearchMeta.radius_km}km
+            </Text>
+          )}
+
+          {teeResults !== null && teeResults.length === 0 && !teeSearching && (
+            <View style={styles.teeEmpty}>
+              <Ionicons name="golf-outline" size={36} color={colors.mutedForeground} />
+              <Text style={[styles.teeEmptyText, { color: colors.mutedForeground }]}>No available tee times found nearby</Text>
+              <Text style={[styles.teeEmptySubText, { color: colors.mutedForeground }]}>Try a different date or time</Text>
+            </View>
+          )}
+
+          {teeResults && teeResults.length > 0 && (
+            <FlatList
+              data={teeResults}
+              keyExtractor={(item) => String(item.club_id)}
+              style={{ flex: 1, marginTop: 12 }}
+              contentContainerStyle={{ paddingBottom: 40 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={[styles.teeClubCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                  onPress={() => {
+                    Haptics.selectionAsync();
+                    setShowTeeSearch(false);
+                    setTeeResults(null);
+                    router.push({ pathname: "/club/[id]", params: { id: item.club_id, date: teeSearchMeta?.date } });
+                  }}
+                >
+                  <View style={styles.teeClubHeader}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.teeClubName, { color: colors.foreground }]}>{item.club_name}</Text>
+                      <Text style={[styles.teeClubLoc, { color: colors.mutedForeground }]}>
+                        {item.club_location} · {item.distance_km}km away
+                      </Text>
+                    </View>
+                    <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                  </View>
+                  <View style={styles.teeSlots}>
+                    {item.slots.map((slot: any) => (
+                      <View key={slot.slot_id} style={[styles.teeSlotChip, { backgroundColor: colors.primary + "15" }]}>
+                        <Text style={[styles.teeSlotTime, { color: colors.primary }]}>
+                          {String(slot.tee_time).slice(0, 5)}
+                        </Text>
+                        <Text style={[styles.teeSlotAvail, { color: colors.mutedForeground }]}>
+                          {slot.available_slots} open
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          )}
+        </View>
+      </Modal>
 
       {/* Banners */}
       {featuredOnly && (
@@ -516,5 +701,114 @@ const styles = StyleSheet.create({
   footerEnd: {
     textAlign: "center",
     paddingVertical: 16,
+  },
+  // Tee time search styles
+  teeModal: {
+    flex: 1,
+    paddingHorizontal: 20,
+    paddingTop: 20,
+  },
+  teeModalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 8,
+  },
+  teeModalTitle: {
+    fontSize: 22,
+    fontFamily: "Inter_700Bold",
+  },
+  teeLabel: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+    marginBottom: 16,
+  },
+  teePickerBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1.5,
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginBottom: 12,
+  },
+  teePickerText: {
+    fontSize: 15,
+    fontFamily: "Inter_500Medium",
+  },
+  teeSearchBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    borderRadius: 12,
+    paddingVertical: 14,
+    marginTop: 8,
+    marginBottom: 8,
+  },
+  teeSearchBtnText: {
+    color: "#fff",
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  teeWindowText: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    textAlign: "center",
+    marginTop: 4,
+  },
+  teeEmpty: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+    gap: 8,
+  },
+  teeEmptyText: {
+    fontSize: 16,
+    fontFamily: "Inter_600SemiBold",
+  },
+  teeEmptySubText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  teeClubCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 10,
+  },
+  teeClubHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  teeClubName: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
+  },
+  teeClubLoc: {
+    fontSize: 12,
+    fontFamily: "Inter_400Regular",
+    marginTop: 2,
+  },
+  teeSlots: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 10,
+  },
+  teeSlotChip: {
+    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    alignItems: "center",
+  },
+  teeSlotTime: {
+    fontSize: 13,
+    fontFamily: "Inter_600SemiBold",
+  },
+  teeSlotAvail: {
+    fontSize: 10,
+    fontFamily: "Inter_400Regular",
   },
 });

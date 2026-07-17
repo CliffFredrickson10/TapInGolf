@@ -87,6 +87,95 @@ router.get("/clubs/counts", async (_req, res): Promise<void> => {
   res.json({ All: total, ...byProvince });
 });
 
+// GET /clubs/tee-time-search — search available tee times near user within ±1 hour of requested time
+router.get("/clubs/tee-time-search", async (req, res): Promise<void> => {
+  const userLat = parseFloat(String(req.query.lat ?? ""));
+  const userLng = parseFloat(String(req.query.lng ?? ""));
+  const date = String(req.query.date ?? "");
+  const time = String(req.query.time ?? "");
+  const radiusKm = Math.min(parseFloat(String(req.query.radius ?? "50")), 200);
+
+  if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+    res.status(400).json({ message: "date is required (YYYY-MM-DD)" });
+    return;
+  }
+  if (!time || !/^\d{2}:\d{2}$/.test(time)) {
+    res.status(400).json({ message: "time is required (HH:MM)" });
+    return;
+  }
+  if (isNaN(userLat) || isNaN(userLng)) {
+    res.status(400).json({ message: "lat and lng are required" });
+    return;
+  }
+
+  // Build ±1 hour window
+  const [h, m] = time.split(":").map(Number);
+  const requestedMinutes = h * 60 + m;
+  const fromMinutes = Math.max(0, requestedMinutes - 60);
+  const toMinutes = Math.min(23 * 60 + 59, requestedMinutes + 60);
+  const fromTime = `${String(Math.floor(fromMinutes / 60)).padStart(2, "0")}:${String(fromMinutes % 60).padStart(2, "0")}`;
+  const toTime = `${String(Math.floor(toMinutes / 60)).padStart(2, "0")}:${String(toMinutes % 60).padStart(2, "0")}`;
+
+  // Find clubs within radius and their available tee times in the window
+  const results = await query<any>(
+    `SELECT
+       c.id AS club_id, c.name AS club_name, c.location AS club_location,
+       c.logo_url, c.province,
+       ROUND((6371 * ACOS(LEAST(1, COS(RADIANS(?)) * COS(RADIANS(c.latitude)) * COS(RADIANS(c.longitude) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(c.latitude)))))::numeric, 1) AS distance_km,
+       pts.id AS slot_id, pts.tee_time, pts.max_players, pts.player_count,
+       GREATEST(0, pts.max_players - pts.player_count) AS available_slots,
+       pts.session_type, pts.tee_start_type
+     FROM portal_tee_slots pts
+     JOIN clubs c ON c.id = pts.club_id
+     WHERE c.active = 1
+       AND c.latitude IS NOT NULL AND c.latitude != 0
+       AND (6371 * ACOS(LEAST(1, COS(RADIANS(?)) * COS(RADIANS(c.latitude)) * COS(RADIANS(c.longitude) - RADIANS(?)) + SIN(RADIANS(?)) * SIN(RADIANS(c.latitude))))) <= ?
+       AND pts.date = ?
+       AND pts.tee_time >= ? AND pts.tee_time <= ?
+       AND pts.is_active = 1
+       AND GREATEST(0, pts.max_players - pts.player_count) > 0
+       AND NOT EXISTS (
+         SELECT 1 FROM resale_listings rl
+         WHERE rl.slot_id = pts.id AND rl.status IN ('listed','sold')
+       )
+     ORDER BY distance_km ASC, pts.tee_time ASC
+     LIMIT 100`,
+    [userLat, userLng, userLat, userLat, userLng, userLat, radiusKm, date, fromTime, toTime]
+  );
+
+  // Group by club
+  const clubMap = new Map<number, any>();
+  for (const r of results) {
+    if (!clubMap.has(r.club_id)) {
+      clubMap.set(r.club_id, {
+        club_id: r.club_id,
+        club_name: r.club_name,
+        club_location: r.club_location,
+        logo_url: r.logo_url,
+        province: r.province,
+        distance_km: parseFloat(r.distance_km),
+        slots: [],
+      });
+    }
+    clubMap.get(r.club_id).slots.push({
+      slot_id: r.slot_id,
+      tee_time: r.tee_time,
+      available_slots: parseInt(r.available_slots),
+      max_players: r.max_players,
+      session_type: r.session_type,
+      tee_start_type: r.tee_start_type,
+    });
+  }
+
+  res.json({
+    date,
+    requested_time: time,
+    time_window: { from: fromTime, to: toTime },
+    radius_km: radiusKm,
+    clubs: Array.from(clubMap.values()),
+  });
+});
+
 router.get("/clubs", async (req, res): Promise<void> => {
   const q        = String(req.query.q ?? "").trim();
   const province = String(req.query.province ?? "").trim();

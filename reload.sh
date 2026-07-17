@@ -52,21 +52,21 @@ cd "$PORTAL_DIR"
 VITE_API_TARGET=http://localhost:3000 npx vite --port 5174 &
 PORTAL_PID=$!
 
-# Start Expo
-echo "🚀 Starting Expo..."
+# Build & run iOS app natively (no Expo Go needed)
+echo "📱 Building & running iOS app on simulator..."
 cd "$APP_DIR"
-EXPO_NO_METRO_WORKSPACE_ROOT=1 npx expo start --ios --clear &
-EXPO_PID=$!
+npx expo run:ios &
+APP_PID=$!
 
 echo ""
 echo "================================="
 echo "🟢 All running:"
 echo "   API:         http://localhost:3000/api"
 echo "   Club Portal: http://localhost:5174"
-echo "   Expo:        Metro bundler on :8081"
+echo "   iOS App:     Building natively on simulator"
 echo ""
 echo "Press Ctrl+C to stop everything"
 echo "================================="
 
-trap "echo ''; echo '⏹️  Stopping...'; kill $API_PID $PORTAL_PID $EXPO_PID 2>/dev/null; exit 0" INT TERM
+trap "echo ''; echo '⏹️  Stopping...'; kill $API_PID $PORTAL_PID $APP_PID 2>/dev/null; exit 0" INT TERM
 wait

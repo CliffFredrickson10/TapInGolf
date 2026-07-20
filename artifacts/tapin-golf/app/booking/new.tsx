@@ -564,15 +564,28 @@ export default function NewBookingScreen() {
         }),
       });
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      if (data.payment_url) {
-        router.replace({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: data.booking_id } });
-      } else {
-        router.replace({ pathname: "/booking/[id]", params: { id: data.booking_id } });
-      }
-    } catch (err: any) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      setBookError(err.message ?? "Booking failed. Please try again.");
-    } finally { setSubmitting(false); }
+
+     // If cart is included, redirect to indemnity form before payment
+     const wantCart = cartAvailable && includeCart;
+     if (wantCart) {
+       router.replace({
+         pathname: "/booking/cart-indemnity" as any,
+         params: {
+           club_id: params.club_id,
+           club_name: params.club_name,
+           booking_id: data.booking_id,
+           ...(data.payment_url ? { payment_url: data.payment_url } : {}),
+         },
+       });
+     } else if (data.payment_url) {
+       router.replace({ pathname: "/booking/payment", params: { url: data.payment_url, booking_id: data.booking_id } });
+     } else {
+       router.replace({ pathname: "/booking/[id]", params: { id: data.booking_id } });
+     }
+   } catch (err: any) {
+     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+     setBookError(err.message ?? "Booking failed. Please try again.");
+   } finally { setSubmitting(false); }
   };
 
   const topPad = Platform.OS === "web" ? 67 : insets.top;

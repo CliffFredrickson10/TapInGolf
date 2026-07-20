@@ -2267,4 +2267,106 @@ router.post("/stitch/webhook", async (req, res): Promise<void> => {
   res.status(200).json({ received: true });
 });
 
+// ── Golf Cart Indemnity ──────────────────────────────────────────────────────
+
+/** Fetch the club's cart indemnity form text (public — no auth required) */
+router.get("/clubs/:id/cart-indemnity", async (req, res): Promise<void> => {
+  const clubId = parseInt(req.params.id);
+  if (isNaN(clubId)) { res.status(400).json({ message: "Invalid club ID" }); return; }
+  const club = await row<any>(
+    "SELECT name, cart_indemnity_text, cart_available FROM clubs WHERE id = ? AND active = 1",
+    [clubId]
+  );
+  if (!club) { res.status(404).json({ message: "Club not found" }); return; }
+  if (!club.cart_available) { res.status(404).json({ message: "Cart not available at this club" }); return; }
+
+  // If club hasn't set custom text, return a sensible default
+  const indemnityText = club.cart_indemnity_text || buildDefaultIndemnity(club.name);
+  res.json({ club_name: club.name, indemnity_text: indemnityText });
+});
+
+/** Submit a signed indemnity form for a booking */
+router.post("/bookings/:id/cart-indemnity", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const bookingId = parseInt(req.params.id);
+  if (isNaN(bookingId)) { res.status(400).json({ message: "Invalid booking ID" }); return; }
+
+  const { full_name, signature_data } = req.body ?? {};
+  if (!full_name?.trim()) { res.status(400).json({ message: "Full name is required" }); return; }
+  if (!signature_data) { res.status(400).json({ message: "Signature is required" }); return; }
+
+  const booking = await row<any>(
+    `SELECT b.id, b.user_id, b.cart_fee, pts.club_id
+     FROM bookings b
+     JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+     WHERE b.id = ?`,
+    [bookingId]
+  );
+  if (!booking) { res.status(404).json({ message: "Booking not found" }); return; }
+  if (booking.user_id !== user.id) { res.status(403).json({ message: "Not your booking" }); return; }
+
+  const club = await row<any>(
+    "SELECT name, cart_indemnity_text FROM clubs WHERE id = ?",
+    [booking.club_id]
+  );
+  const indemnityText = club?.cart_indemnity_text || buildDefaultIndemnity(club?.name ?? "the Club");
+
+  await exec(
+    `INSERT INTO cart_indemnity_signatures (booking_id, user_id, club_id, full_name, signature_data, indemnity_text)
+     VALUES (?, ?, ?, ?, ?, ?)
+     ON CONFLICT (booking_id, user_id) DO UPDATE
+       SET full_name = EXCLUDED.full_name,
+           signature_data = EXCLUDED.signature_data,
+           indemnity_text = EXCLUDED.indemnity_text,
+           signed_at = NOW()`,
+    [bookingId, user.id, booking.club_id, full_name.trim(), signature_data, indemnityText]
+  );
+
+  res.json({ success: true });
+});
+
+/** Check if indemnity has been signed for a booking */
+router.get("/bookings/:id/cart-indemnity", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const bookingId = parseInt(req.params.id);
+  if (isNaN(bookingId)) { res.status(400).json({ message: "Invalid booking ID" }); return; }
+  const sig = await row<any>(
+    "SELECT id, full_name, signed_at FROM cart_indemnity_signatures WHERE booking_id = ? AND user_id = ?",
+    [bookingId, user.id]
+  );
+  res.json({ signed: !!sig, signature: sig ?? null });
+});
+
+function buildDefaultIndemnity(clubName: string): string {
+  return `GOLF CART RENTAL AGREEMENT & INDEMNITY FORM
+
+${clubName}
+
+RULES & REGULATIONS:
+1. The golf cart must remain on designated cart paths at all times unless otherwise indicated.
+2. Maximum of two (2) persons per cart at any time.
+3. Carts must not be driven within 10 metres of any green or tee box.
+4. The driver must hold a valid driver's licence and be at least 18 years of age.
+5. No reckless driving, racing, or dangerous manoeuvres.
+6. Carts must be returned to the designated area immediately after the round.
+7. Any damage to the cart, course, or property must be reported immediately.
+8. The renter is financially responsible for all damage caused during the rental period.
+9. Alcohol consumption while operating a golf cart is strictly prohibited.
+10. Carts must not be driven on public roads or outside club premises.
+
+WAIVER OF LIABILITY:
+I acknowledge that the use of a golf cart involves inherent risks including but not limited to collision, tipping, mechanical failure, and personal injury. I voluntarily assume all risks associated with the use of the golf cart.
+
+ASSUMPTION OF RISK:
+I understand that operating a golf cart carries risks and I voluntarily accept those risks. I confirm that I am physically capable of operating the cart safely.
+
+INDEMNIFICATION:
+I hereby indemnify and hold harmless ${clubName}, its owners, employees, agents, and affiliates from any and all claims, damages, losses, costs, and expenses (including legal fees) arising from my use of the golf cart, whether caused by negligence or otherwise.
+
+I confirm that I have read, understood, and agree to abide by the above rules and conditions.`;
+}
+
 export default router;

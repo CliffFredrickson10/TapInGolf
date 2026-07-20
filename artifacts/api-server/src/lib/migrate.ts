@@ -1893,6 +1893,22 @@ async function applyLateAlters() {
   // invoice_id marks a confirmed purchase as billed.
   await ddl("ALTER TABLE resale_purchases ADD COLUMN IF NOT EXISTS invoice_id INT REFERENCES club_invoices(id)");
   await ddl("INSERT INTO platform_settings (setting_key, setting_value) VALUES ('resale_fee_pct', '10') ON CONFLICT (setting_key) DO NOTHING");
+
+  // ── Golf Cart Indemnity ─────────────────────────────────────────────────────
+  await ddl("ALTER TABLE clubs ADD COLUMN IF NOT EXISTS cart_indemnity_text TEXT");
+  await ddl(`CREATE TABLE IF NOT EXISTS cart_indemnity_signatures (
+    id              SERIAL PRIMARY KEY,
+    booking_id      INT NOT NULL REFERENCES bookings(id) ON DELETE CASCADE,
+    user_id         INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    full_name       VARCHAR(255) NOT NULL,
+    signature_data  TEXT NOT NULL,
+    indemnity_text  TEXT NOT NULL,
+    signed_at       TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (booking_id, user_id)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cart_indemnity_booking ON cart_indemnity_signatures (booking_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_cart_indemnity_club ON cart_indemnity_signatures (club_id, signed_at DESC)");
 }
 
 async function seedAdOfferings(): Promise<void> {

@@ -30,6 +30,7 @@ interface ClubProfile {
   voucher_enabled: boolean;
   pay_at_club_enabled: boolean;
   fiscal_year_start_month: number;
+  cart_indemnity_text: string | null;
 }
 
 type ClubImage = {
@@ -662,6 +663,20 @@ export default function Profile() {
             <Label>Cart Price (ZAR per player)</Label>
             <Input type="number" value={profile.cart_price ?? ""} onChange={e => update("cart_price", Number(e.target.value))} placeholder="0" className="max-w-xs" />
           </div>
+          {!!profile.cart_available && (
+            <div className="space-y-2">
+              <Label>Cart Indemnity Form Text</Label>
+              <p className="text-xs text-muted-foreground">
+                Custom indemnity/waiver text shown to golfers when they add a cart. Leave blank to use the default template.
+              </p>
+              <textarea
+                className="flex min-h-[200px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                placeholder="Enter your club's custom golf cart indemnity/waiver text here..."
+                value={profile.cart_indemnity_text ?? ""}
+                onChange={e => update("cart_indemnity_text", e.target.value || null)}
+              />
+            </div>
+          )}
         </CardContent>
       </Card>
 

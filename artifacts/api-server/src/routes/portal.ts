@@ -280,7 +280,8 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
           phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude,
           geofence_enabled, geofence_radius_m, pay_at_club_enabled,
           stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month,
-          range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price } = req.body ?? {};
+          range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price,
+          cart_indemnity_text } = req.body ?? {};
 
   const fiscalMonth = fiscal_year_start_month != null
     ? Math.min(12, Math.max(1, Math.round(Number(fiscal_year_start_month))))
@@ -303,7 +304,8 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
       range_balls_price   = ?,
       range_balls_options = COALESCE(?, range_balls_options),
       club_hire_enabled   = COALESCE(?, club_hire_enabled),
-      club_hire_price     = ?
+      club_hire_price     = ?,
+      cart_indemnity_text = ?
     WHERE id = ?`,
     [name ?? null, location ?? null, province ?? null,
      image_url ?? null, logo_url ?? null, holes ?? null, price_from ?? null,
@@ -322,9 +324,10 @@ router.put("/portal/me", requireClubAuth, async (req: Request, res: Response): P
      range_balls_options != null ? JSON.stringify(range_balls_options) : null,
      club_hire_enabled != null ? (club_hire_enabled ? 1 : 0) : null,
      club_hire_price ?? null,
+     cart_indemnity_text !== undefined ? (cart_indemnity_text || null) : null,
      club.id]
   );
-  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price FROM clubs WHERE id = ?", [club.id]);
+  const updated = await row<any>("SELECT id, name, location, province, image_url, logo_url, holes, price_from, facilities, website, description, phone, email, address, cart_available, cart_compulsory, cart_price, latitude, longitude, geofence_enabled, geofence_radius_m, pay_at_club_enabled, stitch_enabled, prepaid_enabled, voucher_enabled, fiscal_year_start_month, range_balls_enabled, range_balls_price, range_balls_options, club_hire_enabled, club_hire_price, cart_indemnity_text FROM clubs WHERE id = ?", [club.id]);
   res.json({ ...updated, fiscal_year_start_month: updated?.fiscal_year_start_month ?? 1, facilities: typeof updated!.facilities === "string" ? JSON.parse(updated!.facilities || "[]") : updated!.facilities });
 });
 

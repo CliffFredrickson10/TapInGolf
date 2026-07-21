@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { query, row, exec } from "../lib/pg";
 import { getUser } from "../lib/auth";
 import { buildPayFastPaymentUrl } from "../lib/payfast";
+import { postVoucherRedemptionJournal } from "../lib/ledger-posting";
 
 const router: IRouter = Router();
 
@@ -90,6 +91,15 @@ router.post("/payments/wallet/redeem-voucher", async (req, res): Promise<void> =
   }
 
   const updated = await row<any>("SELECT balance FROM wallets WHERE user_id = ?", [user.id]);
+
+  // Post to financial ledger
+  postVoucherRedemptionJournal({
+    voucher_id: voucher.id,
+    user_id: user.id,
+    amount: creditAmount,
+    club_id: voucher.club_id ?? undefined,
+  }).catch(() => {});
+
   res.json({ success: true, credit_amount: creditAmount, new_balance: parseFloat(updated.balance) });
 });
 

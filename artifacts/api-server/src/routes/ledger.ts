@@ -161,7 +161,7 @@ router.get("/portal/ledger/accounts/:id/balance", requireClubAuth, async (req: R
 router.get("/portal/ledger/source/:module/:sourceId", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
   const { module: sourceModule, sourceId } = req.params;
-  const journals = await getJournalsBySource(club.id, sourceModule, Number(sourceId));
+  const journals = await getJournalsBySource(club.id, String(sourceModule), Number(sourceId));
   res.json(journals);
 });
 

@@ -196,6 +196,107 @@ export async function postPosTransactionJournal(data: {
   }
 }
 
+/**
+ * Post journal when a wallet top-up is completed.
+ * Debit: Payment provider clearing (money received)
+ * Credit: Wallet Clearing (liability — customer's stored balance)
+ */
+export async function postWalletTopupJournal(data: {
+  topup_id: number;
+  user_id: number;
+  amount: number;
+  payment_method: "payfast" | "stitch";
+}): Promise<number | null> {
+  try {
+    // Wallet topups are user-level, not club-level. Use club_id = 0 (platform).
+    await ensureCOA(0);
+
+    const clearingAccount = getClearingAccount(data.payment_method);
+
+    return await postJournal({
+      club_id: 0,
+      description: `Wallet top-up #${data.topup_id} for user ${data.user_id}`,
+      source_module: "wallet_topup",
+      source_id: data.topup_id,
+      entries: [
+        { account_code: clearingAccount, debit: data.amount, description: `Payment received for wallet top-up` },
+        { account_code: "1040", credit: data.amount, description: `Wallet balance credited` },
+      ],
+    });
+  } catch (e: any) {
+    logger.error({ err: e, topup_id: data.topup_id }, "Failed to post wallet topup journal");
+    return null;
+  }
+}
+
+/**
+ * Post journal when an event entry fee is paid.
+ * Debit: Payment provider clearing
+ * Credit: Event Entry Revenue (4060)
+ */
+export async function postEventRegistrationJournal(data: {
+  event_id: number;
+  user_id: number;
+  club_id: number;
+  amount: number;
+  payment_method: string;
+  event_name?: string;
+}): Promise<number | null> {
+  try {
+    await ensureCOA(data.club_id);
+
+    const clearingAccount = getClearingAccount(data.payment_method);
+    const sourceId = data.event_id * 100000 + data.user_id; // unique composite key
+
+    return await postJournal({
+      club_id: data.club_id,
+      description: `Event entry fee — ${data.event_name ?? `event #${data.event_id}`} (user ${data.user_id})`,
+      source_module: "event_registration",
+      source_id: sourceId,
+      entries: [
+        { account_code: clearingAccount, debit: data.amount, description: `Entry fee received` },
+        { account_code: "4060", credit: data.amount, description: `Event entry revenue` },
+      ],
+    });
+  } catch (e: any) {
+    logger.error({ err: e, event_id: data.event_id, user_id: data.user_id }, "Failed to post event registration journal");
+    return null;
+  }
+}
+
+/**
+ * Post journal when a wallet credit voucher is redeemed.
+ * Debit: Voucher Discounts expense (5040) — cost of the promotion
+ * Credit: Wallet Clearing (1040) — balance given to user
+ */
+export async function postVoucherRedemptionJournal(data: {
+  voucher_id: number;
+  user_id: number;
+  amount: number;
+  club_id?: number;
+}): Promise<number | null> {
+  try {
+    const clubId = data.club_id ?? 0;
+    await ensureCOA(clubId);
+
+    const sourceId = data.voucher_id * 100000 + data.user_id;
+
+    return await postJournal({
+      club_id: clubId,
+      description: `Voucher #${data.voucher_id} redeemed by user ${data.user_id} — R${data.amount.toFixed(2)} wallet credit`,
+      source_module: "voucher_redemption",
+      source_id: sourceId,
+      entries: [
+        { account_code: "5040", debit: data.amount, description: "Voucher promotion expense" },
+        { account_code: "1040", credit: data.amount, description: "Wallet credit issued" },
+      ],
+    });
+  } catch (e: any) {
+    logger.error({ err: e, voucher_id: data.voucher_id }, "Failed to post voucher redemption journal");
+    return null;
+  }
+}
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getClearingAccount(paymentMethod: string): string {

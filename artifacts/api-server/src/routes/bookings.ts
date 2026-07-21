@@ -10,7 +10,7 @@ import { sendInvoiceEmail } from "../lib/otp";
 import { getUserTierPrices } from "../lib/pricing";
 import { confirmResalePurchase } from "./resale";
 import { logger } from "../lib/logger";
-import { postBookingConfirmedJournal, postBookingCancelledJournal } from "../lib/ledger-posting";
+import { postBookingConfirmedJournal, postBookingCancelledJournal, postWalletTopupJournal, postEventRegistrationJournal } from "../lib/ledger-posting";
 
 const router: IRouter = Router();
 
@@ -1919,6 +1919,13 @@ async function processCompletedPaymentReference(
           } else {
             await run("INSERT INTO wallets (user_id, balance) VALUES (?, ?)", [topup.user_id, topup.amount]);
           }
+          // Post to financial ledger
+          postWalletTopupJournal({
+            topup_id: topupId,
+            user_id: topup.user_id,
+            amount: Number(topup.amount),
+            payment_method: paymentMethod,
+          }).catch(() => {});
         }
       }
     }
@@ -1930,7 +1937,7 @@ async function processCompletedPaymentReference(
     const eventId = parseInt(parts[1] ?? "", 10);
     const userId  = parseInt(parts[3] ?? "", 10);
     if (!isNaN(eventId) && !isNaN(userId)) {
-      const ev = await row<any>("SELECT id, name, max_participants FROM golf_events WHERE id = ?", [eventId]);
+      const ev = await row<any>("SELECT id, name, max_participants, club_id, entry_fee FROM golf_events WHERE id = ?", [eventId]);
       const u  = await row<any>("SELECT id, push_token FROM users WHERE id = ?", [userId]);
 
       let fieldFull = false;
@@ -1984,6 +1991,17 @@ async function processCompletedPaymentReference(
               body: `Your entry fee for "${ev.name}" has been received. Your spot is confirmed!`,
               data: { type: "event_payment_confirmed", event_id: eventId },
             }]);
+          }
+          // Post to financial ledger
+          if (ev.club_id && ev.entry_fee) {
+            postEventRegistrationJournal({
+              event_id: eventId,
+              user_id: userId,
+              club_id: ev.club_id,
+              amount: Number(ev.entry_fee),
+              payment_method: paymentMethod,
+              event_name: ev.name,
+            }).catch(() => {});
           }
         }
       }

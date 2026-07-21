@@ -286,6 +286,9 @@ import {
   getAvailableProviders,
 } from "../lib/accounting";
 import "../lib/accounting-xero"; // Register Xero adapter
+import "../lib/accounting-sage"; // Register Sage adapter
+import "../lib/accounting-quickbooks"; // Register QuickBooks adapter
+import "../lib/accounting-zoho"; // Register Zoho adapter
 
 // ── List Settlement Batches ──────────────────────────────────────────────────
 router.get("/portal/ledger/settlements", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
@@ -643,6 +646,209 @@ router.post("/portal/ledger/accounting/xero/refresh", requireClubAuth, async (re
   );
 
   res.json({ success: true, expires_at: updatedCreds.expires_at });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Sage OAuth2 Flow
+// ══════════════════════════════════════════════════════════════════════════════
+
+const SAGE_CLIENT_ID = process.env["SAGE_CLIENT_ID"] ?? "";
+const SAGE_CLIENT_SECRET = process.env["SAGE_CLIENT_SECRET"] ?? "";
+const SAGE_REDIRECT_URI = process.env["SAGE_REDIRECT_URI"] ?? "";
+
+router.get("/portal/ledger/accounting/sage/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  if (!SAGE_CLIENT_ID || !SAGE_REDIRECT_URI) {
+    res.status(500).json({ message: "Sage integration not configured" }); return;
+  }
+  const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "sage" })).toString("base64url");
+  const authUrl = new URL("https://www.sageone.com/oauth2/auth/central");
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", SAGE_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", SAGE_REDIRECT_URI);
+  authUrl.searchParams.set("scope", "full_access");
+  authUrl.searchParams.set("state", state);
+  res.json({ auth_url: authUrl.toString() });
+});
+
+router.get("/portal/ledger/accounting/sage/callback", async (req: Request, res: Response): Promise<void> => {
+  const { code, state } = req.query as any;
+  if (!code || !state) { res.status(400).send("Missing code or state"); return; }
+
+  let clubId: number;
+  try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
+  catch { res.status(400).send("Invalid state"); return; }
+
+  const tokenRes = await fetch("https://oauth.accounting.sage.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: SAGE_REDIRECT_URI,
+      client_id: SAGE_CLIENT_ID,
+      client_secret: SAGE_CLIENT_SECRET,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    logger.error({ status: tokenRes.status }, "Sage token exchange failed");
+    res.status(500).send("Failed to exchange Sage authorization code"); return;
+  }
+
+  const tokens = await tokenRes.json() as any;
+  const credentials = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+    client_id: SAGE_CLIENT_ID,
+    client_secret: SAGE_CLIENT_SECRET,
+  };
+
+  await createConnection(clubId, "sage", credentials, {});
+  const portalUrl = process.env["PORTAL_URL"] ?? "http://localhost:5174";
+  res.redirect(`${portalUrl}/finance/integrations?connected=sage`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// QuickBooks OAuth2 Flow
+// ══════════════════════════════════════════════════════════════════════════════
+
+const QB_CLIENT_ID = process.env["QUICKBOOKS_CLIENT_ID"] ?? "";
+const QB_CLIENT_SECRET = process.env["QUICKBOOKS_CLIENT_SECRET"] ?? "";
+const QB_REDIRECT_URI = process.env["QUICKBOOKS_REDIRECT_URI"] ?? "";
+
+router.get("/portal/ledger/accounting/quickbooks/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  if (!QB_CLIENT_ID || !QB_REDIRECT_URI) {
+    res.status(500).json({ message: "QuickBooks integration not configured" }); return;
+  }
+  const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "quickbooks" })).toString("base64url");
+  const authUrl = new URL("https://appcenter.intuit.com/connect/oauth2");
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", QB_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", QB_REDIRECT_URI);
+  authUrl.searchParams.set("scope", "com.intuit.quickbooks.accounting");
+  authUrl.searchParams.set("state", state);
+  res.json({ auth_url: authUrl.toString() });
+});
+
+router.get("/portal/ledger/accounting/quickbooks/callback", async (req: Request, res: Response): Promise<void> => {
+  const { code, state, realmId } = req.query as any;
+  if (!code || !state) { res.status(400).send("Missing code or state"); return; }
+
+  let clubId: number;
+  try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
+  catch { res.status(400).send("Invalid state"); return; }
+
+  const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString("base64");
+  const tokenRes = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+      Authorization: `Basic ${basicAuth}`,
+    },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: QB_REDIRECT_URI,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    logger.error({ status: tokenRes.status }, "QuickBooks token exchange failed");
+    res.status(500).send("Failed to exchange QuickBooks authorization code"); return;
+  }
+
+  const tokens = await tokenRes.json() as any;
+  const credentials = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+    realm_id: realmId ?? "",
+    client_id: QB_CLIENT_ID,
+    client_secret: QB_CLIENT_SECRET,
+  };
+
+  await createConnection(clubId, "quickbooks", credentials, { realm_id: realmId });
+  const portalUrl = process.env["PORTAL_URL"] ?? "http://localhost:5174";
+  res.redirect(`${portalUrl}/finance/integrations?connected=quickbooks`);
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Zoho Books OAuth2 Flow
+// ══════════════════════════════════════════════════════════════════════════════
+
+const ZOHO_CLIENT_ID = process.env["ZOHO_CLIENT_ID"] ?? "";
+const ZOHO_CLIENT_SECRET = process.env["ZOHO_CLIENT_SECRET"] ?? "";
+const ZOHO_REDIRECT_URI = process.env["ZOHO_REDIRECT_URI"] ?? "";
+const ZOHO_REGION = process.env["ZOHO_REGION"] ?? "com"; // com, eu, in, com.au
+
+router.get("/portal/ledger/accounting/zoho/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  if (!ZOHO_CLIENT_ID || !ZOHO_REDIRECT_URI) {
+    res.status(500).json({ message: "Zoho integration not configured" }); return;
+  }
+  const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "zoho" })).toString("base64url");
+  const authUrl = new URL(`https://accounts.zoho.${ZOHO_REGION}/oauth/v2/auth`);
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", ZOHO_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", ZOHO_REDIRECT_URI);
+  authUrl.searchParams.set("scope", "ZohoBooks.fullaccess.all");
+  authUrl.searchParams.set("state", state);
+  authUrl.searchParams.set("access_type", "offline");
+  authUrl.searchParams.set("prompt", "consent");
+  res.json({ auth_url: authUrl.toString() });
+});
+
+router.get("/portal/ledger/accounting/zoho/callback", async (req: Request, res: Response): Promise<void> => {
+  const { code, state } = req.query as any;
+  if (!code || !state) { res.status(400).send("Missing code or state"); return; }
+
+  let clubId: number;
+  try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
+  catch { res.status(400).send("Invalid state"); return; }
+
+  const tokenRes = await fetch(`https://accounts.zoho.${ZOHO_REGION}/oauth/v2/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: ZOHO_REDIRECT_URI,
+      client_id: ZOHO_CLIENT_ID,
+      client_secret: ZOHO_CLIENT_SECRET,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    logger.error({ status: tokenRes.status }, "Zoho token exchange failed");
+    res.status(500).send("Failed to exchange Zoho authorization code"); return;
+  }
+
+  const tokens = await tokenRes.json() as any;
+
+  // Get organization ID
+  const orgsRes = await fetch(`https://www.zohoapis.${ZOHO_REGION}/books/v3/organizations`, {
+    headers: { Authorization: `Zoho-oauthtoken ${tokens.access_token}` },
+  });
+  const orgs = orgsRes.ok ? await orgsRes.json() as any : null;
+  const orgId = orgs?.organizations?.[0]?.organization_id ?? "";
+  const orgName = orgs?.organizations?.[0]?.name ?? "";
+
+  const credentials = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
+    organization_id: orgId,
+    region: ZOHO_REGION,
+    client_id: ZOHO_CLIENT_ID,
+    client_secret: ZOHO_CLIENT_SECRET,
+  };
+
+  await createConnection(clubId, "zoho", credentials, { organization_name: orgName });
+  const portalUrl = process.env["PORTAL_URL"] ?? "http://localhost:5174";
+  res.redirect(`${portalUrl}/finance/integrations?connected=zoho`);
 });
 
 export default router;

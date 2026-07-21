@@ -376,15 +376,6 @@ function Integrations({ justConnected }: IntegrationsProps) {
 
   useEffect(() => { loadConnections(); }, []);
 
-  async function connectXero() {
-    try {
-      const data = await api<{ auth_url: string }>("/api/portal/ledger/accounting/xero/connect");
-      window.location.href = data.auth_url;
-    } catch (err: any) {
-      alert(err.message || "Failed to initiate Xero connection");
-    }
-  }
-
   async function disconnect(id: number) {
     if (!confirm("Disconnect this accounting integration?")) return;
     await api(`/api/portal/ledger/accounting/connections/${id}/disconnect`, { method: "POST" });
@@ -438,6 +429,15 @@ function Integrations({ justConnected }: IntegrationsProps) {
     { id: "quickbooks", name: "QuickBooks Online", description: "Intuit's cloud accounting", logo: "🟡" },
     { id: "zoho", name: "Zoho Books", description: "Online accounting software", logo: "🔴" },
   ];
+
+  async function connectProvider(provider: string) {
+    try {
+      const data = await api<{ auth_url: string }>(`/api/portal/ledger/accounting/${provider}/connect`);
+      window.location.href = data.auth_url;
+    } catch (err: any) {
+      alert(err.message || `Failed to initiate ${provider} connection`);
+    }
+  }
 
   return (
     <div className="space-y-4">
@@ -538,12 +538,10 @@ function Integrations({ justConnected }: IntegrationsProps) {
                   </div>
                   {isConnected ? (
                     <Badge variant="default"><Check className="h-3 w-3 mr-1" /> Connected</Badge>
-                  ) : p.id === "xero" ? (
-                    <Button size="sm" onClick={connectXero}>
+                  ) : (
+                    <Button size="sm" onClick={() => connectProvider(p.id)}>
                       <ArrowUpRight className="h-4 w-4 mr-1" /> Connect
                     </Button>
-                  ) : (
-                    <Badge variant="secondary">Coming Soon</Badge>
                   )}
                 </div>
               );

@@ -226,6 +226,9 @@ function Router() {
         <Route path="/finance">
           <SectionGuard section="finance"><Finance /></SectionGuard>
         </Route>
+        <Route path="/finance/integrations">
+          <SectionGuard section="finance"><Finance /></SectionGuard>
+        </Route>
         <Route path="/invoices">
           <SectionGuard section="members"><Invoices /></SectionGuard>
         </Route>

@@ -496,4 +496,153 @@ router.get("/portal/ledger/accounting/connections/:id/accounts", requireClubAuth
   res.json(accounts);
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Xero OAuth2 Flow
+// ══════════════════════════════════════════════════════════════════════════════
+
+const XERO_CLIENT_ID = process.env["XERO_CLIENT_ID"] ?? "";
+const XERO_CLIENT_SECRET = process.env["XERO_CLIENT_SECRET"] ?? "";
+const XERO_REDIRECT_URI = process.env["XERO_REDIRECT_URI"] ?? "";
+const XERO_SCOPES = "openid profile email accounting.transactions accounting.settings accounting.contacts offline_access";
+
+// ── Initiate Xero OAuth ──────────────────────────────────────────────────────
+router.get("/portal/ledger/accounting/xero/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  if (!XERO_CLIENT_ID || !XERO_REDIRECT_URI) {
+    res.status(500).json({ message: "Xero integration not configured (missing XERO_CLIENT_ID or XERO_REDIRECT_URI)" });
+    return;
+  }
+
+  // Store club_id in state so the callback knows which club to link
+  const state = Buffer.from(JSON.stringify({ club_id: club.id })).toString("base64url");
+
+  const authUrl = new URL("https://login.xero.com/identity/connect/authorize");
+  authUrl.searchParams.set("response_type", "code");
+  authUrl.searchParams.set("client_id", XERO_CLIENT_ID);
+  authUrl.searchParams.set("redirect_uri", XERO_REDIRECT_URI);
+  authUrl.searchParams.set("scope", XERO_SCOPES);
+  authUrl.searchParams.set("state", state);
+
+  res.json({ auth_url: authUrl.toString() });
+});
+
+// ── Xero OAuth Callback ──────────────────────────────────────────────────────
+router.get("/portal/ledger/accounting/xero/callback", async (req: Request, res: Response): Promise<void> => {
+  const { code, state } = req.query as any;
+
+  if (!code || !state) {
+    res.status(400).send("Missing code or state parameter");
+    return;
+  }
+
+  let clubId: number;
+  try {
+    const parsed = JSON.parse(Buffer.from(state, "base64url").toString());
+    clubId = parsed.club_id;
+  } catch {
+    res.status(400).send("Invalid state parameter");
+    return;
+  }
+
+  // Exchange code for tokens
+  const tokenRes = await fetch("https://identity.xero.com/connect/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: XERO_REDIRECT_URI,
+      client_id: XERO_CLIENT_ID,
+      client_secret: XERO_CLIENT_SECRET,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    const body = await tokenRes.text();
+    logger.error({ status: tokenRes.status, body }, "Xero token exchange failed");
+    res.status(500).send("Failed to exchange Xero authorization code");
+    return;
+  }
+
+  const tokens = await tokenRes.json() as any;
+
+  // Get tenant connections (Xero orgs the user has access to)
+  const connectionsRes = await fetch("https://api.xero.com/connections", {
+    headers: { Authorization: `Bearer ${tokens.access_token}` },
+  });
+  const xeroConnections = connectionsRes.ok ? await connectionsRes.json() as any[] : [];
+  const tenantId = xeroConnections?.[0]?.tenantId ?? null;
+  const tenantName = xeroConnections?.[0]?.tenantName ?? "Unknown";
+
+  if (!tenantId) {
+    res.status(400).send("No Xero organisation found. Please ensure you have at least one Xero organisation.");
+    return;
+  }
+
+  // Store credentials
+  const credentials = {
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in ?? 1800) * 1000,
+    tenant_id: tenantId,
+    tenant_name: tenantName,
+    client_id: XERO_CLIENT_ID,
+    client_secret: XERO_CLIENT_SECRET,
+  };
+
+  await createConnection(clubId, "xero", credentials, { tenant_name: tenantName });
+
+  // Redirect back to the portal integrations page
+  const portalUrl = process.env["PORTAL_URL"] ?? "http://localhost:5174";
+  res.redirect(`${portalUrl}/finance/integrations?connected=xero`);
+});
+
+// ── Refresh Xero Token ───────────────────────────────────────────────────────
+router.post("/portal/ledger/accounting/xero/refresh", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const conn = await row<any>(
+    "SELECT * FROM accounting_connections WHERE club_id = ? AND provider = 'xero' AND status = 'connected'",
+    [club.id]
+  );
+  if (!conn) { res.status(404).json({ message: "No active Xero connection" }); return; }
+
+  const creds = conn.credentials;
+  if (!creds?.refresh_token) {
+    res.status(400).json({ message: "No refresh token available — please reconnect" });
+    return;
+  }
+
+  const tokenRes = await fetch("https://identity.xero.com/connect/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "refresh_token",
+      refresh_token: creds.refresh_token,
+      client_id: creds.client_id ?? XERO_CLIENT_ID,
+      client_secret: creds.client_secret ?? XERO_CLIENT_SECRET,
+    }),
+  });
+
+  if (!tokenRes.ok) {
+    await query("UPDATE accounting_connections SET status = 'error' WHERE id = ?", [conn.id]);
+    res.status(400).json({ message: "Token refresh failed — please reconnect" });
+    return;
+  }
+
+  const tokens = await tokenRes.json() as any;
+  const updatedCreds = {
+    ...creds,
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in ?? 1800) * 1000,
+  };
+
+  await query(
+    "UPDATE accounting_connections SET credentials = ?::jsonb WHERE id = ?",
+    [JSON.stringify(updatedCreds), conn.id]
+  );
+
+  res.json({ success: true, expires_at: updatedCreds.expires_at });
+});
+
 export default router;

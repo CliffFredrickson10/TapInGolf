@@ -8,6 +8,7 @@ import {
 import { query, row, exec, run, withTransaction, clientQuery } from "../lib/pg";
 import { generatePosToken, requirePosAuth, requirePosManager, getPosStaff } from "../lib/posAuth";
 import { logger } from "../lib/logger";
+import { postPosTransactionJournal } from "../lib/ledger-posting";
 
 const router: IRouter = Router();
 
@@ -1296,6 +1297,22 @@ router.post("/pos/orders/:id/pay", requirePosAuth, async (req: Request, res: Res
   try {
     await finalizeOrderPayment(id, s.outlet_id, s.id, paymentMethod, amountPaid);
     const full = await orderWithTotals(id, s.outlet_id);
+    // Post to financial ledger (non-blocking)
+    if (full?.total > 0) {
+      const outlet = await row<any>("SELECT club_id, type FROM pos_outlets WHERE id = ?", [s.outlet_id]);
+      if (outlet) {
+        postPosTransactionJournal({
+          transaction_id: id,
+          club_id: outlet.club_id,
+          outlet_type: outlet.type,
+          amount: Number(full.total),
+          tip_amount: Number(full.tip_amount ?? 0),
+          service_fee: Number(full.service_fee ?? 0),
+          platform_fee: 0,
+          payment_method: paymentMethod,
+        }).catch(() => {});
+      }
+    }
     res.json(full);
   } catch (err: any) {
     if (err.status) { res.status(err.status).json({ message: err.message }); return; }

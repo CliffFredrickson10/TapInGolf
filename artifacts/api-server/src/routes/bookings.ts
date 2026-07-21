@@ -10,6 +10,7 @@ import { sendInvoiceEmail } from "../lib/otp";
 import { getUserTierPrices } from "../lib/pricing";
 import { confirmResalePurchase } from "./resale";
 import { logger } from "../lib/logger";
+import { postBookingConfirmedJournal, postBookingCancelledJournal } from "../lib/ledger-posting";
 
 const router: IRouter = Router();
 
@@ -44,6 +45,41 @@ async function syncEventRegistration(bookingId: number): Promise<void> {
       [bk.event_id, bk.user_id, u?.handicap ?? null, bk.payment_method ?? "manual"]
     );
   } catch {}
+}
+
+/**
+ * Post a booking's journal entry to the ledger by fetching its data from the DB.
+ * Used by payment webhooks where only bookingId is available.
+ */
+async function postBookingLedgerFromId(bookingId: number, paymentMethod: string): Promise<void> {
+  try {
+    const b = await row<any>(
+      `SELECT b.id, b.booking_ref, b.total_amount, b.my_amount, b.platform_fee,
+              b.club_amount, b.cart_fee, b.discount_amount, b.players,
+              b.driving_range_fee, b.club_hire_fee,
+              pts.club_id
+       FROM bookings b
+       JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+       WHERE b.id = ?`,
+      [bookingId]
+    );
+    if (!b) return;
+    await postBookingConfirmedJournal({
+      booking_id: b.id,
+      club_id: b.club_id,
+      booking_ref: b.booking_ref,
+      total_amount: Number(b.total_amount),
+      platform_fee: Number(b.platform_fee ?? 0),
+      club_amount: Number(b.club_amount ?? 0),
+      cart_fee: Number(b.cart_fee ?? 0),
+      driving_range_fee: Number(b.driving_range_fee ?? 0),
+      club_hire_fee: Number(b.club_hire_fee ?? 0),
+      discount_amount: Number(b.discount_amount ?? 0),
+      payment_method: paymentMethod,
+    });
+  } catch (e: any) {
+    logger.error({ err: e, bookingId }, "postBookingLedgerFromId failed");
+  }
 }
 
 /**
@@ -1117,6 +1153,20 @@ router.post("/bookings", async (req, res): Promise<void> => {
   if (!needsPaymentLink) {
     fireInvoiceEmail(bookingId).catch(() => {});
     syncEventRegistration(bookingId).catch(() => {});
+    // Post to financial ledger
+    postBookingConfirmedJournal({
+      booking_id: bookingId,
+      club_id: slot.club_id,
+      booking_ref: ref,
+      total_amount: chargeAmount,
+      platform_fee: Math.round(PLATFORM_FEE_PER_PLAYER * numPlayers * 100) / 100,
+      club_amount: chargeAmount - Math.round(PLATFORM_FEE_PER_PLAYER * numPlayers * 100) / 100,
+      cart_fee: cartFee,
+      driving_range_fee: rangeBallsFee,
+      club_hire_fee: clubHireFee,
+      discount_amount: discountAmount,
+      payment_method: effectivePaymentMethod,
+    }).catch(() => {});
   }
 
   let paymentUrl: string | null = null;
@@ -1754,6 +1804,11 @@ router.put("/bookings/:id/cancel", async (req, res): Promise<void> => {
     });
   }
 
+  // Post reversal to financial ledger
+  if (club?.club_id) {
+    postBookingCancelledJournal(id, club.club_id, `Booking ${booking.booking_ref} cancelled by golfer`).catch(() => {});
+  }
+
   res.json({
     success: true,
     contact_email: club?.cancel_contact_email ?? null,
@@ -2169,6 +2224,8 @@ async function processCompletedPaymentReference(
         await settleOrganizerPaid(bookingId, paymentMethod);
         fireInvoiceEmail(bookingId).catch(() => {});
         syncEventRegistration(bookingId).catch(() => {});
+        // Post to financial ledger
+        postBookingLedgerFromId(bookingId, paymentMethod).catch(() => {});
       }
     }
   }

@@ -45,16 +45,30 @@ export async function postBookingConfirmedJournal(data: BookingLedgerData): Prom
     const clearingAccount = getClearingAccount(data.payment_method);
     const greenFee = data.total_amount - data.cart_fee - (data.driving_range_fee ?? 0) - (data.club_hire_fee ?? 0);
 
+    // The amount actually received from the customer (after discount)
+    const amountReceived = data.total_amount - data.discount_amount;
+
     const entries: { account_code: string; debit?: number; credit?: number; description?: string }[] = [];
 
-    // Debit: Payment clearing account (money coming in)
-    entries.push({
-      account_code: clearingAccount,
-      debit: data.total_amount,
-      description: `Payment received: ${data.booking_ref}`,
-    });
+    // Debit: Payment clearing account (actual money coming in)
+    if (amountReceived > 0) {
+      entries.push({
+        account_code: clearingAccount,
+        debit: amountReceived,
+        description: `Payment received: ${data.booking_ref}`,
+      });
+    }
 
-    // Credit: Green Fee Revenue
+    // Debit: Voucher/Discount expense (the discount given)
+    if (data.discount_amount > 0) {
+      entries.push({
+        account_code: "5040",
+        debit: data.discount_amount,
+        description: "Voucher/discount applied",
+      });
+    }
+
+    // Credit: Green Fee Revenue (full price including discount portion)
     if (greenFee > 0) {
       entries.push({
         account_code: "4010",
@@ -87,23 +101,6 @@ export async function postBookingConfirmedJournal(data: BookingLedgerData): Prom
         account_code: "4080",
         credit: data.club_hire_fee,
         description: "Club hire revenue",
-      });
-    }
-
-    // If there's a discount, debit the voucher expense
-    if (data.discount_amount > 0) {
-      entries.push({
-        account_code: "5040",
-        debit: data.discount_amount,
-        description: "Voucher/discount applied",
-      });
-      // Reduce the clearing debit (customer paid less)
-      entries[0].debit = data.total_amount - data.discount_amount;
-      // Add the discount as credit offset
-      entries.push({
-        account_code: "5040",
-        credit: data.discount_amount,
-        description: "Voucher expense offset",
       });
     }
 

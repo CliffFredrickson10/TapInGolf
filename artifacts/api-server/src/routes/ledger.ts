@@ -383,9 +383,10 @@ router.get("/portal/ledger/reports/balance-sheet", requireClubAuth, async (req: 
   const { as_of } = req.query as any;
   const dateFilter = as_of ?? new Date().toISOString().slice(0, 10);
 
+  // Fetch balances for balance-sheet accounts (asset, liability, equity only)
   const rows = await query<{ code: string; name: string; type: string; balance: string }>(
     `SELECT la.code, la.name, la.type,
-            CASE WHEN la.type IN ('asset','expense')
+            CASE WHEN la.type = 'asset'
               THEN COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0)
               ELSE COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0)
             END AS balance
@@ -394,8 +395,9 @@ router.get("/portal/ledger/reports/balance-sheet", requireClubAuth, async (req: 
      LEFT JOIN ledger_journals lj ON le.journal_id = lj.id
        AND lj.journal_date <= ?
      WHERE la.club_id = ? AND la.active = 1
+       AND la.type IN ('asset','liability','equity')
      GROUP BY la.id, la.code, la.name, la.type
-     HAVING CASE WHEN la.type IN ('asset','expense')
+     HAVING CASE WHEN la.type = 'asset'
               THEN COALESCE(SUM(le.debit), 0) - COALESCE(SUM(le.credit), 0)
               ELSE COALESCE(SUM(le.credit), 0) - COALESCE(SUM(le.debit), 0)
             END != 0
@@ -403,22 +405,41 @@ router.get("/portal/ledger/reports/balance-sheet", requireClubAuth, async (req: 
     [dateFilter, club.id]
   );
 
+  // Calculate net income (revenue - expenses) to roll into retained earnings
+  const netIncomeRow = await row<{ net_income: string }>(
+    `SELECT
+       COALESCE(SUM(CASE WHEN la.type = 'revenue' THEN le.credit - le.debit ELSE 0 END), 0) -
+       COALESCE(SUM(CASE WHEN la.type = 'expense' THEN le.debit - le.credit ELSE 0 END), 0) AS net_income
+     FROM ledger_entries le
+     JOIN ledger_accounts la ON la.id = le.account_id
+     JOIN ledger_journals lj ON lj.id = le.journal_id
+     WHERE la.club_id = ? AND lj.journal_date <= ? AND la.type IN ('revenue','expense')`,
+    [club.id, dateFilter]
+  );
+  const netIncome = Number(netIncomeRow?.net_income ?? 0);
+
   const assets = rows.filter(r => r.type === "asset").map(r => ({ ...r, balance: Number(r.balance) }));
   const liabilities = rows.filter(r => r.type === "liability").map(r => ({ ...r, balance: Number(r.balance) }));
-  const equity = rows.filter(r => r.type === "equity").map(r => ({ ...r, balance: Number(r.balance) }));
+  const equityRows = rows.filter(r => r.type === "equity").map(r => ({ ...r, balance: Number(r.balance) }));
+
+  // Add net income as "Current Period Earnings" under equity
+  if (Math.abs(netIncome) >= 0.01) {
+    equityRows.push({ code: "3099", name: "Current Period Earnings", type: "equity", balance: netIncome });
+  }
 
   const totalAssets = assets.reduce((s, r) => s + r.balance, 0);
   const totalLiabilities = liabilities.reduce((s, r) => s + r.balance, 0);
-  const totalEquity = equity.reduce((s, r) => s + r.balance, 0);
+  const totalEquity = equityRows.reduce((s, r) => s + r.balance, 0);
 
   res.json({
     as_of: dateFilter,
     assets,
     liabilities,
-    equity,
+    equity: equityRows,
     total_assets: Math.round(totalAssets * 100) / 100,
     total_liabilities: Math.round(totalLiabilities * 100) / 100,
     total_equity: Math.round(totalEquity * 100) / 100,
+    net_income: Math.round(netIncome * 100) / 100,
     balanced: Math.abs(totalAssets - (totalLiabilities + totalEquity)) < 0.01,
   });
 });

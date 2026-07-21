@@ -299,6 +299,11 @@ function BalanceSheet() {
               <div className="text-center">
                 <p className="text-sm text-muted-foreground">Total Equity</p>
                 <p className="text-lg font-bold text-purple-700">R {Number(data.total_equity).toFixed(2)}</p>
+                {data.net_income != null && Math.abs(data.net_income) >= 0.01 && (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    (incl. net income R {Number(data.net_income).toFixed(2)})
+                  </p>
+                )}
               </div>
             </div>
 

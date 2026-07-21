@@ -1,0 +1,346 @@
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight } from "lucide-react";
+import { api } from "@/lib/api";
+
+type Tab = "ledger" | "pnl" | "balance-sheet" | "settlements";
+
+export default function Finance() {
+  const [tab, setTab] = useState<Tab>("ledger");
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Landmark className="h-6 w-6 text-emerald-600" />
+        <h1 className="text-2xl font-bold">Finance</h1>
+      </div>
+
+      <div className="flex gap-2 border-b pb-2">
+        {([
+          ["ledger", "Ledger"],
+          ["pnl", "Profit & Loss"],
+          ["balance-sheet", "Balance Sheet"],
+          ["settlements", "Settlements"],
+        ] as [Tab, string][]).map(([key, label]) => (
+          <Button
+            key={key}
+            variant={tab === key ? "default" : "ghost"}
+            size="sm"
+            onClick={() => setTab(key)}
+          >
+            {label}
+          </Button>
+        ))}
+      </div>
+
+      {tab === "ledger" && <LedgerView />}
+      {tab === "pnl" && <ProfitLoss />}
+      {tab === "balance-sheet" && <BalanceSheet />}
+      {tab === "settlements" && <Settlements />}
+    </div>
+  );
+}
+
+// ─── Ledger View ─────────────────────────────────────────────────────────────
+
+function LedgerView() {
+  const [journals, setJournals] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [page, setPage] = useState(1);
+  const limit = 25;
+
+  useEffect(() => {
+    setLoading(true);
+    api<any>(`/api/portal/ledger/journals?limit=${limit}&offset=${(page - 1) * limit}`)
+      .then(data => { setJournals(data.journals ?? data ?? []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, [page]);
+
+  return (
+    <Card>
+      <CardHeader className="flex flex-row items-center justify-between">
+        <CardTitle className="text-lg">Journal Entries</CardTitle>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+          <span className="text-sm self-center">Page {page}</span>
+          <Button size="sm" variant="outline" disabled={journals.length < limit} onClick={() => setPage(p => p + 1)}>
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-muted-foreground">Loading...</p>
+        ) : journals.length === 0 ? (
+          <p className="text-muted-foreground">No journal entries yet. Financial events will appear here once bookings and transactions are processed.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Date</TableHead>
+                <TableHead>Ref</TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead>Source</TableHead>
+                <TableHead className="text-right">Amount</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {journals.map((j: any) => (
+                <TableRow key={j.id}>
+                  <TableCell className="whitespace-nowrap">{j.journal_date?.slice(0, 10)}</TableCell>
+                  <TableCell className="font-mono text-xs">{j.journal_ref?.slice(0, 16)}</TableCell>
+                  <TableCell>{j.description}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className="text-xs">{j.source_module}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">
+                    {j.total_debit ? `R ${Number(j.total_debit).toFixed(2)}` : "—"}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Profit & Loss ───────────────────────────────────────────────────────────
+
+function ProfitLoss() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [from, setFrom] = useState(() => {
+    const d = new Date(); d.setMonth(d.getMonth() - 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [to, setTo] = useState(() => new Date().toISOString().slice(0, 10));
+
+  function load() {
+    setLoading(true);
+    api<any>(`/api/portal/ledger/reports/profit-loss?from=${from}&to=${to}`)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  return (
+    <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <div className="flex items-center gap-4">
+            <CardTitle className="text-lg">Profit & Loss</CardTitle>
+            <Input type="date" value={from} onChange={e => setFrom(e.target.value)} className="w-40" />
+            <span>to</span>
+            <Input type="date" value={to} onChange={e => setTo(e.target.value)} className="w-40" />
+            <Button size="sm" onClick={load}><RefreshCw className="h-4 w-4 mr-1" /> Generate</Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {loading ? <p className="text-muted-foreground">Loading...</p> : !data ? <p>No data</p> : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div>
+                <h3 className="font-semibold flex items-center gap-2 mb-2">
+                  <TrendingUp className="h-4 w-4 text-green-600" /> Revenue
+                </h3>
+                <Table>
+                  <TableBody>
+                    {(data.revenue ?? []).map((r: any) => (
+                      <TableRow key={r.code}>
+                        <TableCell>{r.code}</TableCell>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell className="text-right font-mono text-green-700">R {Number(r.total).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-bold border-t-2">
+                      <TableCell colSpan={2}>Total Revenue</TableCell>
+                      <TableCell className="text-right font-mono text-green-700">R {Number(data.total_revenue).toFixed(2)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+              <div>
+                <h3 className="font-semibold flex items-center gap-2 mb-2">
+                  <TrendingDown className="h-4 w-4 text-red-600" /> Expenses
+                </h3>
+                <Table>
+                  <TableBody>
+                    {(data.expenses ?? []).map((r: any) => (
+                      <TableRow key={r.code}>
+                        <TableCell>{r.code}</TableCell>
+                        <TableCell>{r.name}</TableCell>
+                        <TableCell className="text-right font-mono text-red-700">R {Number(r.total).toFixed(2)}</TableCell>
+                      </TableRow>
+                    ))}
+                    <TableRow className="font-bold border-t-2">
+                      <TableCell colSpan={2}>Total Expenses</TableCell>
+                      <TableCell className="text-right font-mono text-red-700">R {Number(data.total_expenses).toFixed(2)}</TableCell>
+                    </TableRow>
+                  </TableBody>
+                </Table>
+              </div>
+              <Card className="col-span-full bg-slate-50">
+                <CardContent className="pt-4">
+                  <div className="flex justify-between items-center text-lg font-bold">
+                    <span>Net Profit</span>
+                    <span className={data.net_profit >= 0 ? "text-green-700" : "text-red-700"}>
+                      R {Number(data.net_profit).toFixed(2)}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ─── Balance Sheet ───────────────────────────────────────────────────────────
+
+function BalanceSheet() {
+  const [data, setData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [asOf, setAsOf] = useState(() => new Date().toISOString().slice(0, 10));
+
+  function load() {
+    setLoading(true);
+    api<any>(`/api/portal/ledger/reports/balance-sheet?as_of=${asOf}`)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }
+
+  useEffect(() => { load(); }, []);
+
+  const renderSection = (title: string, items: any[], color: string) => (
+    <div>
+      <h3 className="font-semibold mb-2">{title}</h3>
+      <Table>
+        <TableBody>
+          {(items ?? []).map((r: any) => (
+            <TableRow key={r.code}>
+              <TableCell>{r.code}</TableCell>
+              <TableCell>{r.name}</TableCell>
+              <TableCell className={`text-right font-mono ${color}`}>R {Number(r.balance).toFixed(2)}</TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+    </div>
+  );
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center gap-4">
+          <Scale className="h-5 w-5" />
+          <CardTitle className="text-lg">Balance Sheet</CardTitle>
+          <Input type="date" value={asOf} onChange={e => setAsOf(e.target.value)} className="w-40" />
+          <Button size="sm" onClick={load}><RefreshCw className="h-4 w-4 mr-1" /> Generate</Button>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {loading ? <p className="text-muted-foreground">Loading...</p> : !data ? <p>No data</p> : (
+          <div className="space-y-6">
+            {renderSection("Assets", data.assets, "text-blue-700")}
+            {renderSection("Liabilities", data.liabilities, "text-orange-700")}
+            {renderSection("Equity", data.equity, "text-purple-700")}
+
+            <div className="grid grid-cols-3 gap-4 pt-4 border-t-2">
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Assets</p>
+                <p className="text-lg font-bold text-blue-700">R {Number(data.total_assets).toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Liabilities</p>
+                <p className="text-lg font-bold text-orange-700">R {Number(data.total_liabilities).toFixed(2)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground">Total Equity</p>
+                <p className="text-lg font-bold text-purple-700">R {Number(data.total_equity).toFixed(2)}</p>
+              </div>
+            </div>
+
+            <div className="flex justify-center">
+              <Badge variant={data.balanced ? "default" : "destructive"}>
+                {data.balanced ? "✓ Balanced" : "⚠ Unbalanced"}
+              </Badge>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── Settlements ─────────────────────────────────────────────────────────────
+
+function Settlements() {
+  const [batches, setBatches] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api<any>("/api/portal/ledger/settlements")
+      .then(data => { setBatches(Array.isArray(data) ? data : []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg">Settlement Batches</CardTitle>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-muted-foreground">Loading...</p>
+        ) : batches.length === 0 ? (
+          <p className="text-muted-foreground">No settlement batches yet. Settlements are generated when payment providers pay out collected funds.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Batch Ref</TableHead>
+                <TableHead>Provider</TableHead>
+                <TableHead>Period</TableHead>
+                <TableHead className="text-right">Gross</TableHead>
+                <TableHead className="text-right">Fees</TableHead>
+                <TableHead className="text-right">Net</TableHead>
+                <TableHead>Status</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {batches.map((b: any) => (
+                <TableRow key={b.id}>
+                  <TableCell className="font-mono text-xs">{b.batch_ref}</TableCell>
+                  <TableCell className="capitalize">{b.provider}</TableCell>
+                  <TableCell className="text-xs">
+                    {b.period_from?.slice(0, 10)} → {b.period_to?.slice(0, 10)}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">R {Number(b.total_amount).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-red-600">R {Number(b.fee_amount).toFixed(2)}</TableCell>
+                  <TableCell className="text-right font-mono text-green-700">R {Number(b.net_amount).toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge variant={b.status === "settled" ? "default" : b.status === "cancelled" ? "destructive" : "secondary"}>
+                      {b.status}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

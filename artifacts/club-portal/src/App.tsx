@@ -46,6 +46,7 @@ import ResellerClub from "@/pages/reseller/club";
 import ResellerPurchases from "@/pages/reseller/purchases";
 import ResaleSuccess from "@/pages/reseller/resale-success";
 import Payments from "@/pages/payments";
+import Finance from "@/pages/finance";
 import Invoices from "@/pages/invoices";
 import CancellationPolicy from "@/pages/cancellation-policy";
 import Bookings from "@/pages/bookings";
@@ -221,6 +222,9 @@ function Router() {
         </Route>
         <Route path="/payments">
           <SectionGuard section="payments"><Payments /></SectionGuard>
+        </Route>
+        <Route path="/finance">
+          <SectionGuard section="finance"><Finance /></SectionGuard>
         </Route>
         <Route path="/invoices">
           <SectionGuard section="members"><Invoices /></SectionGuard>

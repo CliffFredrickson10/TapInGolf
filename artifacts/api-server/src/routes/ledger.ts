@@ -261,4 +261,115 @@ router.get("/portal/ledger/reports/balance-sheet", requireClubAuth, async (req: 
   });
 });
 
+// ══════════════════════════════════════════════════════════════════════════════
+// Settlement & Reconciliation Endpoints
+// ══════════════════════════════════════════════════════════════════════════════
+
+import {
+  generateSettlementBatch,
+  confirmSettlement,
+  cancelSettlement,
+  getSettlementBatches,
+  getReconciliationRecords,
+  reconcileTransaction,
+  autoReconcile,
+} from "../lib/settlement";
+
+// ── List Settlement Batches ──────────────────────────────────────────────────
+router.get("/portal/ledger/settlements", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, status, limit } = req.query as any;
+  const batches = await getSettlementBatches(club.id, {
+    provider: provider ?? undefined,
+    status: status ?? undefined,
+    limit: limit ? Number(limit) : 50,
+  });
+  res.json(batches);
+});
+
+// ── Generate Settlement Batch ────────────────────────────────────────────────
+router.post("/portal/ledger/settlements/generate", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, period_from, period_to } = req.body ?? {};
+  if (!provider || !period_from || !period_to) {
+    res.status(400).json({ message: "provider, period_from, and period_to are required" });
+    return;
+  }
+  try {
+    const batchId = await generateSettlementBatch(club.id, provider, period_from, period_to);
+    res.json({ batch_id: batchId });
+  } catch (err: any) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// ── Confirm Settlement ───────────────────────────────────────────────────────
+router.post("/portal/ledger/settlements/:id/confirm", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const batchId = parseInt(String(req.params["id"]), 10);
+  try {
+    const journalId = await confirmSettlement(batchId);
+    res.json({ journal_id: journalId });
+  } catch (err: any) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// ── Cancel Settlement ────────────────────────────────────────────────────────
+router.post("/portal/ledger/settlements/:id/cancel", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const batchId = parseInt(String(req.params["id"]), 10);
+  try {
+    await cancelSettlement(batchId);
+    res.json({ success: true });
+  } catch (err: any) {
+    res.status(400).json({ message: err.message });
+  }
+});
+
+// ── Reconciliation Records ───────────────────────────────────────────────────
+router.get("/portal/ledger/reconciliation", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, status, limit } = req.query as any;
+  const records = await getReconciliationRecords(club.id, {
+    provider: provider ?? undefined,
+    status: status ?? undefined,
+    limit: limit ? Number(limit) : 50,
+  });
+  res.json(records);
+});
+
+// ── Auto-Reconcile ───────────────────────────────────────────────────────────
+router.post("/portal/ledger/reconciliation/auto", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, records } = req.body ?? {};
+  if (!provider || !Array.isArray(records)) {
+    res.status(400).json({ message: "provider and records[] are required" });
+    return;
+  }
+  try {
+    const result = await autoReconcile(club.id, provider, records);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Manual Reconciliation ────────────────────────────────────────────────────
+router.post("/portal/ledger/reconciliation/manual", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, external_ref, external_amount, journal_id, notes } = req.body ?? {};
+  if (!provider || !external_ref || external_amount == null) {
+    res.status(400).json({ message: "provider, external_ref, and external_amount are required" });
+    return;
+  }
+  const id = await reconcileTransaction(
+    club.id,
+    provider,
+    external_ref,
+    Number(external_amount),
+    journal_id ? Number(journal_id) : null,
+    notes,
+  );
+  res.json({ id });
+});
+
 export default router;

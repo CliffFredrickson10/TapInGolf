@@ -26,6 +26,7 @@ import supportRouter from "./support";
 import standingRouter from "./standing";
 import resaleRouter from "./resale";
 import posRouter from "./pos";
+import ledgerRouter from "./ledger";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,6 @@ router.use(scoringRouter);
 router.use(supportRouter);
 router.use(resaleRouter);
 router.use(posRouter);
+router.use(ledgerRouter);
 
 export default router;

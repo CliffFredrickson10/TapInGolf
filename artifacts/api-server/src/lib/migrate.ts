@@ -1909,6 +1909,138 @@ async function applyLateAlters() {
   )`);
   await ddl("CREATE INDEX IF NOT EXISTS idx_cart_indemnity_booking ON cart_indemnity_signatures (booking_id)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_cart_indemnity_club ON cart_indemnity_signatures (club_id, signed_at DESC)");
+
+  // ── Financial Ledger (Double-Entry) ───────────────────────────────────────────
+  await ddl(`CREATE TABLE IF NOT EXISTS ledger_accounts (
+    id              SERIAL PRIMARY KEY,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    code            VARCHAR(20) NOT NULL,
+    name            VARCHAR(255) NOT NULL,
+    type            VARCHAR(20) NOT NULL CHECK (type IN ('asset','liability','equity','revenue','expense')),
+    parent_id       INT REFERENCES ledger_accounts(id),
+    system_account  SMALLINT NOT NULL DEFAULT 1,
+    active          SMALLINT NOT NULL DEFAULT 1,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (club_id, code)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ledger_accounts_club ON ledger_accounts (club_id, type)");
+
+  await ddl(`CREATE TABLE IF NOT EXISTS ledger_journals (
+    id              SERIAL PRIMARY KEY,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    journal_ref     VARCHAR(50) NOT NULL,
+    journal_date    DATE NOT NULL,
+    description     TEXT NOT NULL,
+    source_module   VARCHAR(50) NOT NULL,
+    source_id       INT,
+    source_ref      VARCHAR(100),
+    posted_by       INT REFERENCES users(id),
+    reversal_of_id  INT REFERENCES ledger_journals(id),
+    reversed_by_id  INT REFERENCES ledger_journals(id),
+    metadata        JSONB,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (club_id, journal_ref)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ledger_journals_club_date ON ledger_journals (club_id, journal_date DESC)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ledger_journals_source ON ledger_journals (club_id, source_module, source_id)");
+
+  await ddl(`CREATE TABLE IF NOT EXISTS ledger_entries (
+    id              SERIAL PRIMARY KEY,
+    journal_id      INT NOT NULL REFERENCES ledger_journals(id) ON DELETE CASCADE,
+    account_id      INT NOT NULL REFERENCES ledger_accounts(id),
+    debit           DECIMAL(12,2) NOT NULL DEFAULT 0,
+    credit          DECIMAL(12,2) NOT NULL DEFAULT 0,
+    description     TEXT,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    CHECK (debit >= 0 AND credit >= 0),
+    CHECK (debit > 0 OR credit > 0)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ledger_entries_journal ON ledger_entries (journal_id)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_ledger_entries_account ON ledger_entries (account_id)");
+
+  await ddl(`CREATE TABLE IF NOT EXISTS ledger_account_balances (
+    account_id      INT NOT NULL REFERENCES ledger_accounts(id) ON DELETE CASCADE,
+    balance_date    DATE NOT NULL,
+    debit_total     DECIMAL(14,2) NOT NULL DEFAULT 0,
+    credit_total    DECIMAL(14,2) NOT NULL DEFAULT 0,
+    running_balance DECIMAL(14,2) NOT NULL DEFAULT 0,
+    updated_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (account_id, balance_date)
+  )`);
+
+  // ── Settlement & Reconciliation ───────────────────────────────────────────────
+  await ddl(`CREATE TABLE IF NOT EXISTS settlement_batches (
+    id              SERIAL PRIMARY KEY,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    provider        VARCHAR(50) NOT NULL,
+    batch_ref       VARCHAR(100) NOT NULL,
+    period_from     DATE NOT NULL,
+    period_to       DATE NOT NULL,
+    total_amount    DECIMAL(12,2) NOT NULL DEFAULT 0,
+    fee_amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    net_amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','settled','failed')),
+    settled_at      TIMESTAMP,
+    journal_id      INT REFERENCES ledger_journals(id),
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (club_id, batch_ref)
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_settlement_batches_club ON settlement_batches (club_id, status)");
+
+  await ddl(`CREATE TABLE IF NOT EXISTS settlement_items (
+    id              SERIAL PRIMARY KEY,
+    batch_id        INT NOT NULL REFERENCES settlement_batches(id) ON DELETE CASCADE,
+    source_module   VARCHAR(50) NOT NULL,
+    source_id       INT NOT NULL,
+    gross_amount    DECIMAL(12,2) NOT NULL DEFAULT 0,
+    fee_amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    net_amount      DECIMAL(12,2) NOT NULL DEFAULT 0,
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending',
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_settlement_items_batch ON settlement_items (batch_id)");
+
+  await ddl(`CREATE TABLE IF NOT EXISTS reconciliation_records (
+    id                  SERIAL PRIMARY KEY,
+    club_id             INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    provider            VARCHAR(50) NOT NULL,
+    external_ref        VARCHAR(255) NOT NULL,
+    external_amount     DECIMAL(12,2) NOT NULL,
+    matched_journal_id  INT REFERENCES ledger_journals(id),
+    status              VARCHAR(20) NOT NULL DEFAULT 'unmatched' CHECK (status IN ('matched','unmatched','disputed')),
+    notes               TEXT,
+    reconciled_at       TIMESTAMP,
+    created_at          TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_reconciliation_club ON reconciliation_records (club_id, status)");
+
+  // ── Accounting Integrations ───────────────────────────────────────────────────
+  await ddl(`CREATE TABLE IF NOT EXISTS accounting_connections (
+    id              SERIAL PRIMARY KEY,
+    club_id         INT NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+    provider        VARCHAR(50) NOT NULL CHECK (provider IN ('xero','sage','quickbooks','zoho','dynamics','myob','sap')),
+    credentials     JSONB NOT NULL DEFAULT '{}',
+    status          VARCHAR(20) NOT NULL DEFAULT 'disconnected' CHECK (status IN ('connected','disconnected','error')),
+    last_sync_at    TIMESTAMP,
+    config          JSONB NOT NULL DEFAULT '{}',
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW(),
+    UNIQUE (club_id, provider)
+  )`);
+
+  await ddl(`CREATE TABLE IF NOT EXISTS accounting_sync_log (
+    id              SERIAL PRIMARY KEY,
+    connection_id   INT NOT NULL REFERENCES accounting_connections(id) ON DELETE CASCADE,
+    journal_id      INT NOT NULL REFERENCES ledger_journals(id) ON DELETE CASCADE,
+    direction       VARCHAR(10) NOT NULL DEFAULT 'outbound' CHECK (direction IN ('outbound','inbound')),
+    external_id     VARCHAR(255),
+    status          VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','synced','failed','skipped')),
+    error_message   TEXT,
+    attempts        INT NOT NULL DEFAULT 0,
+    synced_at       TIMESTAMP,
+    created_at      TIMESTAMP NOT NULL DEFAULT NOW()
+  )`);
+  await ddl("CREATE INDEX IF NOT EXISTS idx_accounting_sync_connection ON accounting_sync_log (connection_id, status)");
+  await ddl("CREATE INDEX IF NOT EXISTS idx_accounting_sync_journal ON accounting_sync_log (journal_id)");
 }
 
 async function seedAdOfferings(): Promise<void> {

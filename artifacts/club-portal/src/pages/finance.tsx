@@ -6,27 +6,30 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle } from "lucide-react";
+import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard, Banknote } from "lucide-react";
 import { api } from "@/lib/api";
+import { PaymentsContent, SplitPaymentsContent } from "./payments";
 
-type Tab = "ledger" | "pnl" | "balance-sheet" | "settlements" | "integrations";
+type Tab = "payments" | "split-payments" | "ledger" | "pnl" | "balance-sheet" | "settlements" | "integrations";
 
 export default function Finance() {
   // Check URL for ?connected= param (Xero OAuth callback redirect)
   const params = new URLSearchParams(window.location.search);
   const justConnected = params.get("connected");
 
-  const [tab, setTab] = useState<Tab>(justConnected ? "integrations" : "ledger");
+  const [tab, setTab] = useState<Tab>(justConnected ? "integrations" : "payments");
 
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-3">
         <Landmark className="h-6 w-6 text-emerald-600" />
-        <h1 className="text-2xl font-bold">Finance</h1>
+        <h1 className="text-2xl font-bold">Finances</h1>
       </div>
 
-      <div className="flex gap-2 border-b pb-2">
+      <div className="flex gap-2 border-b pb-2 flex-wrap">
         {([
+          ["payments", "Payments"],
+          ["split-payments", "Split Payments"],
           ["ledger", "Ledger"],
           ["pnl", "Profit & Loss"],
           ["balance-sheet", "Balance Sheet"],
@@ -39,11 +42,15 @@ export default function Finance() {
             size="sm"
             onClick={() => setTab(key)}
           >
+            {key === "payments" && <CreditCard className="h-4 w-4 mr-1" />}
+            {key === "split-payments" && <Banknote className="h-4 w-4 mr-1" />}
             {label}
           </Button>
         ))}
       </div>
 
+      {tab === "payments" && <PaymentsContent />}
+      {tab === "split-payments" && <SplitPaymentsContent />}
       {tab === "ledger" && <LedgerView />}
       {tab === "pnl" && <ProfitLoss />}
       {tab === "balance-sheet" && <BalanceSheet />}

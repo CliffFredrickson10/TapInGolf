@@ -21,8 +21,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/tee-times",          label: "Tee Schedule",       icon: CalendarDays,    section: "schedule" },
   { href: "/bookings",           label: "Bookings",           icon: BookOpen,        section: "schedule" },
   { href: "/resale",             label: "Resale Marketplace", icon: Store,           section: "schedule" },
-  { href: "/payments",           label: "Payments",           icon: CreditCard,      section: "payments" },
-  { href: "/finance",            label: "Finance",            icon: Landmark,        section: "finance" },
+  { href: "/finance",            label: "Finances",           icon: Landmark,        section: "finance" },
   { href: "/events",             label: "Tournaments",        icon: Calendar,        section: "events" },
   { href: "/members",            label: "Members",            icon: Users,           section: "members" },
   { href: "/invoices",           label: "Invoices",           icon: Receipt,         section: "members" },
@@ -66,7 +65,7 @@ export const SHORTCUT_ITEMS: ShortcutItem[] = [
   { id: "member-renew",     label: "Renew Memberships",    description: "Bulk-renew expiring or lapsed memberships",     href: "/members",                 icon: RefreshCw,       section: "members",              category: "Members" },
 
   { id: "invoices",         label: "View Invoices",        description: "Check outstanding and paid platform invoices",  href: "/invoices",                icon: Receipt,         section: "members",              category: "Finance" },
-  { id: "payments",         label: "Payments",             description: "View payment history and wallet balances",      href: "/payments",                icon: CreditCard,      section: "payments",             category: "Finance" },
+  { id: "payments",         label: "Payments",             description: "View payment history and wallet balances",      href: "/finance",                 icon: CreditCard,      section: "finance",              category: "Finance" },
   { id: "pricing",          label: "Pricing Tiers",        description: "Set green fees by membership tier",             href: "/pricing",                 icon: CircleDollarSign,section: "pricing",              category: "Finance" },
   { id: "voucher-new",      label: "New Voucher",          description: "Create a discount or credit voucher",           href: "/vouchers?action=new",     icon: Ticket,          section: "vouchers",             category: "Finance" },
 

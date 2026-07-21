@@ -403,7 +403,7 @@ export default function Payments() {
   );
 }
 
-function PaymentsContent() {
+export function PaymentsContent() {
   const { club } = useAuth();
   const { toast } = useToast();
 
@@ -1161,7 +1161,7 @@ const SPLIT_STATUS_COLORS: Record<string, string> = {
   failed: "bg-red-100 text-red-800",
 };
 
-function SplitPaymentsContent() {
+export function SplitPaymentsContent() {
   const [payments, setPayments] = useState<SplitPayment[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);

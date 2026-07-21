@@ -63,21 +63,40 @@ export default function Finance() {
 function LedgerView() {
   const [journals, setJournals] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
+  const [seeding, setSeeding] = useState(false);
   const [page, setPage] = useState(1);
   const limit = 25;
 
-  useEffect(() => {
+  function load() {
     setLoading(true);
     api<any>(`/api/portal/ledger/journals?limit=${limit}&offset=${(page - 1) * limit}`)
       .then(data => { setJournals(data.journals ?? data ?? []); setLoading(false); })
       .catch(() => setLoading(false));
-  }, [page]);
+  }
+
+  useEffect(() => { load(); }, [page]);
+
+  async function seedTestData() {
+    setSeeding(true);
+    try {
+      const result = await api<{ message: string }>("/api/portal/ledger/seed-test-data", { method: "POST" });
+      alert(result.message);
+      load();
+    } catch (e: any) {
+      alert("Failed: " + e.message);
+    } finally {
+      setSeeding(false);
+    }
+  }
 
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between">
         <CardTitle className="text-lg">Journal Entries</CardTitle>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={seedTestData} disabled={seeding}>
+            {seeding ? "Seeding..." : "Seed Test Data"}
+          </Button>
           <Button size="sm" variant="outline" disabled={page === 1} onClick={() => setPage(p => p - 1)}>
             <ChevronLeft className="h-4 w-4" />
           </Button>

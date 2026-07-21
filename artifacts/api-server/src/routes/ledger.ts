@@ -16,6 +16,168 @@ import { logger } from "../lib/logger";
 
 const router = Router();
 
+// ── Seed Test Transactions ───────────────────────────────────────────────────
+router.post("/portal/ledger/seed-test-data", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+
+  // Ensure COA exists first
+  await provisionChartOfAccounts(club.id);
+
+  const today = new Date();
+  const testJournals = [
+    // 1. Green fee booking — visitor, 4 players, 18 holes
+    {
+      description: "Booking #TG-4501 — 4x Visitor 18H Green Fees",
+      source_module: "bookings",
+      source_ref: "TG-4501",
+      entries: [
+        { account_code: "1031", debit: 2400, description: "Stitch clearing — R2,400 received" },
+        { account_code: "5010", debit: 120, description: "TapIn platform fee" },
+        { account_code: "4010", credit: 2520, description: "Green fee revenue — 4x R630" },
+      ],
+    },
+    // 2. Cart hire add-on
+    {
+      description: "Booking #TG-4501 — 2x Golf Cart Hire",
+      source_module: "bookings",
+      source_ref: "TG-4501-CART",
+      entries: [
+        { account_code: "1031", debit: 500, description: "Stitch clearing — cart fees" },
+        { account_code: "4020", credit: 500, description: "Cart hire revenue — 2x R250" },
+      ],
+    },
+    // 3. Pro shop sale
+    {
+      description: "POS Sale #PS-882 — Pro Shop (glove, balls, tees)",
+      source_module: "pos",
+      source_ref: "PS-882",
+      entries: [
+        { account_code: "1031", debit: 850, description: "Stitch clearing — POS payment" },
+        { account_code: "4030", credit: 850, description: "Pro shop revenue" },
+      ],
+    },
+    // 4. Bar & restaurant tab
+    {
+      description: "POS Sale #PS-883 — Bar tab (drinks & food after round)",
+      source_module: "pos",
+      source_ref: "PS-883",
+      entries: [
+        { account_code: "1031", debit: 1260, description: "Stitch clearing — bar tab" },
+        { account_code: "4040", credit: 1260, description: "Bar & restaurant revenue" },
+      ],
+    },
+    // 5. Member booking — discounted rate
+    {
+      description: "Booking #TG-4502 — 2x Member 18H Green Fees",
+      source_module: "bookings",
+      source_ref: "TG-4502",
+      entries: [
+        { account_code: "1031", debit: 600, description: "Stitch clearing — R600 received" },
+        { account_code: "5010", debit: 30, description: "TapIn platform fee" },
+        { account_code: "5040", debit: 170, description: "Member discount (R85 x 2)" },
+        { account_code: "4010", credit: 800, description: "Green fee revenue — 2x R400 (member rate)" },
+      ],
+    },
+    // 6. Driving range balls
+    {
+      description: "Booking #TG-4503 — Driving Range (100 balls)",
+      source_module: "bookings",
+      source_ref: "TG-4503",
+      entries: [
+        { account_code: "1031", debit: 80, description: "Stitch clearing — range fee" },
+        { account_code: "4070", credit: 80, description: "Driving range revenue" },
+      ],
+    },
+    // 7. Event entry fee
+    {
+      description: "Event Registration — Monthly Medal July 2026 (4 players)",
+      source_module: "events",
+      source_ref: "EVT-401",
+      entries: [
+        { account_code: "1031", debit: 400, description: "Stitch clearing — entry fees" },
+        { account_code: "4060", credit: 400, description: "Event entry revenue — 4x R100" },
+      ],
+    },
+    // 8. Voucher redemption with discount
+    {
+      description: "Booking #TG-4504 — Voucher VCH-SUMMER25 redeemed (25% off)",
+      source_module: "vouchers",
+      source_ref: "VCH-SUMMER25",
+      entries: [
+        { account_code: "1031", debit: 472.50, description: "Stitch clearing — after discount" },
+        { account_code: "5040", debit: 157.50, description: "Voucher discount (25%)" },
+        { account_code: "4010", credit: 630, description: "Green fee revenue — 1x R630" },
+      ],
+    },
+    // 9. Club hire
+    {
+      description: "Booking #TG-4505 — Club Hire (full set)",
+      source_module: "bookings",
+      source_ref: "TG-4505-HIRE",
+      entries: [
+        { account_code: "1031", debit: 350, description: "Stitch clearing — club hire" },
+        { account_code: "4080", credit: 350, description: "Club hire revenue" },
+      ],
+    },
+    // 10. Refund — cancelled booking
+    {
+      description: "Refund — Booking #TG-4499 cancelled (rain policy)",
+      source_module: "refunds",
+      source_ref: "REF-4499",
+      entries: [
+        { account_code: "5030", debit: 1260, description: "Refund expense — cancelled booking" },
+        { account_code: "1031", credit: 1260, description: "Stitch clearing — refund issued" },
+      ],
+    },
+    // 11. Membership subscription
+    {
+      description: "Membership #M-210 — Annual subscription (Gold tier)",
+      source_module: "memberships",
+      source_ref: "M-210",
+      entries: [
+        { account_code: "1031", debit: 12500, description: "Stitch clearing — membership payment" },
+        { account_code: "4050", credit: 12500, description: "Membership revenue — Gold annual" },
+      ],
+    },
+    // 12. Function venue hire
+    {
+      description: "Function Booking #FN-55 — Prize Giving Dinner venue hire",
+      source_module: "functions",
+      source_ref: "FN-55",
+      entries: [
+        { account_code: "1031", debit: 8500, description: "Stitch clearing — function deposit" },
+        { account_code: "4100", credit: 8500, description: "Function & event revenue — venue hire" },
+      ],
+    },
+  ];
+
+  let created = 0;
+  for (let i = 0; i < testJournals.length; i++) {
+    const j = testJournals[i];
+    // Spread dates over past 30 days
+    const daysAgo = Math.floor((testJournals.length - i) * (30 / testJournals.length));
+    const jDate = new Date(today);
+    jDate.setDate(jDate.getDate() - daysAgo);
+
+    try {
+      await postJournal({
+        club_id: club.id,
+        journal_date: jDate.toISOString().slice(0, 10),
+        description: j.description,
+        source_module: j.source_module,
+        source_ref: j.source_ref,
+        entries: j.entries,
+      });
+      created++;
+    } catch (e: any) {
+      // Skip duplicates (source_ref already exists)
+      logger.warn({ ref: j.source_ref, error: e.message }, "Skipped test journal (may already exist)");
+    }
+  }
+
+  res.json({ message: `Seeded ${created} test journal entries`, total: testJournals.length });
+});
+
 // ── Provision Chart of Accounts ──────────────────────────────────────────────
 router.post("/portal/ledger/provision", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);

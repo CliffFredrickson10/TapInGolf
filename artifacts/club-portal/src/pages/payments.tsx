@@ -416,6 +416,7 @@ export function PaymentsContent() {
   const [search, setSearch]         = useState("");
   const [statusFilter, setStatus]   = useState("all");
   const [methodFilter, setMethod]   = useState("all");
+  const [typeFilter, setType]       = useState("all");
 
   // ── Period picker state ───────────────────────────────────────────────────
   const fiscalStartMonth = club?.fiscal_year_start_month ?? 1;
@@ -451,6 +452,7 @@ export function PaymentsContent() {
     { key: "holes",           label: "Holes" },
     { key: "players",         label: "Players" },
     { key: "service",         label: "Service" },
+    { key: "payment_type",    label: "Payment Type" },
     { key: "payment_method",  label: "Payment Method" },
     { key: "status",          label: "Status" },
     { key: "my_amount",       label: "Amount Charged (R)" },
@@ -470,6 +472,7 @@ export function PaymentsContent() {
     const header = ordered.map(f => f.label);
     const rows = filtered.map(p => ordered.map(f => {
       if (f.key === "service")         return `${p.holes}H${p.cart_fee > 0 ? " + Cart" : ""}`;
+      if (f.key === "payment_type")    return p.split_bill ? "Split" : "Full";
       if (f.key === "paid_on")         return format(parseISO(p.created_at), "dd MMM yyyy HH:mm");
       if (f.key === "payment_method")  return fmtMethod(p.payment_method);
       if (f.key === "my_amount")       return p.my_amount;
@@ -507,6 +510,7 @@ export function PaymentsContent() {
   const filtered = useMemo(() => {
     let list = payments;
     if (methodFilter !== "all") list = list.filter(p => p.payment_method === methodFilter);
+    if (typeFilter !== "all") list = list.filter(p => typeFilter === "split" ? p.split_bill : !p.split_bill);
     if (search.trim()) {
       const q = search.trim().toLowerCase();
       list = list.filter(p =>
@@ -516,7 +520,7 @@ export function PaymentsContent() {
       );
     }
     return list;
-  }, [payments, methodFilter, search]);
+  }, [payments, methodFilter, typeFilter, search]);
 
   const stats = useMemo(() => {
     // "paid" = confirmed/completed, any payment method.
@@ -543,17 +547,17 @@ export function PaymentsContent() {
   }, [payments]);
 
   const clearFilters = () => {
-    setSearch(""); setStatus("all"); setMethod("all");
+    setSearch(""); setStatus("all"); setMethod("all"); setType("all");
     setPeriod("month"); setSelectedMonth(_now.getMonth()); setSelectedMonthYear(_currentYear);
   };
-  const hasFilters = !!(search || statusFilter !== "all" || methodFilter !== "all");
+  const hasFilters = !!(search || statusFilter !== "all" || methodFilter !== "all" || typeFilter !== "all");
 
   // ── Lazy loading ──────────────────────────────────────────────────────────
   const PAGE = 50;
   const [visibleCount, setVisibleCount] = useState(PAGE);
   const sentinelRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => { setVisibleCount(PAGE); }, [fromDate, toDate, search, statusFilter, methodFilter]);
+  useEffect(() => { setVisibleCount(PAGE); }, [fromDate, toDate, search, statusFilter, methodFilter, typeFilter]);
 
   useEffect(() => {
     const el = sentinelRef.current;
@@ -860,6 +864,16 @@ export function PaymentsContent() {
             <SelectItem value="card">Card</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={typeFilter} onValueChange={setType}>
+          <SelectTrigger className="w-32">
+            <SelectValue placeholder="Type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="full">Full Payment</SelectItem>
+            <SelectItem value="split">Split Payment</SelectItem>
+          </SelectContent>
+        </Select>
         {hasFilters && (
           <Button variant="ghost" size="sm" onClick={clearFilters} className="gap-1.5 text-muted-foreground">
             <X className="h-3.5 w-3.5" /> Clear
@@ -893,13 +907,14 @@ export function PaymentsContent() {
       ) : (
         <div className="rounded-lg border bg-white overflow-hidden">
           {/* Table header */}
-          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_95px_85px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_70px_110px_95px_85px_100px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             <div className="px-4 py-3">Reference</div>
             <div className="px-4 py-3">Golfer</div>
             <div className="px-4 py-3">Tee Date</div>
             <div className="px-4 py-3">Time</div>
             <div className="px-4 py-3">Service</div>
             <div className="px-4 py-3">Paid On</div>
+            <div className="px-4 py-3 text-center">Type</div>
             <div className="px-4 py-3 text-right">Amount</div>
             <div className="px-4 py-3 text-right text-emerald-700">Club Earns</div>
             <div className="px-4 py-3 text-right text-amber-700">TapIn Fee</div>
@@ -909,7 +924,7 @@ export function PaymentsContent() {
           {filtered.slice(0, visibleCount).map(p => (
             <div
               key={p.id}
-              className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_110px_95px_85px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
+              className="grid grid-cols-[140px_1fr_100px_90px_120px_130px_70px_110px_95px_85px_100px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
               onClick={() => setSelected(p)}
             >
               <div className="px-4 py-3">
@@ -928,6 +943,12 @@ export function PaymentsContent() {
               <div className="px-4 py-3 text-sm">
                 <span className="block">{format(parseISO(p.created_at), "dd MMM yyyy")}</span>
                 <span className="text-xs text-muted-foreground">{format(parseISO(p.created_at), "HH:mm")}</span>
+              </div>
+              <div className="px-4 py-3 text-center">
+                {p.split_bill
+                  ? <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-blue-50 text-blue-700 border border-blue-200">Split</span>
+                  : <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-gray-50 text-gray-600 border border-gray-200">Full</span>
+                }
               </div>
               <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(p.my_amount)}</div>
               <div className="px-4 py-3 text-sm font-semibold text-right text-emerald-700">

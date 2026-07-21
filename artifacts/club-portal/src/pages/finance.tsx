@@ -6,11 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard, Banknote } from "lucide-react";
+import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard } from "lucide-react";
 import { api } from "@/lib/api";
-import { PaymentsContent, SplitPaymentsContent } from "./payments";
+import { PaymentsContent } from "./payments";
 
-type Tab = "payments" | "split-payments" | "ledger" | "pnl" | "balance-sheet" | "settlements" | "integrations";
+type Tab = "payments" | "ledger" | "pnl" | "balance-sheet" | "settlements" | "integrations";
 
 export default function Finance() {
   // Check URL for ?connected= param (Xero OAuth callback redirect)
@@ -29,7 +29,6 @@ export default function Finance() {
       <div className="flex gap-2 border-b pb-2 flex-wrap">
         {([
           ["payments", "Payments"],
-          ["split-payments", "Split Payments"],
           ["ledger", "Ledger"],
           ["pnl", "Profit & Loss"],
           ["balance-sheet", "Balance Sheet"],
@@ -43,14 +42,12 @@ export default function Finance() {
             onClick={() => setTab(key)}
           >
             {key === "payments" && <CreditCard className="h-4 w-4 mr-1" />}
-            {key === "split-payments" && <Banknote className="h-4 w-4 mr-1" />}
             {label}
           </Button>
         ))}
       </div>
 
       {tab === "payments" && <PaymentsContent />}
-      {tab === "split-payments" && <SplitPaymentsContent />}
       {tab === "ledger" && <LedgerView />}
       {tab === "pnl" && <ProfitLoss />}
       {tab === "balance-sheet" && <BalanceSheet />}

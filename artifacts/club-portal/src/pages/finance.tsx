@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard } from "lucide-react";
+import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard, Settings } from "lucide-react";
 import { api } from "@/lib/api";
 import { PaymentsContent } from "./payments";
 
@@ -370,6 +371,7 @@ function Integrations({ justConnected }: IntegrationsProps) {
   const [internalAccounts, setInternalAccounts] = useState<any[]>([]);
   const [mappings, setMappings] = useState<Record<string, string>>({});
   const [syncResult, setSyncResult] = useState<any>(null);
+  const [configError, setConfigError] = useState<string | null>(null);
 
   function loadConnections() {
     setLoading(true);
@@ -439,7 +441,12 @@ function Integrations({ justConnected }: IntegrationsProps) {
       const data = await api<{ auth_url: string }>(`/api/portal/ledger/accounting/${provider}/connect`);
       window.location.href = data.auth_url;
     } catch (err: any) {
-      alert(err.message || `Failed to initiate ${provider} connection`);
+      const msg = err.message || "";
+      if (msg.includes("not configured") || msg.includes("not found") || msg.includes("Not Found") || err.status === 404 || err.status === 500) {
+        setConfigError(provider);
+      } else {
+        alert(msg || `Failed to initiate ${provider} connection`);
+      }
     }
   }
 
@@ -618,6 +625,40 @@ function Integrations({ justConnected }: IntegrationsProps) {
           </CardContent>
         </Card>
       )}
+
+      {/* Configuration Required Dialog */}
+      <Dialog open={!!configError} onOpenChange={() => setConfigError(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-amber-600" />
+              Configuration Required
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 text-sm">
+            <p>
+              <strong>{configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}</strong> integration
+              is not yet configured on this server.
+            </p>
+            <p className="text-muted-foreground">
+              To enable this integration, the following environment variables need to be set on the API server:
+            </p>
+            <div className="bg-muted rounded-lg p-3 font-mono text-xs space-y-1">
+              <p>{configError ? configError.toUpperCase() : ""}_CLIENT_ID</p>
+              <p>{configError ? configError.toUpperCase() : ""}_CLIENT_SECRET</p>
+              <p>{configError ? configError.toUpperCase() : ""}_REDIRECT_URI</p>
+            </div>
+            <p className="text-muted-foreground">
+              These credentials are obtained by registering an application on the{" "}
+              <strong>{configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}</strong> developer portal.
+              Contact your system administrator to complete the setup.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setConfigError(null)}>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

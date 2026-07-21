@@ -20,7 +20,7 @@ export default function Finance() {
   const [tab, setTab] = useState<Tab>(justConnected ? "integrations" : "payments");
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 p-6">
       <div className="flex items-center gap-3">
         <Landmark className="h-6 w-6 text-emerald-600" />
         <h1 className="text-2xl font-bold">Finances</h1>

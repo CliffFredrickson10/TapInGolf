@@ -787,7 +787,8 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
                       '[]'::json
                     ) AS player_paid,
                     pts.date, pts.tee_time AS time, 0 AS tee_price,
-                    b.refund_processed_at
+                    b.refund_processed_at,
+                    (SELECT cis.signed_at FROM cart_indemnity_signatures cis WHERE cis.booking_id = b.id LIMIT 1) AS indemnity_signed_at
              FROM bookings b
              JOIN portal_tee_slots pts ON b.portal_slot_id = pts.id
              LEFT JOIN users u ON b.user_id = u.id
@@ -796,7 +797,7 @@ router.get("/portal/bookings", requireClubAuth, async (req: Request, res: Respon
   if (status) { sql += " AND b.status = ?"; params.push(status); }
   if (date) { sql += " AND pts.date = ?"; params.push(date); }
   else if (from && to) { sql += " AND pts.date BETWEEN ? AND ?"; params.push(from, to); }
-  sql += ` ORDER BY pts.date ASC, pts.tee_time ASC, b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
+  sql += ` ORDER BY b.created_at DESC LIMIT ${Number(limit)} OFFSET ${Number(offset)}`;
   const rows = await query<any>(sql, params);
   res.json(rows.map(r => ({ ...r, time: String(r.time).slice(0, 5), total_amount: Number(r.total_amount), tee_price: Number(r.tee_price) })));
 });
@@ -810,6 +811,21 @@ router.put("/portal/bookings/:id", requireClubAuth, async (req: Request, res: Re
   if (!existing) { res.status(404).json({ message: "Booking not found" }); return; }
   await exec("UPDATE bookings SET status = ? WHERE id = ?", [status, bId]);
   res.json({ message: "Updated", status });
+});
+
+// Fetch signed cart indemnity for a booking
+router.get("/portal/bookings/:id/indemnity", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const bId = Number(req.params.id);
+  const sig = await row<any>(
+    `SELECT cis.full_name, cis.signature_data, cis.indemnity_text, cis.signed_at, u.name AS user_name, u.email AS user_email
+     FROM cart_indemnity_signatures cis
+     LEFT JOIN users u ON cis.user_id = u.id
+     WHERE cis.booking_id = ? AND cis.club_id = ?`,
+    [bId, club.id]
+  );
+  if (!sig) { res.status(404).json({ message: "No indemnity signed for this booking" }); return; }
+  res.json(sig);
 });
 
 // Mark a cancelled booking's refund as processed.

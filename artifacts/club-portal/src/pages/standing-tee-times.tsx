@@ -36,7 +36,7 @@ function holdBadge(status: string) {
   return <Badge variant="outline">{status}</Badge>;
 }
 
-export default function StandingTeeTimes() {
+export default function StandingTeeTimes({ embedded }: { embedded?: boolean }) {
   const { toast } = useToast();
   const [reservations, setReservations] = useState<Reservation[]>([]);
   const [clubMembers, setClubMembers] = useState<Member[]>([]);
@@ -131,14 +131,22 @@ export default function StandingTeeTimes() {
   }, [clubMembers, memberSearch, form.member_user_ids]);
 
   return (
-    <div className="p-4 md:p-8 space-y-6">
+    <div className={embedded ? "space-y-4" : "p-4 md:p-8 space-y-6"}>
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Standing Tee Times</h1>
-          <p className="text-sm text-muted-foreground">
-            Reserve a weekly tee time for regular members. Seats stay hidden from other golfers until the
-            confirmation deadline — unconfirmed seats are released automatically.
-          </p>
+          {!embedded && <h1 className="text-2xl font-bold">Standing Tee Times</h1>}
+          {embedded && (
+            <div className="flex items-center gap-2">
+              <span className="font-semibold text-sm text-indigo-900">Standing Tee Times</span>
+              <span className="text-xs text-indigo-700 font-normal">— reserve weekly tee times for regular members</span>
+            </div>
+          )}
+          {!embedded && (
+            <p className="text-sm text-muted-foreground">
+              Reserve a weekly tee time for regular members. Seats stay hidden from other golfers until the
+              confirmation deadline — unconfirmed seats are released automatically.
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={load}><RefreshCw className="h-4 w-4 mr-1" /> Refresh</Button>

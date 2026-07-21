@@ -192,7 +192,7 @@ export default function HomeScreen() {
 
       {/* Book Now Hero */}
       <TouchableOpacity
-        style={styles.heroWrap}
+        style={[styles.heroWrap, { marginTop: 16 }]}
         onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium); router.push("/(tabs)/explore"); }}
         activeOpacity={0.88}
       >

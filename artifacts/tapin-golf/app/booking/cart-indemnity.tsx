@@ -38,6 +38,7 @@ export default function CartIndemnityScreen() {
   const [agreed, setAgreed] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [scrollEnabled, setScrollEnabled] = useState(true);
 
   useEffect(() => {
     if (!params.club_id) return;
@@ -111,6 +112,7 @@ export default function CartIndemnityScreen() {
         contentContainerStyle={[styles.container, { paddingBottom: insets.bottom + 24 }]}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
+        scrollEnabled={scrollEnabled}
       >
         {/* Title */}
         <View style={styles.titleSection}>
@@ -150,7 +152,8 @@ export default function CartIndemnityScreen() {
         <View style={[styles.signatureBox, { borderColor: colors.border, backgroundColor: colors.card }]}>
           <SignatureScreen
             ref={signatureRef}
-            onEnd={handleSignatureEnd}
+            onBegin={() => setScrollEnabled(false)}
+            onEnd={() => { setScrollEnabled(true); handleSignatureEnd(); }}
             onOK={handleSignatureOK}
             webStyle={signatureWebStyle}
             backgroundColor="transparent"

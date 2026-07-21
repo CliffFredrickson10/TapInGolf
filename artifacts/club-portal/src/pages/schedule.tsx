@@ -14,9 +14,10 @@ import {
   ChevronLeft, ChevronRight, Pencil, Trash2, RefreshCw,
   CalendarCog, Plus, Loader2, ArrowRight, BookmarkPlus, FolderOpen, X,
   Zap, Play, Clock, ChevronDown, ChevronUp, AlertTriangle,
-  Search, UserPlus, Users,
+  Search, UserPlus, Users, CalendarCheck,
 } from "lucide-react";
 import { format, addDays, parseISO, subDays } from "date-fns";
+import StandingTeeTimes from "@/pages/standing-tee-times";
 
 // ─── Types ─────────────────────────────────────────────────────────────────────
 
@@ -1512,6 +1513,7 @@ export default function Schedule() {
   const [autoRules, setAutoRules] = useState<AutoRule[]>([]);
   const [autoRulesLoading, setAutoRulesLoading] = useState(false);
   const [autoRulesOpen, setAutoRulesOpen] = useState(false);
+  const [standingOpen, setStandingOpen] = useState(false);
   const [toolsOpen, setToolsOpen] = useState(false);
   const [ruleDlgOpen, setRuleDlgOpen] = useState(false);
   const [ruleDlgSaving, setRuleDlgSaving] = useState(false);
@@ -1842,6 +1844,15 @@ export default function Schedule() {
               )}
               {autoRulesOpen ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
             </Button>
+            <Button
+              variant="outline" size="sm"
+              onClick={() => setStandingOpen(p => !p)}
+              className={`gap-1.5 ${standingOpen ? "bg-indigo-50 border-indigo-300 text-indigo-700" : ""}`}
+            >
+              <CalendarCheck className="h-3.5 w-3.5" />
+              Standing Tee Times
+              {standingOpen ? <ChevronUp className="h-3 w-3 ml-0.5" /> : <ChevronDown className="h-3 w-3 ml-0.5" />}
+            </Button>
             <Button className="bg-[#1a5c38] hover:bg-[#164d30] gap-2" onClick={() => setGenOpen(true)}>
               <CalendarCog className="h-4 w-4" /> Generate Schedule
             </Button>
@@ -1936,6 +1947,15 @@ export default function Schedule() {
                 ))}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Standing Tee Times panel */}
+      {standingOpen && (
+        <div className="px-8 pb-4 flex-shrink-0">
+          <div className="border border-indigo-200 bg-indigo-50/60 rounded-xl p-4">
+            <StandingTeeTimes embedded />
           </div>
         </div>
       )}

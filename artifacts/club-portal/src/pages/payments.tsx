@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import {
   CreditCard, Download, Mail, Search, TrendingUp, ReceiptText,
   CheckCircle2, Clock, X, Users, FileSpreadsheet, Building2, Banknote,
+  ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { format, parseISO } from "date-fns";
 
@@ -367,6 +368,42 @@ function downloadInvoice(b: Payment, clubName: string, vatPct: number) {
 }
 
 export default function Payments() {
+  const [tab, setTab] = useState<"payments" | "split">("payments");
+
+  return (
+    <div className="space-y-6">
+      <div className="border-b">
+        <div className="flex gap-0">
+          <button
+            onClick={() => setTab("payments")}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "payments"
+                ? "border-[#1a5c38] text-[#1a5c38]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <CreditCard className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Payments
+          </button>
+          <button
+            onClick={() => setTab("split")}
+            className={`px-5 py-2.5 text-sm font-medium border-b-2 transition-colors ${
+              tab === "split"
+                ? "border-[#1a5c38] text-[#1a5c38]"
+                : "border-transparent text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Banknote className="h-4 w-4 inline mr-1.5 -mt-0.5" />
+            Split Payments
+          </button>
+        </div>
+      </div>
+      {tab === "payments" ? <PaymentsContent /> : <SplitPaymentsContent />}
+    </div>
+  );
+}
+
+function PaymentsContent() {
   const { club } = useAuth();
   const { toast } = useToast();
 
@@ -1095,6 +1132,159 @@ export default function Payments() {
           </DialogContent>
         )}
       </Dialog>
+    </div>
+  );
+}
+
+
+// --- Split Payments Sub-Tab ----------------------------------------------------
+
+interface SplitPayment {
+  id: number;
+  booking_id: number;
+  total_amount: string;
+  tapin_fee: string;
+  club_amount: string;
+  players: number;
+  club_merchant_id: string | null;
+  status: "pending" | "completed" | "failed";
+  created_at: string;
+  updated_at: string;
+  booking_ref: string;
+  player_name: string;
+  player_email: string;
+}
+
+const SPLIT_STATUS_COLORS: Record<string, string> = {
+  pending: "bg-yellow-100 text-yellow-800",
+  completed: "bg-emerald-100 text-emerald-800",
+  failed: "bg-red-100 text-red-800",
+};
+
+function SplitPaymentsContent() {
+  const [payments, setPayments] = useState<SplitPayment[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
+  const [filter, setFilter] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const limit = 25;
+
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({ page: String(page), limit: String(limit) });
+    if (filter) params.set("status", filter);
+    api<{ payments: SplitPayment[]; total: number }>(`/api/portal/split-payments?${params}`)
+      .then((data) => {
+        setPayments(data.payments);
+        setTotal(data.total);
+      })
+      .finally(() => setLoading(false));
+  }, [page, filter]);
+
+  const totalPages = Math.ceil(total / limit);
+  const totalTapIn = payments.reduce((s, p) => s + Number(p.tapin_fee), 0);
+  const totalClub = payments.reduce((s, p) => s + Number(p.club_amount), 0);
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h2 className="text-xl font-bold flex items-center gap-2">
+          <Banknote className="h-5 w-5" /> Split Payments
+        </h2>
+        <div className="flex gap-2">
+          {["", "pending", "completed", "failed"].map((s) => (
+            <Button
+              key={s}
+              size="sm"
+              variant={filter === s ? "default" : "outline"}
+              onClick={() => { setFilter(s); setPage(1); }}
+            >
+              {s || "All"}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-gray-500">TapIn Platform Fees</p>
+            <p className="text-2xl font-bold text-emerald-700">R{totalTapIn.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="pt-4">
+            <p className="text-sm text-gray-500">Your Earnings</p>
+            <p className="text-2xl font-bold">R{totalClub.toFixed(2)}</p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          {loading ? (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          ) : payments.length === 0 ? (
+            <p className="text-gray-500 text-center py-8">No split payments found.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b text-left text-gray-500">
+                    <th className="px-3 py-2">Date</th>
+                    <th className="px-3 py-2">Booking</th>
+                    <th className="px-3 py-2">Player</th>
+                    <th className="px-3 py-2 text-right">Total</th>
+                    <th className="px-3 py-2 text-right">Platform Fee</th>
+                    <th className="px-3 py-2 text-right">Your Earnings</th>
+                    <th className="px-3 py-2 text-center">Players</th>
+                    <th className="px-3 py-2 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((sp) => (
+                    <tr key={sp.id} className="border-b hover:bg-gray-50">
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {format(new Date(sp.created_at), "dd MMM yyyy HH:mm")}
+                      </td>
+                      <td className="px-3 py-2 font-mono text-xs">{sp.booking_ref}</td>
+                      <td className="px-3 py-2">
+                        <div>{sp.player_name}</div>
+                        <div className="text-xs text-gray-400">{sp.player_email}</div>
+                      </td>
+                      <td className="px-3 py-2 text-right">R{Number(sp.total_amount).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right text-gray-500">R{Number(sp.tapin_fee).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-right font-semibold">R{Number(sp.club_amount).toFixed(2)}</td>
+                      <td className="px-3 py-2 text-center">{sp.players}</td>
+                      <td className="px-3 py-2 text-center">
+                        <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${SPLIT_STATUS_COLORS[sp.status] ?? ""}`}>
+                          {sp.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 pt-4 border-t">
+              <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+                <ChevronLeft className="h-4 w-4" /> Previous
+              </Button>
+              <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+              <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+                Next <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

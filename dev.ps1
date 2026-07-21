@@ -4,7 +4,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$ROOT = Split-Path -Parent $MyInvocation.MyCommand.Path
+$ROOT = "C:\Dev\TapInGolf"
 $API_DIR = Join-Path $ROOT "artifacts\api-server"
 $PORTAL_DIR = Join-Path $ROOT "artifacts\club-portal"
 
@@ -64,16 +64,12 @@ Start-Sleep -Seconds 1
 # --- Build API ---
 Write-Host "`n[3/5] Building API server..." -ForegroundColor Cyan
 Set-Location $API_DIR
-node build.mjs
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "API build failed!" -ForegroundColor Red
-    exit 1
-}
-Write-Host "API built successfully" -ForegroundColor Green
+$env:NODE_ENV = "development"
+Write-Host "Skipping build - using tsx for dev mode" -ForegroundColor Yellow
 
 # --- Start API ---
 Write-Host "`n[4/5] Starting API server on port 3000..." -ForegroundColor Cyan
-$apiProcess = Start-Process node -ArgumentList "--enable-source-maps ./dist/index.mjs" -PassThru -NoNewWindow -WorkingDirectory $API_DIR
+$apiProcess = Start-Process -FilePath (Join-Path $ROOT ".pnpm\node_modules\.bin\tsx.CMD") -ArgumentList "src/index.ts" -PassThru -NoNewWindow -WorkingDirectory $API_DIR
 Start-Sleep -Seconds 3
 
 try {
@@ -84,22 +80,52 @@ try {
 }
 
 # --- Start Club Portal ---
-Write-Host "`n[5/5] Starting club portal on port 5174..." -ForegroundColor Cyan
+Write-Host "`n[5/7] Starting club portal on port 5174..." -ForegroundColor Cyan
 $env:VITE_API_TARGET = "http://localhost:3000"
+$env:VITE_API_URL = "http://localhost:3000"
 Set-Location $PORTAL_DIR
-$portalProcess = Start-Process npx -ArgumentList "vite --port 5174" -PassThru -NoNewWindow -WorkingDirectory $PORTAL_DIR
+$portalProcess = Start-Process -FilePath (Join-Path $ROOT ".pnpm\node_modules\.bin\vite.CMD") -ArgumentList "--port 5174" -PassThru -NoNewWindow -WorkingDirectory $PORTAL_DIR
 Start-Sleep -Seconds 3
 Write-Host "Club portal running (PID: $($portalProcess.Id))" -ForegroundColor Green
+
+# --- Start Metro Bundler ---
+Write-Host "`n[6/7] Starting Metro bundler on port 8081..." -ForegroundColor Cyan
+$MOBILE_DIR = Join-Path $ROOT "artifacts\tapin-golf"
+# Kill existing Metro
+$port8081 = Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
+if ($port8081) {
+    $port8081 | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }
+    Start-Sleep -Seconds 1
+}
+$metroProcess = Start-Process -FilePath (Join-Path $ROOT ".pnpm\node_modules\.bin\expo.CMD") -ArgumentList "start --port 8081 --localhost" -PassThru -NoNewWindow -WorkingDirectory $MOBILE_DIR
+Start-Sleep -Seconds 5
+Write-Host "Metro bundler running (PID: $($metroProcess.Id))" -ForegroundColor Green
+
+# --- Setup ADB reverse and launch app ---
+Write-Host "`n[7/7] Setting up emulator connection and launching app..." -ForegroundColor Cyan
+$ADB = Join-Path $env:LOCALAPPDATA "Android\Sdk\platform-tools\adb.exe"
+if (Test-Path $ADB) {
+    # Setup reverse port forwarding so emulator can reach host services
+    & $ADB reverse tcp:8081 tcp:8081 2>$null
+    & $ADB reverse tcp:3000 tcp:3000 2>$null
+    Write-Host "ADB reverse ports set (8081, 3000)" -ForegroundColor Green
+
+    # Force-stop and relaunch app to pick up fresh bundle
+    & $ADB shell am force-stop com.tapingolf.app 2>$null
+    Start-Sleep -Seconds 1
+    & $ADB shell am start -n com.tapingolf.app/.MainActivity 2>$null
+    Write-Host "App launched on emulator" -ForegroundColor Green
+} else {
+    Write-Host "WARNING: ADB not found. Launch the app manually on the emulator." -ForegroundColor Yellow
+}
 
 # --- Summary ---
 Write-Host "`n=== All servers running ===" -ForegroundColor Green
 Write-Host "  SSH Tunnel:  localhost:1111 -> DB"
 Write-Host "  API:         http://localhost:3000/api"
 Write-Host "  Club Portal: http://localhost:5174"
-Write-Host ""
-Write-Host "For mobile app, run separately:"
-Write-Host "  cd $ROOT\artifacts\tapin-golf"
-Write-Host "  npx expo start --ios --clear"
+Write-Host "  Metro:       http://localhost:8081"
+Write-Host "  Mobile App:  Connected via ADB reverse"
 Write-Host ""
 Write-Host "Press Ctrl+C to stop all servers" -ForegroundColor Yellow
 Write-Host "==============================`n"
@@ -117,6 +143,7 @@ try {
     Write-Host "`nStopping servers..." -ForegroundColor Cyan
     if (!$apiProcess.HasExited) { Stop-Process -Id $apiProcess.Id -Force -ErrorAction SilentlyContinue }
     if (!$portalProcess.HasExited) { Stop-Process -Id $portalProcess.Id -Force -ErrorAction SilentlyContinue }
+    if (!$metroProcess.HasExited) { Stop-Process -Id $metroProcess.Id -Force -ErrorAction SilentlyContinue }
     if ($tunnel -and !$tunnel.HasExited) { Stop-Process -Id $tunnel.Id -Force -ErrorAction SilentlyContinue }
     Write-Host "All servers stopped." -ForegroundColor Green
 }

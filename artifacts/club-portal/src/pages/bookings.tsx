@@ -16,7 +16,7 @@ import { Label } from "@/components/ui/label";
 import {
   BookOpen, Download, Search, X, Users, FileSpreadsheet,
   CheckCircle2, Clock, XCircle, CalendarDays, BadgeCheck,
-  User, Mail, Phone, CreditCard, UserPlus,
+  User, Mail, Phone, CreditCard, UserPlus, FileCheck,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -44,6 +44,7 @@ interface Booking {
   time: string;
   tee_price: number;
   refund_processed_at: string | null;
+  indemnity_signed_at: string | null;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -116,6 +117,8 @@ export default function Bookings() {
   const [detail, setDetail]           = useState<Booking | null>(null);
   const [markingRefund, setMarkingRefund] = useState(false);
   const [updating, setUpdating]       = useState<number | null>(null);
+  const [indemnityData, setIndemnityData] = useState<any>(null);
+  const [indemnityOpen, setIndemnityOpen] = useState(false);
 
   const [q, setQ]                     = useState("");
   const [statusFilter, setStatus]     = useState(() => new URLSearchParams(search).get("status") ?? "all");
@@ -265,6 +268,16 @@ export default function Bookings() {
     } finally { setUpdating(null); }
   };
 
+  const viewIndemnity = async (bookingId: number) => {
+    try {
+      const data = await api(`/api/portal/bookings/${bookingId}/indemnity`);
+      setIndemnityData(data);
+      setIndemnityOpen(true);
+    } catch (e: any) {
+      toast({ title: "No indemnity found", description: e.message, variant: "destructive" });
+    }
+  };
+
   const exportToExcel = () => {
     const ordered = ALL_EXPORT_FIELDS.filter(f => exportFields.has(f.key));
     const header = ordered.map(f => f.label);
@@ -403,7 +416,7 @@ export default function Bookings() {
         </Card>
       ) : (
         <div className="rounded-lg border bg-white overflow-hidden">
-          <div className="grid grid-cols-[140px_1fr_100px_80px_80px_150px_110px_130px_105px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
+          <div className="grid grid-cols-[140px_1fr_100px_80px_80px_150px_110px_130px_80px_105px] gap-0 bg-muted/40 border-b text-xs font-semibold text-muted-foreground uppercase tracking-wide">
             <div className="px-4 py-3">Reference</div>
             <div className="px-4 py-3">Golfer</div>
             <div className="px-4 py-3">Tee Date</div>
@@ -412,12 +425,13 @@ export default function Bookings() {
             <div className="px-4 py-3">Booked</div>
             <div className="px-4 py-3 text-right">Amount</div>
             <div className="px-4 py-3">Method</div>
+            <div className="px-4 py-3 text-center">Cart</div>
             <div className="px-4 py-3 text-center">Status</div>
           </div>
           {filtered.map(b => (
             <div
               key={b.id}
-              className="grid grid-cols-[140px_1fr_100px_80px_80px_150px_110px_130px_105px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
+              className="grid grid-cols-[140px_1fr_100px_80px_80px_150px_110px_130px_80px_105px] gap-0 border-b last:border-b-0 hover:bg-muted/20 transition-colors cursor-pointer items-center"
               onClick={() => setDetail(b)}
             >
               <div className="px-4 py-3">
@@ -439,6 +453,21 @@ export default function Bookings() {
               </div>
               <div className="px-4 py-3 text-sm font-semibold text-right">{fmtRand(b.total_amount)}</div>
               <div className="px-4 py-3 text-xs text-muted-foreground">{fmtMethod(b.payment_method)}</div>
+              <div className="px-4 py-3 text-center">
+                {b.indemnity_signed_at ? (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); viewIndemnity(b.id); }}
+                    className="inline-flex items-center gap-1 text-xs text-green-700 hover:text-green-900 font-medium"
+                    title={`Signed ${format(new Date(b.indemnity_signed_at), "dd MMM yyyy HH:mm")}`}
+                  >
+                    <FileCheck className="h-3.5 w-3.5" /> Signed
+                  </button>
+                ) : b.cart_fee > 0 ? (
+                  <span className="text-xs text-amber-600">Pending</span>
+                ) : (
+                  <span className="text-xs text-muted-foreground">—</span>
+                )}
+              </div>
               <div className="px-4 py-3 text-center">
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${STATUS_COLORS[b.status] ?? "bg-gray-100 text-gray-600 border-gray-200"}`}>
                   {b.status}
@@ -724,6 +753,50 @@ export default function Bookings() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* Indemnity Signature Dialog */}
+      <Dialog open={indemnityOpen} onOpenChange={setIndemnityOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileCheck className="h-5 w-5 text-green-700" />
+              Cart Indemnity Form
+            </DialogTitle>
+          </DialogHeader>
+          {indemnityData && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3 text-sm">
+                <div>
+                  <span className="text-muted-foreground">Signed by:</span>
+                  <p className="font-medium">{indemnityData.full_name}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Date:</span>
+                  <p className="font-medium">{indemnityData.signed_at ? format(new Date(indemnityData.signed_at), "dd MMM yyyy HH:mm") : "—"}</p>
+                </div>
+                {indemnityData.user_email && (
+                  <div>
+                    <span className="text-muted-foreground">Email:</span>
+                    <p className="font-medium">{indemnityData.user_email}</p>
+                  </div>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold">Indemnity Text Agreed To</p>
+                <div className="bg-muted/50 rounded p-3 text-sm max-h-40 overflow-y-auto whitespace-pre-wrap">
+                  {indemnityData.indemnity_text}
+                </div>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground mb-1 uppercase font-semibold">Signature</p>
+                <div className="border rounded p-2 bg-white flex items-center justify-center">
+                  <img src={indemnityData.signature_data} alt="Signature" className="max-h-32 object-contain" />
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

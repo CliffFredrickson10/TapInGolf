@@ -3,7 +3,7 @@ import {
   Calendar, Users, Ticket, Bell, CircleDollarSign, CreditCard,
   FileX2, Receipt, ShieldOff, BookOpen, ShieldCheck, Plus,
   UserPlus, Trophy, Download, Clock, RefreshCw, ClipboardList, BookMarked,
-  Store, Landmark,
+  Store, Landmark, Settings,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -35,6 +35,7 @@ export const ALL_NAV_ITEMS: NavItem[] = [
   { href: "/cancellation-policy",label: "Cancellation Policy",icon: FileX2,          section: "cancellation_policy" },
   { href: "/notifications",      label: "Notifications",      icon: Bell,            section: "notifications" },
   { href: "/portal-users",       label: "Portal Users",       icon: ShieldCheck,     section: "admin", adminOnly: true },
+  { href: "/settings",           label: "Settings",           icon: Settings,        section: "admin" },
 ];
 
 export interface ShortcutItem {

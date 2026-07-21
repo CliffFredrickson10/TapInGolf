@@ -51,6 +51,7 @@ import CancellationPolicy from "@/pages/cancellation-policy";
 import Bookings from "@/pages/bookings";
 import { Redirect } from "wouter";
 import PortalUsers from "@/pages/portal-users";
+import PortalSettings from "@/pages/settings";
 import Scorecard from "@/pages/scorecard";
 import RulesFormats from "@/pages/rules-formats";
 import Outlets from "@/pages/outlets";
@@ -242,6 +243,7 @@ function Router() {
           <Redirect to="/bookings" />
         </Route>
         <Route path="/portal-users" component={PortalUsers} />
+        <Route path="/settings" component={PortalSettings} />
         <Route path="/outlets" component={Outlets} />
         <Route>
           <div className="p-8">

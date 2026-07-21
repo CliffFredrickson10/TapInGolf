@@ -500,29 +500,112 @@ router.get("/portal/ledger/accounting/connections/:id/accounts", requireClubAuth
 });
 
 // ══════════════════════════════════════════════════════════════════════════════
+// Club Accounting Credentials Management
+// ══════════════════════════════════════════════════════════════════════════════
+
+// GET — list all credentials for this club
+router.get("/portal/settings/accounting-credentials", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const rows = await query<any>(
+    `SELECT id, provider, client_id, redirect_uri, extra_config, created_at, updated_at
+     FROM club_accounting_credentials WHERE club_id = ? ORDER BY provider`,
+    [club.id]
+  );
+  // Never return client_secret to the frontend — only show masked version
+  res.json(rows.map((r: any) => ({ ...r, client_secret_set: true })));
+});
+
+// PUT — upsert credentials for a provider
+router.put("/portal/settings/accounting-credentials/:provider", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const provider = String(req.params.provider).toLowerCase();
+  const VALID = ["xero", "sage", "quickbooks", "zoho", "dynamics", "myob", "sap"];
+  if (!VALID.includes(provider)) { res.status(400).json({ message: "Invalid provider" }); return; }
+
+  const { client_id, redirect_uri, extra_config } = req.body;
+  let { client_secret } = req.body;
+  if (!client_id) {
+    res.status(400).json({ message: "client_id is required" }); return;
+  }
+
+  // If updating and secret is placeholder, keep the existing secret
+  if (client_secret === "__keep_existing__") {
+    const existing = await row<any>(
+      "SELECT client_secret FROM club_accounting_credentials WHERE club_id = ? AND provider = ?",
+      [club.id, provider]
+    );
+    if (!existing) {
+      res.status(400).json({ message: "client_secret is required for new credentials" }); return;
+    }
+    client_secret = existing.client_secret;
+  }
+
+  if (!client_secret) {
+    res.status(400).json({ message: "client_secret is required" }); return;
+  }
+
+  const redirectUri = redirect_uri || `${process.env["API_URL"] ?? "http://localhost:3000"}/api/portal/ledger/accounting/${provider}/callback`;
+
+  await query(
+    `INSERT INTO club_accounting_credentials (club_id, provider, client_id, client_secret, redirect_uri, extra_config, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, NOW())
+     ON CONFLICT (club_id, provider) DO UPDATE SET
+       client_id = EXCLUDED.client_id,
+       client_secret = EXCLUDED.client_secret,
+       redirect_uri = EXCLUDED.redirect_uri,
+       extra_config = EXCLUDED.extra_config,
+       updated_at = NOW()`,
+    [club.id, provider, client_id, client_secret, redirectUri, JSON.stringify(extra_config ?? {})]
+  );
+
+  res.json({ success: true });
+});
+
+// DELETE — remove credentials for a provider
+router.delete("/portal/settings/accounting-credentials/:provider", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const provider = String(req.params.provider).toLowerCase();
+  await query("DELETE FROM club_accounting_credentials WHERE club_id = ? AND provider = ?", [club.id, provider]);
+  res.json({ success: true });
+});
+
+// Helper to get club credentials, falling back to env vars
+async function getProviderCreds(clubId: number, provider: string): Promise<{ client_id: string; client_secret: string; redirect_uri: string; extra_config: any } | null> {
+  const r = await row<any>(
+    "SELECT client_id, client_secret, redirect_uri, extra_config FROM club_accounting_credentials WHERE club_id = ? AND provider = ?",
+    [clubId, provider]
+  );
+  if (r && r.client_id) return r;
+
+  // Fallback to env vars for backward compatibility
+  const envPrefix = provider === "quickbooks" ? "QUICKBOOKS" : provider.toUpperCase();
+  const envId = process.env[`${envPrefix}_CLIENT_ID`] ?? "";
+  const envSecret = process.env[`${envPrefix}_CLIENT_SECRET`] ?? "";
+  const envUri = process.env[`${envPrefix}_REDIRECT_URI`] ?? "";
+  if (envId && envSecret) return { client_id: envId, client_secret: envSecret, redirect_uri: envUri, extra_config: {} };
+  return null;
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // Xero OAuth2 Flow
 // ══════════════════════════════════════════════════════════════════════════════
 
-const XERO_CLIENT_ID = process.env["XERO_CLIENT_ID"] ?? "";
-const XERO_CLIENT_SECRET = process.env["XERO_CLIENT_SECRET"] ?? "";
-const XERO_REDIRECT_URI = process.env["XERO_REDIRECT_URI"] ?? "";
 const XERO_SCOPES = "openid profile email accounting.transactions accounting.settings accounting.contacts offline_access";
 
 // ── Initiate Xero OAuth ──────────────────────────────────────────────────────
 router.get("/portal/ledger/accounting/xero/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  if (!XERO_CLIENT_ID || !XERO_REDIRECT_URI) {
-    res.status(500).json({ message: "Xero integration not configured (missing XERO_CLIENT_ID or XERO_REDIRECT_URI)" });
+  const creds = await getProviderCreds(club.id, "xero");
+  if (!creds) {
+    res.status(500).json({ message: "Xero integration not configured. Please add your Xero credentials in Settings → Accounting Credentials." });
     return;
   }
 
-  // Store club_id in state so the callback knows which club to link
   const state = Buffer.from(JSON.stringify({ club_id: club.id })).toString("base64url");
-
   const authUrl = new URL("https://login.xero.com/identity/connect/authorize");
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", XERO_CLIENT_ID);
-  authUrl.searchParams.set("redirect_uri", XERO_REDIRECT_URI);
+  authUrl.searchParams.set("client_id", creds.client_id);
+  authUrl.searchParams.set("redirect_uri", creds.redirect_uri);
   authUrl.searchParams.set("scope", XERO_SCOPES);
   authUrl.searchParams.set("state", state);
 
@@ -547,6 +630,9 @@ router.get("/portal/ledger/accounting/xero/callback", async (req: Request, res: 
     return;
   }
 
+  const creds = await getProviderCreds(clubId, "xero");
+  if (!creds) { res.status(500).send("Xero credentials not found for this club"); return; }
+
   // Exchange code for tokens
   const tokenRes = await fetch("https://identity.xero.com/connect/token", {
     method: "POST",
@@ -554,9 +640,9 @@ router.get("/portal/ledger/accounting/xero/callback", async (req: Request, res: 
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: XERO_REDIRECT_URI,
-      client_id: XERO_CLIENT_ID,
-      client_secret: XERO_CLIENT_SECRET,
+      redirect_uri: creds.redirect_uri,
+      client_id: creds.client_id,
+      client_secret: creds.client_secret,
     }),
   });
 
@@ -589,8 +675,8 @@ router.get("/portal/ledger/accounting/xero/callback", async (req: Request, res: 
     expires_at: Date.now() + (tokens.expires_in ?? 1800) * 1000,
     tenant_id: tenantId,
     tenant_name: tenantName,
-    client_id: XERO_CLIENT_ID,
-    client_secret: XERO_CLIENT_SECRET,
+    client_id: creds.client_id,
+    client_secret: creds.client_secret,
   };
 
   await createConnection(clubId, "xero", credentials, { tenant_name: tenantName });
@@ -621,8 +707,8 @@ router.post("/portal/ledger/accounting/xero/refresh", requireClubAuth, async (re
     body: new URLSearchParams({
       grant_type: "refresh_token",
       refresh_token: creds.refresh_token,
-      client_id: creds.client_id ?? XERO_CLIENT_ID,
-      client_secret: creds.client_secret ?? XERO_CLIENT_SECRET,
+      client_id: creds.client_id,
+      client_secret: creds.client_secret,
     }),
   });
 
@@ -652,20 +738,15 @@ router.post("/portal/ledger/accounting/xero/refresh", requireClubAuth, async (re
 // Sage OAuth2 Flow
 // ══════════════════════════════════════════════════════════════════════════════
 
-const SAGE_CLIENT_ID = process.env["SAGE_CLIENT_ID"] ?? "";
-const SAGE_CLIENT_SECRET = process.env["SAGE_CLIENT_SECRET"] ?? "";
-const SAGE_REDIRECT_URI = process.env["SAGE_REDIRECT_URI"] ?? "";
-
 router.get("/portal/ledger/accounting/sage/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  if (!SAGE_CLIENT_ID || !SAGE_REDIRECT_URI) {
-    res.status(500).json({ message: "Sage integration not configured" }); return;
-  }
+  const creds = await getProviderCreds(club.id, "sage");
+  if (!creds) { res.status(500).json({ message: "Sage integration not configured. Please add your Sage credentials in Settings → Accounting Credentials." }); return; }
   const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "sage" })).toString("base64url");
   const authUrl = new URL("https://www.sageone.com/oauth2/auth/central");
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", SAGE_CLIENT_ID);
-  authUrl.searchParams.set("redirect_uri", SAGE_REDIRECT_URI);
+  authUrl.searchParams.set("client_id", creds.client_id);
+  authUrl.searchParams.set("redirect_uri", creds.redirect_uri);
   authUrl.searchParams.set("scope", "full_access");
   authUrl.searchParams.set("state", state);
   res.json({ auth_url: authUrl.toString() });
@@ -679,15 +760,18 @@ router.get("/portal/ledger/accounting/sage/callback", async (req: Request, res: 
   try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
   catch { res.status(400).send("Invalid state"); return; }
 
+  const creds = await getProviderCreds(clubId, "sage");
+  if (!creds) { res.status(500).send("Sage credentials not found"); return; }
+
   const tokenRes = await fetch("https://oauth.accounting.sage.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: SAGE_REDIRECT_URI,
-      client_id: SAGE_CLIENT_ID,
-      client_secret: SAGE_CLIENT_SECRET,
+      redirect_uri: creds.redirect_uri,
+      client_id: creds.client_id,
+      client_secret: creds.client_secret,
     }),
   });
 
@@ -701,8 +785,8 @@ router.get("/portal/ledger/accounting/sage/callback", async (req: Request, res: 
     access_token: tokens.access_token,
     refresh_token: tokens.refresh_token,
     expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
-    client_id: SAGE_CLIENT_ID,
-    client_secret: SAGE_CLIENT_SECRET,
+    client_id: creds.client_id,
+    client_secret: creds.client_secret,
   };
 
   await createConnection(clubId, "sage", credentials, {});
@@ -714,20 +798,15 @@ router.get("/portal/ledger/accounting/sage/callback", async (req: Request, res: 
 // QuickBooks OAuth2 Flow
 // ══════════════════════════════════════════════════════════════════════════════
 
-const QB_CLIENT_ID = process.env["QUICKBOOKS_CLIENT_ID"] ?? "";
-const QB_CLIENT_SECRET = process.env["QUICKBOOKS_CLIENT_SECRET"] ?? "";
-const QB_REDIRECT_URI = process.env["QUICKBOOKS_REDIRECT_URI"] ?? "";
-
 router.get("/portal/ledger/accounting/quickbooks/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  if (!QB_CLIENT_ID || !QB_REDIRECT_URI) {
-    res.status(500).json({ message: "QuickBooks integration not configured" }); return;
-  }
+  const creds = await getProviderCreds(club.id, "quickbooks");
+  if (!creds) { res.status(500).json({ message: "QuickBooks integration not configured. Please add your QuickBooks credentials in Settings → Accounting Credentials." }); return; }
   const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "quickbooks" })).toString("base64url");
   const authUrl = new URL("https://appcenter.intuit.com/connect/oauth2");
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", QB_CLIENT_ID);
-  authUrl.searchParams.set("redirect_uri", QB_REDIRECT_URI);
+  authUrl.searchParams.set("client_id", creds.client_id);
+  authUrl.searchParams.set("redirect_uri", creds.redirect_uri);
   authUrl.searchParams.set("scope", "com.intuit.quickbooks.accounting");
   authUrl.searchParams.set("state", state);
   res.json({ auth_url: authUrl.toString() });
@@ -741,7 +820,10 @@ router.get("/portal/ledger/accounting/quickbooks/callback", async (req: Request,
   try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
   catch { res.status(400).send("Invalid state"); return; }
 
-  const basicAuth = Buffer.from(`${QB_CLIENT_ID}:${QB_CLIENT_SECRET}`).toString("base64");
+  const creds = await getProviderCreds(clubId, "quickbooks");
+  if (!creds) { res.status(500).send("QuickBooks credentials not found"); return; }
+
+  const basicAuth = Buffer.from(`${creds.client_id}:${creds.client_secret}`).toString("base64");
   const tokenRes = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", {
     method: "POST",
     headers: {
@@ -751,7 +833,7 @@ router.get("/portal/ledger/accounting/quickbooks/callback", async (req: Request,
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: QB_REDIRECT_URI,
+      redirect_uri: creds.redirect_uri,
     }),
   });
 
@@ -766,8 +848,8 @@ router.get("/portal/ledger/accounting/quickbooks/callback", async (req: Request,
     refresh_token: tokens.refresh_token,
     expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
     realm_id: realmId ?? "",
-    client_id: QB_CLIENT_ID,
-    client_secret: QB_CLIENT_SECRET,
+    client_id: creds.client_id,
+    client_secret: creds.client_secret,
   };
 
   await createConnection(clubId, "quickbooks", credentials, { realm_id: realmId });
@@ -779,21 +861,16 @@ router.get("/portal/ledger/accounting/quickbooks/callback", async (req: Request,
 // Zoho Books OAuth2 Flow
 // ══════════════════════════════════════════════════════════════════════════════
 
-const ZOHO_CLIENT_ID = process.env["ZOHO_CLIENT_ID"] ?? "";
-const ZOHO_CLIENT_SECRET = process.env["ZOHO_CLIENT_SECRET"] ?? "";
-const ZOHO_REDIRECT_URI = process.env["ZOHO_REDIRECT_URI"] ?? "";
-const ZOHO_REGION = process.env["ZOHO_REGION"] ?? "com"; // com, eu, in, com.au
-
 router.get("/portal/ledger/accounting/zoho/connect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
-  if (!ZOHO_CLIENT_ID || !ZOHO_REDIRECT_URI) {
-    res.status(500).json({ message: "Zoho integration not configured" }); return;
-  }
+  const creds = await getProviderCreds(club.id, "zoho");
+  if (!creds) { res.status(500).json({ message: "Zoho integration not configured. Please add your Zoho credentials in Settings → Accounting Credentials." }); return; }
+  const region = creds.extra_config?.region ?? "com";
   const state = Buffer.from(JSON.stringify({ club_id: club.id, provider: "zoho" })).toString("base64url");
-  const authUrl = new URL(`https://accounts.zoho.${ZOHO_REGION}/oauth/v2/auth`);
+  const authUrl = new URL(`https://accounts.zoho.${region}/oauth/v2/auth`);
   authUrl.searchParams.set("response_type", "code");
-  authUrl.searchParams.set("client_id", ZOHO_CLIENT_ID);
-  authUrl.searchParams.set("redirect_uri", ZOHO_REDIRECT_URI);
+  authUrl.searchParams.set("client_id", creds.client_id);
+  authUrl.searchParams.set("redirect_uri", creds.redirect_uri);
   authUrl.searchParams.set("scope", "ZohoBooks.fullaccess.all");
   authUrl.searchParams.set("state", state);
   authUrl.searchParams.set("access_type", "offline");
@@ -809,15 +886,19 @@ router.get("/portal/ledger/accounting/zoho/callback", async (req: Request, res: 
   try { clubId = JSON.parse(Buffer.from(state, "base64url").toString()).club_id; }
   catch { res.status(400).send("Invalid state"); return; }
 
-  const tokenRes = await fetch(`https://accounts.zoho.${ZOHO_REGION}/oauth/v2/token`, {
+  const creds = await getProviderCreds(clubId, "zoho");
+  if (!creds) { res.status(500).send("Zoho credentials not found"); return; }
+  const region = creds.extra_config?.region ?? "com";
+
+  const tokenRes = await fetch(`https://accounts.zoho.${region}/oauth/v2/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       grant_type: "authorization_code",
       code,
-      redirect_uri: ZOHO_REDIRECT_URI,
-      client_id: ZOHO_CLIENT_ID,
-      client_secret: ZOHO_CLIENT_SECRET,
+      redirect_uri: creds.redirect_uri,
+      client_id: creds.client_id,
+      client_secret: creds.client_secret,
     }),
   });
 
@@ -829,7 +910,7 @@ router.get("/portal/ledger/accounting/zoho/callback", async (req: Request, res: 
   const tokens = await tokenRes.json() as any;
 
   // Get organization ID
-  const orgsRes = await fetch(`https://www.zohoapis.${ZOHO_REGION}/books/v3/organizations`, {
+  const orgsRes = await fetch(`https://www.zohoapis.${region}/books/v3/organizations`, {
     headers: { Authorization: `Zoho-oauthtoken ${tokens.access_token}` },
   });
   const orgs = orgsRes.ok ? await orgsRes.json() as any : null;
@@ -841,9 +922,9 @@ router.get("/portal/ledger/accounting/zoho/callback", async (req: Request, res: 
     refresh_token: tokens.refresh_token,
     expires_at: Date.now() + (tokens.expires_in ?? 3600) * 1000,
     organization_id: orgId,
-    region: ZOHO_REGION,
-    client_id: ZOHO_CLIENT_ID,
-    client_secret: ZOHO_CLIENT_SECRET,
+    region,
+    client_id: creds.client_id,
+    client_secret: creds.client_secret,
   };
 
   await createConnection(clubId, "zoho", credentials, { organization_name: orgName });

@@ -7,7 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
-import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard, Settings } from "lucide-react";
+import { Landmark, TrendingUp, TrendingDown, Scale, RefreshCw, ChevronLeft, ChevronRight, Link2, Unlink, ArrowUpRight, Check, AlertCircle, CreditCard } from "lucide-react";
 import { api } from "@/lib/api";
 import { PaymentsContent } from "./payments";
 
@@ -631,31 +631,31 @@ function Integrations({ justConnected }: IntegrationsProps) {
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-amber-600" />
+              <AlertCircle className="h-5 w-5 text-amber-600" />
               Configuration Required
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3 text-sm">
             <p>
               <strong>{configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}</strong> integration
-              is not yet configured on this server.
+              is not yet configured.
             </p>
             <p className="text-muted-foreground">
-              To enable this integration, the following environment variables need to be set on the API server:
+              To connect to {configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}, you first need to add your OAuth credentials
+              (Client ID & Client Secret) in the Settings page.
             </p>
-            <div className="bg-muted rounded-lg p-3 font-mono text-xs space-y-1">
-              <p>{configError ? configError.toUpperCase() : ""}_CLIENT_ID</p>
-              <p>{configError ? configError.toUpperCase() : ""}_CLIENT_SECRET</p>
-              <p>{configError ? configError.toUpperCase() : ""}_REDIRECT_URI</p>
-            </div>
-            <p className="text-muted-foreground">
-              These credentials are obtained by registering an application on the{" "}
-              <strong>{configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}</strong> developer portal.
-              Contact your system administrator to complete the setup.
-            </p>
+            <ol className="list-decimal list-inside text-muted-foreground space-y-1">
+              <li>Go to <strong>Settings → Accounting Credentials</strong></li>
+              <li>Click <strong>Configure</strong> next to {configError ? configError.charAt(0).toUpperCase() + configError.slice(1) : ""}</li>
+              <li>Enter your Client ID and Client Secret from the provider's developer portal</li>
+              <li>Come back here and click Connect</li>
+            </ol>
           </div>
           <DialogFooter>
-            <Button onClick={() => setConfigError(null)}>Got it</Button>
+            <Button variant="outline" onClick={() => setConfigError(null)}>Close</Button>
+            <Button onClick={() => { setConfigError(null); window.location.href = "/settings"; }}>
+              Go to Settings
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

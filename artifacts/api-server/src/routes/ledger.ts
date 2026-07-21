@@ -275,6 +275,18 @@ import {
   autoReconcile,
 } from "../lib/settlement";
 
+import {
+  getConnections,
+  createConnection,
+  updateConnectionConfig,
+  disconnectProvider,
+  syncJournals,
+  getSyncStatus,
+  getAdapter,
+  getAvailableProviders,
+} from "../lib/accounting";
+import "../lib/accounting-xero"; // Register Xero adapter
+
 // ── List Settlement Batches ──────────────────────────────────────────────────
 router.get("/portal/ledger/settlements", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
   const club = getClub(req);
@@ -370,6 +382,118 @@ router.post("/portal/ledger/reconciliation/manual", requireClubAuth, async (req:
     notes,
   );
   res.json({ id });
+});
+
+// ══════════════════════════════════════════════════════════════════════════════
+// Accounting Integration Endpoints
+// ══════════════════════════════════════════════════════════════════════════════
+
+// ── Available Providers ──────────────────────────────────────────────────────
+router.get("/portal/ledger/accounting/providers", requireClubAuth, async (_req: Request, res: Response): Promise<void> => {
+  res.json({ providers: getAvailableProviders() });
+});
+
+// ── List Connections ─────────────────────────────────────────────────────────
+router.get("/portal/ledger/accounting/connections", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const connections = await getConnections(club.id);
+  // Strip sensitive credentials from response
+  res.json(connections.map(c => ({
+    ...c,
+    credentials: undefined,
+    has_credentials: !!c.credentials,
+  })));
+});
+
+// ── Create/Update Connection ─────────────────────────────────────────────────
+router.post("/portal/ledger/accounting/connections", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const club = getClub(req);
+  const { provider, credentials, config } = req.body ?? {};
+  if (!provider || !credentials) {
+    res.status(400).json({ message: "provider and credentials are required" });
+    return;
+  }
+
+  const adapter = getAdapter(provider);
+  if (!adapter) {
+    res.status(400).json({ message: `Provider "${provider}" is not supported. Available: ${getAvailableProviders().join(", ")}` });
+    return;
+  }
+
+  // Test connection before saving
+  const valid = await adapter.testConnection(credentials);
+  if (!valid) {
+    res.status(400).json({ message: "Connection test failed — invalid credentials or provider unreachable" });
+    return;
+  }
+
+  const id = await createConnection(club.id, provider, credentials, config);
+  res.json({ id, status: "active" });
+});
+
+// ── Update Connection Config (account mappings) ──────────────────────────────
+router.put("/portal/ledger/accounting/connections/:id/config", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const connectionId = parseInt(String(req.params["id"]), 10);
+  const { config } = req.body ?? {};
+  if (!config) { res.status(400).json({ message: "config is required" }); return; }
+  await updateConnectionConfig(connectionId, config);
+  res.json({ success: true });
+});
+
+// ── Disconnect Provider ──────────────────────────────────────────────────────
+router.post("/portal/ledger/accounting/connections/:id/disconnect", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const connectionId = parseInt(String(req.params["id"]), 10);
+  await disconnectProvider(connectionId);
+  res.json({ success: true });
+});
+
+// ── Trigger Sync ─────────────────────────────────────────────────────────────
+router.post("/portal/ledger/accounting/connections/:id/sync", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const connectionId = parseInt(String(req.params["id"]), 10);
+  const { limit } = req.body ?? {};
+
+  const conn = await row<any>("SELECT provider FROM accounting_connections WHERE id = ?", [connectionId]);
+  if (!conn) { res.status(404).json({ message: "Connection not found" }); return; }
+
+  const adapter = getAdapter(conn.provider);
+  if (!adapter) { res.status(400).json({ message: `No adapter for ${conn.provider}` }); return; }
+
+  try {
+    const result = await syncJournals(connectionId, adapter, limit ?? 50);
+    res.json(result);
+  } catch (err: any) {
+    res.status(500).json({ message: err.message });
+  }
+});
+
+// ── Sync Status ──────────────────────────────────────────────────────────────
+router.get("/portal/ledger/accounting/connections/:id/status", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const connectionId = parseInt(String(req.params["id"]), 10);
+  try {
+    const status = await getSyncStatus(connectionId);
+    res.json(status);
+  } catch (err: any) {
+    res.status(404).json({ message: err.message });
+  }
+});
+
+// ── Get External Accounts (for mapping UI) ───────────────────────────────────
+router.get("/portal/ledger/accounting/connections/:id/accounts", requireClubAuth, async (req: Request, res: Response): Promise<void> => {
+  const connectionId = parseInt(String(req.params["id"]), 10);
+  const conn = await row<any>(
+    "SELECT * FROM accounting_connections WHERE id = ?",
+    [connectionId]
+  );
+  if (!conn) { res.status(404).json({ message: "Connection not found" }); return; }
+
+  const adapter = getAdapter(conn.provider);
+  if (!adapter?.getExternalAccounts) {
+    res.status(400).json({ message: "Provider does not support account listing" });
+    return;
+  }
+
+  const accounts = await adapter.getExternalAccounts(conn);
+  res.json(accounts);
 });
 
 export default router;

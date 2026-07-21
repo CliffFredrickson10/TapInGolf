@@ -2041,6 +2041,7 @@ async function applyLateAlters() {
   )`);
   await ddl("CREATE INDEX IF NOT EXISTS idx_accounting_sync_connection ON accounting_sync_log (connection_id, status)");
   await ddl("CREATE INDEX IF NOT EXISTS idx_accounting_sync_journal ON accounting_sync_log (journal_id)");
+  await ddl("CREATE UNIQUE INDEX IF NOT EXISTS idx_accounting_sync_unique ON accounting_sync_log (connection_id, journal_id, direction)");
 }
 
 async function seedAdOfferings(): Promise<void> {

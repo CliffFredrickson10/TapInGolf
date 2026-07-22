@@ -19,10 +19,12 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "TapIn Golf uses your location to find nearby golf clubs and show distance to courses."
+        "NSLocationWhenInUseUsageDescription": "TapIn Golf uses your location to find nearby golf clubs and show distance to courses.",
+        "NSPhotoLibraryAddUsageDescription": "TapIn Golf needs permission to save photos to your library."
       },
       "buildNumber": "7",
-      "usesAppleSignIn": true
+      "usesAppleSignIn": true,
+      "deploymentTarget": "13.4"
     },
     "android": {
       "adaptiveIcon": {

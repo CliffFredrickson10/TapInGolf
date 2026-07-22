@@ -612,69 +612,6 @@ export default function SettingsScreen() {
               </View>
             </View>
 
-            {/* ═══════════════ REMOVE ADS ═══════════════ */}
-            <View>
-              <View style={styles.sectionHeader}>
-                <View style={[styles.sectionIconWrap, { backgroundColor: colors.accent + "18" }]}>
-                  <Ionicons name="ban" size={18} color={colors.accent} />
-                </View>
-                <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Remove Ads</Text>
-              </View>
-
-              <View style={[styles.settingsCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-                <View style={[styles.settingRow, { flexDirection: "column", gap: 10 }]}>
-
-                  {/* What it removes — disclaimer */}
-                  <View style={[styles.adDisclaimer, { backgroundColor: colors.accent + "12", borderColor: colors.accent + "40" }]}>
-                    <Ionicons name="information-circle-outline" size={16} color={colors.accent} style={{ marginTop: 1, flexShrink: 0 }} />
-                    <Text style={[styles.adDisclaimerText, { color: colors.accent }]}>
-                      This only removes the AdMob banner that appears at the bottom of the app. Sponsored club listings and featured content are not affected.
-                    </Text>
-                  </View>
-
-                  {adSub?.active ? (
-                    /* ── Active subscription ── */
-                    <View style={[styles.adActiveBadge, { backgroundColor: "#22c55e18", borderColor: "#22c55e44" }]}>
-                      <Ionicons name="checkmark-circle" size={18} color="#22c55e" />
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.adActiveTitle, { color: "#22c55e" }]}>Ads removed — active</Text>
-                        <Text style={[styles.adActiveExpiry, { color: colors.mutedForeground }]}>
-                          Expires {new Date(adSub.expires_at).toLocaleDateString("en-ZA", { day: "numeric", month: "long", year: "numeric" })}
-                        </Text>
-                      </View>
-                    </View>
-                  ) : (
-                    /* ── Purchase button ── */
-                    <View style={{ gap: 8 }}>
-                      <View style={styles.adPriceRow}>
-                        <Text style={[styles.adPriceLabel, { color: colors.foreground }]}>
-                          R{adConfig.price_zar.toFixed(2)}
-                        </Text>
-                        <Text style={[styles.adPricePeriod, { color: colors.mutedForeground }]}>
-                          {" "}/ {adConfig.period_label}
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.adPurchaseBtn, { backgroundColor: colors.accent, opacity: purchasingAds ? 0.7 : 1 }]}
-                        onPress={handlePurchaseAdRemoval}
-                        disabled={purchasingAds}
-                        activeOpacity={0.82}
-                      >
-                        {purchasingAds ? (
-                          <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                          <>
-                            <Ionicons name="ban" size={18} color="#fff" />
-                            <Text style={styles.adPurchaseBtnText}>Remove Ads</Text>
-                          </>
-                        )}
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              </View>
-            </View>
-
             {/* ═══════════════ DANGER ZONE ═══════════════ */}
             <View>
               <View style={styles.sectionHeader}>

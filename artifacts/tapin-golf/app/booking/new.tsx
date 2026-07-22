@@ -193,6 +193,7 @@ export default function NewBookingScreen() {
   const [includeRangeBalls, setIncludeRangeBalls] = useState(false);
   const [selectedRangeBallsOption, setSelectedRangeBallsOption] = useState<{ label: string; price: number } | null>(null);
   const [includeClubHire, setIncludeClubHire]     = useState(false);
+  const [extrasExpanded, setExtrasExpanded]         = useState(false);
   // Default to the first enabled payment method for this club
   const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
     params.stitch_enabled  !== "0" ? "stitch"      :
@@ -813,86 +814,115 @@ export default function NewBookingScreen() {
             )
           )}
 
-          {/* Driving Range Balls */}
-          {rangeBallsAvailable && (
+          {/* Extras (Driving Range Balls + Club Hire) */}
+          {(rangeBallsAvailable || clubHireAvailable) && (
             <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.cartRow}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => { Haptics.selectionAsync(); setExtrasExpanded(!extrasExpanded); }}
+                style={styles.cartRow}
+              >
                 <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
-                  <Ionicons name="golf" size={20} color={colors.primary} />
+                  <Ionicons name="add-circle-outline" size={20} color={colors.primary} />
                 </View>
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>Driving Range Balls</Text>
+                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>Extras</Text>
                   <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
-                    {rangeBallsOptions.length > 0
-                      ? selectedRangeBallsOption
-                        ? `${selectedRangeBallsOption.label} · +R${rangeBallsFee.toFixed(2)}`
-                        : "Choose a package below"
-                      : `Bucket of range balls · R${rangeBallsUnitPrice.toFixed(2)}${includeRangeBalls ? ` · +R${rangeBallsFee.toFixed(2)}` : ""}`}
+                    {[
+                      rangeBallsFee > 0 ? "Range balls" : null,
+                      includeClubHire ? "Club hire" : null,
+                    ].filter(Boolean).join(", ") || "Driving range balls, club hire"}
                   </Text>
                 </View>
-                {rangeBallsOptions.length === 0 && (
-                  <Switch
-                    value={includeRangeBalls}
-                    onValueChange={(v) => { Haptics.selectionAsync(); setIncludeRangeBalls(v); }}
-                    trackColor={{ true: colors.primary, false: colors.muted }}
-                    thumbColor="#fff"
-                  />
-                )}
-              </View>
-              {rangeBallsOptions.length > 0 && (
-                <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
-                  {rangeBallsOptions.map((opt, i) => {
-                    const selected = selectedRangeBallsOption?.price === opt.price && selectedRangeBallsOption?.label === opt.label;
-                    return (
-                      <TouchableOpacity
-                        key={i}
-                        onPress={() => { Haptics.selectionAsync(); setSelectedRangeBallsOption(selected ? null : opt); }}
-                        style={{
-                          paddingHorizontal: 12,
-                          paddingVertical: 6,
-                          borderRadius: 20,
-                          borderWidth: 1.5,
-                          borderColor: selected ? colors.primary : colors.border,
-                          backgroundColor: selected ? colors.primary + "18" : colors.background,
-                        }}
-                        activeOpacity={0.75}
-                      >
-                        <Text style={{
-                          fontSize: 13,
-                          color: selected ? colors.primary : colors.foreground,
-                          fontWeight: selected ? "600" : "400",
-                        }}>
-                          {opt.label} · R{opt.price.toFixed(2)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
+                <Ionicons
+                  name={extrasExpanded ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+              </TouchableOpacity>
+
+              {extrasExpanded && (
+                <View style={{ marginTop: 12, gap: 12 }}>
+                  {/* Driving Range Balls */}
+                  {rangeBallsAvailable && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="golf" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.cartTitle, { color: colors.foreground, fontSize: 14 }]}>Driving Range Balls</Text>
+                          <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                            {rangeBallsOptions.length > 0
+                              ? selectedRangeBallsOption
+                                ? `${selectedRangeBallsOption.label} · +R${rangeBallsFee.toFixed(2)}`
+                                : "Choose a package below"
+                              : `Bucket of range balls · R${rangeBallsUnitPrice.toFixed(2)}${includeRangeBalls ? ` · +R${rangeBallsFee.toFixed(2)}` : ""}`}
+                          </Text>
+                        </View>
+                        {rangeBallsOptions.length === 0 && (
+                          <Switch
+                            value={includeRangeBalls}
+                            onValueChange={(v) => { Haptics.selectionAsync(); setIncludeRangeBalls(v); }}
+                            trackColor={{ true: colors.primary, false: colors.muted }}
+                            thumbColor="#fff"
+                          />
+                        )}
+                      </View>
+                      {rangeBallsOptions.length > 0 && (
+                        <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 }}>
+                          {rangeBallsOptions.map((opt, i) => {
+                            const selected = selectedRangeBallsOption?.price === opt.price && selectedRangeBallsOption?.label === opt.label;
+                            return (
+                              <TouchableOpacity
+                                key={i}
+                                onPress={() => { Haptics.selectionAsync(); setSelectedRangeBallsOption(selected ? null : opt); }}
+                                style={{
+                                  paddingHorizontal: 12,
+                                  paddingVertical: 6,
+                                  borderRadius: 20,
+                                  borderWidth: 1.5,
+                                  borderColor: selected ? colors.primary : colors.border,
+                                  backgroundColor: selected ? colors.primary + "18" : colors.background,
+                                }}
+                                activeOpacity={0.75}
+                              >
+                                <Text style={{
+                                  fontSize: 13,
+                                  color: selected ? colors.primary : colors.foreground,
+                                  fontWeight: selected ? "600" : "400",
+                                }}>
+                                  {opt.label} · R{opt.price.toFixed(2)}
+                                </Text>
+                              </TouchableOpacity>
+                            );
+                          })}
+                        </View>
+                      )}
+                    </View>
+                  )}
+
+                  {/* Club Hire */}
+                  {clubHireAvailable && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: colors.border, paddingTop: 12 }}>
+                      <View style={{ flexDirection: "row", alignItems: "center" }}>
+                        <Ionicons name="bag-handle" size={18} color={colors.primary} style={{ marginRight: 8 }} />
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.cartTitle, { color: colors.foreground, fontSize: 14 }]}>Club Hire</Text>
+                          <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                            Rental set of clubs · R{clubHireUnitPrice.toFixed(2)}
+                            {includeClubHire ? ` · +R${clubHireFee.toFixed(2)}` : ""}
+                          </Text>
+                        </View>
+                        <Switch
+                          value={includeClubHire}
+                          onValueChange={(v) => { Haptics.selectionAsync(); setIncludeClubHire(v); }}
+                          trackColor={{ true: colors.primary, false: colors.muted }}
+                          thumbColor="#fff"
+                        />
+                      </View>
+                    </View>
+                  )}
                 </View>
               )}
-            </View>
-          )}
-
-          {/* Club Hire */}
-          {clubHireAvailable && (
-            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border }]}>
-              <View style={styles.cartRow}>
-                <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
-                  <Ionicons name="bag-handle" size={20} color={colors.primary} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>Club Hire</Text>
-                  <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
-                    Rental set of clubs · R{clubHireUnitPrice.toFixed(2)}
-                    {includeClubHire ? ` · +R${clubHireFee.toFixed(2)}` : ""}
-                  </Text>
-                </View>
-                <Switch
-                  value={includeClubHire}
-                  onValueChange={(v) => { Haptics.selectionAsync(); setIncludeClubHire(v); }}
-                  trackColor={{ true: colors.primary, false: colors.muted }}
-                  thumbColor="#fff"
-                />
-              </View>
             </View>
           )}
 

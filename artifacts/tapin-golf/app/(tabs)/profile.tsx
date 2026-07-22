@@ -91,10 +91,17 @@ export default function ProfileScreen() {
   const [appealText, setAppealText]       = useState("");
   const [submittingAppeal, setSubmittingAppeal] = useState(false);
 
+  // Liked clubs
+  const [likedClubs, setLikedClubs] = useState<any[]>([]);
+  const [likedClubsOpen, setLikedClubsOpen] = useState(false);
+
   React.useEffect(() => {
     if (!user?.token) return;
     apiFetch("/bans/me", user.token)
       .then((data: any) => setMyBans(Array.isArray(data) ? data.filter((b: any) => b.status !== "lifted") : []))
+      .catch(() => {});
+    apiFetch("/clubs/liked", user.token)
+      .then((data: any) => setLikedClubs(data?.clubs ?? []))
       .catch(() => {});
   }, [user?.token]);
 
@@ -880,6 +887,40 @@ export default function ProfileScreen() {
                     );
                   })}
                 </>
+              )}
+            </View>
+          )}
+
+          {/* Liked Clubs */}
+          {likedClubs.length > 0 && (
+            <View style={{ marginTop: 12 }}>
+              <TouchableOpacity
+                style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border }]}
+                onPress={() => { Haptics.selectionAsync(); setLikedClubsOpen(!likedClubsOpen); }}
+                activeOpacity={0.8}
+              >
+                <Ionicons name="heart" size={20} color="#ef4444" />
+                <Text style={[styles.menuText, { color: colors.foreground }]}>Liked Clubs ({likedClubs.length})</Text>
+                <Ionicons name={likedClubsOpen ? "chevron-down" : "chevron-forward"} size={18} color={colors.mutedForeground} />
+              </TouchableOpacity>
+              {likedClubsOpen && (
+                <View style={{ gap: 6, marginTop: 6 }}>
+                  {likedClubs.map((c: any) => (
+                    <TouchableOpacity
+                      key={c.id}
+                      style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.border, paddingVertical: 10 }]}
+                      onPress={() => router.push(`/club/${c.id}`)}
+                      activeOpacity={0.8}
+                    >
+                      <Ionicons name="golf-outline" size={18} color={colors.primary} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.menuText, { color: colors.foreground }]}>{c.name}</Text>
+                        <Text style={{ fontSize: 12, color: colors.mutedForeground }}>{c.location}, {c.province}</Text>
+                      </View>
+                      <Ionicons name="chevron-forward" size={16} color={colors.mutedForeground} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
               )}
             </View>
           )}

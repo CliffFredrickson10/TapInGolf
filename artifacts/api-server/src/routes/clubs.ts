@@ -364,6 +364,23 @@ router.get("/clubs", async (req, res): Promise<void> => {
   res.json({ clubs: normalize(clubs), total, hasMore: offset + clubs.length < total });
 });
 
+/** Get user's liked clubs — must be before /clubs/:id to avoid matching "liked" as an id */
+router.get("/clubs/liked", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+
+  const clubs = await query<any>(
+    `SELECT c.id, c.name, c.location, c.province, c.logo_url, c.latitude, c.longitude,
+            cl.created_at AS liked_at
+     FROM club_likes cl
+     JOIN clubs c ON c.id = cl.club_id
+     WHERE cl.user_id = ?
+     ORDER BY cl.created_at DESC`,
+    [user.id]
+  );
+  res.json({ clubs });
+});
+
 router.get("/clubs/:id", async (req, res): Promise<void> => {
   const rawId = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
   const id = parseInt(rawId, 10);
@@ -479,6 +496,49 @@ router.get("/clubs/:id/logo", async (req, res): Promise<void> => {
   } catch {
     res.status(404).json({ message: "Logo unavailable" });
   }
+});
+
+// ── Club Likes ─────────────────────────────────────────────────────────────
+
+/** Toggle like on a club (like if not liked, unlike if already liked) */
+router.post("/clubs/:id/like", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  if (!user) { res.status(401).json({ message: "Unauthorized" }); return; }
+  const clubId = parseInt(req.params.id, 10);
+  if (isNaN(clubId)) { res.status(400).json({ message: "Invalid club ID" }); return; }
+
+  const existing = await row<any>(
+    "SELECT id FROM club_likes WHERE user_id = ? AND club_id = ?",
+    [user.id, clubId]
+  );
+
+  if (existing) {
+    await exec("DELETE FROM club_likes WHERE user_id = ? AND club_id = ?", [user.id, clubId]);
+    const count = await row<any>("SELECT COUNT(*)::int AS total FROM club_likes WHERE club_id = ?", [clubId]);
+    res.json({ liked: false, total_likes: count?.total ?? 0 });
+  } else {
+    await exec(
+      "INSERT INTO club_likes (user_id, club_id) VALUES (?, ?) ON CONFLICT DO NOTHING",
+      [user.id, clubId]
+    );
+    const count = await row<any>("SELECT COUNT(*)::int AS total FROM club_likes WHERE club_id = ?", [clubId]);
+    res.json({ liked: true, total_likes: count?.total ?? 0 });
+  }
+});
+
+/** Get like status + total likes for a club */
+router.get("/clubs/:id/likes", async (req, res): Promise<void> => {
+  const user = await getUser(req);
+  const clubId = parseInt(req.params.id, 10);
+  if (isNaN(clubId)) { res.status(400).json({ message: "Invalid club ID" }); return; }
+
+  const count = await row<any>("SELECT COUNT(*)::int AS total FROM club_likes WHERE club_id = ?", [clubId]);
+  let liked = false;
+  if (user) {
+    const existing = await row<any>("SELECT id FROM club_likes WHERE user_id = ? AND club_id = ?", [user.id, clubId]);
+    liked = !!existing;
+  }
+  res.json({ liked, total_likes: count?.total ?? 0 });
 });
 
 router.get("/clubs/:id/tee-times", async (req, res): Promise<void> => {

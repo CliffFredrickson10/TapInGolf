@@ -304,11 +304,14 @@ export default function ClubDetailScreen() {
   const [scorecardExpanded, setScorecardExpanded] = useState(false);
   const [aboutExpanded, setAboutExpanded] = useState(false);
   const [localRulesExpanded, setLocalRulesExpanded] = useState(false);
+  const [liked, setLiked] = useState(false);
+  const [totalLikes, setTotalLikes] = useState(0);
+  const [likeLoading, setLikeLoading] = useState(false);
 
   useEffect(() => {
     (async () => {
       try {
-        const [clubData, adsData, reviewsData, eventsData, photosData, scorecardData, localRulesData] = await Promise.all([
+        const [clubData, adsData, reviewsData, eventsData, photosData, scorecardData, localRulesData, likesData] = await Promise.all([
           apiFetch(`/clubs/${id}`, user?.token),
           apiFetch(`/ads?placement=club&club_id=${id}`, user?.token),
           apiFetch(`/clubs/${id}/reviews`, user?.token),
@@ -316,6 +319,7 @@ export default function ClubDetailScreen() {
           apiFetch(`/clubs/${id}/images`, user?.token),
           apiFetch(`/clubs/${id}/scorecard`, user?.token).catch(() => ({ scorecard: null })),
           apiFetch(`/clubs/${id}/local-rules`, user?.token).catch(() => ({ local_rules: null })),
+          apiFetch(`/clubs/${id}/likes`, user?.token).catch(() => ({ liked: false, total_likes: 0 })),
         ]);
         setClub(clubData.club);
         setAds(adsData.ads ?? []);
@@ -324,6 +328,8 @@ export default function ClubDetailScreen() {
         setPhotos(photosData.images ?? []);
         setScorecard(scorecardData.scorecard ?? null);
         setLocalRules(localRulesData.local_rules ?? null);
+        setLiked(likesData.liked ?? false);
+        setTotalLikes(likesData.total_likes ?? 0);
       } catch {}
       setLoading(false);
     })();
@@ -404,13 +410,43 @@ export default function ClubDetailScreen() {
         >
           <Ionicons name="arrow-back" size={22} color="#fff" />
         </TouchableOpacity>
+        <TouchableOpacity
+          onPress={async () => {
+            if (!user || likeLoading) return;
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setLikeLoading(true);
+            setLiked(!liked);
+            setTotalLikes(prev => liked ? prev - 1 : prev + 1);
+            try {
+              const result = await apiFetch(`/clubs/${id}/like`, user.token, { method: "POST" });
+              setLiked(result.liked);
+              setTotalLikes(result.total_likes);
+            } catch {
+              setLiked(liked);
+              setTotalLikes(prev => liked ? prev + 1 : prev - 1);
+            }
+            setLikeLoading(false);
+          }}
+          style={[styles.backBtn, { top: (Platform.OS === "web" ? 67 : insets.top) + 12, right: 16, left: undefined, backgroundColor: "rgba(0,0,0,0.4)" }]}
+          activeOpacity={0.7}
+        >
+          <Ionicons name={liked ? "heart" : "heart-outline"} size={22} color={liked ? "#ef4444" : "#fff"} />
+        </TouchableOpacity>
       </View>
 
       <View style={styles.content}>
         {/* Club info */}
         <View style={styles.infoRow}>
           <View style={{ flex: 1 }}>
-            <Text style={[styles.clubName, { color: colors.foreground }]}>{club.name}</Text>
+            <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+              <Text style={[styles.clubName, { color: colors.foreground }]}>{club.name}</Text>
+              {totalLikes > 0 && (
+                <View style={{ flexDirection: "row", alignItems: "center", gap: 3 }}>
+                  <Ionicons name="heart" size={14} color="#ef4444" />
+                  <Text style={{ fontSize: 13, color: colors.mutedForeground, fontWeight: "500" }}>{totalLikes}</Text>
+                </View>
+              )}
+            </View>
             <TouchableOpacity
               style={[styles.locationRow, { backgroundColor: colors.primary + "18", borderRadius: 8, paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start", marginTop: 4 }]}
               onPress={() => { Haptics.selectionAsync(); openDirections(club); }}

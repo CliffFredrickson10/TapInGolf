@@ -2359,6 +2359,19 @@ async function seedAdOfferings(): Promise<void> {
       END IF;
     END$$
   `);
+
+  // ── Club Likes ───────────────────────────────────────────────────────────────
+  await ddl(`
+    CREATE TABLE IF NOT EXISTS club_likes (
+      id SERIAL PRIMARY KEY,
+      user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+      club_id INTEGER NOT NULL REFERENCES clubs(id) ON DELETE CASCADE,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, club_id)
+    )
+  `);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_club_likes_club ON club_likes (club_id)`);
+  await ddl(`CREATE INDEX IF NOT EXISTS idx_club_likes_user ON club_likes (user_id)`);
 }
 
 async function seedScreenshotAccount(): Promise<void> {

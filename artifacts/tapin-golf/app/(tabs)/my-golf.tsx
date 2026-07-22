@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
-import { router } from "expo-router";
+import { router, useFocusEffect } from "expo-router";
 import React, { useCallback, useEffect, useState } from "react";
 import {
   FlatList,
@@ -415,12 +415,14 @@ export default function MyGolfScreen() {
   const [activeTab, setActiveTab] = useState<MainTab | null>(null);
   const [likedClubs, setLikedClubs] = useState<any[]>([]);
 
-  useEffect(() => {
-    if (!user?.token) return;
-    apiFetch("/clubs/liked", user.token)
-      .then((data: any) => setLikedClubs(data?.clubs ?? []))
-      .catch(() => {});
-  }, [user?.token]);
+  useFocusEffect(
+    useCallback(() => {
+      if (!user?.token) return;
+      apiFetch("/clubs/liked", user.token)
+        .then((data: any) => setLikedClubs(data?.clubs ?? []))
+        .catch(() => {});
+    }, [user?.token])
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>

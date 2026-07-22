@@ -194,6 +194,7 @@ export default function NewBookingScreen() {
   const [selectedRangeBallsOption, setSelectedRangeBallsOption] = useState<{ label: string; price: number } | null>(null);
   const [includeClubHire, setIncludeClubHire]     = useState(false);
   const [extrasExpanded, setExtrasExpanded]         = useState(false);
+  const [morePaymentsExpanded, setMorePaymentsExpanded] = useState(false);
   // Default to the first enabled payment method for this club
   const [paymentMethod, setPaymentMethod] = useState<"stitch" | "prepaid" | "wallet" | "pay_at_club">(
     params.stitch_enabled  !== "0" ? "stitch"      :
@@ -1040,6 +1041,8 @@ export default function NewBookingScreen() {
               />
             </View>
           )}
+
+          {/* PayFast — default, always visible */}
           {stitchEnabled && (
             <TouchableOpacity
               style={[
@@ -1060,115 +1063,144 @@ export default function NewBookingScreen() {
             </TouchableOpacity>
           )}
 
-          {/* Pay at Club option — shown only when club has enabled it */}
-          {payAtClubEnabled && (
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                {
-                  backgroundColor: paymentMethod === "pay_at_club" ? colors.primaryLight : colors.card,
-                  borderColor:     paymentMethod === "pay_at_club" ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => { Haptics.selectionAsync(); setPaymentMethod("pay_at_club"); }}
-            >
-              <Ionicons name="golf-outline" size={22} color={paymentMethod === "pay_at_club" ? colors.primary : colors.mutedForeground} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.payLabel, { color: colors.foreground }]}>Pay at Club</Text>
-                <Text style={[styles.paySub, { color: colors.mutedForeground }]}>
-                  Pay commitment fee online · settle greens fee at the club
-                </Text>
-              </View>
-              {paymentMethod === "pay_at_club" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-            </TouchableOpacity>
-          )}
-          {paymentMethod === "pay_at_club" && (
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, marginTop: -4, backgroundColor: colors.primaryLight, borderRadius: 8, padding: 8 }}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: colors.primary, lineHeight: 17 }}>
-                A commitment fee of R{platformFee.toFixed(2)} is charged now and deducted from your greens fee. You pay R{(myAmount - platformFee).toFixed(2)} at the club on the day.
-              </Text>
-            </View>
-          )}
+          {/* More Payment Methods — collapsed card */}
+          {(payAtClubEnabled || walletBalance !== null || (prepaidEnabled && prepaidBalance !== null)) && (
+            <View style={[styles.cartCard, { backgroundColor: colors.card, borderColor: colors.border, marginTop: 4 }]}>
+              <TouchableOpacity
+                activeOpacity={0.75}
+                onPress={() => { Haptics.selectionAsync(); setMorePaymentsExpanded(!morePaymentsExpanded); }}
+                style={styles.cartRow}
+              >
+                <View style={[styles.cartIconBadge, { backgroundColor: colors.primary + "18" }]}>
+                  <Ionicons name="ellipsis-horizontal-circle-outline" size={20} color={colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cartTitle, { color: colors.foreground }]}>More Payment Methods</Text>
+                  <Text style={[styles.cartSub, { color: colors.mutedForeground }]}>
+                    {paymentMethod !== "stitch" ? (
+                      paymentMethod === "wallet" ? "TapIn Wallet selected" :
+                      paymentMethod === "prepaid" ? "Prepaid Rounds selected" :
+                      paymentMethod === "pay_at_club" ? "Pay at Club selected" : "Wallet, Prepaid, Pay at Club"
+                    ) : "Wallet, Prepaid, Pay at Club"}
+                  </Text>
+                </View>
+                <Ionicons
+                  name={morePaymentsExpanded ? "chevron-up" : "chevron-down"}
+                  size={20}
+                  color={colors.mutedForeground}
+                />
+              </TouchableOpacity>
 
-          {/* Wallet option — always available; shown once balance is loaded */}
-          {walletBalance !== null && (
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                {
-                  backgroundColor: paymentMethod === "wallet" ? colors.primaryLight : colors.card,
-                  borderColor:     paymentMethod === "wallet" ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => { Haptics.selectionAsync(); setPaymentMethod("wallet"); }}
-            >
-              <Ionicons name="wallet-outline" size={22} color={paymentMethod === "wallet" ? colors.primary : colors.mutedForeground} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.payLabel, { color: colors.foreground }]}>TapIn Wallet</Text>
-                <Text style={[styles.paySub, { color: walletBalance >= myAmount ? colors.primary : "#e53e3e" }]}>
-                  R {walletBalance.toFixed(2)} available
-                  {walletBalance < myAmount ? " — insufficient balance" : ""}
-                </Text>
-              </View>
-              {paymentMethod === "wallet" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-            </TouchableOpacity>
-          )}
+              {morePaymentsExpanded && (
+                <View style={{ marginTop: 12, gap: 8 }}>
+                  {/* Pay at Club */}
+                  {payAtClubEnabled && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOption,
+                        {
+                          backgroundColor: paymentMethod === "pay_at_club" ? colors.primaryLight : colors.background,
+                          borderColor:     paymentMethod === "pay_at_club" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => { Haptics.selectionAsync(); setPaymentMethod("pay_at_club"); }}
+                    >
+                      <Ionicons name="golf-outline" size={22} color={paymentMethod === "pay_at_club" ? colors.primary : colors.mutedForeground} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.payLabel, { color: colors.foreground }]}>Pay at Club</Text>
+                        <Text style={[styles.paySub, { color: colors.mutedForeground }]}>
+                          Pay commitment fee online · settle greens fee at the club
+                        </Text>
+                      </View>
+                      {paymentMethod === "pay_at_club" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
+                  )}
+                  {paymentMethod === "pay_at_club" && (
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: colors.primaryLight, borderRadius: 8, padding: 8 }}>
+                      <Ionicons name="information-circle-outline" size={15} color={colors.primary} style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 12, color: colors.primary, lineHeight: 17 }}>
+                        A commitment fee of R{platformFee.toFixed(2)} is charged now and deducted from your greens fee. You pay R{(myAmount - platformFee).toFixed(2)} at the club on the day.
+                      </Text>
+                    </View>
+                  )}
 
-          {/* Insufficient wallet balance notice */}
-          {paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fef3cd", borderRadius: 8, padding: 8 }}>
-              <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
-                Your wallet balance (R {walletBalance.toFixed(2)}) is less than the amount due (R {myAmount.toFixed(2)}). Top up your wallet in the Profile tab before booking.
-              </Text>
-            </View>
-          )}
+                  {/* Wallet */}
+                  {walletBalance !== null && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOption,
+                        {
+                          backgroundColor: paymentMethod === "wallet" ? colors.primaryLight : colors.background,
+                          borderColor:     paymentMethod === "wallet" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => { Haptics.selectionAsync(); setPaymentMethod("wallet"); }}
+                    >
+                      <Ionicons name="wallet-outline" size={22} color={paymentMethod === "wallet" ? colors.primary : colors.mutedForeground} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.payLabel, { color: colors.foreground }]}>TapIn Wallet</Text>
+                        <Text style={[styles.paySub, { color: walletBalance >= myAmount ? colors.primary : "#e53e3e" }]}>
+                          R {walletBalance.toFixed(2)} available
+                          {walletBalance < myAmount ? " — insufficient balance" : ""}
+                        </Text>
+                      </View>
+                      {paymentMethod === "wallet" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
+                  )}
+                  {paymentMethod === "wallet" && walletBalance !== null && walletBalance < myAmount && (
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fef3cd", borderRadius: 8, padding: 8 }}>
+                      <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
+                        Your wallet balance (R {walletBalance.toFixed(2)}) is less than the amount due (R {myAmount.toFixed(2)}). Top up your wallet in the Profile tab before booking.
+                      </Text>
+                    </View>
+                  )}
 
-          {/* Prepaid rounds option — shown only when club has enabled it and member has rounds */}
-          {prepaidEnabled && prepaidBalance !== null && (
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                {
-                  backgroundColor: paymentMethod === "prepaid" ? colors.primaryLight : colors.card,
-                  borderColor:     paymentMethod === "prepaid" ? colors.primary : colors.border,
-                },
-              ]}
-              onPress={() => {
-                Haptics.selectionAsync();
-                setPaymentMethod("prepaid");
-                if (numPlayers > 1) setSplitBill(true);
-              }}
-            >
-              <Ionicons name="ticket-outline" size={22} color={paymentMethod === "prepaid" ? colors.primary : colors.mutedForeground} />
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.payLabel, { color: colors.foreground }]}>Use Prepaid Rounds</Text>
-                <Text style={[styles.paySub, { color: prepaidBalance.remaining > 0 ? colors.primary : "#e53e3e" }]}>
-                  {prepaidBalance.remaining} round{prepaidBalance.remaining !== 1 ? "s" : ""} remaining
-                  {numPlayers > 1 ? " — covers your spot only, others pay their share" : " — covers your greens fee"}
-                </Text>
-              </View>
-              {paymentMethod === "prepaid" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
-            </TouchableOpacity>
-          )}
-
-          {/* Prepaid + multi-player notice */}
-          {paymentMethod === "prepaid" && numPlayers > 1 && (
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, marginTop: -4 }}>
-              <Ionicons name="information-circle-outline" size={15} color={colors.mutedForeground} style={{ marginTop: 1 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
-                Split billing is required when using prepaid rounds with other players. Each player will receive a payment request for their own share.
-              </Text>
-            </View>
-          )}
-          {/* Prepaid non-refundable notice */}
-          {paymentMethod === "prepaid" && (
-            <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fff3cd", borderRadius: 8, padding: 8 }}>
-              <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
-              <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
-                Prepaid rounds are non-refundable. Once confirmed, this round cannot be returned for cash, credit, or rollover — even if the booking is later cancelled.
-              </Text>
+                  {/* Prepaid Rounds */}
+                  {prepaidEnabled && prepaidBalance !== null && (
+                    <TouchableOpacity
+                      style={[
+                        styles.paymentOption,
+                        {
+                          backgroundColor: paymentMethod === "prepaid" ? colors.primaryLight : colors.background,
+                          borderColor:     paymentMethod === "prepaid" ? colors.primary : colors.border,
+                        },
+                      ]}
+                      onPress={() => {
+                        Haptics.selectionAsync();
+                        setPaymentMethod("prepaid");
+                        if (numPlayers > 1) setSplitBill(true);
+                      }}
+                    >
+                      <Ionicons name="ticket-outline" size={22} color={paymentMethod === "prepaid" ? colors.primary : colors.mutedForeground} />
+                      <View style={{ flex: 1 }}>
+                        <Text style={[styles.payLabel, { color: colors.foreground }]}>Use Prepaid Rounds</Text>
+                        <Text style={[styles.paySub, { color: prepaidBalance.remaining > 0 ? colors.primary : "#e53e3e" }]}>
+                          {prepaidBalance.remaining} round{prepaidBalance.remaining !== 1 ? "s" : ""} remaining
+                          {numPlayers > 1 ? " — covers your spot only, others pay their share" : " — covers your greens fee"}
+                        </Text>
+                      </View>
+                      {paymentMethod === "prepaid" && <Ionicons name="checkmark-circle" size={20} color={colors.primary} />}
+                    </TouchableOpacity>
+                  )}
+                  {paymentMethod === "prepaid" && numPlayers > 1 && (
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, marginTop: -4 }}>
+                      <Ionicons name="information-circle-outline" size={15} color={colors.mutedForeground} style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 12, color: colors.mutedForeground, lineHeight: 17 }}>
+                        Split billing is required when using prepaid rounds with other players. Each player will receive a payment request for their own share.
+                      </Text>
+                    </View>
+                  )}
+                  {paymentMethod === "prepaid" && (
+                    <View style={{ flexDirection: "row", gap: 6, alignItems: "flex-start", paddingHorizontal: 4, backgroundColor: "#fff3cd", borderRadius: 8, padding: 8 }}>
+                      <Ionicons name="warning-outline" size={14} color="#a07c10" style={{ marginTop: 1 }} />
+                      <Text style={{ flex: 1, fontSize: 12, color: "#7d5a00", lineHeight: 17 }}>
+                        Prepaid rounds are non-refundable. Once confirmed, this round cannot be returned for cash, credit, or rollover — even if the booking is later cancelled.
+                      </Text>
+                    </View>
+                  )}
+                </View>
+              )}
             </View>
           )}
 

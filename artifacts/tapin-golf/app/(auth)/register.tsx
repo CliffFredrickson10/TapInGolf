@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   KeyboardAvoidingView,
@@ -14,13 +15,18 @@ import {
   View,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+
+GoogleSignin.configure({
+  iosClientId: "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com", // TODO: replace with real ID
+});
 
 export default function RegisterScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { register } = useAuth();
+  const { register, socialLogin } = useAuth();
 
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -29,6 +35,55 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
+
+  const handleAppleSignIn = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      setLoading(true);
+      const fullName = credential.fullName
+        ? `${credential.fullName.givenName ?? ""} ${credential.fullName.familyName ?? ""}`.trim()
+        : undefined;
+      await socialLogin("apple", credential.email ?? "", fullName, credential.user);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err: any) {
+      if (err.code !== "ERR_REQUEST_CANCELED") {
+        Alert.alert("Error", "Apple Sign-In failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (response.type === "success" && response.data?.user) {
+        setLoading(true);
+        const { email: gEmail, name: gName, id: gId } = response.data.user;
+        await socialLogin("google", gEmail, gName ?? undefined, gId);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/(tabs)");
+      }
+    } catch (err: any) {
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+        Alert.alert("Error", "Google Sign-In failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleRegister = async () => {
     if (!name || !email || !password) {
@@ -162,6 +217,35 @@ export default function RegisterScreen() {
             activeOpacity={0.85}
           >
             <Text style={styles.btnText}>{loading ? "Creating account…" : "Create Account"}</Text>
+          </TouchableOpacity>
+
+          {/* Social Sign-In divider */}
+          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 24, marginBottom: 16, gap: 12 }}>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+            <Text style={{ fontSize: 13, color: colors.mutedForeground, fontFamily: "Inter_400Regular" }}>or sign up with</Text>
+            <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
+          </View>
+
+          {appleAvailable && (
+            <TouchableOpacity
+              style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: 52, borderRadius: 14, backgroundColor: colors.foreground, marginBottom: 10 }}
+              onPress={handleAppleSignIn}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="logo-apple" size={20} color={colors.background} />
+              <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.background }}>Sign up with Apple</Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: 52, borderRadius: 14, backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1.5 }}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="logo-google" size={18} color="#4285F4" />
+            <Text style={{ fontSize: 15, fontFamily: "Inter_600SemiBold", color: colors.foreground }}>Sign up with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity style={styles.loginLink} onPress={() => router.back()}>

@@ -35,6 +35,7 @@ interface AuthContextType {
   user: User | null;
   loading: boolean;
   login: (email: string, password: string) => Promise<void>;
+  socialLogin: (provider: string, email: string, name?: string, providerUserId?: string) => Promise<void>;
   register: (name: string, email: string, password: string, phone: string) => Promise<void>;
   logout: () => Promise<void>;
   updateUser: (updates: Partial<User>) => void;
@@ -132,6 +133,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     startGeofencing(data.user.token);
   };
 
+  const socialLogin = async (provider: string, email: string, name?: string, providerUserId?: string) => {
+    const res = await fetch(`${API_BASE}/auth/social`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider, email, name, provider_user_id: providerUserId }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.message || "Social login failed");
+    setUser(data.user);
+    await AsyncStorage.setItem("tapin_user", JSON.stringify(data.user));
+    registerForPushNotifications(data.user.token);
+    startGeofencing(data.user.token);
+  };
+
   const register = async (name: string, email: string, password: string, phone: string) => {
     const res = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
@@ -176,7 +191,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout, updateUser, acceptTerms }}>
+    <AuthContext.Provider value={{ user, loading, login, socialLogin, register, logout, updateUser, acceptTerms }}>
       {children}
     </AuthContext.Provider>
   );

@@ -18,9 +18,11 @@
       "bundleIdentifier": "com.tapingolf.app",
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
-        "ITSAppUsesNonExemptEncryption": false
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "TapIn Golf uses your location to find nearby golf clubs and show distance to courses."
       },
-      "buildNumber": "7"
+      "buildNumber": "7",
+      "usesAppleSignIn": true
     },
     "android": {
       "adaptiveIcon": {
@@ -56,6 +58,13 @@
         {
           "androidAppId": "ca-app-pub-3940256099942544~3347511713",
           "iosAppId": "ca-app-pub-3940256099942544~1458002511"
+        }
+      ],
+      "expo-apple-authentication",
+      [
+        "@react-native-google-signin/google-signin",
+        {
+          "iosUrlScheme": "com.googleusercontent.apps.YOUR_IOS_CLIENT_ID"
         }
       ]
     ],

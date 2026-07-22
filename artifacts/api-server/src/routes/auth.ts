@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import crypto from "crypto";
 import bcrypt from "bcryptjs";
 import { query, row, exec, run } from "../lib/pg";
 import { generateToken, getUser } from "../lib/auth";
@@ -223,6 +224,67 @@ router.post("/auth/register", async (req, res): Promise<void> => {
       is_super_user:         isSuperUser,
       terms_accepted:        true,
       chat_disabled:         false,
+      token,
+    },
+  });
+});
+
+// ── POST /auth/social ──────────────────────────────────────────────────────
+// Sign in (or auto-register) via Apple/Google. The mobile app verifies the
+// identity token locally and sends us the provider, email, and name.
+router.post("/auth/social", async (req, res): Promise<void> => {
+  const { provider, email, name, provider_user_id } = req.body ?? {};
+  if (!provider || !email) {
+    res.status(400).json({ message: "provider and email are required" });
+    return;
+  }
+  const emailStr = String(email).trim().toLowerCase();
+
+  let user = await row<any>("SELECT * FROM users WHERE email = ?", [emailStr]);
+
+  if (!user) {
+    // Auto-register
+    const SUPER_USER_EMAILS = ["marco@tapingolf.co.za", "cliff@tapingolf.co.za"];
+    const isSuperUser = SUPER_USER_EMAILS.includes(emailStr);
+    const dummyHash = await bcrypt.hash(crypto.randomUUID(), 10);
+    const id = await exec(
+      `INSERT INTO users (name, email, password_hash, role, is_super_user, auth_provider, auth_provider_id, terms_accepted_at, privacy_accepted_at, privacy_policy_version)
+       VALUES (?, ?, ?, 'golfer', ?, ?, ?, NOW(), NOW(), ?)`,
+      [String(name || "Golfer").trim(), emailStr, dummyHash, isSuperUser ? 1 : 0, provider, provider_user_id || null, PRIVACY_POLICY_VERSION]
+    );
+    user = await row<any>("SELECT * FROM users WHERE id = ?", [id]);
+  } else {
+    // Link provider if not already linked
+    if (!user.auth_provider) {
+      await run("UPDATE users SET auth_provider = ?, auth_provider_id = ? WHERE id = ?", [provider, provider_user_id || null, user.id]);
+    }
+  }
+
+  const token = generateToken(user.id);
+  const hna = await getHnaStatus(user.id, user.hna_number);
+  res.json({
+    user: {
+      id:                    user.id,
+      name:                  user.name,
+      email:                 user.email,
+      phone:                 user.phone ?? null,
+      handicap:              user.handicap ? parseFloat(user.handicap) : null,
+      role:                  user.role,
+      club_id:               user.club_id ?? null,
+      avatar:                user.profile_picture ?? null,
+      gender:                user.gender ?? null,
+      date_of_birth:         fmtDate(user.date_of_birth),
+      home_province:         user.home_province ?? null,
+      hna_number:            hna.hna_number,
+      hna_verified:          hna.hna_verified,
+      hna_verified_club_name: hna.hna_verified_club_name,
+      hna_valid_until:       hna.hna_valid_until,
+      student_number:        user.student_number ?? null,
+      hna_locked:            hna.hna_locked,
+      student_number_locked: user.student_number_locked === 1 || user.student_number_locked === true,
+      is_super_user:         user.is_super_user === 1 || user.is_super_user === true,
+      terms_accepted:        user.terms_accepted_at != null,
+      chat_disabled:         user.chat_disabled === 1 || user.chat_disabled === true,
       token,
     },
   });

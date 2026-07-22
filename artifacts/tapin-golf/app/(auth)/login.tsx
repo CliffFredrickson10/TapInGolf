@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
+import * as AppleAuthentication from "expo-apple-authentication";
 import * as Haptics from "expo-haptics";
 import { router } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -14,19 +15,29 @@ import {
 } from "react-native";
 import { Ellipse, Polygon, Rect, Svg } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
+
+GoogleSignin.configure({
+  iosClientId: "YOUR_IOS_CLIENT_ID.apps.googleusercontent.com", // TODO: replace with real ID
+});
 
 export default function LoginScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
-  const { login } = useAuth();
+  const { login, socialLogin } = useAuth();
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [appleAvailable, setAppleAvailable] = useState(false);
+
+  useEffect(() => {
+    AppleAuthentication.isAvailableAsync().then(setAppleAvailable);
+  }, []);
 
   const handleLogin = async () => {
     setError("");
@@ -42,6 +53,50 @@ export default function LoginScreen() {
     } catch (err: any) {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
       setError(err.message ?? "Incorrect email or password. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAppleSignIn = async () => {
+    try {
+      const credential = await AppleAuthentication.signInAsync({
+        requestedScopes: [
+          AppleAuthentication.AppleAuthenticationScope.FULL_NAME,
+          AppleAuthentication.AppleAuthenticationScope.EMAIL,
+        ],
+      });
+      setLoading(true);
+      const fullName = credential.fullName
+        ? `${credential.fullName.givenName ?? ""} ${credential.fullName.familyName ?? ""}`.trim()
+        : undefined;
+      await socialLogin("apple", credential.email ?? "", fullName, credential.user);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      router.replace("/(tabs)");
+    } catch (err: any) {
+      if (err.code !== "ERR_REQUEST_CANCELED") {
+        setError("Apple Sign-In failed. Please try again.");
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    try {
+      await GoogleSignin.hasPlayServices();
+      const response = await GoogleSignin.signIn();
+      if (response.type === "success" && response.data?.user) {
+        setLoading(true);
+        const { email: gEmail, name: gName, id: gId } = response.data.user;
+        await socialLogin("google", gEmail, gName ?? undefined, gId);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        router.replace("/(tabs)");
+      }
+    } catch (err: any) {
+      if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
+        setError("Google Sign-In failed. Please try again.");
+      }
     } finally {
       setLoading(false);
     }
@@ -129,6 +184,37 @@ export default function LoginScreen() {
             <Text style={[styles.registerText, { color: colors.primary, fontFamily: "Inter_500Medium" }]}>
               Forgot password?
             </Text>
+          </TouchableOpacity>
+
+          {/* Social Sign-In divider */}
+          <View style={styles.dividerRow}>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+            <Text style={[styles.dividerText, { color: colors.mutedForeground }]}>or continue with</Text>
+            <View style={[styles.dividerLine, { backgroundColor: colors.border }]} />
+          </View>
+
+          {/* Apple Sign-In */}
+          {appleAvailable && (
+            <TouchableOpacity
+              style={[styles.socialBtn, { backgroundColor: colors.foreground }]}
+              onPress={handleAppleSignIn}
+              disabled={loading}
+              activeOpacity={0.85}
+            >
+              <Ionicons name="logo-apple" size={20} color={colors.background} />
+              <Text style={[styles.socialBtnText, { color: colors.background }]}>Sign in with Apple</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Google Sign-In */}
+          <TouchableOpacity
+            style={[styles.socialBtn, { backgroundColor: colors.card, borderColor: colors.border, borderWidth: 1.5 }]}
+            onPress={handleGoogleSignIn}
+            disabled={loading}
+            activeOpacity={0.85}
+          >
+            <Ionicons name="logo-google" size={18} color="#4285F4" />
+            <Text style={[styles.socialBtnText, { color: colors.foreground }]}>Sign in with Google</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -231,5 +317,33 @@ const styles = StyleSheet.create({
   registerText: {
     fontSize: 14,
     fontFamily: "Inter_400Regular",
+  },
+  dividerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 24,
+    marginBottom: 16,
+    gap: 12,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+  },
+  dividerText: {
+    fontSize: 13,
+    fontFamily: "Inter_400Regular",
+  },
+  socialBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    height: 52,
+    borderRadius: 14,
+    marginTop: 10,
+  },
+  socialBtnText: {
+    fontSize: 15,
+    fontFamily: "Inter_600SemiBold",
   },
 });

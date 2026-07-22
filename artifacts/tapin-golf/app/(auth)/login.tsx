@@ -84,7 +84,9 @@ export default function LoginScreen() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await GoogleSignin.hasPlayServices();
+      if (Platform.OS === "android") {
+        await GoogleSignin.hasPlayServices();
+      }
       const response = await GoogleSignin.signIn();
       if (response.type === "success" && response.data?.user) {
         setLoading(true);
@@ -95,7 +97,8 @@ export default function LoginScreen() {
       }
     } catch (err: any) {
       if (err.code !== statusCodes.SIGN_IN_CANCELLED) {
-        setError("Google Sign-In failed. Please try again.");
+        console.error("Google Sign-In error:", err.code, err.message);
+        setError(`Google Sign-In failed: ${err.message || err.code || "Unknown error"}`);
       }
     } finally {
       setLoading(false);

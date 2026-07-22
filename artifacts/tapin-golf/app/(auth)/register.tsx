@@ -67,7 +67,9 @@ export default function RegisterScreen() {
 
   const handleGoogleSignIn = async () => {
     try {
-      await GoogleSignin.hasPlayServices();
+      if (Platform.OS === "android") {
+        await GoogleSignin.hasPlayServices();
+      }
       const response = await GoogleSignin.signIn();
       if (response.type === "success" && response.data?.user) {
         setLoading(true);

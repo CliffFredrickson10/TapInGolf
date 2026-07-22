@@ -379,10 +379,20 @@ export default function ExploreScreen() {
 
         {/* Tee Time Search button */}
         <TouchableOpacity
-          style={[styles.iconBtn, { backgroundColor: showTeeSearch ? colors.primary : colors.card, borderColor: showTeeSearch ? colors.primary : colors.border }]}
+          style={{
+            flexDirection: "row",
+            alignItems: "center",
+            gap: 6,
+            backgroundColor: colors.primary,
+            borderRadius: 20,
+            paddingHorizontal: 14,
+            paddingVertical: 9,
+          }}
           onPress={() => { Haptics.selectionAsync(); setShowTeeSearch(true); }}
+          activeOpacity={0.8}
         >
-          <Ionicons name="time-outline" size={18} color={showTeeSearch ? "#fff" : colors.foreground} />
+          <Ionicons name="time-outline" size={16} color="#fff" />
+          <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Find Tee Times</Text>
         </TouchableOpacity>
       </View>
 

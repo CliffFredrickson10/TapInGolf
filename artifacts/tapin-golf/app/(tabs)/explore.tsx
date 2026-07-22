@@ -318,8 +318,8 @@ export default function ExploreScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppHeader />
 
-      {/* Search bar */}
-      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
+      {/* Search + action buttons */}
+      <View style={[styles.header, { paddingTop: 12 }]}>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: sortedByDistance ? colors.primary : colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
           <TextInput
@@ -338,11 +338,8 @@ export default function ExploreScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
-      </View>
 
-      {/* Action buttons row */}
-      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
-        {/* Location toggle */}
+        {/* Location toggle button */}
         <TouchableOpacity
           style={[
             styles.iconBtn,
@@ -379,25 +376,28 @@ export default function ExploreScreen() {
         >
           <Ionicons name="map-outline" size={18} color="#fff" />
         </TouchableOpacity>
-
-        {/* Find Tee Times button */}
-        <TouchableOpacity
-          style={{
-            flexDirection: "row",
-            alignItems: "center",
-            gap: 6,
-            backgroundColor: colors.primary,
-            borderRadius: 20,
-            paddingHorizontal: 14,
-            paddingVertical: 9,
-          }}
-          onPress={() => { Haptics.selectionAsync(); setShowTeeSearch(true); }}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="time-outline" size={16} color="#fff" />
-          <Text style={{ color: "#fff", fontSize: 13, fontWeight: "600" }}>Find Tee Times</Text>
-        </TouchableOpacity>
       </View>
+
+      {/* Find Tee Times banner */}
+      <TouchableOpacity
+        style={{
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 8,
+          marginHorizontal: 16,
+          marginTop: 8,
+          marginBottom: 4,
+          backgroundColor: colors.primary,
+          borderRadius: 12,
+          paddingVertical: 12,
+        }}
+        onPress={() => { Haptics.selectionAsync(); setShowTeeSearch(true); }}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="time-outline" size={18} color="#fff" />
+        <Text style={{ color: "#fff", fontSize: 15, fontWeight: "600" }}>Find Tee Times</Text>
+      </TouchableOpacity>
 
       {/* Tee Time Search Modal */}
       <Modal visible={showTeeSearch} animationType="slide" presentationStyle="pageSheet">

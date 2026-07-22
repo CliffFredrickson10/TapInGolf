@@ -8,6 +8,7 @@ set -e
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 API_DIR="$ROOT/artifacts/api-server"
 PORTAL_DIR="$ROOT/artifacts/club-portal"
+APP_DIR="$ROOT/artifacts/tapin-golf"
 
 echo "🏌️ TapIn Golf Dev Server"
 echo "========================"
@@ -60,6 +61,10 @@ else
   echo "⚠️  API server may still be starting..."
 fi
 
+# Ensure esbuild darwin binary is linked (pnpm override workaround)
+mkdir -p "$ROOT/node_modules/@esbuild"
+ln -sf ../.pnpm/@esbuild+darwin-arm64@0.27.3/node_modules/@esbuild/darwin-arm64 "$ROOT/node_modules/@esbuild/darwin-arm64" 2>/dev/null || true
+
 # Start club portal
 echo "🚀 Starting club portal on port 5174..."
 cd "$PORTAL_DIR"
@@ -68,22 +73,25 @@ PORTAL_PID=$!
 sleep 2
 echo "✅ Club portal running (PID: $PORTAL_PID)"
 
+# Build & run iOS app on simulator
+echo "📱 Building & running iOS app on simulator..."
+cd "$APP_DIR"
+npx expo run:ios &
+APP_PID=$!
+
 echo ""
 echo "========================"
-echo "🟢 All servers running:"
+echo "🟢 All running:"
 echo "   SSH Tunnel:  localhost:1111 → DB"
 echo "   API:         http://localhost:3000/api"
 echo "   Club Portal: http://localhost:5174"
-echo ""
-echo "📱 For mobile app, run separately:"
-echo "   cd $ROOT/artifacts/tapin-golf"
-echo "   EXPO_NO_METRO_WORKSPACE_ROOT=1 npx expo start --ios --clear"
+echo "   iOS App:     Building on simulator"
 echo ""
 echo "Press Ctrl+C to stop all servers"
 echo "========================"
 
 # Trap Ctrl+C to kill tunnel + servers
-trap "echo ''; echo '⏹️  Stopping servers...'; kill $API_PID $PORTAL_PID $TUNNEL_PID 2>/dev/null; exit 0" INT TERM
+trap "echo ''; echo '⏹️  Stopping servers...'; kill $API_PID $PORTAL_PID $APP_PID $TUNNEL_PID 2>/dev/null; exit 0" INT TERM
 
 # Wait for either to exit
 wait

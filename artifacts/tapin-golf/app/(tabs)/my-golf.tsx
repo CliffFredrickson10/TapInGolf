@@ -411,7 +411,16 @@ const CHOICES: { key: MainTab; label: string; sub: string; icon: any; accent: st
 
 export default function MyGolfScreen() {
   const colors = useColors();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<MainTab | null>(null);
+  const [likedClubs, setLikedClubs] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (!user?.token) return;
+    apiFetch("/clubs/liked", user.token)
+      .then((data: any) => setLikedClubs(data?.clubs ?? []))
+      .catch(() => {});
+  }, [user?.token]);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -424,28 +433,59 @@ export default function MyGolfScreen() {
 
       {activeTab === null ? (
         /* ── Choice screen ── */
-        <View style={styles.choiceWrap}>
-          <Text style={[styles.choicePrompt, { color: colors.mutedForeground }]}>
-            What would you like to view?
-          </Text>
-          {CHOICES.map(({ key, label, sub, icon, accent }) => (
-            <TouchableOpacity
-              key={key}
-              style={[styles.choiceCard, { backgroundColor: colors.card, borderColor: colors.border }]}
-              activeOpacity={0.82}
-              onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
-            >
-              <View style={[styles.choiceIcon, { backgroundColor: accent + "18" }]}>
-                <Ionicons name={icon} size={28} color={accent} />
+        <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator={false}>
+          <View style={styles.choiceWrap}>
+            <Text style={[styles.choicePrompt, { color: colors.mutedForeground }]}>
+              What would you like to view?
+            </Text>
+            {CHOICES.map(({ key, label, sub, icon, accent }) => (
+              <TouchableOpacity
+                key={key}
+                style={[styles.choiceCard, { backgroundColor: colors.card, borderColor: colors.border }]}
+                activeOpacity={0.82}
+                onPress={() => { Haptics.selectionAsync(); setActiveTab(key); }}
+              >
+                <View style={[styles.choiceIcon, { backgroundColor: accent + "18" }]}>
+                  <Ionicons name={icon} size={28} color={accent} />
+                </View>
+                <View style={styles.choiceText}>
+                  <Text style={[styles.choiceLabel, { color: colors.foreground }]}>{label}</Text>
+                  <Text style={[styles.choiceSub, { color: colors.mutedForeground }]}>{sub}</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {/* Liked Clubs */}
+          {likedClubs.length > 0 && (
+            <View style={{ paddingHorizontal: 20, paddingBottom: 20 }}>
+              <View style={{ flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 }}>
+                <Ionicons name="heart" size={18} color="#ef4444" />
+                <Text style={[styles.choiceLabel, { color: colors.foreground, fontSize: 16 }]}>Liked Clubs</Text>
+                <Text style={{ fontSize: 13, color: colors.mutedForeground }}>({likedClubs.length})</Text>
               </View>
-              <View style={styles.choiceText}>
-                <Text style={[styles.choiceLabel, { color: colors.foreground }]}>{label}</Text>
-                <Text style={[styles.choiceSub, { color: colors.mutedForeground }]}>{sub}</Text>
-              </View>
-              <Ionicons name="chevron-forward" size={20} color={colors.mutedForeground} />
-            </TouchableOpacity>
-          ))}
-        </View>
+              {likedClubs.map((c: any) => (
+                <TouchableOpacity
+                  key={c.id}
+                  style={[styles.choiceCard, { backgroundColor: colors.card, borderColor: colors.border, height: 70, marginBottom: 8 }]}
+                  activeOpacity={0.82}
+                  onPress={() => { Haptics.selectionAsync(); router.push(`/club/${c.id}`); }}
+                >
+                  <View style={[styles.choiceIcon, { backgroundColor: colors.primary + "18", width: 44, height: 44, borderRadius: 12 }]}>
+                    <Ionicons name="golf-outline" size={22} color={colors.primary} />
+                  </View>
+                  <View style={styles.choiceText}>
+                    <Text style={[styles.choiceLabel, { color: colors.foreground, fontSize: 15 }]}>{c.name}</Text>
+                    <Text style={[styles.choiceSub, { color: colors.mutedForeground }]}>{c.location}, {c.province}</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+          <View style={{ height: 74 }} />
+        </ScrollView>
       ) : (
         /* ── Content screen ── */
         <>

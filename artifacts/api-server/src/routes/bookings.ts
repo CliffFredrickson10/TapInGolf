@@ -1259,8 +1259,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
         : `${user.name} added you to a round at ${slot.club_name} on ${dateStr} at ${timeStr}.`;
 
   // Push notifications — only to players who have a registered device token
+  // If payment is pending, skip the organizer (they'll be notified on payment confirmation)
   const pushMessages = playerRows
     .filter((p: any) => p.push_token?.startsWith("ExponentPushToken["))
+    .filter((p: any) => needsPaymentLink ? p.id !== user.id : true)
     .map((p: any) => {
       const isOrganizer = p.id === user.id;
       return {
@@ -1274,8 +1276,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
   sendPushNotifications(pushMessages);
 
   // In-app notifications — save for every registered player regardless of push token
+  // Skip the organizer if payment is still pending (they get notified on confirmation)
   for (const p of playerRows) {
     const isOrganizer = p.id === user.id;
+    if (needsPaymentLink && isOrganizer) continue;
     saveUserNotification(
       p.id,
       isOrganizer ? "booking_confirmed" : "booking_invited",
@@ -1289,7 +1293,7 @@ router.post("/bookings", async (req, res): Promise<void> => {
     booking_id:     bookingId,
     booking_ref:    ref,
     payment_url:    paymentUrl,
-    status:         "confirmed",
+    status:         needsPaymentLink ? "pending" : "confirmed",
     commitment_fee: payment_method === "pay_at_club" ? commitmentFee : undefined,
   });
 });
@@ -2244,6 +2248,35 @@ async function processCompletedPaymentReference(
         syncEventRegistration(bookingId).catch(() => {});
         // Post to financial ledger
         postBookingLedgerFromId(bookingId, paymentMethod).catch(() => {});
+
+        // Send "Booking Confirmed" notification to the organizer now that payment is done
+        const booking = await row<any>(
+          `SELECT b.user_id, pts.date, pts.time, c.name AS club_name
+           FROM bookings b
+           JOIN portal_tee_slots pts ON pts.id = b.portal_slot_id
+           JOIN clubs c ON c.id = pts.club_id
+           WHERE b.id = ?`,
+          [bookingId]
+        );
+        if (booking) {
+          const organizer = await row<any>("SELECT id, push_token FROM users WHERE id = ?", [booking.user_id]);
+          if (organizer) {
+            const bDateStr = booking.date instanceof Date ? booking.date.toISOString().split("T")[0] : String(booking.date).split("T")[0];
+            const bTimeStr = String(booking.time).slice(0, 5);
+            const title = "Booking Confirmed! ⛳";
+            const body = `Your tee time at ${booking.club_name} on ${bDateStr} at ${bTimeStr} is confirmed.`;
+            saveUserNotification(organizer.id, "booking_confirmed", title, body, { booking_id: bookingId });
+            if (organizer.push_token?.startsWith("ExponentPushToken[")) {
+              sendPushNotifications([{
+                to: organizer.push_token,
+                sound: "default",
+                title,
+                body,
+                data: { type: "booking_confirmed", booking_id: bookingId },
+              }]);
+            }
+          }
+        }
       }
     }
   }

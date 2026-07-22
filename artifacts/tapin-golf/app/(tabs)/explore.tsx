@@ -318,8 +318,8 @@ export default function ExploreScreen() {
     <View style={{ flex: 1, backgroundColor: colors.background }}>
       <AppHeader />
 
-      {/* Search + action buttons */}
-      <View style={[styles.header, { paddingTop: 12 }]}>
+      {/* Search bar */}
+      <View style={{ paddingHorizontal: 16, paddingTop: 12 }}>
         <View style={[styles.searchBar, { backgroundColor: colors.card, borderColor: sortedByDistance ? colors.primary : colors.border }]}>
           <Ionicons name="search-outline" size={18} color={colors.mutedForeground} />
           <TextInput
@@ -338,8 +338,11 @@ export default function ExploreScreen() {
             </TouchableOpacity>
           ) : null}
         </View>
+      </View>
 
-        {/* Location toggle button */}
+      {/* Action buttons row */}
+      <View style={{ flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 16, paddingTop: 8, paddingBottom: 4 }}>
+        {/* Location toggle */}
         <TouchableOpacity
           style={[
             styles.iconBtn,
@@ -377,7 +380,7 @@ export default function ExploreScreen() {
           <Ionicons name="map-outline" size={18} color="#fff" />
         </TouchableOpacity>
 
-        {/* Tee Time Search button */}
+        {/* Find Tee Times button */}
         <TouchableOpacity
           style={{
             flexDirection: "row",

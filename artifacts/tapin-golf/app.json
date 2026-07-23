@@ -22,7 +22,7 @@
         "NSLocationWhenInUseUsageDescription": "TapIn Golf uses your location to find nearby golf clubs and show distance to courses.",
         "NSPhotoLibraryAddUsageDescription": "TapIn Golf needs permission to save photos to your library."
       },
-      "buildNumber": "29",
+      "buildNumber": "31",
       "usesAppleSignIn": true,
       "deploymentTarget": "13.4"
     },

@@ -17,11 +17,7 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       },
-      "node": "22.15.0",
-      "pnpm": "11.5.0",
-      "install": {
-        "customCommand": "cd ../.. && sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" pnpm-workspace.yaml && pnpm install --no-frozen-lockfile"
-      }
+      "pnpm": "11.5.0"
     },
     "preview": {
       "distribution": "internal",
@@ -34,11 +30,7 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       },
-      "node": "22.15.0",
-      "pnpm": "11.5.0",
-      "install": {
-        "customCommand": "cd ../.. && sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" pnpm-workspace.yaml && pnpm install --no-frozen-lockfile"
-      }
+      "pnpm": "11.5.0"
     },
     "production": {
       "autoIncrement": true,
@@ -52,11 +44,8 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       },
-      "node": "22.15.0",
       "pnpm": "11.5.0",
-      "install": {
-        "customCommand": "cd ../.. && sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" pnpm-workspace.yaml && pnpm install --no-frozen-lockfile"
-      }
+      "prebuildCommand": "sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" ../../pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" ../../pnpm-workspace.yaml"
     }
   },
   "submit": {

@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "screenshots": "tsx scripts/take-screenshots.ts",
     "android": "expo run:android",
-    "ios": "expo run:ios"
+    "ios": "expo run:ios",
+    "eas-build-pre-install": "cd ../.. && sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" pnpm-workspace.yaml && cat pnpm-workspace.yaml"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

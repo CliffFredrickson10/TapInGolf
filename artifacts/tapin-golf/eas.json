@@ -44,8 +44,7 @@
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
       },
-      "pnpm": "11.5.0",
-      "prebuildCommand": "sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" ../../pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" ../../pnpm-workspace.yaml"
+      "pnpm": "11.5.0"
     }
   },
   "submit": {

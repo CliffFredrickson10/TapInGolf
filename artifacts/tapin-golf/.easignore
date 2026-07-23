@@ -1,29 +1,8 @@
-# EAS Build ignore - reduces upload from 1.6GB to ~50MB
-# Place in the directory where eas.json lives (artifacts/tapin-golf/)
+# EAS Build ignore - reduces upload size
+# Only exclude build artifacts, NOT node_modules (EAS needs them for monorepo)
 
 # iOS native build output (2.7GB)
 ios/build/
 
-# CocoaPods (980MB) - EAS runs pod install itself
-ios/Pods/
-
-# Root node_modules (913MB) - EAS installs fresh
-../../node_modules/
-
-# Other node_modules
-node_modules/
-
 # Expo cache
 .expo/
-
-# Other artifacts not needed
-../../artifacts/api-server/node_modules/
-../../artifacts/club-portal/node_modules/
-../../artifacts/mockup-sandbox/
-
-# Git directory
-../../.git/
-
-# Keystores
-../../*.jks
-*.jks

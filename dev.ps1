@@ -2,14 +2,14 @@
 # Sets up SSH tunnel, builds API server and starts all dev servers
 # Usage: powershell -ExecutionPolicy Bypass -File dev.ps1
 
-$ErrorActionPreference = "Stop"
-
 $ROOT = "C:\Dev\TapInGolf"
 
 # Pull latest changes
 Write-Host "📥 Pulling latest changes..."
 Set-Location $ROOT
 git pull --rebase 2>$null
+
+$ErrorActionPreference = "Stop"
 
 $API_DIR = Join-Path $ROOT "artifacts\api-server"
 $PORTAL_DIR = Join-Path $ROOT "artifacts\club-portal"

@@ -241,7 +241,7 @@ export default function RegisterScreen() {
             <View style={{ flex: 1, height: 1, backgroundColor: colors.border }} />
           </View>
 
-          {appleAvailable && (
+          {Platform.OS === 'ios' && (
             <TouchableOpacity
               style={{ flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 10, height: 52, borderRadius: 14, backgroundColor: colors.foreground, marginBottom: 10 }}
               onPress={handleAppleSignIn}

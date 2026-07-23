@@ -210,7 +210,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Apple Sign-In */}
-          {appleAvailable && (
+          {Platform.OS === 'ios' && (
             <TouchableOpacity
               style={[styles.socialBtn, { backgroundColor: colors.foreground }]}
               onPress={handleAppleSignIn}

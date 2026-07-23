@@ -5,6 +5,12 @@
 $ErrorActionPreference = "Stop"
 
 $ROOT = "C:\Dev\TapInGolf"
+
+# Pull latest changes
+Write-Host "📥 Pulling latest changes..."
+Set-Location $ROOT
+git pull --rebase 2>$null
+
 $API_DIR = Join-Path $ROOT "artifacts\api-server"
 $PORTAL_DIR = Join-Path $ROOT "artifacts\club-portal"
 

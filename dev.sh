@@ -6,6 +6,11 @@
 set -e
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+
+# Pull latest changes
+echo "📥 Pulling latest changes..."
+cd "$ROOT" && git pull --rebase || true
+
 API_DIR="$ROOT/artifacts/api-server"
 PORTAL_DIR="$ROOT/artifacts/club-portal"
 APP_DIR="$ROOT/artifacts/tapin-golf"

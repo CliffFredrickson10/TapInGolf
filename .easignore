@@ -3,20 +3,17 @@
 
 # node_modules are reinstalled fresh on the EAS build server
 node_modules/
-artifacts/tapin-golf/node_modules/
-artifacts/api-server/node_modules/
-artifacts/club-portal/node_modules/
-artifacts/mockup-sandbox/node_modules/
-lib/api-client-react/node_modules/
+**/node_modules/
 
 # iOS build output (2.7GB) and Pods (980MB)
 artifacts/tapin-golf/ios/build/
 artifacts/tapin-golf/ios/Pods/
 
-# Other monorepo apps — not needed to build the mobile app
-artifacts/api-server/
-artifacts/club-portal/
-artifacts/mockup-sandbox/
+# Build outputs from other apps (not needed, keeps source for workspace resolution)
+artifacts/api-server/dist/
+artifacts/club-portal/dist/
+artifacts/club-portal/.next/
+artifacts/mockup-sandbox/dist/
 
 # Agent/editor internals
 .agents/

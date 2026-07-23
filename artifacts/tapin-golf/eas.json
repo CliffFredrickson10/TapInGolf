@@ -16,8 +16,7 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
-      },
-      "pnpm": "11.5.0"
+      }
     },
     "preview": {
       "distribution": "internal",
@@ -29,8 +28,7 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
-      },
-      "pnpm": "11.5.0"
+      }
     },
     "production": {
       "autoIncrement": true,
@@ -43,8 +41,7 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
-      },
-      "pnpm": "11.5.0"
+      }
     }
   },
   "submit": {

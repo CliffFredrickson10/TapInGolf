@@ -16,6 +16,10 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
+      },
+      "node": "22.15.0",
+      "pnpm": {
+        "version": "11.5.0"
       }
     },
     "preview": {
@@ -28,6 +32,10 @@
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
+      },
+      "node": "22.15.0",
+      "pnpm": {
+        "version": "11.5.0"
       }
     },
     "production": {
@@ -36,10 +44,15 @@
         "buildType": "app-bundle"
       },
       "ios": {
-        "simulator": false
+        "simulator": false,
+        "image": "latest"
       },
       "env": {
         "EXPO_PUBLIC_DOMAIN": "tapingolf.dedicated.co.za"
+      },
+      "node": "22.15.0",
+      "pnpm": {
+        "version": "11.5.0"
       }
     }
   },

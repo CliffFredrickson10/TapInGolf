@@ -1,8 +1,0 @@
-# EAS Build ignore - reduces upload size
-# Only exclude build artifacts, NOT node_modules (EAS needs them for monorepo)
-
-# iOS native build output (2.7GB)
-ios/build/
-
-# Expo cache
-.expo/

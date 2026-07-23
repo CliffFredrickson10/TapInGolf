@@ -9,6 +9,10 @@ artifacts/club-portal/node_modules/
 artifacts/mockup-sandbox/node_modules/
 lib/api-client-react/node_modules/
 
+# iOS build output (2.7GB) and Pods (980MB)
+artifacts/tapin-golf/ios/build/
+artifacts/tapin-golf/ios/Pods/
+
 # Other monorepo apps — not needed to build the mobile app
 artifacts/api-server/
 artifacts/club-portal/
@@ -23,6 +27,12 @@ artifacts/mockup-sandbox/
 # Large binaries
 artifacts/tapin-golf/screenshots/
 artifacts/tapin-golf/screenshots.zip
+
+# Keystores
+*.jks
+
+# Expo cache
+artifacts/tapin-golf/.expo/
 
 # Version control
 .git/

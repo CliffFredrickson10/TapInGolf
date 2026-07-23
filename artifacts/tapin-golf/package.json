@@ -11,7 +11,7 @@
     "screenshots": "tsx scripts/take-screenshots.ts",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "eas-build-pre-install": "cd ../.. && sed -i \"/^overrides:/,/^[^ ]/{ /^overrides:/d; /^  /d; }\" pnpm-workspace.yaml && sed -i \"/^onlyBuiltDependencies:/,/^[^ ]/{ /^onlyBuiltDependencies:/d; /^  /d; }\" pnpm-workspace.yaml && cat pnpm-workspace.yaml"
+    "eas-build-pre-install": "python3 -c \"import re; f=open('../../pnpm-workspace.yaml'); t=f.read(); f.close(); t=re.sub(r'\\nonlyBuiltDependencies:.*?(?=\\n[a-z]|\\Z)', '', t, flags=re.DOTALL); t=re.sub(r'\\noverrides:.*?(?=\\n[a-z]|\\Z)', '', t, flags=re.DOTALL); f=open('../../pnpm-workspace.yaml','w'); f.write(t); f.close(); print(t)\""
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

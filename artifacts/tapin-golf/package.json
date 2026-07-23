@@ -10,8 +10,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "screenshots": "tsx scripts/take-screenshots.ts",
     "android": "expo run:android",
-    "ios": "expo run:ios",
-    "eas-build-pre-install": "bash ../../scripts/eas-pre-install.sh"
+    "ios": "expo run:ios"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

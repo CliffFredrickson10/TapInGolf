@@ -86,9 +86,10 @@ xcodebuild archive \
   -configuration Release \
   -archivePath "$ARCHIVE_PATH" \
   -destination "generic/platform=iOS" \
-  CODE_SIGN_STYLE=Manual \
+  CODE_SIGN_STYLE=Automatic \
   DEVELOPMENT_TEAM=7AMSB7M6VT \
-  -quiet 2>&1 | grep -E "error:|warning:|BUILD|Archive" || true
+  -allowProvisioningUpdates \
+  2>&1 | grep -E "error:|warning:.*provisioning|BUILD|Archive" || true
 
 if [ ! -d "$ARCHIVE_PATH" ]; then
   echo "   ❌ Archive failed. Run without -quiet for details:"

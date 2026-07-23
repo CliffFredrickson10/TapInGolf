@@ -34,8 +34,5 @@ artifacts/tapin-golf/screenshots.zip
 # Expo cache
 artifacts/tapin-golf/.expo/
 
-# pnpm config that may conflict with EAS auto-detection
-.npmrc
-
 # Version control
 .git/

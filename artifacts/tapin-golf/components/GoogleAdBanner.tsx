@@ -22,9 +22,9 @@ if (Constants.appOwnership !== "expo") {
 
 // ── Production ad unit IDs ────────────────────────────────────────────────────
 const PROD_UNIT_ID = Platform.select({
-  ios:     "ca-app-pub-3594659863953259/9938651491",
-  android: "ca-app-pub-3594659863953259/5839624384",
-  default: "ca-app-pub-3594659863953259/5839624384",
+  ios:     "ca-app-pub-2788464450764977/8052361350",
+  android: "ca-app-pub-2788464450764977/3422851202",
+  default: "ca-app-pub-2788464450764977/3422851202",
 }) as string;
 
 // In development use Google's official test unit ID so impressions are never

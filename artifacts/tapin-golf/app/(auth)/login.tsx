@@ -15,14 +15,22 @@ import {
 } from "react-native";
 import { Ellipse, Polygon, Rect, Svg } from "react-native-svg";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { GoogleSignin, statusCodes } from "@react-native-google-signin/google-signin";
 import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
-GoogleSignin.configure({
-  iosClientId: "378740564190-8mgibt541t6n23huldrq612ool9kt3bu.apps.googleusercontent.com",
-  webClientId: "378740564190-796p1inb044pb4q18dpg8rar0agf68tg.apps.googleusercontent.com",
-});
+let GoogleSignin: any = null;
+let statusCodes: any = {};
+try {
+  const gsi = require("@react-native-google-signin/google-signin");
+  GoogleSignin = gsi.GoogleSignin;
+  statusCodes = gsi.statusCodes;
+  GoogleSignin.configure({
+    iosClientId: "378740564190-8mgibt541t6n23huldrq612ool9kt3bu.apps.googleusercontent.com",
+    webClientId: "378740564190-796p1inb044pb4q18dpg8rar0agf68tg.apps.googleusercontent.com",
+  });
+} catch (e) {
+  console.warn("Google Sign-In not available (native module missing - expected in dev builds without custom client)");
+}
 
 export default function LoginScreen() {
   const colors = useColors();
@@ -84,6 +92,10 @@ export default function LoginScreen() {
   };
 
   const handleGoogleSignIn = async () => {
+    if (!GoogleSignin) {
+      setError("Google Sign-In is not available in this build. Use a production build to sign in with Google.");
+      return;
+    }
     try {
       if (Platform.OS === "android") {
         await GoogleSignin.hasPlayServices();

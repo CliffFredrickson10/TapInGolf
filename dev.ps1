@@ -3,16 +3,11 @@
 # Usage: powershell -ExecutionPolicy Bypass -File dev.ps1
 
 $ROOT = "C:\Dev\TapInGolf"
-
-# Pull latest changes
-Write-Host "📥 Pulling latest changes..."
-Set-Location $ROOT
-git pull --rebase 2>$null
-
-$ErrorActionPreference = "Stop"
-
 $API_DIR = Join-Path $ROOT "artifacts\api-server"
 $PORTAL_DIR = Join-Path $ROOT "artifacts\club-portal"
+$MOBILE_DIR = Join-Path $ROOT "artifacts\tapin-golf"
+
+$ErrorActionPreference = "Stop"
 
 Write-Host "`n=== TapIn Golf Dev Server ===" -ForegroundColor Green
 
@@ -96,7 +91,6 @@ Write-Host "Club portal running (PID: $($portalProcess.Id))" -ForegroundColor Gr
 
 # --- Start Metro Bundler ---
 Write-Host "`n[6/7] Starting Metro bundler on port 8081..." -ForegroundColor Cyan
-$MOBILE_DIR = Join-Path $ROOT "artifacts\tapin-golf"
 # Kill existing Metro
 $port8081 = Get-NetTCPConnection -LocalPort 8081 -ErrorAction SilentlyContinue
 if ($port8081) {

@@ -20,7 +20,8 @@ import { useAuth } from "@/context/AuthContext";
 import { useColors } from "@/hooks/useColors";
 
 GoogleSignin.configure({
-  iosClientId: "378740564190-8mgibt541t6n23huldrq612ool9kt3bu.apps.googleusercontent.com", // TODO: replace with real ID
+  iosClientId: "378740564190-8mgibt541t6n23huldrq612ool9kt3bu.apps.googleusercontent.com",
+  webClientId: "378740564190-796p1inb044pb4q18dpg8rar0agf68tg.apps.googleusercontent.com",
 });
 
 export default function RegisterScreen() {

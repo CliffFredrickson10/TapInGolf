@@ -108,14 +108,17 @@ function computeSplitFields(params: PayFastPaymentParams, totalAmountCents: numb
     throw new Error("PayFast split amount must leave a positive amount for the club");
   }
 
+  // Calculate club's percentage of the total (rounded to 2 decimal places)
+  const clubPercentage = Math.round((clubAmountCents / totalAmountCents) * 10000) / 100;
+
   // PayFast requires split config as a JSON string in the "setup" field,
   // and this field must be EXCLUDED from signature calculation.
   const splitConfig = JSON.stringify({
     split_payment: {
       merchant_id: parseInt(clubMerchantId, 10) || clubMerchantId,
-      amount: clubAmountCents,
-      min: 100,
-      max: totalAmountCents,
+      percentage: clubPercentage,
+      min: clubAmountCents,
+      max: clubAmountCents,
     },
   });
 

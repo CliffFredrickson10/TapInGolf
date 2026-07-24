@@ -638,7 +638,7 @@ export default function NewBookingScreen() {
           </View>
 
           {/* Holes selection — shown when 9-hole price is set, or when an event locks the holes */}
-          {(has9 || eventHolesLock) && allAvailable && (
+          {(has9 || eventHolesLock) && (
             <>
               <Text style={[styles.sectionTitle, { color: colors.foreground }]}>Number of Holes</Text>
               <View style={styles.ballRow}>

@@ -67,7 +67,7 @@ function encodePayFastValue(value: string): string {
 
 function createSignature(fields: readonly PayFastField[], passphrase: string): string {
   const payload = fields
-    .filter(([, value]) => value !== "")
+    .filter(([key, value]) => key !== "setup" && value !== "")
     .map(([key, value]) => `${key}=${encodePayFastValue(value)}`)
     .join("&");
   const seed = passphrase
@@ -108,11 +108,18 @@ function computeSplitFields(params: PayFastPaymentParams, totalAmountCents: numb
     throw new Error("PayFast split amount must leave a positive amount for the club");
   }
 
-  return [
-    ["setup", "1"],
-    ["split_payment[merchant_id]", clubMerchantId],
-    ["split_payment[amount]", centsToRands(clubAmountCents)],
-  ];
+  // PayFast requires split config as a JSON string in the "setup" field,
+  // and this field must be EXCLUDED from signature calculation.
+  const splitConfig = JSON.stringify({
+    split_payment: {
+      merchant_id: parseInt(clubMerchantId, 10) || clubMerchantId,
+      amount: clubAmountCents,
+      min: 100,
+      max: totalAmountCents,
+    },
+  });
+
+  return [["setup", splitConfig]];
 }
 
 function buildPaymentFields(params: PayFastPaymentParams, config: PayFastConfig): PayFastField[] {

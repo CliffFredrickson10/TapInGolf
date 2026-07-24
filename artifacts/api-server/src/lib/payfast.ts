@@ -111,7 +111,7 @@ function computeSplitFields(params: PayFastPaymentParams, totalAmountCents: numb
   return [
     ["setup", "1"],
     ["split_payment[merchant_id]", clubMerchantId],
-    ["split_payment[amount]", String(clubAmountCents)],
+    ["split_payment[amount]", centsToRands(clubAmountCents)],
   ];
 }
 

@@ -793,9 +793,10 @@ router.post("/bookings", async (req, res): Promise<void> => {
   }
   // ────────────────────────────────────────────────────────────────
 
-  // Use 9-hole price when requested and available, else 18-hole
-  const numHoles = holes === 9 && slot.price_9 != null ? 9 : 18;
-  const rawPrice = numHoles === 9 ? parseFloat(slot.price_9) : parseFloat(slot.price);
+  // Use 9-hole price when requested — trust the client's holes selection
+  // (slot.price_9 is always null for tier-priced clubs, so don't gate on it)
+  const numHoles = holes === 9 ? 9 : 18;
+  const rawPrice = numHoles === 9 && slot.price_9 != null ? parseFloat(slot.price_9) : parseFloat(slot.price);
   const priceCol = numHoles === 9 ? "price_9h" : "price_18h";
 
   // Always resolve the organizer's tier for pricing AND for recording on the booking row.
